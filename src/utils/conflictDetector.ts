@@ -620,6 +620,7 @@ export function findReservationConflicts(
     for (let i = 0; i < candidates.length; i++) {
       const cand = candidates[i];
       if (!cand.fecha || isDateExemptFromConflicts(cand.fecha) || !cand.espacio) continue;
+      if (!isReservationActiveForAvailability(cand, deletedSet)) continue;
       const intervals = getTimeIntervalsForReservation(cand);
       for (const slot of intervals) {
         let list = candidatesByDate.get(slot.date);

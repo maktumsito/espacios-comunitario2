@@ -282,6 +282,7 @@ export function calculateEquipmentAvailability(
 
     if (targetDate && !isDateExemptFromConflicts(targetDate)) {
       for (const r of allReservations) {
+        if (r.estado && ['cancelada', 'rechazada', 'eliminada'].includes(r.estado)) continue;
         if (excludeIdSet.has(r.id)) {
           continue;
         }

@@ -3,6 +3,7 @@ import { beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { connectFirestoreEmulator, getFirestore, getDoc, getDocs, doc, collection, setDoc, terminate } from 'firebase/firestore';
 import type { Reservation } from '../../types';
+import { buildReplacementBatch } from '../../utils/reservationReplacement';
 
 const context = vi.hoisted(() => ({ db: null as any }));
 vi.mock('../../firebase/config', () => ({ getDb: () => context.db }));
@@ -24,6 +25,26 @@ beforeEach(async () => {
 },30000);
 afterAll(async () => { await terminate(context.db); await deleteApp(app); });
 describe.skipIf(process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8087')('isolated Firestore reservation persistence', () => {
+  it('replaces one recurring occurrence atomically and preserves the next occurrence after reload', async () => {
+    const source = (await service.saveReservation(make('replace-source', {actividadRecurrente:'Sí',serieRecurrente:'replace-series'}))).reservations[0];
+    const next = make('replace-next', {fecha:'2026-10-13',actividadRecurrente:'Sí',serieRecurrente:'replace-series'});
+    await service.saveReservation(next);
+    const batch = buildReplacementBatch(source, make('replace-new', {descripcion:'Reunión excepcional'}), 'replace-new', 'Reunión de vecinos');
+    await service.commitReservationChanges(batch.updatedReservations);
+    expect((await service.fetchReservationById(source.id))).toMatchObject({estado:'cancelada',reemplazadaPorReservaId:'replace-new',motivoReemplazo:'Reunión de vecinos'});
+    expect((await service.fetchReservationById('replace-new'))).toMatchObject({estado:'activa',reemplazaReservaId:source.id,actividadRecurrente:'No'});
+    expect((await service.fetchReservationById(next.id))?.estado).toBe('activa');
+    const slots = (await getDoc(doc(context.db,'schedule_slots','2026-10-06_SALA%202'))).data()?.bookings;
+    expect(slots.map((r:any)=>r.id)).toEqual(['replace-new']);
+  });
+  it('rejects a stale replacement without suspending its source or creating the new event', async () => {
+    const source = (await service.saveReservation(make('stale-source', {actividadRecurrente:'Sí',serieRecurrente:'stale-series'}))).reservations[0];
+    await service.saveReservation({...source,descripcion:'Editada por otra persona'});
+    const batch = buildReplacementBatch(source, make('stale-new'), 'stale-new', 'Motivo');
+    await expect(service.commitReservationChanges(batch.updatedReservations)).rejects.toThrow(/otro usuario/);
+    expect((await service.fetchReservationById(source.id))?.estado).toBe('activa');
+    expect(await service.fetchReservationById('stale-new')).toBeNull();
+  });
   it('confirms conversion to a recurring series after omitting occupied days and releases the original slot', async () => {
     const {renderHook,act,cleanup}=await import('@testing-library/react');
     const {useReservationSaveHandler}=await import('../../hooks/useReservationSaveHandler');

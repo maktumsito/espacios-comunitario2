@@ -4,7 +4,7 @@ import { SPACES_LIST, ACTIVITY_TYPES, normalizeSpaceName } from '../data/spacesD
 import { DEFAULT_LOAN_TYPES } from '../services/adminConfigService';
 import { getStoredEquipment } from '../services/equipmentService';
 import { EquipmentSelector } from './EquipmentSelector';
-import { checkSingleConflict, timeToMinutes, formatMinutesToTime } from '../utils/conflictDetector';
+import { checkSingleConflict, timeToMinutes, formatMinutesToTime, findMaintenanceBlockConflicts, formatBlockConflictMessage } from '../utils/conflictDetector';
 import { AuthUser, isCoordinatorOrAdmin } from '../services/authService';
 import {
   validateRut,
@@ -106,6 +106,7 @@ import {
   parseISO
 } from 'date-fns';
 import { formatDateDDMMYYYY, getDayOfWeekFromDateString, generateRecurrenceDates } from '../utils/dateUtils';
+import { buildReplacementBatch } from '../utils/reservationReplacement';
 
 interface SeriesItemSlot {
   fecha: string;
@@ -115,6 +116,7 @@ interface SeriesItemSlot {
 }
 
 interface ReservationModalProps {
+  replacementSource?: Reservation | null;
   isOpen: boolean;
   onClose: () => void;
   onSave: (
@@ -149,6 +151,7 @@ interface ReservationModalProps {
 }
 
 export const ReservationModal: React.FC<ReservationModalProps> = ({
+  replacementSource,
   isOpen,
   onClose,
   onSave,
@@ -174,6 +177,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   initialEmail,
   currentUser
 }) => {
+  const replacementId = useRef(`RSV_${crypto.randomUUID()}`);
   const effectiveEquipment = useMemo(() => {
     return availableEquipment && availableEquipment.length > 0 ? availableEquipment : getStoredEquipment();
   }, [availableEquipment]);
@@ -202,8 +206,9 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
   const [formData, setFormData] = useState<Partial<Reservation>>({
     fecha: initialDate || format(new Date(), 'yyyy-MM-dd'),
-    horaInicio: getSafeEarlyStartTime(initialStartTime),
-    horaFin: getSafeEarlyEndTime(initialStartTime, initialEndTime),
+    horaInicio: replacementSource?.horaInicio || getSafeEarlyStartTime(initialStartTime),
+    horaFin: replacementSource?.horaFin || getSafeEarlyEndTime(initialStartTime, initialEndTime),
+    terminaDiaSiguiente: Boolean(replacementSource?.terminaDiaSiguiente),
     espacio: initialSpace || (availableSpaces[0]?.name || 'TATAMI'),
     responsable: initialResponsable || '',
     telefonoContacto: initialPhone || '',
@@ -227,7 +232,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
   // Booking mode: 'single' (una fecha), 'specific' (fechas específicas elegidas a gusto), 'pattern' (serie semanal por días)
   const [bookingMode, setBookingMode] = useState<'single' | 'specific' | 'pattern'>('single');
-  const [specificDates, setSpecificDates] = useState<string[]>([
+  const [selectedSpecificDates, setSpecificDates] = useState<string[]>([
     initialDate || format(new Date(), 'yyyy-MM-dd')
   ]);
   const [dateInputToAdd, setDateInputToAdd] = useState<string>('');
@@ -259,6 +264,12 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
   // Progressive Wizard UX State (5 steps)
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const specificDates = useMemo(() => {
+    const seriesId = !isDuplicating && (editingReservation?.serieRecurrente || editingReservation?.recurrenteId);
+    const exceptions = new Set(allReservations.filter(r => r.reemplazadaPorReservaId && seriesId &&
+      (r.serieRecurrente || r.recurrenteId) === seriesId).map(r => r.fecha));
+    return selectedSpecificDates.filter(date => !exceptions.has(date));
+  }, [selectedSpecificDates, allReservations, editingReservation, isDuplicating]);
   const [isWizardMode, setIsWizardMode] = useState<boolean>(!editingReservation || isDuplicating);
   const [isEditingLoading, setIsEditingLoading] = useState<boolean>(false);
 
@@ -546,7 +557,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   } = useReservationAutosave({
     editScope: useMemo(()=>({updateScope,rangeStartDate,rangeEndDate,selectedOccurrenceIds:[...selectedOccurrenceIds]}),[updateScope,rangeStartDate,rangeEndDate,selectedOccurrenceIds]),
     settings: useMemo(()=>({holidayOverrideKey,extendedAuthKey,includeHolidaysInSeries,generateFullSeries}),[holidayOverrideKey,extendedAuthKey,includeHolidaysInSeries,generateFullSeries]),
-    isOpen,
+    isOpen: isOpen && !replacementSource,
     editingReservation,
     isDuplicating,
     formData,
@@ -581,7 +592,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     isHolidayAuthorized,
     generatedDates,
     singleDateHolidayInfo,
-    excludeReservationIds,
+    excludeReservationIds: seriesExcludeReservationIds,
     excludeSeriesId
   } = useReservationSeriesState({
     editingReservation,
@@ -601,6 +612,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     holidayOverrideKey,
     ratings
   });
+  const excludeReservationIds = replacementSource ? [replacementSource.id] : seriesExcludeReservationIds;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -791,8 +803,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
         initDayNum = 1;
       }
 
-      const safeInitStartTime = getSafeEarlyStartTime(initialStartTime);
-      const safeInitEndTime = getSafeEarlyEndTime(initialStartTime, initialEndTime);
+      const safeInitStartTime = replacementSource?.horaInicio || getSafeEarlyStartTime(initialStartTime);
+      const safeInitEndTime = replacementSource?.horaFin || getSafeEarlyEndTime(initialStartTime, initialEndTime);
 
       // If opening fresh without a pre-chosen space, pick the first non-conflicting space if possible
       if (!initialSpace && availableSpaces.length > 1) {
@@ -813,7 +825,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       }
 
       setFormData({
-        id: `RSV_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+        id: replacementSource ? replacementId.current : `RSV_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
         fecha: initD,
         horaInicio: safeInitStartTime,
         horaFin: safeInitEndTime,
@@ -834,7 +846,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
         comentarios: '',
         rut: initialRut || '',
         domicilio: '',
-        terminaDiaSiguiente: false,
+        terminaDiaSiguiente: Boolean(replacementSource?.terminaDiaSiguiente),
         horarioExtendidoAutorizado: false,
         claveAutorizacion: '',
         autorizadoPor: '',
@@ -1340,14 +1352,31 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     rangeEndDate,
     descargarCartaAlCrear,
     effectiveSeriesSlotsForLetter,
-    onSave,
-    clearDraft,
+    onSave: replacementSource ? async (replacement) => {
+      const batch = buildReplacementBatch(replacementSource, replacement, replacementId.current, formData.motivoReemplazo || '');
+      const blocks = findMaintenanceBlockConflicts([batch.updatedReservations[1]], spaceBlocks);
+      if (blocks.length) throw new Error(formatBlockConflictMessage(blocks[0]));
+      return onSave(batch.updatedReservations[1], false, undefined, false, batch, false);
+    } : onSave,
+    clearDraft: replacementSource ? () => {} : clearDraft,
     onClose,
     showFormFeedback
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (replacementSource) {
+      if (!formData.motivoReemplazo?.trim()) {
+        showFormFeedback('Indica el motivo del reemplazo.');
+        return;
+      }
+      if (isWizardMode && wizardStep !== 5) {
+        showFormFeedback('Revisa el resumen antes de confirmar el reemplazo.');
+        return;
+      }
+      executeSave(false);
+      return;
+    }
     if (isWizardMode) {
       if (wizardStep === 1) {
         if (validateStep1(true)) {
@@ -1459,6 +1488,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full border border-slate-100 overflow-hidden my-6">
         {/* Header */}
         <ReservationModalHeader
+          replacementMode={Boolean(replacementSource)}
           isDuplicating={isDuplicating}
           editingReservation={editingReservation}
           isWizardMode={isWizardMode}
@@ -1607,7 +1637,19 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
           )}
 
           {/* Paso 2: Espacio, Fecha y Horarios */}
-          <ReservationStep2DateTime
+          {replacementSource ? ((!isWizardMode || wizardStep === 2) && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-2">
+              <h3 className="font-bold">Reemplazar solo este día</h3>
+              <p>{formatDateDDMMYYYY(replacementSource.fecha)} · {replacementSource.horaInicio}–{replacementSource.horaFin}{replacementSource.terminaDiaSiguiente ? ' (hasta el día siguiente)' : ''} · {replacementSource.espacio}</p>
+              <p>La fecha, el espacio y el horario se conservan. Las demás fechas de la serie continúan normalmente.</p>
+              {loanScheduleCheck.requiresAuthorization && <label className="block">Clave de autorización de horario extendido
+                <input type="password" value={extendedAuthKey} onChange={e => setExtendedAuthKey(e.target.value)} className="block rounded-lg border bg-white p-2" />
+              </label>}
+              {singleDateHolidayInfo && <label className="block">Clave de autorización de feriado
+                <input type="password" value={holidayOverrideKey} onChange={e => setHolidayOverrideKey(e.target.value)} className="block rounded-lg border bg-white p-2" />
+              </label>}
+            </div>
+          )) : <ReservationStep2DateTime
             isWizardMode={isWizardMode}
             wizardStep={wizardStep}
             formData={formData}
@@ -1697,7 +1739,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
             handleCopyDayScheduleToAll={handleCopyDayScheduleToAll}
             handleApplyBaseToAllDays={handleApplyBaseToAllDays}
             generatedDates={generatedDates}
-          />
+          />}
 
           {/* Paso 3: Solicitante y Participantes */}
           <ReservationStep3Applicant
@@ -1741,6 +1783,21 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
           />
 
           {/* Paso 5: Resumen y Confirmación */}
+          {replacementSource && (!isWizardMode || wizardStep === 1 || wizardStep === 5) && (
+            <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-3">
+              <h3 className="font-bold">{wizardStep === 5 ? 'Confirmar reemplazo' : 'Motivo del reemplazo'}</h3>
+              <p><strong>Actividad original:</strong> {replacementSource.descripcion} ({replacementSource.tipoActividad})</p>
+              {wizardStep === 5 && <>
+                <p><strong>Actividad nueva:</strong> {formData.descripcion} ({formData.tipoActividad})</p>
+                <p>{formatDateDDMMYYYY(replacementSource.fecha)} · {replacementSource.horaInicio}–{replacementSource.horaFin} · {replacementSource.espacio}</p>
+                <p>Las demás fechas de la serie continúan normalmente.</p>
+              </>}
+              <label className="block font-semibold" htmlFor="replacement-reason">Motivo obligatorio</label>
+              <textarea id="replacement-reason" maxLength={2000} value={formData.motivoReemplazo || ''}
+                onChange={e => setFormData(prev => ({ ...prev, motivoReemplazo: e.target.value }))}
+                className="w-full rounded-lg border border-slate-300 bg-white p-2" />
+            </section>
+          )}
           {isWizardMode && wizardStep === 5 && (
             <ReservationStep5Review
               isWizardMode={isWizardMode}
@@ -1794,6 +1851,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
           {/* Buttons Footer */}
           <ReservationModalFooter
+            replacementMode={Boolean(replacementSource)}
             editingReservation={editingReservation}
             isDuplicating={isDuplicating}
             canModifyReservation={canModifyReservation}
@@ -1839,7 +1897,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
       {/* Sub-modals & Overlays (Conflict resolution, Commitment letter, Deletion confirmation) */}
       <ReservationModalDialogs
-        showConflictDialog={showConflictDialog}
+        showConflictDialog={showConflictDialog && !replacementSource}
         setShowConflictDialog={setShowConflictDialog}
         handleConfirmSaveFromConflictModal={handleConfirmSaveFromConflictModal}
         bookingMode={bookingMode}

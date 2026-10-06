@@ -13,6 +13,9 @@ import {
   purgeExpiredScheduleSlots,
   getLocalCache
 } from './services/reservationService';
+import { fetchReservationById } from './services/reservationService';
+import { canReplaceOccurrence } from './utils/reservationReplacement';
+import { useReplacementReminders } from './hooks/useReplacementReminders';
 import { PendingReservationOperations } from './components/PendingReservationOperations';
 import { Navbar } from './components/Navbar';
 import { FilterBar } from './components/FilterBar';
@@ -46,6 +49,10 @@ const ReservationModal = lazyWithRetry(
 const ReservationDetailModal = lazyWithRetry(
   () => import('./components/ReservationDetailModal').then((m) => ({ default: m.ReservationDetailModal })),
   'ReservationDetailModal'
+);
+const ReplacementReminderModal = lazyWithRetry(
+  () => import('./components/ReplacementReminderModal').then(m => ({ default: m.ReplacementReminderModal })),
+  'ReplacementReminderModal'
 );
 const GlobalCommandPalette = lazyWithRetry(
   () => import('./components/GlobalCommandPalette').then((m) => ({ default: m.GlobalCommandPalette })),
@@ -118,6 +125,7 @@ import { checkAndRunScheduledBackup } from './services/backupService';
 import { getActiveDraftSummary, removeStoredDraft, ActiveDraftSummary } from './hooks/useReservationAutosave';
 
 export default function App() {
+  const [replacementSource, setReplacementSource] = useState<Reservation | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(getStoredAuthUser());
   const [currentView, setCurrentView] = useState<ViewMode>(() => getInitialViewMode());
   const [adminSubTab, setAdminSubTab] = useState<'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring'>('spaces');
@@ -298,6 +306,9 @@ export default function App() {
   }, [userAccounts, currentUser]);
 
   // 7. Autosaved Reservation Draft state for recovery after reload
+  useEffect(() => {
+    if (!isReservationModalOpen) setReplacementSource(null);
+  }, [isReservationModalOpen]);
   const [activeDraft, setActiveDraft] = useState<ActiveDraftSummary | null>(() => getActiveDraftSummary());
 
   useEffect(() => {
@@ -590,6 +601,14 @@ export default function App() {
       setIsReservationModalOpen(true);
     }, 'crear una reserva en esta fecha');
   }, [filters.espacio, spaces, currentUser]);
+
+  const { reminder: replacementReminder, pendingCount: replacementReminderCount, acknowledge: acknowledgeReplacementReminder } = useReplacementReminders(
+    reservations, currentUser?.username,
+    !isInitialLoading && !isReservationModalOpen && !isDetailModalOpen && !isDeleteModalOpen &&
+    !isImportExportModalOpen && !isAuditLogOpen && !isPendingDeletionsModalOpen && !isChangePasswordOpen &&
+    !isPasswordPromptOpen && !isRatingModalOpen && !isGlobalPrintModalOpen && !isGmailDispatchModalOpen &&
+    !isNotificationCenterOpen && !conflictReportData.isOpen
+  );
 
   if (!currentUser) {
     return <LoginScreen onLoginSuccess={handleAuthSuccess} />;
@@ -1280,9 +1299,21 @@ export default function App() {
       />
 
       {/* Modals */}
+      {replacementReminder && <Suspense fallback={null}>
+        <ReplacementReminderModal key={replacementReminder.id} replacement={replacementReminder}
+          original={reservations.find(r => r.id === replacementReminder.reemplazaReservaId)}
+          pendingCount={replacementReminderCount}
+          onAcknowledge={() => acknowledgeReplacementReminder(replacementReminder)}
+          onViewActivity={() => {
+            acknowledgeReplacementReminder(replacementReminder);
+            setSelectedReservation(replacementReminder);
+            setIsDetailModalOpen(true);
+          }} />
+      </Suspense>}
       {isReservationModalOpen && (
         <Suspense fallback={null}>
           <ReservationModal
+            replacementSource={replacementSource}
             isOpen={isReservationModalOpen}
             onClose={() => {
               setIsReservationModalOpen(false);
@@ -1303,7 +1334,7 @@ export default function App() {
             editingReservation={editingReservation}
             isDuplicating={isDuplicating}
             onDuplicateReservation={handleDuplicateReservation}
-            allReservations={activeReservations}
+            allReservations={replacementSource ? reservations.filter(r => r.id !== replacementSource.id) : reservations}
             availableSpaces={spaces}
             availableLoanTypes={loanTypes}
             availableActivityTypes={activityTypes}
@@ -1326,9 +1357,34 @@ export default function App() {
       {isDetailModalOpen && (
         <Suspense fallback={null}>
           <ReservationDetailModal
+            onReplace={(r) => {
+              if (!userCanCreateReservations(currentUser) || !userCanEditReservations(currentUser) || !canReplaceOccurrence(r)) return;
+              setReplacementSource(r);
+              setEditingReservation(null);
+              setIsDuplicating(false);
+              setPrefillDate(r.fecha);
+              setPrefillSpace(r.espacio);
+              setPrefillStartTime(r.horaInicio);
+              setPrefillEndTime(r.horaFin);
+              setPrefillResponsable(r.responsable);
+              setPrefillRut(r.rut || '');
+              setPrefillPhone(r.telefonoContacto || '');
+              setPrefillEmail(r.emailContacto || '');
+              setIsDetailModalOpen(false);
+              setIsReservationModalOpen(true);
+            }}
+            onViewRelated={async (id) => {
+              try {
+                const related = await fetchReservationById(id);
+                if (!related) throw new Error('La actividad relacionada ya no existe.');
+                setSelectedReservation(related);
+              } catch (error: any) {
+                triggerSyncToast(error.message || 'No se pudo consultar la actividad relacionada.', 'error');
+              }
+            }}
             isOpen={isDetailModalOpen}
             reservation={selectedReservation}
-            allReservations={activeReservations}
+            allReservations={reservations}
             onMergeReservations={handleMergeReservations}
             currentUser={currentUser}
             existingRating={
@@ -1346,9 +1402,14 @@ export default function App() {
                 triggerSyncToast('Permiso denegado: No tienes autorización para modificar reservas (gestión controlada por Cristian Shute).', 'error');
                 return;
               }
-              setReservations((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-              setSelectedReservation(updated);
-              await saveReservation(updated);
+              try {
+                const result = await saveReservation(updated);
+                const confirmed = result.reservations[0];
+                setReservations((prev) => prev.map((r) => (r.id === confirmed.id ? confirmed : r)));
+                setSelectedReservation(confirmed);
+              } catch (error: any) {
+                triggerSyncToast(error.message || 'No se pudo actualizar la reserva.', 'error');
+              }
             }}
             onEdit={(r) => {
               if (!userCanEditReservations(currentUser)) {

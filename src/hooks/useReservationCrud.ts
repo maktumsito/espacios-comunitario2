@@ -2,10 +2,13 @@ import { useCallback, useRef } from 'react';
 import { addWeeks, format, parseISO } from 'date-fns';
 import { Reservation, BatchUpdateInfo, isSingleDayMultiSpaceReservation } from '../types';
 import { normalizeSpaceName } from '../data/spacesData';
+import { buildReplacementBatch, preserveReplacementExceptions } from '../utils/reservationReplacement';
+import { calculateEquipmentAvailability, getStoredEquipment } from '../services/equipmentService';
 import { isChileanHoliday } from '../utils/holidayUtils';
 import {
   saveReservation,
   commitReservationChanges,
+  queryReservationsBySeries,
   getLocalCache,
   ReservationWriteError,
   ReservationVersionError,
@@ -30,6 +33,7 @@ import {
   formatMinutesToTime,
   getConstituentSpaces
 } from '../utils/conflictDetector';
+import { getTimeIntervalsForReservation } from '../utils/conflictDetector';
 import {
   AuthUser,
   userCanCreateReservations,
@@ -523,6 +527,26 @@ export function useReservationCrud({
     if (saveInFlight.current) return false;
     saveInFlight.current = true;
     try {
+      const seriesIdForExceptions = reserva.serieRecurrente || reserva.recurrenteId;
+      const exceptionHistory = !batchUpdateInfo?.replacementOriginal && seriesIdForExceptions &&
+        (updateWholeSeries || batchUpdateInfo && batchUpdateInfo.scope !== 'single')
+        ? await queryReservationsBySeries(seriesIdForExceptions) : reservations;
+      if (batchUpdateInfo?.replacementOriginal) {
+        if (!userCanEditReservations(currentUser) || !userCanCreateReservations(currentUser)) throw new Error('No tienes permiso para reemplazar esta sesión.');
+        const original = batchUpdateInfo.replacementOriginal;
+        const replacement = batchUpdateInfo.updatedReservations.find(r => r.reemplazaReservaId === original.id);
+        if (!replacement) throw new Error('Falta la actividad excepcional.');
+        batchUpdateInfo = buildReplacementBatch(original, replacement, replacement.id, replacement.motivoReemplazo || '');
+        allowConflictOverride = false;
+        for (const interval of getTimeIntervalsForReservation(replacement)) {
+          const availability = calculateEquipmentAvailability(interval.date, interval.startMin, interval.endMin,
+            reservations.filter(r => isReservationActiveForAvailability(r)), getStoredEquipment(), [original.id]);
+          for (const requested of replacement.equipamientoSolicitado || []) {
+            const item = availability.find(a => a.item.id === requested.equipmentId);
+            if (!item || requested.quantity < 0 || requested.quantity > item.availableQuantity) throw new Error(`Equipamiento no disponible: ${requested.equipmentName || requested.equipmentId}.`);
+          }
+        }
+      }
       // -------------------------------------------------------------
       // CASE 0: TARGETED BATCH UPDATE (PRECISE SCOPE: single, future, series, dateRange, selected)
       // -------------------------------------------------------------
@@ -533,8 +557,12 @@ export function useReservationCrud({
         }
 
         const { scope, updatedReservations, affectedIds } = batchUpdateInfo;
+        if (!batchUpdateInfo.replacementOriginal && scope !== 'single') {
+          const exceptionIds = new Set(exceptionHistory.filter(r => r.reemplazadaPorReservaId).map(r => r.id));
+          batchUpdateInfo = { ...batchUpdateInfo, deletedIds: batchUpdateInfo.deletedIds?.filter(id => !exceptionIds.has(id)) };
+        }
         const deletedSet = getDeletedIds();
-        const activeUpdated = (updatedReservations || []).filter(
+        const activeUpdated = (batchUpdateInfo.replacementOriginal || scope === 'single' ? updatedReservations : preserveReplacementExceptions(updatedReservations, exceptionHistory)).filter(
           (r) => !deletedSet.has(r.id) && r.estado !== 'eliminada'
         );
         if (activeUpdated.length === 0) {
@@ -588,14 +616,15 @@ export function useReservationCrud({
               reservaEspacio: firstRes.espacio,
               reservaHorario: `${firstRes.horaInicio} - ${firstRes.horaFin}`,
               reservaResponsable: firstRes.responsable,
-              newState: activeUpdated
+              newState: activeUpdated,
+              previousState: batchUpdateInfo.replacementOriginal
             });
         applyConfirmed(confirmedWrite);
 
         // Close only after the write confirms all requested changes.
         setIsReservationModalOpen(false);
         setEditingReservation(null);
-        triggerSyncToast(`✓ ${activeUpdated.length} reservas actualizadas y confirmadas`, 'success');
+        triggerSyncToast(batchUpdateInfo.replacementOriginal ? '✓ Reemplazo confirmado. Las demás fechas continúan normalmente.' : `✓ ${activeUpdated.length} reservas actualizadas y confirmadas`, 'success');
 
 
 
@@ -649,6 +678,7 @@ export function useReservationCrud({
         // Find all active reservations in the series (strictly exclude deleted items)
         const seriesMatches = reservations.filter(
           (r) =>
+            !exceptionHistory.some(e => e.id === r.id && e.reemplazadaPorReservaId) &&
             !deletedSet.has(r.id) &&
             r.estado !== 'eliminada' &&
             (r as any).eliminada !== true &&
@@ -664,7 +694,8 @@ export function useReservationCrud({
 
           if (explicitSlots.length > 0) {
             // Re-sync with explicit slots (supports multiple segments per day, e.g. 2 spaces/times on Monday & Wednesday)
-            const totalCount = explicitSlots.length;
+            const safeSlots = explicitSlots.filter(item => !exceptionHistory.some(e => e.reemplazadaPorReservaId && e.fecha === item.fecha));
+            const totalCount = safeSlots.length;
             const existingByDate = new Map<string, Reservation[]>();
             seriesMatches.forEach((m) => {
               const list = existingByDate.get(m.fecha) || [];
@@ -674,7 +705,7 @@ export function useReservationCrud({
 
             const usedExistingIds = new Set<string>();
 
-            updatedSeriesList = explicitSlots.map((item, i) => {
+            updatedSeriesList = safeSlots.map((item, i) => {
               const matchesForDate = existingByDate.get(item.fecha) || [];
 
               // Best effort match: 1) Same space & time, 2) Same space, 3) Any unused for this date, 4) Any unused in series

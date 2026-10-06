@@ -10,6 +10,9 @@ export interface CommitmentLetterAttachment {
 
 export interface Reservation {
   id: string;
+  reemplazaReservaId?: string;
+  reemplazadaPorReservaId?: string;
+  motivoReemplazo?: string;
   fecha: string; // YYYY-MM-DD
   horaInicio: string; // HH:mm
   horaFin: string; // HH:mm
@@ -64,6 +67,7 @@ export interface Reservation {
 export type UpdateScope = 'single' | 'future' | 'series' | 'dateRange' | 'selected';
 
 export interface BatchUpdateInfo {
+  replacementOriginal?: Reservation;
   scope: UpdateScope;
   updatedReservations: Reservation[];
   affectedIds: string[];

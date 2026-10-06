@@ -5,6 +5,7 @@ import {
   onSnapshot,
   writeBatch,
   getDocs,
+  getDoc,
   query,
   where,
   orderBy,
@@ -1006,6 +1007,13 @@ export async function saveReservation(reserva: Reservation, options: WriteOption
   return commitReservationChanges([reserva], options);
 }
 
+export async function fetchReservationById(id: string): Promise<Reservation | null> {
+  const db = getDb();
+  if (!db) throw new Error('No hay conexión para consultar la actividad relacionada.');
+  const snapshot = await getDoc(doc(db, COLLECTION_NAME, id));
+  return snapshot.exists() ? normalizeReservationFromFirestore(snapshot.id, snapshot.data()) : null;
+}
+
 export async function saveReservationsBatch(reservas: readonly Reservation[], options: WriteOptions = {}): Promise<WriteResult> {
   return commitReservationChanges(reservas, options);
 }
@@ -1014,6 +1022,7 @@ export async function resumeReservationOperation(id: string): Promise<WriteResul
   const operation = getPendingOperations().find(o => o.id === id);
   if (!operation) throw new Error('La operación ya fue completada o no está disponible.');
   const user = getStoredAuthUser();
+  if (operation.reservations.some(r => r.reemplazaReservaId) && (!userCanCreateReservations(user) || !userCanEditReservations(user))) throw new Error('No tienes permisos para reanudar un reemplazo.');
   if (!user || (operation.actor && operation.actor !== user.username) || operation.reservations.some(r=>r.version ? !userCanEditReservations(user) : !userCanCreateReservations(user)) || (operation.deletedIds.length && !userCanDeleteReservations(user))) throw new Error('No tienes permisos para reanudar esta operación.');
   return commitReservationChanges(operation.reservations.filter(r=>!operation.confirmedIds.includes(r.id)), {
     operationId: operation.id, deletedIds: operation.deletedIds.filter(id => !operation.confirmedIds.includes(id)),

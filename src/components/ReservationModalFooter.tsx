@@ -13,6 +13,7 @@ import { Reservation, UpdateScope } from '../types';
 import { isCommitmentLetterEligible } from '../utils/commitmentLetterPdf';
 
 interface ReservationModalFooterProps {
+  replacementMode?: boolean;
   editingReservation?: Reservation | null;
   isDuplicating: boolean;
   canModifyReservation: boolean;
@@ -54,6 +55,7 @@ interface ReservationModalFooterProps {
 }
 
 export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = React.memo(({
+  replacementMode = false,
   editingReservation,
   isDuplicating,
   canModifyReservation,
@@ -324,6 +326,8 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
                   : enableSingleSecondSpace
                   ? 'Guardar Copia (2 Espacios)'
                   : 'Guardar Reserva Duplicada')
+              : replacementMode
+              ? 'Confirmar reemplazo'
               : editingReservation
               ? 'Guardar Cambios'
               : bookingMode === 'specific' && generateFullSeries

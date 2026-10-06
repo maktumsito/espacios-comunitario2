@@ -12,3 +12,9 @@ it.each<[UpdateScope,string[]]>([['single',['scope-1']],['future',['scope-1','sc
   expect(new Set(result.current.excludeReservationIds)).toEqual(new Set(ids));
   expect(result.current.excludeSeriesId).toBe(updateScope==='series'?'series':undefined);
 });
+it('omits replaced dates from regeneration even if the replacement is cancelled', () => {
+  const history = rows.map(r => r.id === 'scope-1' ? { ...r, estado: 'cancelada', reemplazadaPorReservaId: 'exception' } : r);
+  const { result } = renderHook(() => useReservationSeriesState({ editingReservation: rows[0], allReservations: history, updateScope: 'series', rangeStartDate: '', rangeEndDate: '', selectedOccurrenceIds: new Set(), bookingMode: 'pattern', recurrenceStartDate: '2026-10-05', recurrenceEndDate: '2026-10-07', selectedDays: [1, 2, 3], specificDates: [], formData: rows[0], includeHolidaysInSeries: false, holidayOverrideKey: '' }));
+  expect(result.current.generatedDates).toEqual(['2026-10-05', '2026-10-07']);
+  expect(result.current.affectedReservations.map(r => r.id)).toEqual(['scope-0', 'scope-2']);
+});

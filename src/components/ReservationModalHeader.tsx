@@ -3,6 +3,7 @@ import { Copy, Calendar, Sparkles, SlidersHorizontal, X } from 'lucide-react';
 import { Reservation } from '../types';
 
 interface ReservationModalHeaderProps {
+  replacementMode?: boolean;
   isDuplicating: boolean;
   editingReservation?: Reservation | null;
   isWizardMode: boolean;
@@ -11,6 +12,7 @@ interface ReservationModalHeaderProps {
 }
 
 export const ReservationModalHeader: React.FC<ReservationModalHeaderProps> = React.memo(({
+  replacementMode = false,
   isDuplicating,
   editingReservation,
   isWizardMode,
@@ -35,7 +37,7 @@ export const ReservationModalHeader: React.FC<ReservationModalHeaderProps> = Rea
         </div>
         <div>
           <h2 className="text-lg font-bold">
-            {isDuplicating
+            {replacementMode ? 'Reemplazar solo este día' : isDuplicating
               ? 'Duplicar Reserva de Espacio'
               : editingReservation
               ? 'Editar Reserva de Espacio'
@@ -51,7 +53,7 @@ export const ReservationModalHeader: React.FC<ReservationModalHeaderProps> = Rea
         </div>
       </div>
       <div className="flex items-center space-x-2">
-        <button
+        {!replacementMode && <button
           type="button"
           id="toggle-wizard-mode-btn"
           onClick={() => setIsWizardMode((prev) => !prev)}
@@ -61,7 +63,7 @@ export const ReservationModalHeader: React.FC<ReservationModalHeaderProps> = Rea
           <SlidersHorizontal className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">{isWizardMode ? 'Ver Formulario Completo' : 'Modo Guiado (3 Pasos)'}</span>
           <span className="sm:hidden">{isWizardMode ? 'Completo' : '3 Pasos'}</span>
-        </button>
+        </button>}
         <button
           type="button"
           onClick={onClose}

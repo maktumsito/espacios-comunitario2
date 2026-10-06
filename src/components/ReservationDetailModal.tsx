@@ -40,8 +40,12 @@ import {
 } from '../services/authService';
 import { ConfirmationModal } from './common/ConfirmationModal';
 import { BaseModal } from './common/BaseModal';
+import { canReplaceOccurrence } from '../utils/reservationReplacement';
+import { checkSingleConflict } from '../utils/conflictDetector';
 
 interface ReservationDetailModalProps {
+  onReplace?: (reservation: Reservation) => void;
+  onViewRelated?: (id: string) => void | Promise<void>;
   reservation: Reservation | null;
   isOpen: boolean;
   onClose: () => void;
@@ -61,6 +65,8 @@ interface ReservationDetailModalProps {
 }
 
 export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
+  onReplace,
+  onViewRelated,
   reservation,
   isOpen,
   onClose,
@@ -122,6 +128,8 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   const canModify = userCanEditReservations(currentUser);
   const canDelete = userCanDeleteReservations(currentUser);
   const canCreate = userCanCreateReservations(currentUser);
+  const reactivationBlocked = Boolean(reservation.reemplazadaPorReservaId &&
+    checkSingleConflict({ ...reservation, estado: 'activa' }, allReservations, [reservation.id]).length);
 
   const getSpaceColor = (spaceName: string) => {
     const found = SPACES_LIST.find(s => s.name.toUpperCase() === spaceName.toUpperCase());
@@ -146,6 +154,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
 
   const handleToggleCancel = () => {
     if (!reservation) return;
+    if (reservation.estado === 'cancelada' && reactivationBlocked) return;
     const isCurrentlyCancelled = reservation.estado === 'cancelada';
     if (isCurrentlyCancelled) {
       openConfirm({
@@ -217,13 +226,23 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                 )}
                 {reservation.estado === 'cancelada' && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
-                    🚫 Cancelada
+                    {reservation.reemplazadaPorReservaId ? 'Suspendida por reemplazo' : '🚫 Cancelada'}
                   </span>
                 )}
               </div>
               <h3 className="text-base font-bold text-slate-900">
                 {reservation.descripcion || reservation.tipoActividad}
               </h3>
+              {(reservation.reemplazaReservaId || reservation.reemplazadaPorReservaId) && (
+                <div className="mt-2 text-xs text-indigo-800 space-y-1">
+                  <p>{reservation.reemplazaReservaId ? 'Actividad excepcional: reemplaza una sesión recurrente.' : 'Esta sesión fue suspendida por una actividad excepcional.'}</p>
+                  <p>Motivo: {reservation.motivoReemplazo}</p>
+                  {onViewRelated && <button type="button" className="underline font-semibold cursor-pointer"
+                    onClick={() => void onViewRelated(reservation.reemplazaReservaId || reservation.reemplazadaPorReservaId!)}>
+                    {reservation.reemplazaReservaId ? 'Ver actividad original' : 'Ver reemplazo'}
+                  </button>}
+                </div>
+              )}
             </div>
 
             <button
@@ -657,6 +676,12 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         {/* Footer Actions: Carta, Edit & Delete */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200">
           <div className="flex items-center space-x-2">
+            {onReplace && canCreate && canModify && canReplaceOccurrence(reservation) && (
+              <button id="btn-detail-replace-occurrence" type="button" onClick={() => onReplace(reservation)}
+                className="px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-bold cursor-pointer">
+                Reemplazar solo este día
+              </button>
+            )}
             {canDelete ? (
               <button
                 id="btn-detail-delete"
@@ -798,12 +823,13 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                     id="btn-detail-toggle-cancel"
                     type="button"
                     onClick={handleToggleCancel}
+                    disabled={reservation.estado === 'cancelada' && reactivationBlocked}
                     className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer border ${
                       reservation.estado === 'cancelada'
                         ? 'text-emerald-800 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border-emerald-300'
                         : 'text-amber-800 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border-amber-300'
                     }`}
-                    title={reservation.estado === 'cancelada' ? 'Reactivar reserva en la agenda' : 'Marcar como cancelada y liberar el horario'}
+                    title={reactivationBlocked ? 'No se puede reactivar mientras el horario siga ocupado.' : reservation.estado === 'cancelada' ? 'Reactivar reserva en la agenda' : 'Marcar como cancelada y liberar el horario'}
                   >
                     <Ban className="w-3.5 h-3.5" />
                     <span>{reservation.estado === 'cancelada' ? 'Reactivar' : 'Cancelar Reserva'}</span>

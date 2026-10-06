@@ -164,8 +164,11 @@ export function useReservationSeriesState({
   const rawPatternDates = useMemo(() => {
     if (bookingMode !== 'pattern') return [];
     if (!recurrenceStartDate || !recurrenceEndDate) return [];
-    return generateRecurrenceDates(recurrenceStartDate, recurrenceEndDate, selectedDays);
-  }, [bookingMode, recurrenceStartDate, recurrenceEndDate, selectedDays]);
+    const seriesId = !isDuplicating && (editingReservation?.serieRecurrente || editingReservation?.recurrenteId);
+    const exceptions = new Set(allReservations.filter(r => r.reemplazadaPorReservaId && seriesId &&
+      (r.serieRecurrente || r.recurrenteId) === seriesId).map(r => r.fecha));
+    return generateRecurrenceDates(recurrenceStartDate, recurrenceEndDate, selectedDays).filter(date => !exceptions.has(date));
+  }, [bookingMode, recurrenceStartDate, recurrenceEndDate, selectedDays, editingReservation, isDuplicating, allReservations]);
 
   // Chilean holiday analysis for pattern recurrence
   const patternHolidayAnalysis = useMemo(() => {

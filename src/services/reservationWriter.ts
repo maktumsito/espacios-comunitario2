@@ -3,6 +3,7 @@ import type { Reservation } from '../types';
 import { getConstituentSpaces, getTimeIntervalsForReservation, isReservationActiveForAvailability, isDateExemptFromConflicts, isTimeOverlapping, findReservationConflicts } from '../utils/conflictDetector';
 import { isChileanHoliday, verifyHolidayOverrideKey } from '../utils/holidayUtils';
 import { validateReservationWithZod } from '../schemas/reservationSchema';
+import { canReplaceOccurrence, sameReplacementSlot } from '../utils/reservationReplacement';
 
 export interface WriteResult {
   operationId: string;
@@ -27,6 +28,7 @@ export class ReservationVersionError extends Error {
     super('La reserva cambió por otro usuario. Recarga la versión actual antes de guardar; tus datos se conservaron.');
   }
 }
+class ReplacementValidationError extends Error {}
 export type SlotBooking = { id: string; startMin: number; endMin: number; horaInicio: string; horaFin: string; responsable: string; estado: string; exempt: boolean };
 export type ScheduleSlot = { fecha: string; espacio: string; bookings: SlotBooking[] };
 export function reservationSlots(r: Reservation): Map<string, ScheduleSlot> {
@@ -97,6 +99,11 @@ export function planWriteChunks(items: Reservation[], previous: Map<string, Rese
       if (owner) parent.set(root(id),root(owner)); else slotOwner.set(key,id);
     }
   }
+  for (const r of items) {
+    for (const linked of [r.reemplazaReservaId, r.reemplazadaPorReservaId]) {
+      if (linked && parent.has(linked)) parent.set(root(r.id), root(linked));
+    }
+  }
   const groups = new Map<string,string[]>();
   for (const id of ids) { const key = root(id); groups.set(key,[...(groups.get(key)||[]), id]); }
   const chunks: string[][] = [];
@@ -156,6 +163,44 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
         ]);
         const current = new Map<string,Reservation>();
         snapshots.forEach(s=> { if(s.exists()) current.set(s.id,s.data() as Reservation); });
+        const linkedIds = [...new Set([...current.values()].map(r => r.reemplazadaPorReservaId).filter((id): id is string => Boolean(id && !current.has(id))))];
+        const linkedSnapshots = await Promise.all(linkedIds.map(id => tx.get(doc(db, 'reservas', id))));
+        const linkedCurrent = new Map<string, Reservation>();
+        linkedSnapshots.forEach(s => { if (s.exists()) linkedCurrent.set(s.id, s.data() as Reservation); });
+        // A newly linked replacement and its cancellation must be confirmed together.
+        for (const id of chunk) {
+          const next = byId.get(id);
+          const existing = current.get(id);
+          if (!next || (existing as any)?.lastOperationId === operationId) continue;
+          if (existing?.reemplazadaPorReservaId && next.reemplazadaPorReservaId !== existing.reemplazadaPorReservaId ||
+              existing?.reemplazaReservaId && next.reemplazaReservaId !== existing.reemplazaReservaId) {
+            throw new ReplacementValidationError('No se puede quitar el vínculo de un reemplazo existente.');
+          }
+          if (next.reemplazaReservaId && !existing) {
+            const original = current.get(next.reemplazaReservaId);
+            const suspended = byId.get(next.reemplazaReservaId);
+            if (!original || !canReplaceOccurrence(original) || !suspended || suspended.estado !== 'cancelada' ||
+                suspended.reemplazadaPorReservaId !== next.id || !sameReplacementSlot(original, next) ||
+                !sameReplacementSlot(original, suspended) || !next.motivoReemplazo?.trim() ||
+                next.motivoReemplazo !== suspended.motivoReemplazo || next.actividadRecurrente !== 'No' ||
+                next.serieRecurrente || next.recurrenteId || next.estado !== 'activa' || options.allowConflictOverride) {
+              throw new ReplacementValidationError('El reemplazo requiere una sesión activa y el guardado conjunto sin solapamientos.');
+            }
+          }
+          if (next.reemplazadaPorReservaId && !existing?.reemplazadaPorReservaId) {
+            const replacement = byId.get(next.reemplazadaPorReservaId);
+            if (!existing || !replacement || current.has(replacement.id) || replacement.reemplazaReservaId !== next.id) {
+              throw new ReplacementValidationError('La suspensión debe guardarse junto con una actividad excepcional nueva.');
+            }
+          }
+          if (existing?.reemplazadaPorReservaId && isReservationActiveForAvailability(next, new Set())) {
+            const linkedId = existing.reemplazadaPorReservaId;
+            const replacement = byId.get(linkedId) || current.get(linkedId) || linkedCurrent.get(linkedId);
+            if (replacement && findReservationConflicts([next], [replacement]).length) {
+              throw new ReplacementValidationError('No se puede reactivar: el horario sigue ocupado por el reemplazo.');
+            }
+          }
+        }
         const keys = new Set(chunk.flatMap(id=>[...allSlotKeys(current.get(id),true),...allSlotKeys(byId.get(id))]));
         if (chunk.length + keys.size > 450) throw new Error('Los datos cambiaron y la operación excede el límite atómico. Reintenta con un grupo más pequeño.');
         const remainingSlotSnapshots = await Promise.all([...keys].filter(key=>!incomingKeys.has(key)).map(key=>tx.get(doc(db,'schedule_slots',key))));
@@ -223,6 +268,7 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
     }
     return result;
   } catch (cause: any) {
+    if (cause instanceof ReplacementValidationError && !result.confirmedIds.length) updateJournal(operation, true);
     if (!options.operationId && !pending && !result.confirmedIds.length && (cause instanceof ReservationVersionError || /conflicto|límite/i.test(cause?.message || ''))) updateJournal(operation, true);
     throw new ReservationWriteError(`${cause?.message || 'Error de conexión'}. Confirmadas: ${result.confirmedIds.length}; pendientes: ${result.pendingIds.length}. Puedes reanudar sin duplicar reservas.`, result, cause);
   }
