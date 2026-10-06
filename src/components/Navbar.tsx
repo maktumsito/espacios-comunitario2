@@ -325,14 +325,14 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                 id="btn-navbar-command-palette"
                 type="button"
                 onClick={onOpenCommandPalette}
-                aria-label="Buscar reservas o ejecutar comandos (Ctrl+K)"
+                aria-label="Buscar reservas o ejecutar comandos (Ctrl+K o Cmd+K)"
                 className="min-h-[40px] sm:min-h-[44px] hidden sm:flex items-center space-x-1.5 px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-600 hover:text-slate-900 shadow-2xs transition cursor-pointer text-xs font-semibold"
-                title="Buscador rápido global y comandos (Ctrl + K)"
+                title="Buscador rápido global y comandos (Ctrl+K o Cmd+K)"
               >
                 <Search className="w-4 h-4 text-slate-500" />
                 <span className="hidden 2xl:inline text-slate-600">Buscar...</span>
                 <kbd className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-500 bg-white border border-slate-200 rounded shadow-2xs">
-                  ⌘K
+                  Ctrl/⌘ K
                 </kbd>
               </button>
             )}
@@ -576,7 +576,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                 type="button"
                 id="btn-mobile-command-palette"
                 onClick={onOpenCommandPalette}
-                aria-label="Búsqueda rápida y comandos (Ctrl+K)"
+                aria-label="Búsqueda rápida y comandos (Ctrl+K o Cmd+K)"
                 className="sm:hidden min-w-[44px] min-h-[44px] p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer transition"
                 title="Buscador rápido"
               >
@@ -722,7 +722,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                     <span>Buscador Rápido (Spotlight)</span>
                   </div>
                   <kbd className="text-xs font-mono font-bold px-2 py-0.5 bg-white border border-blue-200 rounded text-blue-700">
-                    ⌘K
+                    Ctrl/⌘ K
                   </kbd>
                 </button>
               )}

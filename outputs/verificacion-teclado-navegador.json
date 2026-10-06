@@ -1,0 +1,91 @@
+{
+  "engine": "Edge headless",
+  "cloud": "All external requests blocked",
+  "results": [
+    {
+      "width": 1200,
+      "case": "Ctrl+K, Escape from another control, focus restoration",
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "case": "Cmd+K and Ctrl+K toggle",
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "case": "Slash, Tab and Shift+Tab cycling",
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "case": "ArrowDown, ArrowUp and Enter select view",
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "case": "Native Enter on focusable command button",
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "case": "Calendar booking Enter opens its details without navigating the day",
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "case": "Filter Escape preserves text; slash and Alt+N do not interrupt input",
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "case": "Alt+N creates; Ctrl+K blocked during reservation editing",
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "case": "No page errors",
+      "passed": true
+    },
+    {
+      "width": 390,
+      "case": "Ctrl+K, Escape from another control, focus restoration",
+      "passed": true
+    },
+    {
+      "width": 390,
+      "case": "Cmd+K and Ctrl+K toggle",
+      "passed": true
+    },
+    {
+      "width": 390,
+      "case": "Slash, Tab and Shift+Tab cycling",
+      "passed": true
+    },
+    {
+      "width": 390,
+      "case": "ArrowDown, ArrowUp and Enter select view",
+      "passed": true
+    },
+    {
+      "width": 390,
+      "case": "Native Enter on focusable command button",
+      "passed": true
+    },
+    {
+      "width": 390,
+      "case": "Filter Escape preserves text; slash and Alt+N do not interrupt input",
+      "passed": true
+    },
+    {
+      "width": 390,
+      "case": "Alt+N creates; Ctrl+K blocked during reservation editing",
+      "passed": true
+    },
+    {
+      "width": 390,
+      "case": "No page errors",
+      "passed": true
+    }
+  ]
+}

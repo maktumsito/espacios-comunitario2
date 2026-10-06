@@ -326,6 +326,7 @@ export default function App() {
 
   // Global Keyboard Shortcuts (Ctrl+K, Cmd+K, '/', Alt+N)
   useKeyboardShortcuts({
+    enabled: Boolean(currentUser),
     onToggleCommandPalette: () => setIsCommandPaletteOpen((prev) => !prev),
     onOpenNewReservation: () => {
       if (!userCanCreateReservations(currentUser)) {

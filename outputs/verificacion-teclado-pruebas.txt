@@ -1,0 +1,17 @@
+
+> react-example@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.3 C:/Users/cshute/Documents/Codex/2026-10-05/ve
+
+
+ Test Files  36 passed | 1 skipped (37)
+      Tests  172 passed | 24 skipped (196)
+   Start at  08:14:42
+   Duration  43.17s (import 64%, environment 16%, tests 16%, transform 2%, setup 1%)
+
+     Import  114 modules were evaluated 272 times · 51.28s total, 64% of tracked time
+             ~10.93s faster with isolate: false — shared modules are evaluated once per worker instead of once per file
+             learn more: https://vitest.dev/guide/improving-performance#test-isolation
+

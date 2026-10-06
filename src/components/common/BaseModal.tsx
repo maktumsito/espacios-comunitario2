@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { getDialogFocusables, isTopmostDialog, trapDialogTab } from '../../utils/dialogKeyboard';
 
 export interface BaseModalProps {
   isOpen: boolean;
@@ -72,7 +73,8 @@ export const BaseModal: React.FC<BaseModalProps> = ({
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.defaultPrevented && !e.repeat && !e.isComposing && isTopmostDialog(modalRef.current)) {
+        e.preventDefault();
         e.stopPropagation();
         onClose();
       }
@@ -100,7 +102,7 @@ export const BaseModal: React.FC<BaseModalProps> = ({
     return () => {
       document.body.style.overflow = originalOverflow;
       document.body.style.paddingRight = originalPaddingRight;
-      if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
+      if (previousActiveElementRef.current?.isConnected && typeof previousActiveElementRef.current.focus === 'function') {
         previousActiveElementRef.current.focus();
         previousActiveElementRef.current = null;
       }
@@ -113,38 +115,16 @@ export const BaseModal: React.FC<BaseModalProps> = ({
 
     const getFocusable = (): HTMLElement[] => {
       if (!modalRef.current) return [];
-      return Array.from(
-        modalRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        )
-      ).filter((el) => el.offsetParent !== null);
+      return getDialogFocusables(modalRef.current);
     };
 
     const focusables = getFocusable();
-    if (focusables.length > 0) {
+    if (focusables.length > 0 && isTopmostDialog(modalRef.current)) {
       focusables[0]?.focus();
     }
 
     const handleTabKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab' || !modalRef.current) return;
-
-      const currentFocusables = getFocusable();
-      if (currentFocusables.length === 0) return;
-
-      const firstEl = currentFocusables[0];
-      const lastEl = currentFocusables[currentFocusables.length - 1];
-
-      if (e.shiftKey) {
-        if (document.activeElement === firstEl) {
-          e.preventDefault();
-          lastEl.focus();
-        }
-      } else {
-        if (document.activeElement === lastEl) {
-          e.preventDefault();
-          firstEl.focus();
-        }
-      }
+      if (modalRef.current) trapDialogTab(e, modalRef.current);
     };
 
     window.addEventListener('keydown', handleTabKey);
@@ -175,6 +155,7 @@ export const BaseModal: React.FC<BaseModalProps> = ({
       {/* Modal Container */}
       <div
         ref={modalRef}
+        tabIndex={-1}
         className={`relative w-full ${widthClass} bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col max-h-[90vh] my-auto z-10 animate-in fade-in zoom-in-95 duration-200 ${containerClassName}`}
         onClick={(e) => e.stopPropagation()}
       >

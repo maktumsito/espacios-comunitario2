@@ -27,6 +27,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { fuzzySearchReservations, fuzzySearchItems } from '../utils/fuzzySearch';
 import { ConfirmationModal } from './common/ConfirmationModal';
+import { isTopmostDialog, trapDialogTab } from '../utils/dialogKeyboard';
 
 interface PaletteCommandItem {
   id: string;
@@ -108,22 +109,39 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
   });
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   // Focus input automatically when palette opens
   useEffect(() => {
     if (isOpen) {
       setQuery('');
       setSelectedIndex(0);
+      const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const previousOverflow = document.body.style.overflow;
       const timer = setTimeout(() => {
-        inputRef.current?.focus();
+        if (isTopmostDialog(dialogRef.current)) inputRef.current?.focus();
       }, 50);
       document.body.style.overflow = 'hidden';
       return () => {
         clearTimeout(timer);
-        document.body.style.overflow = '';
+        document.body.style.overflow = previousOverflow;
+        if (previousFocus?.isConnected) previousFocus.focus();
       };
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleDialogKey = (event: KeyboardEvent) => {
+      if (!dialogRef.current || event.defaultPrevented || event.isComposing || !isTopmostDialog(dialogRef.current)) return;
+      if (event.key === 'Escape') {
+        if (event.repeat) return;
+        event.preventDefault(); event.stopPropagation(); onClose();
+      } else trapDialogTab(event, dialogRef.current);
+    };
+    window.addEventListener('keydown', handleDialogKey);
+    return () => window.removeEventListener('keydown', handleDialogKey);
+  }, [isOpen, onClose]);
 
   // Unique applicants index derived from reservations
   const applicantsList = useMemo(() => {
@@ -161,7 +179,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
         type: 'action',
         title: 'Nueva Reserva de Espacio',
         subtitle: 'Crear una reserva puntual o taller recurrente',
-        badge: 'Atajo: N',
+        badge: 'Atajo: Alt+N',
         badgeColor: 'blue',
         icon: <Plus className="w-4 h-4 text-blue-600" />,
         onSelect: () => {
@@ -494,12 +512,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
 
   // Keyboard navigation inside list
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (flattenedItems.length === 0) {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-      return;
-    }
+    if (e.target !== inputRef.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229 || confirmDialog.isOpen || flattenedItems.length === 0) return;
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -509,13 +522,10 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
       setSelectedIndex((prev) => (prev - 1 + flattenedItems.length) % flattenedItems.length);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const currentItem = flattenedItems[selectedIndex];
+      const currentItem = flattenedItems[Math.min(selectedIndex, flattenedItems.length - 1)];
       if (currentItem) {
         handleSelectItem(currentItem);
       }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      onClose();
     }
   };
 
@@ -526,12 +536,16 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
     if (activeEl) {
       activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
-  }, [selectedIndex]);
+  }, [selectedIndex, flattenedItems.length, query]);
 
   if (!isOpen) return null;
 
   return (
     <div
+      id="global-command-palette"
+      ref={dialogRef}
+      tabIndex={-1}
+      onKeyDown={handleKeyDown}
       role="dialog"
       aria-modal="true"
       aria-label="Buscador rápido global y comandos"
@@ -551,7 +565,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
+            aria-label="Buscar reservas y comandos"
             placeholder="Buscar por taller, vecino, RUT, cancha, ID o comando..."
             className="flex-1 bg-transparent text-sm sm:text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-hidden"
           />
@@ -569,6 +583,10 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
               ESC
             </kbd>
           )}
+          <button type="button" aria-label="Cerrar buscador" title="Cerrar buscador (Esc)" onClick={onClose}
+            className="ml-2 p-1 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-200 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Results List */}
@@ -600,12 +618,14 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
                       const itemIdx = flattenedItems.findIndex((f) => f.id === item.id);
                       const isSelected = itemIdx === selectedIndex;
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={item.id}
                           data-index={itemIdx}
+                          onFocus={() => setSelectedIndex(itemIdx)}
                           onMouseEnter={() => setSelectedIndex(itemIdx)}
                           onClick={() => handleSelectItem(item)}
-                          className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition text-left ${
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition text-left ${
                             isSelected
                               ? 'bg-blue-50/90 text-blue-950 ring-1 ring-blue-500/30'
                               : 'hover:bg-slate-50 text-slate-800'
@@ -644,7 +664,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
                               <CornerDownLeft className="w-3 h-3" />
                             </span>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -663,12 +683,14 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
                       const itemIdx = flattenedItems.findIndex((f) => f.id === item.id);
                       const isSelected = itemIdx === selectedIndex;
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={item.id}
                           data-index={itemIdx}
+                          onFocus={() => setSelectedIndex(itemIdx)}
                           onMouseEnter={() => setSelectedIndex(itemIdx)}
                           onClick={() => handleSelectItem(item)}
-                          className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition text-left ${
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition text-left ${
                             isSelected
                               ? 'bg-emerald-50 text-emerald-950 ring-1 ring-emerald-500/30'
                               : 'hover:bg-slate-50 text-slate-800'
@@ -695,7 +717,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
                               <ChevronRight className="w-3 h-3" />
                             </span>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -713,9 +735,11 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
                       const itemIdx = flattenedItems.findIndex((f) => f.id === item.id);
                       const isSelected = itemIdx === selectedIndex;
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={item.id}
                           data-index={itemIdx}
+                          onFocus={() => setSelectedIndex(itemIdx)}
                           onMouseEnter={() => setSelectedIndex(itemIdx)}
                           onClick={() => handleSelectItem(item)}
                           className={`flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition text-left ${
@@ -745,7 +769,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
                               <ChevronRight className="w-3 h-3" />
                             </span>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -763,9 +787,11 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
                       const itemIdx = flattenedItems.findIndex((f) => f.id === item.id);
                       const isSelected = itemIdx === selectedIndex;
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={item.id}
                           data-index={itemIdx}
+                          onFocus={() => setSelectedIndex(itemIdx)}
                           onMouseEnter={() => setSelectedIndex(itemIdx)}
                           onClick={() => handleSelectItem(item)}
                           className={`flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition text-left ${
@@ -818,7 +844,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
                               <CornerDownLeft className="w-3 h-3" />
                             </span>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>

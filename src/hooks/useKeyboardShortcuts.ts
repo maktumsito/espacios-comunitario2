@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
+import { getTopmostDialog } from '../utils/dialogKeyboard';
 
 interface KeyboardShortcutsOptions {
   onToggleCommandPalette: () => void;
   onOpenNewReservation?: () => void;
   isCommandPaletteOpen: boolean;
+  enabled?: boolean;
 }
 
 /**
@@ -14,36 +16,36 @@ interface KeyboardShortcutsOptions {
 export function useKeyboardShortcuts({
   onToggleCommandPalette,
   onOpenNewReservation,
-  isCommandPaletteOpen
+  isCommandPaletteOpen,
+  enabled = true
 }: KeyboardShortcutsOptions) {
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (!enabled || e.defaultPrevented || e.repeat || e.isComposing || e.keyCode === 229) return;
+      const topDialog = getTopmostDialog();
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      const isEditing = Boolean(target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]') || target?.isContentEditable);
       // 1. Ctrl+K or Cmd+K
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+        if (topDialog && topDialog.id !== 'global-command-palette') return;
         e.preventDefault();
         onToggleCommandPalette();
         return;
       }
 
       // 2. '/' to open spotlight when user isn't in an active text input or editable element
-      if (e.key === '/' && !isCommandPaletteOpen) {
-        const target = e.target as HTMLElement | null;
-        const tagName = target?.tagName?.toLowerCase();
-        if (
-          tagName !== 'input' &&
-          tagName !== 'textarea' &&
-          tagName !== 'select' &&
-          !target?.isContentEditable
-        ) {
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !isCommandPaletteOpen && !topDialog) {
+        if (!isEditing) {
           e.preventDefault();
           onToggleCommandPalette();
           return;
         }
       }
 
-      // 3. Alt+N or 'n' shortcut for new reservation when not in active input
+      // 3. Alt+N, only outside editors and dialogs.
       if (
-        (e.altKey && e.key.toLowerCase() === 'n') &&
+        (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'n') &&
+        !isEditing && !topDialog && !isCommandPaletteOpen &&
         onOpenNewReservation
       ) {
         e.preventDefault();
@@ -53,5 +55,5 @@ export function useKeyboardShortcuts({
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [onToggleCommandPalette, onOpenNewReservation, isCommandPaletteOpen]);
+  }, [onToggleCommandPalette, onOpenNewReservation, isCommandPaletteOpen, enabled]);
 }

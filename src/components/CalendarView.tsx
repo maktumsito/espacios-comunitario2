@@ -304,6 +304,8 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
   }, [onNavigateToDay, day]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Reservation buttons inside the day keep their native Enter/Space actions.
+    if (e.target !== e.currentTarget || e.defaultPrevented || e.nativeEvent.isComposing) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       if (onNavigateToDay) {

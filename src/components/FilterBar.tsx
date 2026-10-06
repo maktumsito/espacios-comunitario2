@@ -64,7 +64,12 @@ const FilterBarComponent: React.FC<FilterBarProps> = ({
   }, [localSearch, filters, onFilterChange]);
 
   return (
-    <div className="bg-white border-b border-slate-200 py-3.5 px-3 sm:px-4 lg:px-6 shadow-xs">
+    <div className="bg-white border-b border-slate-200 py-3.5 px-3 sm:px-4 lg:px-6 shadow-xs" onKeyDown={(event) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing || !onClose) return;
+      event.preventDefault(); event.stopPropagation();
+      if (localSearch !== filters.search) onFilterChange({ ...filters, search: localSearch });
+      onClose();
+    }}>
       <div className="w-full max-w-[1680px] mx-auto space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Search Box */}
