@@ -238,6 +238,15 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   const [allowConflictOverride, setAllowConflictOverride] = useState(false);
   const [showInlineSuggestions, setShowInlineSuggestions] = useState(false);
   const [generateFullSeries, setGenerateFullSeries] = useState(true);
+
+  // Existing individual bookings have no "create all sessions" checkbox.
+  // Switching their booking mode must enable the series preview/save label.
+  useEffect(() => {
+    if (editingReservation && !isDuplicating && editingReservation.actividadRecurrente !== 'Sí' &&
+      !editingReservation.serieRecurrente && !editingReservation.recurrenteId && bookingMode !== 'single') {
+      setGenerateFullSeries(true);
+    }
+  }, [bookingMode, editingReservation, isDuplicating]);
   const [updateScope, setUpdateScope] = useState<UpdateScope>('single');
   const [rangeStartDate, setRangeStartDate] = useState<string>('');
   const [rangeEndDate, setRangeEndDate] = useState<string>('');

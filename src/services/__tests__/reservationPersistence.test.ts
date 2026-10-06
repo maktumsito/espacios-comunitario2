@@ -24,6 +24,31 @@ beforeEach(async () => {
 },30000);
 afterAll(async () => { await terminate(context.db); await deleteApp(app); });
 describe.skipIf(process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8087')('isolated Firestore reservation persistence', () => {
+  it('confirms conversion to a recurring series after omitting occupied days and releases the original slot', async () => {
+    const {renderHook,act,cleanup}=await import('@testing-library/react');
+    const {useReservationSaveHandler}=await import('../../hooks/useReservationSaveHandler');
+    const {conversionProps,conversionBase}=await import('../../test/reservationConversionFixture');
+    const original=(await service.saveReservation({...conversionBase,version:0})).reservations[0];
+    const occupied=make('conversion-occupied',{fecha:'2026-10-06',horaInicio:'12:00',horaFin:'13:00'});
+    await service.saveReservation(occupied);
+    const p=conversionProps(async (_row,_series,_dates,_batch,batch)=>{
+      expect(batch).toBeDefined();
+      await service.commitReservationChanges(batch!.updatedReservations,{deletedIds:batch!.deletedIds});return true;
+    });
+    p.editingReservation=original;p.formData={...original,horaInicio:'12:00',horaFin:'13:00'};
+    p.affectedReservations=[original];p.allReservations=[original,occupied];
+    const {result}=renderHook(()=>useReservationSaveHandler(p));
+    try {
+      await act(()=>result.current.executeSave(false,{bookingMode:'specific',specificDates:['2026-10-13','2026-10-20']}));
+      const rows=await getDocs(collection(context.db,'reservas'));
+      const series=rows.docs.map(d=>d.data() as Reservation).filter(r=>r.serieRecurrente==='SER_convert-normal');
+      expect(series).toHaveLength(2);expect(series.map(r=>r.fecha).sort()).toEqual(['2026-10-13','2026-10-20']);
+      expect(series.find(r=>r.id===original.id)).toMatchObject({fecha:'2026-10-13',version:2});
+      expect((await getDoc(doc(context.db,'schedule_slots','2026-10-06_SALA%202'))).data()?.bookings.map((r:any)=>r.id)).toEqual([occupied.id]);
+      expect((await getDoc(doc(context.db,'schedule_slots','2026-10-13_SALA%202'))).data()?.bookings.map((r:any)=>r.id)).toEqual([original.id]);
+      expect((await getDoc(doc(context.db,'reservas',occupied.id))).data()?.horaInicio).toBe('12:00');
+    } finally {cleanup();}
+  });
   it('keeps holiday authorization independent from extended-hours authorization', async () => {
     await service.saveReservation(make('holiday', {fecha:'2026-12-25', claveAutorizacion:'ccd2026', claveAutorizacionFeriado:'CCD'}));
     await expect(service.saveReservation(make('holiday-conflict', {fecha:'2026-12-25', claveAutorizacionFeriado:'CCD'}))).rejects.toThrow(/conflicto/i);

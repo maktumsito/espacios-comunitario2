@@ -29,6 +29,7 @@ import {
 import { WEEKDAYS } from '../utils/dateUtils';
 import { CustomScheduleSlot, ConflictSavePayload } from '../types';
 import { AuthUser } from '../services/authService';
+import { filterOutChileanHolidays } from '../utils/holidayUtils';
 
 export interface SeriesItemSlot {
   fecha: string;
@@ -244,6 +245,9 @@ export function useReservationSaveHandler({
     const effectiveSpecificDates: string[] = overridesPayload?.specificDates
       ? [...overridesPayload.specificDates]
       : [...specificDates];
+    const selectedDateHolidayAnalysis = overridesPayload?.specificDates
+      ? filterOutChileanHolidays(effectiveSpecificDates)
+      : specificHolidayAnalysis;
     const effectiveDateSchedules: Record<string, CustomScheduleSlot> = overridesPayload?.dateSchedules
       ? { ...overridesPayload.dateSchedules }
       : { ...dateSchedules };
@@ -357,7 +361,7 @@ export function useReservationSaveHandler({
       }
 
       // Check holidays in specific dates
-      if (specificHolidayAnalysis.omittedHolidays.length > 0) {
+      if (selectedDateHolidayAnalysis.omittedHolidays.length > 0) {
         if (includeHolidaysInSeries || isHolidayAuthorized) {
           if (!isHolidayAuthorized) {
             abortWithFeedback(
@@ -367,13 +371,13 @@ export function useReservationSaveHandler({
           }
           finalDates = effectiveSpecificDates;
         } else {
-          if (specificHolidayAnalysis.validDates.length === 0) {
+          if (selectedDateHolidayAnalysis.validDates.length === 0) {
             abortWithFeedback(
-              `🚫 Todas las fechas seleccionadas son días feriados en Chile (${specificHolidayAnalysis.omittedHolidays.map((h) => `${formatDateDDMMYYYY(h.date)}: ${h.holiday.name}`).join(', ')}).\n\nLos feriados están bloqueados por defecto. Para autorizarlos debes ingresar la clave especial CCD.`
+              `🚫 Todas las fechas seleccionadas son días feriados en Chile (${selectedDateHolidayAnalysis.omittedHolidays.map((h) => `${formatDateDDMMYYYY(h.date)}: ${h.holiday.name}`).join(', ')}).\n\nLos feriados están bloqueados por defecto. Para autorizarlos debes ingresar la clave especial CCD.`
             );
             return;
           }
-          finalDates = [...specificHolidayAnalysis.validDates];
+          finalDates = [...selectedDateHolidayAnalysis.validDates];
         }
       } else {
         finalDates = effectiveSpecificDates;
@@ -920,7 +924,10 @@ export function useReservationSaveHandler({
 
     try {
       if (editingReservation && !isDuplicating) {
-        if (!isEditingRecurring || updateScope === 'single') {
+        // Converting an individual booking is a series update, not an edit of
+        // one occurrence. Its existing ID/version must participate in the batch.
+        const isConvertingToSeries = !isEditingRecurring && isRecurring;
+        if (!isConvertingToSeries && (!isEditingRecurring || updateScope === 'single')) {
           // SINGLE RESERVATION OR SINGLE OCCURRENCE
           const updatedReserva: Reservation = {
             ...editingReservation,
@@ -979,7 +986,7 @@ export function useReservationSaveHandler({
         } else {
           // MULTI-OCCURRENCE / SERIES EXPANSION UPDATE (future, series, dateRange, selected)
           const deletedSet = getDeletedIds();
-          const cleanAffected = affectedReservations.filter(
+          const cleanAffected = (isConvertingToSeries ? [editingReservation] : affectedReservations).filter(
             (orig) => !deletedSet.has(orig.id) && orig.estado !== 'eliminada' && isReservationActiveForAvailability(orig)
           );
 
@@ -1046,6 +1053,7 @@ export function useReservationSaveHandler({
 
           const usedExistingIds = new Set<string>();
           const updatedList: Reservation[] = [];
+          const originalDateRetained = targetSlots.some(slot => slot.fecha === editingReservation.fecha);
 
           for (let sIdx = 0; sIdx < targetSlots.length; sIdx++) {
             const slot = targetSlots[sIdx];
@@ -1053,6 +1061,9 @@ export function useReservationSaveHandler({
             let match = existingByDateAndSpace.get(key)?.find((r) => !usedExistingIds.has(r.id));
             if (!match) {
               match = existingByDateOnly.get(slot.fecha)?.find((r) => !usedExistingIds.has(r.id));
+            }
+            if (!match && isConvertingToSeries && !originalDateRetained && !usedExistingIds.has(editingReservation.id)) {
+              match = cleanAffected.find(reservation => reservation.id === editingReservation.id);
             }
 
             const slotEquip = effectiveFormData.equipamientoSolicitado
@@ -1063,6 +1074,7 @@ export function useReservationSaveHandler({
               usedExistingIds.add(match.id);
               updatedList.push({
                 ...match,
+                fecha: slot.fecha,
                 horaInicio: slot.horaInicio || effectiveFormData.horaInicio || match.horaInicio,
                 horaFin: slot.horaFin || effectiveFormData.horaFin || match.horaFin,
                 espacio: slot.espacio || normalizedSpace || match.espacio,
@@ -1107,8 +1119,8 @@ export function useReservationSaveHandler({
                 recurrenteId: seriesId,
                 tipoRecurrencia: isSpecific ? 'especificas' : 'semanal',
                 diasSemana: diasSemanaStr,
-                fechaInicioRecurrencia: recurrenceStartDate || finalDates[0] || match.fecha,
-                fechaFinRecurrencia: recurrenceEndDate || finalDates[finalDates.length - 1] || match.fecha,
+                fechaInicioRecurrencia: isConvertingToSeries ? finalDates[0] : recurrenceStartDate || finalDates[0] || match.fecha,
+                fechaFinRecurrencia: isConvertingToSeries ? finalDates[finalDates.length - 1] : recurrenceEndDate || finalDates[finalDates.length - 1] || match.fecha,
                 editadoPor: currentUser?.name || currentUser?.username || 'Usuario',
                 fechaEdicion: format(new Date(), 'dd/MM/yyyy HH:mm:ss'),
                 version: match?.version || 0,
@@ -1164,8 +1176,8 @@ export function useReservationSaveHandler({
                 recurrenteId: seriesId,
                 tipoRecurrencia: isSpecific ? 'especificas' : 'semanal',
                 diasSemana: diasSemanaStr,
-                fechaInicioRecurrencia: recurrenceStartDate || finalDates[0] || slot.fecha,
-                fechaFinRecurrencia: recurrenceEndDate || finalDates[finalDates.length - 1] || slot.fecha,
+                fechaInicioRecurrencia: isConvertingToSeries ? finalDates[0] : recurrenceStartDate || finalDates[0] || slot.fecha,
+                fechaFinRecurrencia: isConvertingToSeries ? finalDates[finalDates.length - 1] : recurrenceEndDate || finalDates[finalDates.length - 1] || slot.fecha,
                 estado: 'confirmada',
                 version: 0,
                 editadoPor: currentUser?.name || currentUser?.username || 'Usuario',
@@ -1202,11 +1214,13 @@ export function useReservationSaveHandler({
 
           const batchResult = await Promise.resolve(
             onSave(updatedList[0], true, undefined, true, {
-              scope: updateScope,
+              scope: isConvertingToSeries ? 'series' : updateScope,
               updatedReservations: updatedList,
               affectedIds: updatedList.map((r) => r.id),
               deletedIds: idsToDelete.length > 0 ? idsToDelete : undefined,
-              description: `Actualizadas ${updatedList.length} reservas (${scopeLabels[updateScope] || updateScope}) para '${effectiveFormData.tipoActividad || 'Actividad'}' (${effectiveFormData.responsable || 'Responsable'})`
+              description: isConvertingToSeries
+                ? `Convertida reserva individual a serie de ${updatedList.length} sesiones para '${effectiveFormData.tipoActividad || 'Actividad'}' (${effectiveFormData.responsable || 'Responsable'})`
+                : `Actualizadas ${updatedList.length} reservas (${scopeLabels[updateScope] || updateScope}) para '${effectiveFormData.tipoActividad || 'Actividad'}' (${effectiveFormData.responsable || 'Responsable'})`
             }, forceConflictOverride || allowConflictOverride)
           );
           if (batchResult === false) {
