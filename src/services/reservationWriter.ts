@@ -4,6 +4,9 @@ import { getConstituentSpaces, getTimeIntervalsForReservation, isReservationActi
 import { isChileanHoliday, verifyHolidayOverrideKey } from '../utils/holidayUtils';
 import { validateReservationWithZod } from '../schemas/reservationSchema';
 import { canReplaceOccurrence, sameReplacementSlot } from '../utils/reservationReplacement';
+import { readPendingOperations, updateOperationJournal, type PendingOperation } from './reservationOperationJournal';
+export { getPendingOperations, readPendingOperations } from './reservationOperationJournal';
+export type { PendingOperation } from './reservationOperationJournal';
 
 export interface WriteResult {
   operationId: string;
@@ -61,23 +64,6 @@ export function prepareReservation(r: Reservation): Reservation {
   return normalized;
 }
 
-// Persist the payload before the first write. A reload can retry with the SAME IDs.
-const JOURNAL_KEY = 'reservation_pending_operations_v1';
-export interface PendingOperation { id: string; actor?: string; reservations: Reservation[]; deletedIds: string[]; confirmedIds: string[]; allowConflictOverride: boolean; intent?: 'create' | 'update'; requireAtomic?: boolean; expectedVersions?: Record<string,number>; }
-export function getPendingOperations(): PendingOperation[] {
-  if (typeof localStorage === 'undefined') return [];
-  try {
-    const value = JSON.parse(localStorage.getItem(JOURNAL_KEY) || '[]');
-    return Array.isArray(value) ? value.filter(o => o && typeof o.id === 'string' && Array.isArray(o.reservations) && Array.isArray(o.deletedIds) && Array.isArray(o.confirmedIds)) : [];
-  } catch { return []; }
-}
-function updateJournal(operation: PendingOperation, finished = false) {
-  if (typeof localStorage === 'undefined') return;
-  const entries = getPendingOperations().filter(o => o.id !== operation.id);
-  if (!finished) entries.push(operation);
-  localStorage.setItem(JOURNAL_KEY, JSON.stringify(entries));
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event('reservation-operations-changed'));
-}
 function allSlotKeys(r?: Reservation, legacy = false): string[] {
   if (!r) return [];
   // Include the legacy compound key when removing stale entries.
@@ -133,7 +119,8 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
   if (new Set(items.map(r=>r.id)).size !== items.length) throw new Error('La operación contiene IDs de reserva duplicados.');
   const deletedIds = [...new Set(options.deletedIds || [])].filter(id => !items.some(r=>r.id===id));
   const fingerprint = (rows: readonly Reservation[]) => JSON.stringify(rows.map(({ createdAt, updatedAt, ...r }) => r));
-  const pending = !options.operationId && getPendingOperations().find(o =>
+  const pendingOperations = await readPendingOperations();
+  const pending = !options.operationId && pendingOperations.find(o =>
     o.actor === options.actor && fingerprint(o.reservations) === fingerprint(items) && JSON.stringify(o.deletedIds) === JSON.stringify(deletedIds));
   const operationId = options.operationId || (pending && pending.id) || crypto.randomUUID();
   const ids = [...items.map(r=>r.id),...deletedIds];
@@ -152,9 +139,9 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
   }
   const chunks = planWriteChunks(items, previous, deletedIds);
   if (options.requireAtomic && chunks.length > 1) throw new Error('La serie excede el límite de un movimiento atómico. Usa un alcance más pequeño. No se modificó ninguna reserva.');
-  const tracked = getPendingOperations().find(o=>o.id===operationId);
+  const tracked = pendingOperations.find(o=>o.id===operationId);
   const operation: PendingOperation = { id: operationId, actor: options.actor, reservations: tracked?.reservations || items, deletedIds: tracked?.deletedIds || deletedIds, confirmedIds: tracked?.confirmedIds || [], allowConflictOverride: Boolean(options.allowConflictOverride), intent: options.intent, ...(options.requireAtomic ? {requireAtomic: true} : {}), ...(options.expectedVersions ? {expectedVersions: options.expectedVersions} : {}) };
-  updateJournal(operation);
+  await updateOperationJournal(operation);
   const byId = new Map(items.map(r=>[r.id,r]));
   try {
     for (const chunk of chunks) {
@@ -276,7 +263,7 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
       result.deletedIds.push(...chunk.filter(id=>!byId.has(id)));
       result.pendingIds = ids.filter(id=>!result.confirmedIds.includes(id));
       operation.confirmedIds = [...new Set([...operation.confirmedIds,...result.confirmedIds])];
-      try { updateJournal(operation, result.pendingIds.length===0); }
+      try { await updateOperationJournal(operation, result.pendingIds.length===0); }
       catch (error) { console.warn('No se pudo actualizar el registro de recuperación; el reintento sigue siendo idempotente.', error); }
       try { options.onProgress?.({ ...result }); }
       catch(error) {
@@ -286,8 +273,11 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
     }
     return result;
   } catch (cause: any) {
-    if (cause instanceof ReplacementValidationError && !result.confirmedIds.length) updateJournal(operation, true);
-    if (!options.operationId && !pending && !result.confirmedIds.length && (cause instanceof ReservationVersionError || /conflicto|límite/i.test(cause?.message || ''))) updateJournal(operation, true);
+    if (!result.confirmedIds.length && (cause instanceof ReplacementValidationError ||
+      !options.operationId && !pending && (cause instanceof ReservationVersionError || /conflicto|límite/i.test(cause?.message || '')))) {
+      try { await updateOperationJournal(operation, true); }
+      catch (error) { console.warn('Se conservó el registro pendiente tras rechazar el guardado.', error); }
+    }
     throw new ReservationWriteError(`${cause?.message || 'Error de conexión'}. Confirmadas: ${result.confirmedIds.length}; pendientes: ${result.pendingIds.length}. Puedes reanudar sin duplicar reservas.`, result, cause);
   }
 }

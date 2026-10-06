@@ -15,8 +15,8 @@ import {
 import { getDb } from '../firebase/config';
 import { Reservation } from '../types';
 import { getStoredAuthUser, userCanCreateReservations, userCanEditReservations, userCanDeleteReservations } from './authService';
-import { writeReservations, getPendingOperations, type WriteOptions, type WriteResult } from './reservationWriter';
-export { getPendingOperations, ReservationWriteError, ReservationVersionError } from './reservationWriter';
+import { writeReservations, readPendingOperations, type WriteOptions, type WriteResult } from './reservationWriter';
+export { getPendingOperations, readPendingOperations, ReservationWriteError, ReservationVersionError } from './reservationWriter';
 import { INITIAL_RESERVATIONS } from '../data/initialData';
 import { isChileanHoliday, verifyHolidayOverrideKey } from '../utils/holidayUtils';
 import { normalizeSpaceName } from '../data/spacesData';
@@ -1019,7 +1019,7 @@ export async function saveReservationsBatch(reservas: readonly Reservation[], op
 }
 
 export async function resumeReservationOperation(id: string): Promise<WriteResult> {
-  const operation = getPendingOperations().find(o => o.id === id);
+  const operation = (await readPendingOperations()).find(o => o.id === id);
   if (!operation) throw new Error('La operación ya fue completada o no está disponible.');
   const user = getStoredAuthUser();
   if (operation.reservations.some(r => r.reemplazaReservaId) && (!userCanCreateReservations(user) || !userCanEditReservations(user))) throw new Error('No tienes permisos para reanudar un reemplazo.');

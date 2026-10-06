@@ -9,6 +9,7 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:journal": "node scripts/test-reservation-journal.cjs",
     "clean": "node -e \"const fs=require('fs');['dist','server.js','server.cjs'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}))\"",
     "lint": "tsc --noEmit",
     "test:integration": "node scripts/run-emulator-tests.cjs",

@@ -37,6 +37,17 @@ function seed(row: Reservation) {
 }
 beforeEach(() => { localStorage.clear(); memory.rows.clear(); memory.fail = false; memory.loseAck = false; memory.beforeCommit = undefined; memory.commits = 0; seed(original); });
 describe('single occurrence replacement transaction', () => {
+  it('does not start a cloud transaction when durable local recovery storage is unavailable', async () => {
+    const existing = { id: 'other-pending', reservations: [original], deletedIds: [], confirmedIds: [], allowConflictOverride: false };
+    localStorage.setItem('reservation_pending_operations_v1', JSON.stringify([existing]));
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });
+    try {
+      await expect(writeReservations({} as any, batch(), clean)).rejects.toThrow(/No hay espacio local/);
+      expect(memory.commits).toBe(0);
+      expect(memory.rows.get('reservas/original')).toEqual(original);
+      expect(getPendingOperations()).toEqual([existing]);
+    } finally { setItem.mockRestore(); }
+  });
   it('rejects deletion if a session changed after the editor opened', async () => {
     const future = { ...original, id: 'future', fecha: '2026-10-13' }; seed(future);
     memory.rows.set('reservas/future', { ...future, descripcion: 'Edición ajena', version: 2 });

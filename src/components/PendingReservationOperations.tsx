@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getPendingOperations, resumeReservationOperation } from '../services/reservationService';
+import { getPendingOperations, readPendingOperations, resumeReservationOperation } from '../services/reservationService';
 import type { PendingOperation } from '../services/reservationWriter';
 import { userCanCreateReservations, userCanEditReservations, userCanDeleteReservations, type AuthUser } from '../services/authService';
 
@@ -8,9 +8,12 @@ export function PendingReservationOperations({ user }: { user: AuthUser | null }
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
+    let active = true;
     const update = () => setOperations(getPendingOperations());
     window.addEventListener('reservation-operations-changed', update);
-    return () => window.removeEventListener('reservation-operations-changed', update);
+    void readPendingOperations().then(rows => { if (active) setOperations(rows); })
+      .catch(err => { if (active) setError(err?.message || 'No se pudo leer el registro de recuperación.'); });
+    return () => { active = false; window.removeEventListener('reservation-operations-changed', update); };
   }, []);
   if (!user) return null;
   const visible = operations.filter(o => !o.actor || o.actor === user.username);
