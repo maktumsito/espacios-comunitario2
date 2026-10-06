@@ -1,7 +1,7 @@
 import { EquipmentItem, Reservation } from '../types';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { getDb } from '../firebase/config';
-import { timeToMinutes, isTimeOverlapping, isDateExemptFromConflicts } from '../utils/conflictDetector';
+import { isTimeOverlapping, isDateExemptFromConflicts, getTimeIntervalsForReservation, isReservationActiveForAvailability } from '../utils/conflictDetector';
 
 const EQUIPMENT_STORAGE_KEY = 'espacios_comunitarios_equipment_v1';
 const CONFIG_COLLECTION = 'configuracion_sistema';
@@ -268,6 +268,15 @@ export function calculateEquipmentAvailability(
     excludeIdSet.add(excludeReservationId);
   }
 
+  const targetDay=Date.parse(`${targetDate}T12:00:00Z`);
+  const previousDate=Number.isFinite(targetDay) ? new Date(targetDay-86400000).toISOString().slice(0,10) : '';
+  const occupying=targetDate && Number.isFinite(targetDay) && !isDateExemptFromConflicts(targetDate) ? allReservations.filter(r=>{
+    const date=(r.fecha||'').trim();
+    return date>=previousDate && date<=targetDate && !excludeIdSet.has(r.id) &&
+      !(excludeSeriesId && (r.serieRecurrente===excludeSeriesId||r.recurrenteId===excludeSeriesId)) &&
+      !isDateExemptFromConflicts(date) && isReservationActiveForAvailability(r) &&
+      getTimeIntervalsForReservation(r).some(slot=>slot.date===targetDate && isTimeOverlapping(startMin,endMin,slot.startMin,slot.endMin));
+  }) : [];
   return equipmentList.map((eq) => {
     let usedQuantity = 0;
     const occupyingReservations: {
@@ -280,42 +289,13 @@ export function calculateEquipmentAvailability(
       quantity: number;
     }[] = [];
 
-    if (targetDate && !isDateExemptFromConflicts(targetDate)) {
-      for (const r of allReservations) {
-        if (r.estado && ['cancelada', 'rechazada', 'eliminada'].includes(r.estado)) continue;
-        if (excludeIdSet.has(r.id)) {
-          continue;
-        }
-        if (
-          excludeSeriesId &&
-          (r.serieRecurrente === excludeSeriesId || r.recurrenteId === excludeSeriesId)
-        ) {
-          continue;
-        }
-        if (!r.fecha || isDateExemptFromConflicts(r.fecha) || r.fecha.trim() !== targetDate) {
-          continue;
-        }
-
-        const rStart = timeToMinutes(r.horaInicio);
-        const rEnd = timeToMinutes(r.horaFin);
-
-        if (isTimeOverlapping(startMin, endMin, rStart, rEnd)) {
-          const req = r.equipamientoSolicitado?.find(
-            e => e.equipmentId === eq.id || e.equipmentName?.toLowerCase() === eq.name.toLowerCase()
-          );
-          if (req && req.quantity > 0) {
-            usedQuantity += req.quantity;
-            occupyingReservations.push({
-              reservationId: r.id,
-              espacio: r.espacio,
-              responsable: r.responsable,
-              tipoActividad: r.tipoActividad || r.descripcion,
-              horaInicio: r.horaInicio,
-              horaFin: r.horaFin,
-              quantity: req.quantity
-            });
-          }
-        }
+    for (const r of occupying) {
+      const req=r.equipamientoSolicitado?.find(e=>e.equipmentId===eq.id || e.equipmentName?.toLowerCase()===eq.name.toLowerCase());
+      if (req && Number(req.quantity)>0) {
+        const quantity=Number(req.quantity);
+        usedQuantity+=quantity;
+        occupyingReservations.push({reservationId:r.id,espacio:r.espacio,responsable:r.responsable,
+          tipoActividad:r.tipoActividad||r.descripcion,horaInicio:r.horaInicio,horaFin:r.horaFin,quantity});
       }
     }
 

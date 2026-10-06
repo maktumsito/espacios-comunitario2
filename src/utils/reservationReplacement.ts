@@ -41,6 +41,12 @@ export function preserveReplacementExceptions(incoming: Reservation[], history: 
   const exceptions = history.filter(r => r.reemplazadaPorReservaId);
   return incoming.filter(r => !exceptions.some(e => {
     const series = e.serieRecurrente || e.recurrenteId;
-    return e.id === r.id || Boolean(series && (r.serieRecurrente || r.recurrenteId) === series && e.fecha === r.fecha);
+    if (e.id === r.id) return true;
+    if (!series || (r.serieRecurrente || r.recurrenteId) !== series || e.fecha !== r.fecha) return false;
+    const existing = history.find(other => other.id === r.id);
+    if (existing && !existing.reemplazadaPorReservaId && isReservationActiveForAvailability(existing)) return false;
+    const otherSession = history.some(other => other.fecha === e.fecha && (other.serieRecurrente || other.recurrenteId) === series &&
+      !other.reemplazadaPorReservaId && isReservationActiveForAvailability(other));
+    return !otherSession || sameReplacementSlot(e, r);
   }));
 }

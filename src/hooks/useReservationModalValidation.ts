@@ -19,8 +19,12 @@ import {
 } from '../utils/validationUtils';
 import { formatDateDDMMYYYY, WEEKDAYS } from '../utils/dateUtils';
 import { CustomScheduleSlot } from '../types';
+import { sameScheduleSlot, type ScheduleSlot } from '../utils/recurringSchedule';
 
 interface UseReservationModalValidationProps {
+  preserveExistingSchedule?: boolean;
+  reviewSlots?: ScheduleSlot[];
+  allReservations?: Reservation[];
   formData: Partial<Reservation>;
   enableSingleSecondSpace: boolean;
   singleSecondStartTime: string;
@@ -59,6 +63,9 @@ interface UseReservationModalValidationProps {
 }
 
 export function useReservationModalValidation({
+  preserveExistingSchedule = false,
+  reviewSlots,
+  allReservations = [],
   formData,
   enableSingleSecondSpace,
   singleSecondStartTime,
@@ -116,6 +123,14 @@ export function useReservationModalValidation({
   }, [formData.telefonoContacto]);
 
   const loanScheduleCheck = useMemo<LoanScheduleLimitResult>(() => {
+    if (reviewSlots) {
+      for (const slot of reviewSlots) {
+        const check=checkLoanScheduleLimit(slot.horaInicio,slot.horaFin,Boolean(slot.terminaDiaSiguiente));
+        const existing=allReservations.find(r=>r.id===slot.sourceId);
+        if (check.requiresAuthorization && !(existing && sameScheduleSlot(existing,slot) && existing.horarioExtendidoAutorizado)) return check;
+      }
+      return {isOutsideRegularHours:false,requiresAuthorization:false};
+    }
     // Check main schedule
     const mainCheck = checkLoanScheduleLimit(
       formData.horaInicio || '',
@@ -187,6 +202,8 @@ export function useReservationModalValidation({
 
     return mainCheck;
   }, [
+    reviewSlots,
+    allReservations,
     formData.horaInicio,
     formData.horaFin,
     formData.terminaDiaSiguiente,
@@ -222,7 +239,7 @@ export function useReservationModalValidation({
   }, [enableSingleSecondSpace, singleSecondSpace, formData.cantidadParticipantes, availableSpaces]);
 
   const patternDatesValidation = useMemo<{ isValid: boolean; error?: string }>(() => {
-    if (bookingMode !== 'pattern' || !generateFullSeries) return { isValid: true, error: undefined };
+    if (preserveExistingSchedule || bookingMode !== 'pattern' || !generateFullSeries) return { isValid: true, error: undefined };
     if (!recurrenceStartDate || !recurrenceEndDate) {
       return { isValid: false, error: 'Debe ingresar las fechas de inicio y término de la serie.' };
     }
@@ -236,15 +253,15 @@ export function useReservationModalValidation({
       return { isValid: false, error: 'El rango y días seleccionados no generan ninguna sesión válida (0 sesiones calculadas).' };
     }
     return { isValid: true, error: undefined };
-  }, [bookingMode, generateFullSeries, recurrenceStartDate, recurrenceEndDate, selectedDays, generatedDates]);
+  }, [preserveExistingSchedule, bookingMode, generateFullSeries, recurrenceStartDate, recurrenceEndDate, selectedDays, generatedDates]);
 
   const specificDatesValidation = useMemo<{ isValid: boolean; error?: string }>(() => {
-    if (bookingMode !== 'specific' || !generateFullSeries) return { isValid: true, error: undefined };
+    if (preserveExistingSchedule || bookingMode !== 'specific' || !generateFullSeries) return { isValid: true, error: undefined };
     if (specificDates.length === 0) {
       return { isValid: false, error: 'Debes seleccionar al menos una fecha específica.' };
     }
     return { isValid: true, error: undefined };
-  }, [bookingMode, generateFullSeries, specificDates]);
+  }, [preserveExistingSchedule, bookingMode, generateFullSeries, specificDates]);
 
   const isFormSubmitDisabled = useMemo(() => {
     if (isSubmitting) return true;
@@ -296,12 +313,12 @@ export function useReservationModalValidation({
     if (loanScheduleCheck.requiresAuthorization && !isExtensionAuthorized) return false;
 
     // Single date mode holiday check
-    if (bookingMode === 'single') {
+    if (!preserveExistingSchedule && bookingMode === 'single') {
       if (singleDateHolidayInfo && !isHolidayAuthorized) return false;
     }
 
     // Specific dates mode holiday check
-    if (bookingMode === 'specific') {
+    if (!preserveExistingSchedule && bookingMode === 'specific') {
       if (specificDates.length === 0) return false;
       if (specificHolidayAnalysis.omittedHolidays.length > 0) {
         if (includeHolidaysInSeries || isHolidayAuthorized) {
@@ -313,13 +330,14 @@ export function useReservationModalValidation({
     }
 
     // Pattern mode holiday check
-    if (bookingMode === 'pattern') {
+    if (!preserveExistingSchedule && bookingMode === 'pattern') {
       if (includeHolidaysInSeries && !isHolidayAuthorized && patternHolidayAnalysis.omittedHolidays.length > 0) return false;
       if (generatedDates.length === 0) return false;
     }
 
     return true;
   }, [
+    preserveExistingSchedule,
     formData.espacio,
     formData.fecha,
     editingReservation?.fecha,
@@ -369,7 +387,7 @@ export function useReservationModalValidation({
     }
 
     // Holiday validation for single date mode
-    if (bookingMode === 'single') {
+    if (!preserveExistingSchedule && bookingMode === 'single') {
       const targetDate = formData.fecha || editingReservation?.fecha;
       if (!targetDate) {
         if (showAlert) showFormFeedback('⚠️ Por favor indica la fecha de la reserva.', 'warning');
@@ -387,7 +405,7 @@ export function useReservationModalValidation({
     }
 
     // Holiday & date validation for specific dates mode
-    if (bookingMode === 'specific') {
+    if (!preserveExistingSchedule && bookingMode === 'specific') {
       if (specificDates.length === 0) {
         if (showAlert) showFormFeedback('⚠️ Por favor selecciona al menos una fecha específica en el calendario.', 'warning');
         return false;
@@ -410,7 +428,7 @@ export function useReservationModalValidation({
     }
 
     // Holiday & date validation for pattern mode
-    if (bookingMode === 'pattern') {
+    if (!preserveExistingSchedule && bookingMode === 'pattern') {
       if (includeHolidaysInSeries && !isHolidayAuthorized && patternHolidayAnalysis.omittedHolidays.length > 0) {
         if (showAlert) showFormFeedback('🚫 Para incluir los días feriados en la serie semanal, debes ingresar la clave de autorización especial "CCD" correcta.', 'warning');
         return false;
@@ -476,10 +494,10 @@ export function useReservationModalValidation({
     if (hasStep1Conflict) return false;
     if (loanScheduleCheck.requiresAuthorization && !isExtensionAuthorized) return false;
 
-    if (bookingMode === 'single') {
+    if (!preserveExistingSchedule && bookingMode === 'single') {
       if (singleDateHolidayInfo && !isHolidayAuthorized) return false;
     }
-    if (bookingMode === 'specific') {
+    if (!preserveExistingSchedule && bookingMode === 'specific') {
       if (specificDates.length === 0) return false;
       if (specificHolidayAnalysis.omittedHolidays.length > 0) {
         if (includeHolidaysInSeries || isHolidayAuthorized) {
@@ -489,12 +507,13 @@ export function useReservationModalValidation({
         }
       }
     }
-    if (bookingMode === 'pattern') {
+    if (!preserveExistingSchedule && bookingMode === 'pattern') {
       if (includeHolidaysInSeries && !isHolidayAuthorized && patternHolidayAnalysis.omittedHolidays.length > 0) return false;
       if (generatedDates.length === 0) return false;
     }
     return true;
   }, [
+    preserveExistingSchedule,
     formData.espacio,
     formData.fecha,
     editingReservation?.fecha,
@@ -551,7 +570,7 @@ export function useReservationModalValidation({
       return false;
     }
 
-    if (bookingMode === 'single') {
+    if (!preserveExistingSchedule && bookingMode === 'single') {
       const targetDate = formData.fecha || editingReservation?.fecha;
       if (!targetDate) {
         if (showAlert) showFormFeedback('⚠️ Por favor indica la fecha de la reserva.', 'warning');
@@ -568,7 +587,7 @@ export function useReservationModalValidation({
       }
     }
 
-    if (bookingMode === 'specific') {
+    if (!preserveExistingSchedule && bookingMode === 'specific') {
       if (specificDates.length === 0) {
         if (showAlert) showFormFeedback('⚠️ Por favor selecciona al menos una fecha específica en el calendario.', 'warning');
         return false;
@@ -590,7 +609,7 @@ export function useReservationModalValidation({
       }
     }
 
-    if (bookingMode === 'pattern') {
+    if (!preserveExistingSchedule && bookingMode === 'pattern') {
       if (includeHolidaysInSeries && !isHolidayAuthorized && patternHolidayAnalysis.omittedHolidays.length > 0) {
         if (showAlert) showFormFeedback('🚫 Para incluir los días feriados en la serie semanal, debes ingresar la clave de autorización especial "CCD" correcta.', 'warning');
         return false;

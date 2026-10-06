@@ -75,6 +75,7 @@ export interface BatchUpdateInfo {
   sourceReservationId?: string;
   deletedIds?: string[];
   addedIds?: string[];
+  expectedVersions?: Record<string,number>;
 }
 
 export interface DeletionRequest {
@@ -94,6 +95,7 @@ export interface DeletionRequest {
 export function isSingleDayMultiSpaceReservation(reservation?: Partial<Reservation> | null): boolean {
   if (!reservation) return false;
   if (reservation.tipoRecurrencia === 'doble_espacio') return true;
+  if (reservation.actividadRecurrente === 'Sí' || reservation.tipoRecurrencia === 'semanal' || reservation.tipoRecurrencia === 'especificas') return false;
   if (
     reservation.totalEnSerie === 2 &&
     (!reservation.fechaInicioRecurrencia ||

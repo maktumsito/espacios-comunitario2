@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Reservation, SpaceRating, UpdateScope, isSingleDayMultiSpaceReservation } from '../types';
 import { generateRecurrenceDates, getChileLocalDateString } from '../utils/dateUtils';
 import { getSeriesEditStartDate } from '../utils/recurringEdits';
+import { isDateInSeriesScope } from '../utils/recurringSchedule';
 import {
   filterOutChileanHolidays,
   getChileanHolidayInfo,
@@ -88,7 +89,7 @@ export function useReservationSeriesState({
           if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
           return a.horaInicio.localeCompare(b.horaInicio);
         });
-      if (matches.length > 0) return matches;
+      return matches;
     }
     if (editingReservation.actividadRecurrente === 'Sí' && allReservations) {
       const matches = allReservations
@@ -96,7 +97,7 @@ export function useReservationSeriesState({
           (r) =>
             isCleanActive(r) &&
             (r.id === editingReservation.id ||
-              (r.actividadRecurrente === 'Sí' &&
+              (!r.serieRecurrente && !r.recurrenteId && r.actividadRecurrente === 'Sí' &&
                 r.tipoActividad === editingReservation.tipoActividad &&
                 r.responsable === editingReservation.responsable &&
                 r.espacio === editingReservation.espacio))
@@ -168,10 +169,13 @@ export function useReservationSeriesState({
     if (!recurrenceStartDate || !recurrenceEndDate) return [];
     const seriesId = !isDuplicating && (editingReservation?.serieRecurrente || editingReservation?.recurrenteId);
     const exceptions = new Set(allReservations.filter(r => r.reemplazadaPorReservaId && seriesId &&
-      (r.serieRecurrente || r.recurrenteId) === seriesId).map(r => r.fecha));
+      (r.serieRecurrente || r.recurrenteId) === seriesId && !allReservations.some(other =>
+        other.fecha === r.fecha && (other.serieRecurrente || other.recurrenteId) === seriesId && !other.reemplazadaPorReservaId && isReservationActiveForAvailability(other))).map(r => r.fecha));
     const cutoff = isEditingRecurring ? getSeriesEditStartDate(updateScope, editingReservation!.fecha, today) : '';
-    return generateRecurrenceDates(recurrenceStartDate, recurrenceEndDate, selectedDays).filter(date => !exceptions.has(date) && date >= cutoff);
-  }, [bookingMode, recurrenceStartDate, recurrenceEndDate, selectedDays, editingReservation, isDuplicating, allReservations, isEditingRecurring, updateScope, today]);
+    const context = editingReservation ? {scope: updateScope, source: editingReservation, history: allReservations, today, rangeStartDate, rangeEndDate, selectedIds: selectedOccurrenceIds} : null;
+    return generateRecurrenceDates(recurrenceStartDate, recurrenceEndDate, selectedDays).filter(date => !exceptions.has(date) && date >= cutoff &&
+      (!isEditingRecurring || updateScope === 'single' || !context || isDateInSeriesScope(date, context)));
+  }, [bookingMode, recurrenceStartDate, recurrenceEndDate, selectedDays, editingReservation, isDuplicating, allReservations, isEditingRecurring, updateScope, today, rangeStartDate, rangeEndDate, selectedOccurrenceIds]);
 
   // Chilean holiday analysis for pattern recurrence
   const patternHolidayAnalysis = useMemo(() => {

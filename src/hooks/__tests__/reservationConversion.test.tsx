@@ -84,3 +84,69 @@ it('restricts this-and-following editing to dates on or after the selected occur
   const {result}=renderHook(()=>useReservationSaveHandler(p));await act(()=>result.current.executeSave());
   expect(save.mock.calls[0][4].updatedReservations.map((r:any)=>r.fecha)).toEqual(['2026-10-13','2026-10-20']);
 });
+it('changes only the description without rebuilding irregular dates or copying per-session resources',async()=>{
+  const save=vi.fn().mockResolvedValue(true),p=conversionProps(save);
+  const source={...base,fecha:'2026-10-13',actividadRecurrente:'Sí',serieRecurrente:'existing',indiceEnSerie:5,totalEnSerie:20,googleEventId:'google-source',cantidadParticipantes:4};
+  const other={...source,id:'other',fecha:'2026-10-16',horaInicio:'14:00',horaFin:'15:00',espacio:'SALA 3',responsable:'Otra persona',cantidadParticipantes:8,googleEventId:'google-other',indiceEnSerie:6,equipamientoSolicitado:[{equipmentId:'projector',equipmentName:'Proyector',quantity:1}]};
+  p.editingReservation=source;p.initialFormData=source;p.formData={...source,descripcion:'Nombre nuevo'};p.scheduleChanged=false;
+  p.initialReservations=[source,other];p.isEditingRecurring=true;p.isEditingSingleOccurrence=false;p.updateScope='series';p.affectedReservations=[source,other];p.allReservations=[source,other];p.excludeReservationIds=[source.id,other.id];
+  const {result}=renderHook(()=>useReservationSaveHandler(p));await act(()=>result.current.executeSave());
+  const rows=save.mock.calls[0][4].updatedReservations;
+  expect(rows).toHaveLength(2);expect(rows[1]).toMatchObject({id:'other',fecha:'2026-10-16',horaInicio:'14:00',espacio:'SALA 3',responsable:'Otra persona',cantidadParticipantes:8,descripcion:'Nombre nuevo',googleEventId:'google-other',equipamientoSolicitado:other.equipamientoSolicitado,indiceEnSerie:6,totalEnSerie:20});
+  expect(save.mock.calls[0][4].deletedIds).toBeUndefined();expect(save.mock.calls[0][4].addedIds).toEqual([]);
+});
+it('edits only the selected second session when there are two schedules on the same date',async()=>{
+  const save=vi.fn().mockResolvedValue(true),p=conversionProps(save);
+  const source={...base,fecha:'2026-10-13',actividadRecurrente:'Sí',serieRecurrente:'existing'};
+  const second={...source,id:'second',horaInicio:'12:00',horaFin:'13:00',espacio:'SALA 3'};
+  p.editingReservation=source;p.formData={...source,descripcion:'Actualizada'};p.initialFormData=source;
+  p.isEditingRecurring=true;p.isEditingSingleOccurrence=false;p.updateScope='selected';p.bookingMode='specific';p.specificDates=[source.fecha];p.specificHolidayAnalysis={validDates:[source.fecha],omittedHolidays:[]};
+  p.affectedReservations=[second];p.allReservations=[source,second];p.excludeReservationIds=[second.id];p.useCustomSchedulesPerDate=true;
+  p.dateSchedules={[source.fecha]:{horaInicio:'10:00',horaFin:'11:00',espacio:'SALA 2',hasSecondSlot:true,secondHoraInicio:'14:00',secondHoraFin:'15:00',secondEspacio:'SALA 3'}};
+  const {result}=renderHook(()=>useReservationSaveHandler(p));await act(()=>result.current.executeSave());
+  const batch=save.mock.calls[0][4];expect(batch.updatedReservations).toHaveLength(1);
+  expect(batch.updatedReservations[0]).toMatchObject({id:'second',horaInicio:'14:00',espacio:'SALA 3',descripcion:'Actualizada'});
+  expect(batch.addedIds).toEqual([]);expect(batch.deletedIds).toBeUndefined();
+});
+it('checks maintenance in the actual custom second room, not the global fallback',async()=>{
+  const save=vi.fn(),p=conversionProps(save);p.showFormFeedback=vi.fn();p.bookingMode='specific';p.specificDates=['2026-10-13'];p.specificHolidayAnalysis={validDates:p.specificDates,omittedHolidays:[]};
+  p.useCustomSchedulesPerDate=true;p.dateSchedules={'2026-10-13':{horaInicio:'10:00',horaFin:'11:00',espacio:'SALA 2',hasSecondSlot:true,secondHoraInicio:'14:00',secondHoraFin:'15:00',secondEspacio:'SALA 3'}};
+  p.singleSecondSpace='TATAMI';p.spaceBlocks=[{id:'block',espacio:'SALA 3',fechaInicio:'2026-10-13',fechaFin:'2026-10-13',todoElDia:true,motivo:'Mantención',descripcion:'Trabajo',activo:true,createdAt:''}];
+  const {result}=renderHook(()=>useReservationSaveHandler(p));await act(()=>result.current.executeSave());
+  expect(save).not.toHaveBeenCalled();expect(p.showFormFeedback).toHaveBeenCalledWith(expect.stringContaining('SALA 3'),'error');
+});
+it('checks maintenance after midnight and keeps the draft if the next day is blocked',async()=>{
+  const save=vi.fn(),p=conversionProps(save);p.showFormFeedback=vi.fn();p.bookingMode='single';p.formData={...base,fecha:'2026-10-13',horaInicio:'23:00',horaFin:'02:00',terminaDiaSiguiente:true};
+  p.timeValidation={isValid:true,startMinutes:1380,endMinutes:120,durationMinutes:180};p.isExtensionAuthorized=true;p.loanScheduleCheck={isOutsideRegularHours:true,requiresAuthorization:true};
+  p.spaceBlocks=[{id:'block',espacio:'SALA 2',fechaInicio:'2026-10-14',fechaFin:'2026-10-14',todoElDia:true,motivo:'Mantención',descripcion:'Trabajo',activo:true,createdAt:''}];
+  const {result}=renderHook(()=>useReservationSaveHandler(p));await act(()=>result.current.executeSave());
+  expect(save).not.toHaveBeenCalled();expect(p.showFormFeedback).toHaveBeenCalled();expect(p.isSubmittingRef.current).toBe(false);
+});
+it('applies a conflict-resolution schedule even if the form schedule was initially unchanged',async()=>{
+  const save=vi.fn().mockResolvedValue(true),p=conversionProps(save);
+  const source={...base,actividadRecurrente:'Sí',serieRecurrente:'existing'};
+  const future={...source,id:'future',fecha:'2026-10-13'};
+  p.editingReservation=source;p.initialFormData=source;p.formData=source;p.scheduleChanged=false;
+  p.isEditingRecurring=true;p.isEditingSingleOccurrence=false;p.updateScope='series';p.affectedReservations=[source,future];p.allReservations=[source,future];p.excludeReservationIds=[source.id,future.id];
+  const {result}=renderHook(()=>useReservationSaveHandler(p));
+  await act(()=>result.current.executeSave(false,{bookingMode:'specific',specificDates:[source.fecha],useCustomSchedulesPerDate:true,dateSchedules:{[source.fecha]:{horaInicio:'12:00',horaFin:'13:00',espacio:'SALA 3'}}}));
+  const batch=save.mock.calls[0][4];expect(batch.updatedReservations).toHaveLength(1);
+  expect(batch.updatedReservations[0]).toMatchObject({id:source.id,horaInicio:'12:00',espacio:'SALA 3'});
+  expect(batch.deletedIds).toEqual([future.id]);
+});
+it('retains holiday authorization when editing an existing session on the same date',async()=>{
+  const save=vi.fn().mockResolvedValue(true),p=conversionProps(save);
+  const source={...base,fecha:'2026-10-12',actividadRecurrente:'Sí',serieRecurrente:'existing',claveAutorizacionFeriado:'CCD'};
+  p.editingReservation=source;p.formData={...source,descripcion:'Nombre nuevo'};p.bookingMode='single';p.isEditingRecurring=true;p.isEditingSingleOccurrence=true;p.updateScope='single';p.allReservations=[source];p.excludeReservationIds=[source.id];p.singleDateHolidayInfo={name:'Feriado'};
+  const {result}=renderHook(()=>useReservationSaveHandler(p));await act(()=>result.current.executeSave());
+  expect(save).toHaveBeenCalledOnce();expect(save.mock.calls[0][0].claveAutorizacionFeriado).toBe('CCD');
+});
+it('uses unique stable IDs for new occurrences even when the source ID is very long',async()=>{
+  const save=vi.fn().mockResolvedValue(false),p=conversionProps(save);
+  const source={...base,id:'a'.repeat(120),actividadRecurrente:'Sí',serieRecurrente:'existing',googleEventId:'old-google',cartaCompromisoDescargada:true};
+  p.editingReservation=source;p.formData=source;p.isEditingRecurring=true;p.isEditingSingleOccurrence=false;p.updateScope='series';p.affectedReservations=[source];p.allReservations=[source];p.excludeReservationIds=[source.id];p.generatedDates=['2026-10-13','2026-10-20'];
+  const {result}=renderHook(()=>useReservationSaveHandler(p));await act(()=>result.current.executeSave());await act(()=>result.current.executeSave());
+  const rows=save.mock.calls[0][4].updatedReservations;
+  expect(new Set(rows.map((r:any)=>r.id)).size).toBe(2);expect(rows.every((r:any)=>r.id.length<=128&&r.googleEventId===undefined&&r.cartaCompromisoDescargada===false)).toBe(true);
+  expect(save.mock.calls[1][4].updatedReservations.map((r:any)=>r.id)).toEqual(rows.map((r:any)=>r.id));
+});

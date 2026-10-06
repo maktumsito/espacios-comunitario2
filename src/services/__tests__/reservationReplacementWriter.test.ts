@@ -37,6 +37,34 @@ function seed(row: Reservation) {
 }
 beforeEach(() => { localStorage.clear(); memory.rows.clear(); memory.fail = false; memory.loseAck = false; memory.beforeCommit = undefined; memory.commits = 0; seed(original); });
 describe('single occurrence replacement transaction', () => {
+  it('rejects deletion if a session changed after the editor opened', async () => {
+    const future = { ...original, id: 'future', fecha: '2026-10-13' }; seed(future);
+    memory.rows.set('reservas/future', { ...future, descripcion: 'Edición ajena', version: 2 });
+    await expect(writeReservations({} as any, [{ ...original, descripcion: 'Edición propia' }], clean,
+      { deletedIds: [future.id], expectedVersions: { original: 1, future: 1 }, requireAtomic: true })).rejects.toThrow(/otro usuario/);
+    expect(memory.rows.get('reservas/original')).toEqual(original);
+    expect(memory.rows.get('reservas/future').descripcion).toBe('Edición ajena');
+    expect(memory.commits).toBe(0);
+  });
+  it('guards the source version even when only other selected sessions are updated', async () => {
+    const future = { ...original, id: 'future', fecha: '2026-10-13' }; seed(future);
+    memory.beforeCommit = () => memory.rows.set('reservas/original', { ...original, version: 2 });
+    await expect(writeReservations({} as any, [{ ...future, descripcion: 'Cambio' }], clean,
+      { expectedVersions: { original: 1, future: 1 }, requireAtomic: true })).rejects.toThrow(/otro usuario/);
+    expect(memory.rows.get('reservas/future')).toEqual(future);
+    expect(memory.commits).toBe(0);
+  });
+  it('retries an acknowledged deletion safely without advancing the surviving version twice', async () => {
+    const future = { ...original, id: 'future', fecha: '2026-10-13' }; seed(future);
+    const rows = [{ ...original, descripcion: 'Actualizado' }];
+    const options = { deletedIds: [future.id], expectedVersions: { original: 1, future: 1 }, requireAtomic: true };
+    memory.loseAck = true;
+    await expect(writeReservations({} as any, rows, clean, options)).rejects.toThrow('Confirmación perdida');
+    await writeReservations({} as any, rows, clean, options);
+    expect(memory.rows.get('reservas/original').version).toBe(2);
+    expect(memory.rows.has('reservas/future')).toBe(false);
+    expect(getPendingOperations()).toEqual([]);
+  });
   it('does not recreate an already removed legacy occurrence during a movement', async () => {
     const removed = { ...original, id: 'removed', version: 0, espacio: 'SALA 3' };
     await expect(writeReservations({} as any,[removed],clean,{intent:'update',requireAtomic:true})).rejects.toThrow(/eliminada por otro usuario/);

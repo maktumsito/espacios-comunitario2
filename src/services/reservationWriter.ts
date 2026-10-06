@@ -14,6 +14,7 @@ export interface WriteResult {
 }
 export interface WriteOptions {
   requireAtomic?: boolean;
+  expectedVersions?: Record<string,number>;
   intent?: 'create' | 'update';
   actor?: string;
   operationId?: string;
@@ -62,7 +63,7 @@ export function prepareReservation(r: Reservation): Reservation {
 
 // Persist the payload before the first write. A reload can retry with the SAME IDs.
 const JOURNAL_KEY = 'reservation_pending_operations_v1';
-export interface PendingOperation { id: string; actor?: string; reservations: Reservation[]; deletedIds: string[]; confirmedIds: string[]; allowConflictOverride: boolean; intent?: 'create' | 'update'; requireAtomic?: boolean; }
+export interface PendingOperation { id: string; actor?: string; reservations: Reservation[]; deletedIds: string[]; confirmedIds: string[]; allowConflictOverride: boolean; intent?: 'create' | 'update'; requireAtomic?: boolean; expectedVersions?: Record<string,number>; }
 export function getPendingOperations(): PendingOperation[] {
   if (typeof localStorage === 'undefined') return [];
   try {
@@ -152,7 +153,7 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
   const chunks = planWriteChunks(items, previous, deletedIds);
   if (options.requireAtomic && chunks.length > 1) throw new Error('La serie excede el límite de un movimiento atómico. Usa un alcance más pequeño. No se modificó ninguna reserva.');
   const tracked = getPendingOperations().find(o=>o.id===operationId);
-  const operation: PendingOperation = { id: operationId, actor: options.actor, reservations: tracked?.reservations || items, deletedIds: tracked?.deletedIds || deletedIds, confirmedIds: tracked?.confirmedIds || [], allowConflictOverride: Boolean(options.allowConflictOverride), intent: options.intent, ...(options.requireAtomic ? {requireAtomic: true} : {}) };
+  const operation: PendingOperation = { id: operationId, actor: options.actor, reservations: tracked?.reservations || items, deletedIds: tracked?.deletedIds || deletedIds, confirmedIds: tracked?.confirmedIds || [], allowConflictOverride: Boolean(options.allowConflictOverride), intent: options.intent, ...(options.requireAtomic ? {requireAtomic: true} : {}), ...(options.expectedVersions ? {expectedVersions: options.expectedVersions} : {}) };
   updateJournal(operation);
   const byId = new Map(items.map(r=>[r.id,r]));
   try {
@@ -165,6 +166,20 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
         ]);
         const current = new Map<string,Reservation>();
         snapshots.forEach(s=> { if(s.exists()) current.set(s.id,s.data() as Reservation); });
+        const guards=Object.entries(options.expectedVersions||{}).filter(([id])=>!operation.confirmedIds.includes(id));
+        const guardSnapshots=await Promise.all(guards.filter(([id])=>!current.has(id)).map(([id])=>tx.get(doc(db,'reservas',id))));
+        const guarded=new Map(current);
+        guardSnapshots.forEach(s=>{if(s.exists())guarded.set(s.id,{...s.data(),id:s.id} as Reservation);});
+        const survivingIds = chunk.filter(id => byId.has(id));
+        const acknowledgedChunk = survivingIds.length > 0 && survivingIds.every(id =>
+          (current.get(id) as any)?.lastOperationId === operationId);
+        for(const [id,version] of guards){
+          const row=guarded.get(id);
+          if((row as any)?.lastOperationId===operationId)continue;
+          if(!row && chunk.includes(id) && deletedIds.includes(id) && acknowledgedChunk)continue;
+          if(!row)throw new Error('La reserva fue eliminada por otro usuario. No se volverá a crear.');
+          if((row.version||0)!==version)throw new ReservationVersionError(row);
+        }
         const linkedIds = [...new Set([...current.values()].map(r => r.reemplazadaPorReservaId).filter((id): id is string => Boolean(id && !current.has(id))))];
         const linkedSnapshots = await Promise.all(linkedIds.map(id => tx.get(doc(db, 'reservas', id))));
         const linkedCurrent = new Map<string, Reservation>();
@@ -218,8 +233,8 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
         for (const id of chunk) {
           const next = byId.get(id); const existing = current.get(id);
           if (!next) {
-            const expected = previous.get(id);
-            if (existing && (existing.version||0)!==(expected?.version||0)) throw new ReservationVersionError(existing);
+            const expected = options.expectedVersions?.[id] ?? previous.get(id)?.version ?? 0;
+            if (existing && (existing.version||0)!==expected) throw new ReservationVersionError(existing);
             continue;
           }
           // The operation marker makes retry safe even if acknowledgement was lost.

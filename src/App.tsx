@@ -14,6 +14,8 @@ import {
   getLocalCache
 } from './services/reservationService';
 import { fetchReservationById } from './services/reservationService';
+import { queryReservationsBySeries } from './services/reservationService';
+import { getChileLocalDateString } from './utils/dateUtils';
 import { canReplaceOccurrence } from './utils/reservationReplacement';
 import { useReplacementReminders } from './hooks/useReplacementReminders';
 import { isRecurringSeriesReservation } from './utils/recurringEdits';
@@ -130,6 +132,7 @@ import { checkAndRunScheduledBackup } from './services/backupService';
 import { getActiveDraftSummary, removeStoredDraft, ActiveDraftSummary } from './hooks/useReservationAutosave';
 
 export default function App() {
+  const editorLoadRequest = useRef(0);
   const [pendingSeriesMove, setPendingSeriesMove] = useState<{ original: Reservation; target: Reservation; resolve: (result: boolean) => void } | null>(null);
   const [replacementSource, setReplacementSource] = useState<Reservation | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(getStoredAuthUser());
@@ -585,6 +588,7 @@ export default function App() {
   });
 
   const handleLogout = () => {
+    editorLoadRequest.current++;
     clearAuthUser();
     setCurrentUser(null);
   };
@@ -593,6 +597,26 @@ export default function App() {
     setSelectedReservation(r);
     setIsDetailModalOpen(true);
   }, [setSelectedReservation, setIsDetailModalOpen]);
+  const prepareReservationEditor = async (reservation: Reservation) => {
+    if (!userCanEditReservations(currentUser)) { triggerSyncToast('No tienes permiso para editar reservas.','error'); return; }
+    const request=++editorLoadRequest.current;
+    try {
+      let current=reservation;
+      if (isRecurringSeriesReservation(reservation)) {
+        triggerSyncToast('Cargando las sesiones pendientes de la serie…','info');
+        const rows=await queryReservationsBySeries(reservation.serieRecurrente||reservation.recurrenteId||'',getChileLocalDateString());
+        if(request!==editorLoadRequest.current)return;
+        setReservations(previous=>[...new Map([...previous,...rows].map(r=>[r.id,r])).values()]);
+        current=rows.find(r=>r.id===reservation.id)||reservation;
+      }
+      if(request!==editorLoadRequest.current)return;
+      setEditingReservation(current);setIsDuplicating(false);
+      setPrefillDate(current.fecha);setPrefillSpace(current.espacio);
+      setPrefillStartTime(current.horaInicio);setPrefillEndTime(current.horaFin);
+      setIsReservationModalOpen(true);
+    }catch(error:any){triggerSyncToast(error?.message||'No se pudo cargar la serie. Intenta nuevamente.','error');}
+  };
+  useEffect(()=>{if(isReservationModalOpen)editorLoadRequest.current++;},[isReservationModalOpen]);
 
   const handleCalendarNewReservationForDate = useCallback((dateStr: string) => {
     requireAuth(() => {
@@ -1003,17 +1027,7 @@ export default function App() {
               onDuplicateReservation={(r) => {
                 handleDuplicateReservation(r);
               }}
-              onEditReservation={(r) => {
-                requireAuth(() => {
-                  if (!userCanEditReservations(currentUser)) {
-                    triggerSyncToast('Permiso denegado: No tienes autorización para editar reservas (gestión controlada por Cristian Shute).', 'error');
-                    return;
-                  }
-                  setEditingReservation(r);
-                  setIsDuplicating(false);
-                  setIsReservationModalOpen(true);
-                }, 'editar esta reserva');
-              }}
+              onEditReservation={(r) => { requireAuth(() => void prepareReservationEditor(r), 'editar esta reserva'); }}
               onDeleteReservation={(id, isSeries, seriesId) => {
                 return requireAuth(() => handleDelete(id, isSeries, seriesId), 'eliminar esta reserva');
               }}
@@ -1078,17 +1092,7 @@ export default function App() {
                 setSelectedReservation(r);
                 setIsDetailModalOpen(true);
               }}
-              onEditReservation={(r) => {
-                requireAuth(() => {
-                  if (!userCanEditReservations(currentUser)) {
-                    triggerSyncToast('Permiso denegado: No tienes autorización para editar reservas (gestión controlada por Cristian Shute).', 'error');
-                    return;
-                  }
-                  setEditingReservation(r);
-                  setIsDuplicating(false);
-                  setIsReservationModalOpen(true);
-                }, 'editar esta reserva');
-              }}
+              onEditReservation={(r) => { requireAuth(() => void prepareReservationEditor(r), 'editar esta reserva'); }}
               onDuplicateReservation={(r) => {
                 handleDuplicateReservation(r);
               }}
@@ -1198,12 +1202,7 @@ export default function App() {
                 setSelectedReservation(r);
                 setIsDetailModalOpen(true);
               }}
-              onEditReservation={(r) => {
-                requireAuth(() => {
-                  setEditingReservation(r);
-                  setIsReservationModalOpen(true);
-                }, 'editar esta reserva');
-              }}
+              onEditReservation={(r) => { requireAuth(() => void prepareReservationEditor(r), 'editar esta reserva'); }}
             />
           </Suspense>
         )}
@@ -1288,16 +1287,7 @@ export default function App() {
                   await handleDelete(id, !!seriesId, seriesId);
                 }, 'eliminar actividad recurrente');
               }}
-              onEditReservation={(r) => {
-                requireAuth(() => {
-                  if (!userCanEditReservations(currentUser)) {
-                    triggerSyncToast('Permiso denegado: No tienes autorización para editar reservas (gestión controlada por Cristian Shute).', 'error');
-                    return;
-                  }
-                  setEditingReservation(r);
-                  setIsReservationModalOpen(true);
-                }, 'editar reserva');
-              }}
+              onEditReservation={(r) => { requireAuth(() => void prepareReservationEditor(r), 'editar esta reserva'); }}
             />
           </Suspense>
         )}
@@ -1445,21 +1435,7 @@ export default function App() {
                 triggerSyncToast(error.message || 'No se pudo actualizar la reserva.', 'error');
               }
             }}
-            onEdit={(r) => {
-              if (!userCanEditReservations(currentUser)) {
-                triggerSyncToast('Permiso denegado: No tienes autorización para editar reservas (gestión controlada por Cristian Shute).', 'error');
-                return;
-              }
-              requireAuth(() => {
-                setEditingReservation(r);
-                setIsDuplicating(false);
-                setPrefillDate(r.fecha);
-                setPrefillSpace(r.espacio);
-                setPrefillStartTime(r.horaInicio || '10:00');
-                setPrefillEndTime(r.horaFin || '11:00');
-                setIsReservationModalOpen(true);
-              }, 'editar esta reserva');
-            }}
+            onEdit={(r) => { requireAuth(() => void prepareReservationEditor(r), 'editar esta reserva'); }}
             onDuplicate={(r) => {
               handleDuplicateReservation(r);
             }}

@@ -78,7 +78,7 @@ it('preserves authoritative exceptions and excludes their deletion during a scop
     scope: 'series', updatedReservations: [{ ...source, id: 'regenerated' }, { ...future, descripcion: 'Actualizado' }], affectedIds: [future.id], deletedIds: [source.id],
   })).toBe(true));
   expect(mocks.series).toHaveBeenCalledWith('series', '2026-10-06');
-  expect(mocks.save).toHaveBeenCalledWith([{ ...future, descripcion: 'Actualizado' }], { deletedIds: [], allowConflictOverride: undefined });
+  expect(mocks.save).toHaveBeenCalledWith([{ ...future, descripcion: 'Actualizado' }], { deletedIds: [], allowConflictOverride: undefined, requireAtomic: true, intent: 'update' });
 });
 
 it('moves all pending sessions atomically while preserving past sessions and replacements', async () => {
@@ -122,5 +122,5 @@ it('guards historical IDs against deletion and reuse during series edits', async
   await act(async()=>expect(await result.current.handleCreateOrUpdate(future,false,undefined,false,{
     scope:'series',sourceReservationId:future.id,updatedReservations:[{...past,fecha:future.fecha},{...future,descripcion:'Editado'}],affectedIds:[past.id,future.id],deletedIds:[past.id],
   })).toBe(true));
-  expect(mocks.save).toHaveBeenCalledWith([{...future,descripcion:'Editado'}],{deletedIds:[],allowConflictOverride:undefined});
+  expect(mocks.save).toHaveBeenCalledWith([{...future,descripcion:'Editado'}],{deletedIds:[],allowConflictOverride:undefined,requireAtomic:true,intent:'update'});
 });

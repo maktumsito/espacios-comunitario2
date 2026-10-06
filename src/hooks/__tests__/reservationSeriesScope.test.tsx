@@ -19,3 +19,12 @@ it('omits replaced dates from regeneration even if the replacement is cancelled'
   expect(result.current.generatedDates).toEqual(['2026-10-07']);
   expect(result.current.affectedReservations.map(r => r.id)).toEqual(['scope-2']);
 });
+it('does not mix another series with the same activity and responsible when the target has no pending sessions',()=>{
+  const archived={...rows[0],fecha:'2026-10-05',serieRecurrente:'archived'};
+  const {result}=renderHook(()=>useReservationSeriesState({editingReservation:archived,allReservations:[archived,...rows],updateScope:'series',rangeStartDate:'',rangeEndDate:'',selectedOccurrenceIds:new Set(),bookingMode:'pattern',recurrenceStartDate:'2026-10-05',recurrenceEndDate:'2026-10-07',selectedDays:[1,2,3],specificDates:[],formData:archived,includeHolidaysInSeries:false,holidayOverrideKey:''}));
+  expect(result.current.seriesReservations).toEqual([]);expect(result.current.affectedReservations).toEqual([]);
+});
+it('limits pattern previews to a date range rather than checking the whole series',()=>{
+  const {result}=renderHook(()=>useReservationSeriesState({editingReservation:rows[1],allReservations:rows,updateScope:'dateRange',rangeStartDate:'2026-10-07',rangeEndDate:'2026-10-07',selectedOccurrenceIds:new Set(),bookingMode:'pattern',recurrenceStartDate:'2026-10-05',recurrenceEndDate:'2026-10-07',selectedDays:[1,2,3],specificDates:[],formData:rows[1],includeHolidaysInSeries:false,holidayOverrideKey:''}));
+  expect(result.current.generatedDates).toEqual(['2026-10-07']);
+});

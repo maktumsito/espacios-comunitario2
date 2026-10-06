@@ -1,5 +1,5 @@
 import { toast } from 'sonner';
-import { MutableRefObject } from 'react';
+import { MutableRefObject, useRef } from 'react';
 import { format } from 'date-fns';
 import {
   Reservation,
@@ -9,10 +9,9 @@ import {
   BatchUpdateInfo
 } from '../types';
 import { normalizeSpaceName } from '../data/spacesData';
-import { checkSingleConflict, timeToMinutes, isReservationActiveForAvailability } from '../utils/conflictDetector';
+import { isReservationActiveForAvailability, findMaintenanceBlockConflicts, formatBlockConflictMessage, findReservationConflicts } from '../utils/conflictDetector';
 import { getDeletedIds, getLocalCache, saveReservation } from '../services/reservationService';
-import { formatDateDDMMYYYY, getDayOfWeekFromDateString } from '../utils/dateUtils';
-import { checkSpaceBlocked } from '../services/spaceBlockService';
+import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import {
   isCommitmentLetterEligible,
   downloadCommitmentLetterPdf
@@ -29,9 +28,11 @@ import {
 import { WEEKDAYS } from '../utils/dateUtils';
 import { CustomScheduleSlot, ConflictSavePayload } from '../types';
 import { AuthUser } from '../services/authService';
-import { filterOutChileanHolidays } from '../utils/holidayUtils';
+import { filterOutChileanHolidays, verifyHolidayOverrideKey } from '../utils/holidayUtils';
 import { getSeriesEditStartDate } from '../utils/recurringEdits';
 import { getChileLocalDateString } from '../utils/dateUtils';
+import { scheduleSlotsForDate, scopedScheduleSlots, sameScheduleSlot, applyChangedSeriesFields, type ScheduleSlot } from '../utils/recurringSchedule';
+import { validateTimeRange, checkLoanScheduleLimit } from '../utils/validationUtils';
 
 export interface SeriesItemSlot {
   fecha: string;
@@ -41,6 +42,9 @@ export interface SeriesItemSlot {
 }
 
 interface UseReservationSaveHandlerProps {
+  scheduleChanged?: boolean;
+  initialFormData?: Partial<Reservation>;
+  initialReservations?: Reservation[];
   formData: Partial<Reservation>;
   setFormData: React.Dispatch<React.SetStateAction<Partial<Reservation>>>;
   isSubmittingRef: MutableRefObject<boolean>;
@@ -124,6 +128,9 @@ interface UseReservationSaveHandlerProps {
 }
 
 export function useReservationSaveHandler({
+  scheduleChanged = true,
+  initialFormData,
+  initialReservations,
   formData,
   setFormData,
   isSubmittingRef,
@@ -192,6 +199,7 @@ export function useReservationSaveHandler({
   onClose,
   showFormFeedback
 }: UseReservationSaveHandlerProps) {
+  const newOccurrenceIds = useRef(new Map<string, string>());
   const executeSave = async (
     forceConflictOverride: boolean = false,
     overridesPayload?: ConflictSavePayload
@@ -314,7 +322,11 @@ export function useReservationSaveHandler({
       return;
     }
 
-    if (!timeValidation.isValid) {
+    const hasScheduleOverride = Boolean(overridesPayload && (overridesPayload.bookingMode || overridesPayload.specificDates ||
+      overridesPayload.dateSchedules || overridesPayload.secondSpaceUpdates || overridesPayload.useCustomSchedulesPerDate !== undefined ||
+      ['fecha','espacio','horaInicio','horaFin','terminaDiaSiguiente'].some(key => key in (overridesPayload.formDataUpdates || {}))));
+    const metadataOnly = isEditingRecurring && !scheduleChanged && !hasScheduleOverride && updateScope !== 'single';
+    if (!timeValidation.isValid && !metadataOnly) {
       abortWithFeedback(
         `⚠️ Error en horario: ${timeValidation.error || 'La hora de término debe ser posterior a la hora de inicio.'}`
       );
@@ -345,15 +357,15 @@ export function useReservationSaveHandler({
 
     // Comprehensive Zod schema validation
     const candidatePayload = {
-      ...formData,
-      id: formData.id || editingReservation?.id || 'temp-id',
-      fecha: formData.fecha || editingReservation?.fecha || '2026-01-01',
+      ...effectiveFormData,
+      id: effectiveFormData.id || editingReservation?.id || 'temp-id',
+      fecha: effectiveFormData.fecha || editingReservation?.fecha || '2026-01-01',
       horaInicio: baseStart,
       horaFin: baseEnd,
       espacio: baseSpace,
-      responsable: formData.responsable || '',
-      tipoActividad: formData.tipoActividad || 'Comunitario',
-      descripcion: formData.descripcion || 'Actividad'
+      responsable: effectiveFormData.responsable || '',
+      tipoActividad: effectiveFormData.tipoActividad || 'Comunitario',
+      descripcion: effectiveFormData.descripcion || 'Actividad'
     };
     const zodValidation = validateReservationWithZod(candidatePayload);
     if (!zodValidation.success && zodValidation.firstError) {
@@ -361,7 +373,7 @@ export function useReservationSaveHandler({
       return;
     }
 
-    if (loanScheduleCheck.requiresAuthorization) {
+    if (loanScheduleCheck.requiresAuthorization && !metadataOnly) {
       if (!isExtensionAuthorized) {
         abortWithFeedback(
           '⚠️ Autorización requerida: La actividad opera en horario extendido (antes de las 08:30 hrs o después de las 22:00 hrs). Ingresa la clave oficial "ccd2026" para autorizarla.'
@@ -371,7 +383,9 @@ export function useReservationSaveHandler({
     }
 
     let finalDates: string[] = [];
-    if (isSpecific) {
+    if (metadataOnly || isEditingRecurring && updateScope !== 'single' && !isRecurring) {
+      finalDates = [...new Set(affectedReservations.filter(r => inEditScope(r.fecha)).map(r => r.fecha))];
+    } else if (isSpecific) {
       if (effectiveSpecificDates.length === 0) {
         abortWithFeedback('Por favor selecciona al menos una fecha específica.');
         return;
@@ -434,7 +448,9 @@ export function useReservationSaveHandler({
       }
 
       // Check single date holiday
-      if (singleDateHolidayInfo && !isHolidayAuthorized) {
+      const existingHolidayAuthorization = !isDuplicating && editingReservation?.fecha === targetSingleDate &&
+        verifyHolidayOverrideKey(editingReservation.claveAutorizacionFeriado || '');
+      if (singleDateHolidayInfo && !isHolidayAuthorized && !existingHolidayAuthorization) {
         abortWithFeedback(
           `🚫 FECHA EN DÍA FERIADO NACIONAL: El día ${formatDateDDMMYYYY(targetSingleDate)} es feriado (${singleDateHolidayInfo.name}). Para autorizarla debes ingresar la clave CCD.`
         );
@@ -444,267 +460,42 @@ export function useReservationSaveHandler({
       finalDates = [targetSingleDate];
     }
 
-    // Check custom schedules timing validation
-    if (isSpecific && effectiveUseCustomSchedulesPerDate && finalDates.length > 1) {
-      for (const d of finalDates) {
-        const slot =
-          effectiveDateSchedules[d] || {
-            horaInicio: effectiveFormData.horaInicio,
-            horaFin: effectiveFormData.horaFin
-          };
-        const sMin = timeToMinutes(slot.horaInicio || '10:00');
-        const eMin = timeToMinutes(slot.horaFin || '11:00');
-        if (eMin <= sMin) {
-          abortWithFeedback(
-            `En la fecha ${formatDateDDMMYYYY(d)}, la hora de término (${slot.horaFin}) del 1er espacio debe ser posterior a la hora de inicio (${slot.horaInicio}).`
-          );
-          return;
-        }
-        if (slot.hasSecondSlot) {
-          const sMin2 = timeToMinutes(slot.secondHoraInicio || '11:00');
-          const eMin2 = timeToMinutes(slot.secondHoraFin || '12:00');
-          if (eMin2 <= sMin2) {
-            abortWithFeedback(
-              `En la fecha ${formatDateDDMMYYYY(d)}, la hora de término (${slot.secondHoraFin}) del 2do espacio (${slot.secondEspacio}) debe ser posterior a la hora de inicio (${slot.secondHoraInicio}).`
-            );
-            return;
-          }
-        }
+    finalDates = [...new Set(finalDates)];
+    const scheduleOptions = { mode: isEditingSingleOccurrence ? 'single' as const : effectiveBookingMode,
+      base: effectiveFormData, customDates: effectiveDateSchedules, customDays: daySchedules,
+      useCustomDates: effectiveUseCustomSchedulesPerDate, useCustomDays: useCustomSchedulesPerDay,
+      secondEnabled: !isEditingSingleOccurrence && enableSingleSecondSpace,
+      secondSpace: effectiveSecondSpace, secondStart: effectiveSecondStartTime, secondEnd: effectiveSecondEndTime };
+    let plannedSlots: ScheduleSlot[] = metadataOnly
+      ? affectedReservations.filter(r => inEditScope(r.fecha)).map(r => ({fecha:r.fecha,espacio:r.espacio,horaInicio:r.horaInicio,horaFin:r.horaFin,terminaDiaSiguiente:r.terminaDiaSiguiente,sourceId:r.id}))
+      : finalDates.flatMap(date => scheduleSlotsForDate(date, scheduleOptions));
+    if (editingReservation && !isDuplicating && (!isEditingRecurring || updateScope === 'single') && plannedSlots.length) {
+      plannedSlots[0].sourceId = editingReservation.id;
+    }
+    if (isEditingRecurring && updateScope !== 'single' && !isRecurring && !metadataOnly) plannedSlots=affectedReservations.filter(r=>inEditScope(r.fecha)).map(r=>({
+      ...scheduleSlotsForDate(r.fecha,scheduleOptions)[0],sourceId:r.id,
+    }));
+    if (isEditingRecurring && editingReservation && updateScope !== 'single') plannedSlots = scopedScheduleSlots(plannedSlots, {
+      scope:updateScope,source:editingReservation,history:allReservations,today,rangeStartDate,rangeEndDate,
+      selectedIds:new Set(affectedReservations.map(r=>r.id)),
+    });
+    if (!plannedSlots.length) { abortWithFeedback('No hay sesiones dentro del alcance seleccionado.'); return; }
+    for (const slot of plannedSlots) {
+      if (!slot.espacio) { abortWithFeedback(`Selecciona un espacio para el ${formatDateDDMMYYYY(slot.fecha)}.`); return; }
+      const timing = validateTimeRange(slot.horaInicio,slot.horaFin,Boolean(slot.terminaDiaSiguiente));
+      if (!timing.isValid) { abortWithFeedback(`Horario inválido el ${formatDateDDMMYYYY(slot.fecha)}: ${timing.error}`); return; }
+      const original = allReservations.find(r=>r.id===slot.sourceId);
+      const alreadyAuthorized = original && sameScheduleSlot(original,slot) && original.horarioExtendidoAutorizado;
+      if (checkLoanScheduleLimit(slot.horaInicio,slot.horaFin,Boolean(slot.terminaDiaSiguiente)).requiresAuthorization && !isExtensionAuthorized && !alreadyAuthorized) {
+        abortWithFeedback(`El horario del ${formatDateDDMMYYYY(slot.fecha)} requiere autorización de horario extendido.`); return;
       }
     }
-
-    if (isPattern && useCustomSchedulesPerDay) {
-      for (const dayNum of selectedDays) {
-        const slot =
-          daySchedules[dayNum] || {
-            horaInicio: effectiveFormData.horaInicio,
-            horaFin: effectiveFormData.horaFin
-          };
-        const sMin = timeToMinutes(slot.horaInicio || '10:00');
-        const eMin = timeToMinutes(slot.horaFin || '11:00');
-        const dayObj = WEEKDAYS.find((w) => w.dayNum === dayNum);
-        if (eMin <= sMin) {
-          abortWithFeedback(
-            `Para el día ${dayObj?.full || 'seleccionado'}, la hora de término (${slot.horaFin}) del 1er espacio debe ser posterior a la hora de inicio (${slot.horaInicio}).`
-          );
-          return;
-        }
-        if (slot.hasSecondSlot) {
-          const sMin2 = timeToMinutes(slot.secondHoraInicio || '11:00');
-          const eMin2 = timeToMinutes(slot.secondHoraFin || '12:00');
-          if (eMin2 <= sMin2) {
-            abortWithFeedback(
-              `Para el día ${dayObj?.full || 'seleccionado'}, la hora de término (${slot.secondHoraFin}) del 2do espacio (${slot.secondEspacio}) debe ser posterior a la hora de inicio (${slot.secondHoraInicio}).`
-            );
-            return;
-          }
-        }
-      }
-    }
-
-    // Validation for single day 2nd space
-    if (!isRecurring && enableSingleSecondSpace) {
-      if (!effectiveSecondSpace) {
-        abortWithFeedback('Por favor selecciona el segundo espacio para registrar.');
-        return;
-      }
-      const sMin2 = timeToMinutes(effectiveSecondStartTime || '11:00');
-      const eMin2 = timeToMinutes(effectiveSecondEndTime || '12:00');
-      if (eMin2 <= sMin2) {
-        abortWithFeedback(
-          `Para el 2do espacio (${effectiveSecondSpace}), la hora de término (${effectiveSecondEndTime}) debe ser posterior a la hora de inicio (${effectiveSecondStartTime}).`
-        );
-        return;
-      }
-    }
-
-    // Check if any requested date/time overlaps with a Maintenance Block
-    if (spaceBlocks && spaceBlocks.length > 0) {
-      for (const d of finalDates) {
-        let hStart = effectiveFormData.horaInicio || '10:00';
-        let hEnd = effectiveFormData.horaFin || '11:00';
-        let esp = effectiveFormData.espacio || availableSpaces[0]?.name || '';
-
-        if (isPattern && useCustomSchedulesPerDay) {
-          const dayNum = getDayOfWeekFromDateString(d);
-          const sched = daySchedules[dayNum];
-          if (sched) {
-            hStart = sched.horaInicio || hStart;
-            hEnd = sched.horaFin || hEnd;
-            esp = sched.espacio || esp;
-          }
-        } else if (isSpecific && effectiveUseCustomSchedulesPerDate) {
-          const customSlot = effectiveDateSchedules[d];
-          if (customSlot) {
-            hStart = customSlot.horaInicio || hStart;
-            hEnd = customSlot.horaFin || hEnd;
-            esp = customSlot.espacio || esp;
-          }
-        }
-
-        const blockConflict = checkSpaceBlocked(esp, d, hStart, hEnd, [...spaceBlocks]);
-        if (blockConflict) {
-          abortWithFeedback(
-            `El espacio '${esp}' se encuentra BLOQUEADO por mantención/obras el ${formatDateDDMMYYYY(d)} (${blockConflict.motivo}). No es posible agendar en este horario.`
-          );
-          return;
-        }
-
-        // Check 2nd space if active
-        const hasSecond =
-          isPattern && useCustomSchedulesPerDay
-            ? Boolean(daySchedules[getDayOfWeekFromDateString(d)]?.hasSecondSlot)
-            : isSpecific && effectiveUseCustomSchedulesPerDate
-            ? Boolean(effectiveDateSchedules[d]?.hasSecondSlot)
-            : enableSingleSecondSpace;
-
-        if (hasSecond && effectiveSecondSpace) {
-          const s2Start = effectiveSecondStartTime || '11:00';
-          const s2End = effectiveSecondEndTime || '12:00';
-          const blockConflict2 = checkSpaceBlocked(effectiveSecondSpace, d, s2Start, s2End, [...spaceBlocks]);
-          if (blockConflict2) {
-            abortWithFeedback(
-              `El 2° espacio '${effectiveSecondSpace}' se encuentra BLOQUEADO por mantención/obras el ${formatDateDDMMYYYY(d)} (${blockConflict2.motivo}).`
-            );
-            return;
-          }
-        }
-      }
-    }
-
-    // Topamiento check: Verification dialog to allow mass or individual resolution directly from modal
-    if (!forceConflictOverride && !allowConflictOverride) {
-      const remainingConflicts: string[] = [];
-
-      if (!isRecurring) {
-        const d = finalDates[0];
-        const s1 = checkSingleConflict(
-          {
-            ...effectiveFormData,
-            fecha: d,
-            horaInicio: effectiveFormData.horaInicio,
-            horaFin: effectiveFormData.horaFin,
-            espacio: effectiveFormData.espacio
-          },
-          allReservations,
-          excludeReservationIds,
-          excludeSeriesId
-        );
-        const s2 =
-          enableSingleSecondSpace &&
-          effectiveSecondSpace &&
-          effectiveSecondStartTime &&
-          effectiveSecondEndTime
-            ? checkSingleConflict(
-                {
-                  ...effectiveFormData,
-                  fecha: d,
-                  horaInicio: effectiveSecondStartTime,
-                  horaFin: effectiveSecondEndTime,
-                  espacio: effectiveSecondSpace
-                },
-                allReservations,
-                excludeReservationIds,
-                excludeSeriesId
-              )
-            : [];
-        if (s1.length > 0 || s2.length > 0) {
-          remainingConflicts.push(d);
-        }
-      } else if (isSpecific) {
-        finalDates.forEach((d) => {
-          const customSlot = effectiveUseCustomSchedulesPerDate ? effectiveDateSchedules[d] : undefined;
-          const hInicio = customSlot?.horaInicio || effectiveFormData.horaInicio || '10:00';
-          const hFin = customSlot?.horaFin || effectiveFormData.horaFin || '11:00';
-          const esp = customSlot?.espacio || effectiveFormData.espacio || availableSpaces[0]?.name;
-          const s1 =
-            esp && hInicio && hFin
-              ? checkSingleConflict(
-                  { ...effectiveFormData, fecha: d, horaInicio: hInicio, horaFin: hFin, espacio: esp },
-                  allReservations,
-                  excludeReservationIds,
-                  excludeSeriesId
-                )
-              : [];
-
-          const hasSecond = effectiveUseCustomSchedulesPerDate
-            ? customSlot?.hasSecondSlot
-            : enableSingleSecondSpace;
-          const s2Esp = effectiveUseCustomSchedulesPerDate
-            ? customSlot?.secondEspacio
-            : effectiveSecondSpace;
-          const s2Start = effectiveUseCustomSchedulesPerDate
-            ? customSlot?.secondHoraInicio
-            : effectiveSecondStartTime;
-          const s2End = effectiveUseCustomSchedulesPerDate
-            ? customSlot?.secondHoraFin
-            : effectiveSecondEndTime;
-          const s2 =
-            hasSecond && s2Esp && s2Start && s2End
-              ? checkSingleConflict(
-                  { ...effectiveFormData, fecha: d, horaInicio: s2Start, horaFin: s2End, espacio: s2Esp },
-                  allReservations,
-                  excludeReservationIds,
-                  excludeSeriesId
-                )
-              : [];
-
-          if (s1.length > 0 || s2.length > 0) {
-            remainingConflicts.push(d);
-          }
-        });
-      } else if (isPattern) {
-        finalDates.forEach((d) => {
-          const dayNum = getDayOfWeekFromDateString(d);
-          const customSlot = useCustomSchedulesPerDay ? daySchedules[dayNum] : undefined;
-          const hInicio = customSlot?.horaInicio || effectiveFormData.horaInicio || '10:00';
-          const hFin = customSlot?.horaFin || effectiveFormData.horaFin || '11:00';
-          const esp = customSlot?.espacio || effectiveFormData.espacio || availableSpaces[0]?.name;
-          const s1 =
-            esp && hInicio && hFin
-              ? checkSingleConflict(
-                  { ...effectiveFormData, fecha: d, horaInicio: hInicio, horaFin: hFin, espacio: esp },
-                  allReservations,
-                  excludeReservationIds,
-                  excludeSeriesId
-                )
-              : [];
-
-          const hasSecond = useCustomSchedulesPerDay
-            ? customSlot?.hasSecondSlot
-            : enableSingleSecondSpace;
-          const s2Esp = useCustomSchedulesPerDay
-            ? customSlot?.secondEspacio
-            : effectiveSecondSpace;
-          const s2Start = useCustomSchedulesPerDay
-            ? customSlot?.secondHoraInicio
-            : effectiveSecondStartTime;
-          const s2End = useCustomSchedulesPerDay
-            ? customSlot?.secondHoraFin
-            : effectiveSecondEndTime;
-          const s2 =
-            hasSecond && s2Esp && s2Start && s2End
-              ? checkSingleConflict(
-                  { ...effectiveFormData, fecha: d, horaInicio: s2Start, horaFin: s2End, espacio: s2Esp },
-                  allReservations,
-                  excludeReservationIds,
-                  excludeSeriesId
-                )
-              : [];
-
-          if (s1.length > 0 || s2.length > 0) {
-            remainingConflicts.push(d);
-          }
-        });
-      }
-
-      if (remainingConflicts.length > 0) {
-        setShowConflictDialog(true);
-        isSubmittingRef.current = false;
-        setIsSubmitting(false);
-        return;
-      }
-    }
+    const validationCandidates: Reservation[] = plannedSlots.map((slot,index)=>({...effectiveFormData,...slot,id:slot.sourceId || `PREVIEW_${index}`,estado:'activa'} as Reservation));
+    const blocks = findMaintenanceBlockConflicts(validationCandidates,spaceBlocks);
+    if (blocks.length) { abortWithFeedback(formatBlockConflictMessage(blocks[0])); return; }
+    if (!forceConflictOverride && !allowConflictOverride && findReservationConflicts(validationCandidates,allReservations,{
+      excludeReservationIds,excludeSeriesId,allowCandidateSelfConflicts:false,
+    }).length) { setShowConflictDialog(true); return; }
 
     const normalizedSpace = normalizeSpaceName(effectiveFormData.espacio || baseSpace || 'Espacio');
 
@@ -717,109 +508,8 @@ export function useReservationSaveHandler({
 
     const seriesId = `SER_${effectiveFormData.id || editingReservation?.id || 'draft'}`.slice(0,128);
 
-    // Build explicit payload for all dates with individual space and schedule
-    let finalSeriesPayload: (string | SeriesItemSlot)[] = finalDates;
-
-    if (isSpecific && effectiveUseCustomSchedulesPerDate) {
-      finalSeriesPayload = [];
-      for (const d of finalDates) {
-        const slot = effectiveDateSchedules[d] || {
-          horaInicio: effectiveFormData.horaInicio || '10:00',
-          horaFin: effectiveFormData.horaFin || '11:00',
-          espacio: effectiveFormData.espacio
-        };
-        finalSeriesPayload.push({
-          fecha: d,
-          horaInicio: slot.horaInicio || effectiveFormData.horaInicio || '10:00',
-          horaFin: slot.horaFin || effectiveFormData.horaFin || '11:00',
-          espacio: slot.espacio ? normalizeSpaceName(slot.espacio) : normalizedSpace
-        });
-        if (slot.hasSecondSlot && slot.secondEspacio) {
-          finalSeriesPayload.push({
-            fecha: d,
-            horaInicio: slot.secondHoraInicio || '11:00',
-            horaFin: slot.secondHoraFin || '12:00',
-            espacio: normalizeSpaceName(slot.secondEspacio)
-          });
-        }
-      }
-    } else if (isSpecific && enableSingleSecondSpace && effectiveSecondSpace) {
-      finalSeriesPayload = [];
-      for (const d of finalDates) {
-        finalSeriesPayload.push({
-          fecha: d,
-          horaInicio: effectiveFormData.horaInicio || '10:00',
-          horaFin: effectiveFormData.horaFin || '11:00',
-          espacio: normalizedSpace
-        });
-        finalSeriesPayload.push({
-          fecha: d,
-          horaInicio: effectiveSecondStartTime || '11:00',
-          horaFin: effectiveSecondEndTime || '12:00',
-          espacio: normalizeSpaceName(effectiveSecondSpace)
-        });
-      }
-    } else if (isPattern && useCustomSchedulesPerDay) {
-      finalSeriesPayload = [];
-      for (const d of finalDates) {
-        const dayNum = getDayOfWeekFromDateString(d);
-        const sched = daySchedules[dayNum];
-        finalSeriesPayload.push({
-          fecha: d,
-          horaInicio: sched?.horaInicio || effectiveFormData.horaInicio || '10:00',
-          horaFin: sched?.horaFin || effectiveFormData.horaFin || '11:00',
-          espacio: sched?.espacio ? normalizeSpaceName(sched.espacio) : normalizedSpace
-        });
-        if (sched?.hasSecondSlot && sched?.secondEspacio) {
-          finalSeriesPayload.push({
-            fecha: d,
-            horaInicio: sched.secondHoraInicio || '11:00',
-            horaFin: sched.secondHoraFin || '12:00',
-            espacio: normalizeSpaceName(sched.secondEspacio)
-          });
-        }
-      }
-    } else if (isRecurring) {
-      if (enableSingleSecondSpace && effectiveSecondSpace) {
-        finalSeriesPayload = [];
-        for (const d of finalDates) {
-          finalSeriesPayload.push({
-            fecha: d,
-            horaInicio: effectiveFormData.horaInicio || '10:00',
-            horaFin: effectiveFormData.horaFin || '11:00',
-            espacio: normalizedSpace
-          });
-          finalSeriesPayload.push({
-            fecha: d,
-            horaInicio: effectiveSecondStartTime || '11:00',
-            horaFin: effectiveSecondEndTime || '12:00',
-            espacio: normalizeSpaceName(effectiveSecondSpace)
-          });
-        }
-      } else {
-        finalSeriesPayload = finalDates.map((d) => ({
-          fecha: d,
-          horaInicio: effectiveFormData.horaInicio || '10:00',
-          horaFin: effectiveFormData.horaFin || '11:00',
-          espacio: normalizedSpace
-        }));
-      }
-    } else if (enableSingleSecondSpace) {
-      finalSeriesPayload = [
-        {
-          fecha: effectiveFormData.fecha || '',
-          horaInicio: effectiveFormData.horaInicio || '10:00',
-          horaFin: effectiveFormData.horaFin || '11:00',
-          espacio: normalizedSpace
-        },
-        {
-          fecha: effectiveFormData.fecha || '',
-          horaInicio: effectiveSecondStartTime || '11:00',
-          horaFin: effectiveSecondEndTime || '12:00',
-          espacio: normalizeSpaceName(effectiveSecondSpace)
-        }
-      ];
-    }
+    // Validation and persistence share the exact same scoped schedule.
+    const finalSeriesPayload: (string | SeriesItemSlot)[] = plannedSlots;
 
     const firstDate =
       isEditingSingleOccurrence && effectiveFormData.fecha
@@ -903,7 +593,7 @@ export function useReservationSaveHandler({
         : isRecurring && finalDates.length > 0
         ? finalDates[finalDates.length - 1]
         : effectiveFormData.fecha,
-      cantidadParticipantes: Number(effectiveFormData.cantidadParticipantes) || 10,
+      cantidadParticipantes: Number.isFinite(Number(effectiveFormData.cantidadParticipantes)) ? Number(effectiveFormData.cantidadParticipantes) : 10,
       realizada: effectiveFormData.realizada || 'No',
       rut: effectiveFormData.rut || '',
       domicilio: effectiveFormData.domicilio || '',
@@ -989,6 +679,11 @@ export function useReservationSaveHandler({
             updatedAt: new Date().toISOString()
           };
 
+          if (sameScheduleSlot(editingReservation, updatedReserva)) {
+            updatedReserva.horarioExtendidoAutorizado = editingReservation.horarioExtendidoAutorizado;
+            updatedReserva.claveAutorizacion = editingReservation.claveAutorizacion;
+            updatedReserva.autorizadoPor = editingReservation.autorizadoPor;
+          }
           const singleResult = await Promise.resolve(
             onSave(updatedReserva, false, undefined, false, {
               scope: 'single',
@@ -1003,7 +698,8 @@ export function useReservationSaveHandler({
         } else {
           // MULTI-OCCURRENCE / SERIES EXPANSION UPDATE (future, series, dateRange, selected)
           const deletedSet = getDeletedIds();
-          const cleanAffected = (isConvertingToSeries ? [editingReservation] : affectedReservations).filter(
+          const initialById = new Map((initialReservations || []).map(r=>[r.id,r]));
+          const cleanAffected = (isConvertingToSeries ? [editingReservation] : affectedReservations.map(r=>initialById.get(r.id)||r)).filter(
             (orig) => (isConvertingToSeries || inEditScope(orig.fecha)) && !deletedSet.has(orig.id) && orig.estado !== 'eliminada' && isReservationActiveForAvailability(orig)
           );
 
@@ -1026,10 +722,12 @@ export function useReservationSaveHandler({
             horaInicio: string;
             horaFin: string;
             espacio: string;
+            sourceId?: string;
+            terminaDiaSiguiente?: boolean;
           }
 
           // Target slots from explicit series payload (handles date expansion, per-day / per-date schedules, second space)
-          const targetSlots: NormalizedSlot[] = (isRecurring && finalSeriesPayload.length > 0)
+          const targetSlots: NormalizedSlot[] = ((isRecurring || isEditingRecurring) && finalSeriesPayload.length > 0)
             ? finalSeriesPayload.map((item) => {
                 if (typeof item === 'string') {
                   return {
@@ -1043,7 +741,9 @@ export function useReservationSaveHandler({
                   fecha: item.fecha,
                   horaInicio: item.horaInicio || effectiveFormData.horaInicio || '10:00',
                   horaFin: item.horaFin || effectiveFormData.horaFin || '11:00',
-                  espacio: item.espacio || normalizedSpace
+                  espacio: item.espacio || normalizedSpace,
+                  sourceId: (item as ScheduleSlot).sourceId,
+                  terminaDiaSiguiente: (item as ScheduleSlot).terminaDiaSiguiente
                 };
               })
             : cleanAffected.map((orig) => ({
@@ -1075,7 +775,9 @@ export function useReservationSaveHandler({
           for (let sIdx = 0; sIdx < targetSlots.length; sIdx++) {
             const slot = targetSlots[sIdx];
             const key = `${slot.fecha}_${slot.espacio.trim().toUpperCase()}`;
-            let match = existingByDateAndSpace.get(key)?.find((r) => !usedExistingIds.has(r.id));
+            let match = slot.sourceId ? cleanAffected.find(r=>r.id===slot.sourceId) : undefined;
+            if (!match) match = existingByDateAndSpace.get(key)?.find((r) => !usedExistingIds.has(r.id) && r.horaInicio===slot.horaInicio && r.horaFin===slot.horaFin);
+            if (!match) match = existingByDateAndSpace.get(key)?.find((r) => !usedExistingIds.has(r.id));
             if (!match) {
               match = existingByDateOnly.get(slot.fecha)?.find((r) => !usedExistingIds.has(r.id));
             }
@@ -1109,7 +811,7 @@ export function useReservationSaveHandler({
                     : match.emailContacto,
                 tipoPrestamo: effectiveFormData.tipoPrestamo || match.tipoPrestamo,
                 cantidadParticipantes:
-                  Number(effectiveFormData.cantidadParticipantes) || match.cantidadParticipantes || 10,
+                  Number.isFinite(Number(effectiveFormData.cantidadParticipantes)) ? Number(effectiveFormData.cantidadParticipantes) : match.cantidadParticipantes ?? 10,
                 equipamientoSolicitado: slotEquip,
                 importante: effectiveFormData.importante || match.importante,
                 comentarios:
@@ -1120,7 +822,7 @@ export function useReservationSaveHandler({
                   isCommitmentLetterEligible(effectiveFormData.tipoActividad, effectiveFormData.tipoPrestamo) ||
                   Boolean(effectiveFormData.requiereCartaCompromiso),
                 realizada: effectiveFormData.realizada || match.realizada,
-                terminaDiaSiguiente: Boolean(effectiveFormData.terminaDiaSiguiente),
+                terminaDiaSiguiente: Boolean(slot.terminaDiaSiguiente),
                 horarioExtendidoAutorizado: loanScheduleCheck.requiresAuthorization
                   ? true
                   : Boolean(effectiveFormData.horarioExtendidoAutorizado),
@@ -1147,7 +849,10 @@ export function useReservationSaveHandler({
               // Brand new occurrence for newly expanded dates/slots in the series
               updatedList.push({
                 ...baseRef,
-                id: `RSV_${effectiveFormData.id}_${slot.fecha}_${slot.espacio}_${slot.horaInicio}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0,128),
+                id: (()=>{const key=JSON.stringify([editingReservation.id,slot.fecha,slot.espacio,slot.horaInicio,slot.horaFin,sIdx]);let id=newOccurrenceIds.current.get(key);if(!id){id=`RSV_${crypto.randomUUID()}`;newOccurrenceIds.current.set(key,id);}return id;})(),
+                googleEventId: undefined, cartaCompromisoAdjunta: undefined, cartaCompromisoDescargada: false,
+                reemplazaReservaId: undefined, reemplazadaPorReservaId: undefined, motivoReemplazo: undefined,
+                createdAt: undefined,
                 fecha: slot.fecha,
                 horaInicio: slot.horaInicio || effectiveFormData.horaInicio || '10:00',
                 horaFin: slot.horaFin || effectiveFormData.horaFin || '11:00',
@@ -1166,7 +871,7 @@ export function useReservationSaveHandler({
                     : (baseRef.emailContacto || ''),
                 tipoPrestamo: effectiveFormData.tipoPrestamo || baseRef.tipoPrestamo || '',
                 cantidadParticipantes:
-                  Number(effectiveFormData.cantidadParticipantes) || baseRef.cantidadParticipantes || 10,
+                  Number.isFinite(Number(effectiveFormData.cantidadParticipantes)) ? Number(effectiveFormData.cantidadParticipantes) : baseRef.cantidadParticipantes ?? 10,
                 equipamientoSolicitado: slotEquip,
                 importante: effectiveFormData.importante || baseRef.importante || 'No',
                 comentarios:
@@ -1177,7 +882,7 @@ export function useReservationSaveHandler({
                   isCommitmentLetterEligible(effectiveFormData.tipoActividad, effectiveFormData.tipoPrestamo) ||
                   Boolean(effectiveFormData.requiereCartaCompromiso),
                 realizada: 'No',
-                terminaDiaSiguiente: Boolean(effectiveFormData.terminaDiaSiguiente),
+                terminaDiaSiguiente: Boolean(slot.terminaDiaSiguiente),
                 horarioExtendidoAutorizado: loanScheduleCheck.requiresAuthorization
                   ? true
                   : Boolean(effectiveFormData.horarioExtendidoAutorizado),
@@ -1215,10 +920,26 @@ export function useReservationSaveHandler({
             return a.horaInicio.localeCompare(b.horaInicio);
           });
 
-          const totalSeriesCount = updatedList.length;
-          updatedList.forEach((r, idx) => {
-            r.indiceEnSerie = idx + 1;
-            r.totalEnSerie = totalSeriesCount;
+          const knownSeries = allReservations.filter(r=>(r.serieRecurrente||r.recurrenteId)===seriesId && r.estado!=='eliminada');
+          const removedIds = new Set(idsToDelete);
+          const oldIndices = new Map(cleanAffected.map(r=>[r.id,r.indiceEnSerie]));
+          let nextIndex = Math.max(0,...knownSeries.map(r=>r.indiceEnSerie||0));
+          const totalSeriesCount = new Set([...knownSeries.filter(r=>!removedIds.has(r.id)).map(r=>r.id),...updatedList.map(r=>r.id)]).size;
+          updatedList.forEach(r=>{
+            r.indiceEnSerie = oldIndices.get(r.id) || ++nextIndex;
+            r.totalEnSerie = totalSeriesCount || updatedList.length;
+            const existing=cleanAffected.find(old=>old.id===r.id);
+            if (existing && initialFormData) {
+              const changed=applyChangedSeriesFields(existing,effectiveFormData,initialFormData);
+              for (const field of ['tipoActividad','descripcion','responsable','telefonoContacto','emailContacto','tipoPrestamo','cantidadParticipantes','equipamientoSolicitado','importante','comentarios','rut','domicilio','requiereCartaCompromiso','cartaCompromisoAdjunta','realizada'] as const) (r as any)[field]=changed[field];
+            }
+            if (existing && sameScheduleSlot(existing,r)) {
+              r.horarioExtendidoAutorizado = existing.horarioExtendidoAutorizado;
+              r.claveAutorizacion = existing.claveAutorizacion;
+              r.autorizadoPor = existing.autorizadoPor;
+              r.claveAutorizacionFeriado = existing.claveAutorizacionFeriado;
+              if (metadataOnly) {r.fechaInicioRecurrencia=existing.fechaInicioRecurrencia;r.fechaFinRecurrencia=existing.fechaFinRecurrencia;r.tipoRecurrencia=existing.tipoRecurrencia;r.diasSemana=existing.diasSemana;r.totalEnSerie=existing.totalEnSerie;}
+            }
           });
 
           const scopeLabels: Record<UpdateScope, string> = {
@@ -1234,7 +955,9 @@ export function useReservationSaveHandler({
               scope: isConvertingToSeries ? 'series' : updateScope,
               sourceReservationId: editingReservation.id,
               updatedReservations: updatedList,
-              affectedIds: updatedList.map((r) => r.id),
+              affectedIds: cleanAffected.map((r) => r.id),
+              addedIds: updatedList.filter(r=>!cleanAffected.some(old=>old.id===r.id)).map(r=>r.id),
+              expectedVersions: Object.fromEntries([...cleanAffected,editingReservation].map(r=>[r.id,r.version||0])),
               deletedIds: idsToDelete.length > 0 ? idsToDelete : undefined,
               description: isConvertingToSeries
                 ? `Convertida reserva individual a serie de ${updatedList.length} sesiones para '${effectiveFormData.tipoActividad || 'Actividad'}' (${effectiveFormData.responsable || 'Responsable'})`

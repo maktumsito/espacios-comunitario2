@@ -1026,7 +1026,7 @@ export async function resumeReservationOperation(id: string): Promise<WriteResul
   if (!user || (operation.actor && operation.actor !== user.username) || operation.reservations.some(r=>operation.intent === 'update' || r.version ? !userCanEditReservations(user) : !userCanCreateReservations(user)) || (operation.deletedIds.length && !userCanDeleteReservations(user))) throw new Error('No tienes permisos para reanudar esta operación.');
   return commitReservationChanges(operation.reservations.filter(r=>!operation.confirmedIds.includes(r.id)), {
     operationId: operation.id, deletedIds: operation.deletedIds.filter(id => !operation.confirmedIds.includes(id)),
-    allowConflictOverride: operation.allowConflictOverride, intent: operation.intent, requireAtomic: operation.requireAtomic
+    allowConflictOverride: operation.allowConflictOverride, intent: operation.intent, requireAtomic: operation.requireAtomic, expectedVersions: operation.expectedVersions
   });
 }
 
