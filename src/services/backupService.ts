@@ -1,8 +1,7 @@
-import { splitBackupPayload } from '../utils/backupChunks';
 import { doc, getDoc, setDoc, getDocs, collection, deleteDoc, query, orderBy, limit } from 'firebase/firestore';
 import { getDb } from '../firebase/config';
 import { Reservation, SpaceInfo, LoanType, ActivityTypeItem, EquipmentItem, SpaceRating } from '../types';
-import { getLocalCache, seedAllToFirestore, setLocalCache, normalizeReservationFromFirestore } from './reservationService';
+import { getLocalCache, seedAllToFirestore, setLocalCache } from './reservationService';
 import { getStoredSpaces, getStoredLoanTypes, getStoredActivityTypes } from './adminConfigService';
 import { getStoredEquipment } from './equipmentService';
 import { getAllAuthorizedUsers, UserAccount, AuthUser } from './authService';
@@ -174,6 +173,10 @@ export async function saveBackupScheduleConfig(cfg: Partial<BackupScheduleConfig
     intervalDays: typeof cfg.intervalDays === 'number' && cfg.intervalDays > 0 ? cfg.intervalDays : current.intervalDays
   };
 
+  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    localStorage.setItem(BACKUP_CONFIG_STORAGE_KEY, JSON.stringify(updated));
+  }
+
   // Also sync to Firestore under configuracion_sistema for multi-device agreement
   try {
     const db = getDb();
@@ -183,14 +186,9 @@ export async function saveBackupScheduleConfig(cfg: Partial<BackupScheduleConfig
       updatedAt: new Date().toISOString()
     }, { merge: true });
   } catch (err) {
+    // Non-blocking for offline
     console.warn('[BackupService] Could not persist backup schedule config to Firestore:', err);
-    throw err;
   }
-
-  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-    localStorage.setItem(BACKUP_CONFIG_STORAGE_KEY, JSON.stringify(updated));
-  }
-
 
   return updated;
 }
@@ -256,7 +254,7 @@ export async function createDatabaseBackup(options: CreateBackupOptions = {}): P
       const creadoPor = options.creadoPor || (tipo === 'automatica_15_dias' ? 'Sistema (Automático cada 15 días)' : 'Usuario Administrador');
 
   // 1. Gather all collections
-  const rawReservations = options.customReservations ?? (await getDocs(collection(getDb(),'reservas'))).docs.map(d=>normalizeReservationFromFirestore(d.id,d.data()));
+  const rawReservations = options.customReservations || getLocalCache();
   const reservations = Array.isArray(rawReservations) ? [...rawReservations] : [];
   const spaces = getStoredSpaces();
   const loanTypes = getStoredLoanTypes();
@@ -307,11 +305,19 @@ export async function createDatabaseBackup(options: CreateBackupOptions = {}): P
     : `Copia de seguridad manual generada por ${creadoPor} con ${reservations.length} reservas`;
 
   // Partition serialized backup payload into chunks to respect Firestore 1MB document size limit
-  const payloads = splitBackupPayload(serializedData, BACKUP_CHUNK_SIZE);
-  const totalPartes = payloads.length;
-  const chunks: DatabaseBackupChunk[] = payloads.map((payload,index) => ({
-    id: `parte_${String(index).padStart(3, '0')}`, backupId: id, index, totalPartes, payload
-  }));
+  const totalPartes = Math.max(1, Math.ceil(serializedData.length / BACKUP_CHUNK_SIZE));
+  const chunks: DatabaseBackupChunk[] = [];
+  for (let i = 0; i < totalPartes; i++) {
+    const start = i * BACKUP_CHUNK_SIZE;
+    const end = Math.min(start + BACKUP_CHUNK_SIZE, serializedData.length);
+    chunks.push({
+      id: `parte_${String(i).padStart(3, '0')}`,
+      backupId: id,
+      index: i,
+      totalPartes,
+      payload: serializedData.slice(start, end)
+    });
+  }
 
   const metadata: DatabaseBackupMetadata = {
     id,
@@ -343,10 +349,11 @@ export async function createDatabaseBackup(options: CreateBackupOptions = {}): P
     const db = getDb();
 
     // Save chunks to subcollection
-    for (let i = 0; i < chunks.length; i += 4) {
-      await Promise.all(chunks.slice(i,i+4).map(chunk =>
-        setDoc(doc(db, BACKUP_COLLECTION, id, 'partes', chunk.id), chunk)));
-    }
+    const chunkPromises = chunks.map(chunk => {
+      const chunkDocRef = doc(db, BACKUP_COLLECTION, id, 'partes', chunk.id);
+      return setDoc(chunkDocRef, chunk);
+    });
+    await Promise.all(chunkPromises);
 
     // Save metadata to main document (size is < 2 KB, well below 1 MB)
     const backupDocRef = doc(db, BACKUP_COLLECTION, id);
@@ -355,24 +362,22 @@ export async function createDatabaseBackup(options: CreateBackupOptions = {}): P
     console.log(`[BackupService] Copia de seguridad guardada exitosamente en Firestore (${id}, ${tamanoBytes} bytes en ${totalPartes} partes, ${reservations.length} reservas)`);
   } catch (err) {
     console.error('[BackupService] Error al guardar copia de seguridad en Firestore:', err);
-    throw err;
+    // Keep local persistence if network fails
   }
 
   // 4. Update local history and schedule config
   const existingHistory = getLocalBackupHistory().filter(b => b.id !== id);
   saveLocalBackupHistory([metadata, ...existingHistory]);
 
-  try {
   await saveBackupScheduleConfig({
     lastBackupDate: dateStr,
     lastBackupTimestamp: now.getTime(),
     lastBackupId: id
   });
-  } catch (err) { console.warn('Respaldo confirmado; no se pudo actualizar su programación:', err); }
 
   // 5. Audit Log Entry
   try {
-    await recordAuditEntry({
+    recordAuditEntry({
       reservaId: id,
       action: 'BACKUP_CREATED',
       description: metadata.descripcion,
@@ -672,10 +677,10 @@ export async function restoreDatabaseFromBackup(
 
   try {
     const reservationsToRestore = recordToRestore.data.reservas;
+    setLocalCache(reservationsToRestore);
     const res = await seedAllToFirestore(reservationsToRestore, true);
-    if (res.error) return { success: false, count: 0, error: res.error };
 
-    void recordAuditEntry({
+    await recordAuditEntry({
       reservaId: recordToRestore.id,
       action: 'BACKUP_RESTORED',
       description: `Base de datos restaurada a partir de copia de seguridad ${recordToRestore.id} (${recordToRestore.fecha})`,
@@ -685,9 +690,9 @@ export async function restoreDatabaseFromBackup(
         { field: 'id', label: 'ID de Copia', oldValue: null, newValue: recordToRestore.id },
         { field: 'totalReservas', label: 'Reservas Restauradas', oldValue: null, newValue: reservationsToRestore.length }
       ]
-    }).catch(error=>console.warn("Respaldo restaurado; auditoría pendiente:", error));
+    });
 
-    return { success: true, count: res.count, restoredReservations: getLocalCache() };
+    return { success: true, count: res.count, restoredReservations: reservationsToRestore };
   } catch (err: any) {
     return { success: false, count: 0, error: err?.message || 'Error al restaurar copia de seguridad' };
   }
@@ -703,15 +708,14 @@ export async function deleteDatabaseBackup(backupId: string): Promise<boolean> {
     const partesRef = collection(db, BACKUP_COLLECTION, backupId, 'partes');
     const partesSnap = await getDocs(partesRef);
     if (!partesSnap.empty) {
-      for (let i = 0; i < partesSnap.docs.length; i += 4) {
-        await Promise.all(partesSnap.docs.slice(i,i+4).map(d => deleteDoc(d.ref)));
-      }
+      const deletePromises = partesSnap.docs.map(d => deleteDoc(d.ref));
+      await Promise.all(deletePromises);
     }
 
     // 2. Delete parent metadata document
     await deleteDoc(doc(db, BACKUP_COLLECTION, backupId));
   } catch (err) {
-    throw err;
+    console.warn('[BackupService] Could not delete backup from Firestore:', err);
   }
 
   const current = getLocalBackupHistory().filter(b => b.id !== backupId);

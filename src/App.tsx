@@ -13,7 +13,6 @@ import {
   purgeExpiredScheduleSlots,
   getLocalCache
 } from './services/reservationService';
-import { PendingReservationOperations } from './components/PendingReservationOperations';
 import { Navbar } from './components/Navbar';
 import { FilterBar } from './components/FilterBar';
 import { CalendarView } from './components/CalendarView';
@@ -317,7 +316,7 @@ export default function App() {
     setIsFilterBarOpen,
     hasActiveFilters,
     resetFilters,
-    conflictsCount,
+    conflicts,
     conflictReservationIds,
     filteredReservations,
     activeReservations
@@ -376,7 +375,7 @@ export default function App() {
       try {
         const currentResList = reservationsRef.current;
         if (!currentResList || currentResList.length === 0) return;
-        const check = await checkAndRunScheduledBackup();
+        const check = await checkAndRunScheduledBackup(currentResList);
         if (isMounted && check.triggered && check.backup) {
           console.log(`[Copia Automática 15 Días] Ejecutada con éxito: ${check.backup.id} (${check.backup.totalReservas} reservas)`);
           setBackupToast({
@@ -509,13 +508,13 @@ export default function App() {
     if (pendingAuthAction) {
       const action = pendingAuthAction;
       setPendingAuthAction(null);
-      void Promise.resolve(action()).catch((err: any)=>triggerSyncToast(err?.message || "No se pudo completar la operación.", "error"));
+      action();
     }
   };
 
-  const requireAuth = useCallback(<T,>(action: () => T, description?: string): T | undefined => {
+  const requireAuth = useCallback((action: () => void, description?: string) => {
     if (currentUser) {
-      return action();
+      action();
     } else {
       setPendingAuthAction(() => action);
       setAuthActionDescription(description || 'modificar o crear reservas');
@@ -608,7 +607,7 @@ export default function App() {
             <WifiOff className="w-3.5 h-3.5 stroke-[2.2]" />
           </div>
           <span className="leading-snug text-center sm:text-left">
-            <strong className="font-semibold text-amber-100">Sin conexión a internet:</strong> Puedes consultar datos locales y conservar borradores. El guardado se confirmará al recuperar la conexión.
+            <strong className="font-semibold text-amber-100">Sin conexión a internet:</strong> La aplicación funciona en modo local y sincronizará los cambios automáticamente cuando se restablezca la red.
           </span>
         </div>
       )}
@@ -689,7 +688,7 @@ export default function App() {
         onOpenChangePassword={() => handleOpenChangePassword()}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         totalReservas={reservations.length}
-        conflictsCount={conflictsCount}
+        conflictsCount={conflicts.length}
         currentUser={currentUser}
         onLogout={handleLogout}
         isFirebaseConnected={isFirebaseConnected}
@@ -729,7 +728,7 @@ export default function App() {
           onClose={() => setIsFilterBarOpen(false)}
           totalFiltered={filteredReservations.length}
           totalAll={reservations.length}
-          conflictsCount={conflictsCount}
+          conflictsCount={conflicts.length}
           availableSpaces={spaces}
           availableActivityTypes={activityTypes}
         />
@@ -811,7 +810,6 @@ export default function App() {
           ? 'max-w-none px-1.5 sm:px-3 lg:px-4 py-1.5'
           : 'max-w-[1680px] px-3 sm:px-4 md:px-6 py-4'
       }`}>
-        <PendingReservationOperations user={currentUser} />
         {/* Banner de Recuperación de Borrador de Reserva tras Recarga Accidental */}
         {activeDraft && !isReservationModalOpen && (
           <div
@@ -981,7 +979,7 @@ export default function App() {
                 }, 'editar esta reserva');
               }}
               onDeleteReservation={(id, isSeries, seriesId) => {
-                return requireAuth(() => handleDelete(id, isSeries, seriesId), 'eliminar esta reserva');
+                requireAuth(() => handleDelete(id, isSeries, seriesId), 'eliminar esta reserva');
               }}
               onRequestDelete={(r) => {
                 requireAuth(() => handleRequestDelete(r), 'eliminar esta reserva');
@@ -1048,7 +1046,7 @@ export default function App() {
                 handleDuplicateReservation(r);
               }}
               onDeleteReservation={(id, isSeries, seriesId) => {
-                return requireAuth(() => handleDelete(id, isSeries, seriesId), 'eliminar esta reserva');
+                requireAuth(() => handleDelete(id, isSeries, seriesId), 'eliminar esta reserva');
               }}
               onRequestDelete={(r) => {
                 requireAuth(() => handleRequestDelete(r), 'eliminar esta reserva');
@@ -1188,8 +1186,12 @@ export default function App() {
               onDeleteEquipment={(id) => requireAuth(() => handleDeleteEquipment(id), 'eliminar equipamiento')}
               onResetEquipment={() => requireAuth(handleResetEquipment, 'restablecer inventario de equipamiento')}
               onSaveUser={(user, orig) => requireAuth(() => handleSaveUser(user, orig), 'guardar usuario')}
-              onDeleteUser={async (username) => {
-                return await requireAuth(() => handleDeleteUser(username), 'eliminar usuario') || { success: false, message: 'Debes iniciar sesión.' };
+              onDeleteUser={(username) => {
+                let res: { success: boolean; message?: string } = { success: false, message: '' };
+                requireAuth(() => {
+                  res = handleDeleteUser(username);
+                }, 'eliminar usuario');
+                return res;
               }}
               onResetUsers={() => requireAuth(handleResetUsers, 'restablecer usuarios')}
               onResetDefaults={() => requireAuth(handleResetDefaults, 'restablecer configuración')}
@@ -1373,7 +1375,7 @@ export default function App() {
                 if (target) handleRequestDelete(target);
                 return;
               }
-              return requireAuth(() => handleDelete(id, isSeries, seriesId), 'eliminar esta reserva');
+              requireAuth(() => handleDelete(id, isSeries, seriesId), 'eliminar esta reserva');
             }}
             onRequestDelete={(r) => {
               handleRequestDelete(r);
@@ -1554,7 +1556,7 @@ export default function App() {
               });
               triggerSyncToast('Filtros restablecidos', 'info');
             }}
-            conflictsCount={conflictsCount}
+            conflictsCount={conflicts.length}
             hasActiveFilters={hasActiveFilters}
           />
         </Suspense>

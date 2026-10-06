@@ -15,7 +15,6 @@ export default defineConfig(() => {
       chunkSizeWarningLimit: 500,
       rollupOptions: {
         output: {
-          onlyExplicitManualChunks: true,
           manualChunks(id) {
             if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('node_modules/scheduler/')) {
               return 'vendor-react';
@@ -32,7 +31,6 @@ export default defineConfig(() => {
             if (id.includes('node_modules/jspdf') || id.includes('node_modules/jspdf-autotable')) {
               return 'vendor-pdf';
             }
-            if (id.includes('node_modules/sonner')) return 'vendor-feedback';
             if (id.includes('node_modules/lucide-react')) {
               return 'vendor-lucide';
             }

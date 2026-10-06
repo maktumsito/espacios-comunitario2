@@ -47,7 +47,6 @@ export interface Reservation {
   terminaDiaSiguiente?: boolean;
   horarioExtendidoAutorizado?: boolean;
   claveAutorizacion?: string;
-  claveAutorizacionFeriado?: string;
   autorizadoPor?: string;
   actoAutorizaUso?: string;
   normativaUsoAplicable?: string;
@@ -69,8 +68,6 @@ export interface BatchUpdateInfo {
   affectedIds: string[];
   description?: string;
   sourceReservationId?: string;
-  deletedIds?: string[];
-  addedIds?: string[];
 }
 
 export interface DeletionRequest {

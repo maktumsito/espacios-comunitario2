@@ -23,11 +23,5 @@
     "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true
-  },
-  "exclude": [
-    "node_modules",
-    "dist",
-    "work",
-    "outputs"
-  ]
+  }
 }

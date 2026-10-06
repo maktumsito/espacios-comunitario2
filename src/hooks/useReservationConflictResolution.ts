@@ -1,4 +1,3 @@
-import { buildAvailabilityIndex, getAvailabilityCandidates } from '../utils/availabilityIndex';
 import { useMemo } from 'react';
 import { Reservation, SpaceInfo, UpdateScope, CustomScheduleSlot } from '../types';
 import { checkSingleConflict, timeToMinutes, formatMinutesToTime } from '../utils/conflictDetector';
@@ -72,9 +71,6 @@ export function useReservationConflictResolution({
   setSingleSecondSpace,
   setDateSchedules
 }: UseReservationConflictResolutionProps) {
-  const availabilityIndex = useMemo(()=>buildAvailabilityIndex(allReservations),[allReservations]);
-  const checkIndexedConflict: typeof checkSingleConflict = (candidate, _all, excluded, series) =>
-    checkSingleConflict(candidate, getAvailabilityCandidates(availabilityIndex,candidate), excluded, series);
   // Conflict calculation for individual date slots (primary slot 1 or secondary slot 2)
   const getDateSlotConflict = (
     dateStr: string,
@@ -85,7 +81,7 @@ export function useReservationConflictResolution({
       const hInicio = customSlot?.secondHoraInicio || '11:00';
       const hFin = customSlot?.secondHoraFin || '12:00';
       const esp = customSlot?.secondEspacio || availableSpaces[1]?.name || 'SALA 2';
-      return checkIndexedConflict(
+      return checkSingleConflict(
         {
           ...formData,
           fecha: dateStr,
@@ -102,7 +98,7 @@ export function useReservationConflictResolution({
     const hInicio = customSlot?.horaInicio || formData.horaInicio || '10:00';
     const hFin = customSlot?.horaFin || formData.horaFin || '11:00';
     const esp = customSlot?.espacio || formData.espacio;
-    return checkIndexedConflict(
+    return checkSingleConflict(
       {
         ...formData,
         fecha: dateStr,
@@ -128,7 +124,7 @@ export function useReservationConflictResolution({
     ) {
       return [];
     }
-    return checkIndexedConflict(
+    return checkSingleConflict(
       {
         ...formData,
         espacio: singleSecondSpace,
@@ -142,9 +138,7 @@ export function useReservationConflictResolution({
   }, [
     bookingMode,
     enableSingleSecondSpace,
-    formData.id,
-    formData.fecha,
-    formData.terminaDiaSiguiente,
+    formData,
     singleSecondSpace,
     singleSecondStartTime,
     singleSecondEndTime,
@@ -156,7 +150,7 @@ export function useReservationConflictResolution({
   // Real-time conflict check memoized to avoid recalculating on every re-render and keystroke
   const conflicts = useMemo<Reservation[]>(() => {
     if (!formData.fecha || !formData.espacio || !formData.horaInicio || !formData.horaFin) return [];
-    return checkIndexedConflict(formData, allReservations, excludeReservationIds, excludeSeriesId);
+    return checkSingleConflict(formData, allReservations, excludeReservationIds, excludeSeriesId);
   }, [
     formData.fecha,
     formData.horaInicio,
@@ -502,16 +496,34 @@ export function useReservationConflictResolution({
   const candidateConflictDates = useMemo<string[]>(() => {
     const datesWithConflicts: string[] = [];
 
-    if (editingReservation && !isDuplicating && isEditingRecurring && updateScope === 'single' && bookingMode === 'single') {
-      const d = formData.fecha || editingReservation.fecha;
-      if (d && formData.espacio && formData.horaInicio && formData.horaFin) {
-        const s1 = checkIndexedConflict(
-          { ...formData, fecha: d, horaInicio: formData.horaInicio, horaFin: formData.horaFin, espacio: formData.espacio },
-          allReservations,
-          excludeReservationIds,
-          excludeSeriesId
-        );
-        if (s1.length > 0) datesWithConflicts.push(d);
+    if (editingReservation && !isDuplicating && isEditingRecurring) {
+      if (updateScope === 'single') {
+        const d = formData.fecha || editingReservation.fecha;
+        if (d && formData.espacio && formData.horaInicio && formData.horaFin) {
+          const s1 = checkSingleConflict(
+            { ...formData, fecha: d, horaInicio: formData.horaInicio, horaFin: formData.horaFin, espacio: formData.espacio },
+            allReservations,
+            excludeReservationIds,
+            excludeSeriesId
+          );
+          if (s1.length > 0) datesWithConflicts.push(d);
+        }
+      } else {
+        affectedReservations.forEach((r) => {
+          const s1 = checkSingleConflict(
+            {
+              ...formData,
+              fecha: r.fecha,
+              horaInicio: formData.horaInicio || r.horaInicio,
+              horaFin: formData.horaFin || r.horaFin,
+              espacio: formData.espacio || r.espacio
+            },
+            allReservations,
+            excludeReservationIds,
+            excludeSeriesId
+          );
+          if (s1.length > 0) datesWithConflicts.push(r.fecha);
+        });
       }
       return Array.from(new Set(datesWithConflicts));
     }
@@ -519,14 +531,14 @@ export function useReservationConflictResolution({
     if (bookingMode === 'single' || isEditingSingleOccurrence) {
       const d = formData.fecha || editingReservation?.fecha;
       if (d && formData.espacio && formData.horaInicio && formData.horaFin) {
-        const s1 = checkIndexedConflict(
+        const s1 = checkSingleConflict(
           { ...formData, fecha: d, horaInicio: formData.horaInicio, horaFin: formData.horaFin, espacio: formData.espacio },
           allReservations,
           excludeReservationIds,
           excludeSeriesId
         );
         const s2 = (enableSingleSecondSpace && singleSecondSpace && singleSecondStartTime && singleSecondEndTime)
-          ? checkIndexedConflict(
+          ? checkSingleConflict(
               { ...formData, fecha: d, horaInicio: singleSecondStartTime, horaFin: singleSecondEndTime, espacio: singleSecondSpace },
               allReservations,
               excludeReservationIds,
@@ -544,7 +556,7 @@ export function useReservationConflictResolution({
         const hFin = customSlot?.horaFin || formData.horaFin || '11:00';
         const esp = customSlot?.espacio || formData.espacio || availableSpaces[0]?.name;
         const s1 = (esp && hInicio && hFin)
-          ? checkIndexedConflict(
+          ? checkSingleConflict(
               { ...formData, fecha: d, horaInicio: hInicio, horaFin: hFin, espacio: esp },
               allReservations,
               excludeReservationIds,
@@ -557,7 +569,7 @@ export function useReservationConflictResolution({
         const s2Start = useCustomSchedulesPerDate ? customSlot?.secondHoraInicio : singleSecondStartTime;
         const s2End = useCustomSchedulesPerDate ? customSlot?.secondHoraFin : singleSecondEndTime;
         const s2 = (hasSecond && s2Esp && s2Start && s2End)
-          ? checkIndexedConflict(
+          ? checkSingleConflict(
               { ...formData, fecha: d, horaInicio: s2Start, horaFin: s2End, espacio: s2Esp },
               allReservations,
               excludeReservationIds,
@@ -577,7 +589,7 @@ export function useReservationConflictResolution({
         const hFin = customSlot?.horaFin || formData.horaFin || '11:00';
         const esp = customSlot?.espacio || formData.espacio || availableSpaces[0]?.name;
         const s1 = (esp && hInicio && hFin)
-          ? checkIndexedConflict(
+          ? checkSingleConflict(
               { ...formData, fecha: d, horaInicio: hInicio, horaFin: hFin, espacio: esp },
               allReservations,
               excludeReservationIds,
@@ -590,7 +602,7 @@ export function useReservationConflictResolution({
         const s2Start = useCustomSchedulesPerDay ? customSlot?.secondHoraInicio : singleSecondStartTime;
         const s2End = useCustomSchedulesPerDay ? customSlot?.secondHoraFin : singleSecondEndTime;
         const s2 = (hasSecond && s2Esp && s2Start && s2End)
-          ? checkIndexedConflict(
+          ? checkSingleConflict(
               { ...formData, fecha: d, horaInicio: s2Start, horaFin: s2End, espacio: s2Esp },
               allReservations,
               excludeReservationIds,

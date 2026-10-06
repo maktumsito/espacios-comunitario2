@@ -8,7 +8,6 @@ import {
   checkAutomaticMondayEmail,
   isRatingAllowedForReservation
 } from '../services/ratingService';
-import { showToast } from '../services/toastNotificationService';
 
 export interface UseRatingsStateReturn {
   ratings: SpaceRating[];
@@ -44,28 +43,19 @@ export function useRatingsState(reservations: Reservation[]): UseRatingsStateRet
     if (ratings.length > 0 || reservations.length > 0) {
       checkAutomaticMondayEmail(ratings, reservations, (report) => {
         console.log(
-          `[Envío Automático Lunes] Reporte generado para ${report.recipients.join(', ')} con ${report.ratingsCount} calificaciones de cumpleaños.`
+          `[Envío Automático Lunes] Generando correo para ${report.recipients.join(', ')} con ${report.ratingsCount} calificaciones de cumpleaños.`
         );
-        showToast.info('Reporte de Cumpleaños Disponible', {
-          description: `Se detectaron ${report.ratingsCount} evaluaciones de cumpleaños listas para informar a coordinación.`,
-          duration: 10000,
-          action: {
-            label: 'Abrir Correo',
-            onClick: () => {
-              try {
-                const mailtoAnchor = document.createElement('a');
-                mailtoAnchor.href = report.mailtoUrl;
-                mailtoAnchor.target = '_blank';
-                mailtoAnchor.rel = 'noopener noreferrer';
-                document.body.appendChild(mailtoAnchor);
-                mailtoAnchor.click();
-                document.body.removeChild(mailtoAnchor);
-              } catch (err) {
-                console.warn('[Envío Automático Lunes] Error al abrir cliente de correo:', err);
-              }
-            }
-          }
-        });
+        try {
+          const mailtoAnchor = document.createElement('a');
+          mailtoAnchor.href = report.mailtoUrl;
+          mailtoAnchor.target = '_blank';
+          mailtoAnchor.rel = 'noopener noreferrer';
+          document.body.appendChild(mailtoAnchor);
+          mailtoAnchor.click();
+          document.body.removeChild(mailtoAnchor);
+        } catch (err) {
+          console.warn('[Envío Automático Lunes] Error al disparar cliente de correo:', err);
+        }
       });
     }
   }, [ratings, reservations]);

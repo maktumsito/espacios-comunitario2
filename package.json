@@ -5,18 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --define:import.meta.env={} --sourcemap --outfile=dist/server.cjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "test": "vitest run",
     "clean": "node -e \"const fs=require('fs');['dist','server.js','server.cjs'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}))\"",
-    "lint": "tsc --noEmit",
-    "test:integration": "node scripts/run-emulator-tests.cjs",
-    "measure:core": "tsx scripts/measure-performance.ts after",
-    "measure:browser": "node scripts/measure-browser.cjs after",
-    "slots:check": "tsx scripts/rebuild-schedule-slots.ts",
-    "slots:rebuild": "tsx scripts/rebuild-schedule-slots.ts --apply",
-    "measure:persistence": "node scripts/measure-persistence.cjs after"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -41,8 +35,6 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@testing-library/dom": "^10.4.2",
-    "@testing-library/react": "^16.3.3",
     "@types/d3": "^7.4.3",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
@@ -52,12 +44,13 @@
     "@types/react-dom": "^19.2.5",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
-    "jsdom": "^30.1.0",
-    "playwright": "^1.63.0",
     "pngjs": "^7.0.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vitest": "^5.0.0"
+    "vite": "^6.2.3",
+    "vitest": "^5.0.0",
+    "@testing-library/react": "^16.3.3",
+    "jsdom": "^30.1.0"
   }
 }

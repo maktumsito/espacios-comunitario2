@@ -1,8 +1,7 @@
-import { useState, useMemo, useCallback, useDeferredValue } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Reservation, FilterState, BookingConflict } from '../types';
 import { detectAllConflicts, getConflictReservationIds, isReservationActiveForAvailability, doSpacesConflict } from '../utils/conflictDetector';
 import { getFuzzyMatchIds } from '../utils/fuzzySearch';
-import { summarizeConflicts } from '../utils/conflictSummary';
 import { getDeletedIds } from '../services/reservationService';
 
 export const INITIAL_FILTERS: FilterState = {
@@ -56,7 +55,7 @@ export interface UseFilteredReservationsReturn {
   setIsFilterBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   hasActiveFilters: boolean;
   resetFilters: () => void;
-  conflictsCount: number;
+  conflicts: BookingConflict[];
   conflictReservationIds: Set<string>;
   filteredReservations: Reservation[];
   activeReservations: Reservation[];
@@ -94,14 +93,12 @@ export function useFilteredReservations(reservations: Reservation[]): UseFiltere
   }, [reservations, deletedSet]);
 
   // Conflict calculations (Optimized single-pass derived set over active non-deleted reservations)
-  const conflictSummary = useMemo(() => summarizeConflicts(activeReservations), [activeReservations]);
-  const conflictsCount = conflictSummary.count;
-  const conflictReservationIds = conflictSummary.ids;
-  const deferredSearch = useDeferredValue(filters.search);
+  const conflicts = useMemo(() => detectAllConflicts(activeReservations), [activeReservations]);
+  const conflictReservationIds = useMemo(() => getConflictReservationIds(activeReservations, conflicts), [activeReservations, conflicts]);
 
   // Filtered reservations list (precomputing search query and filter constants outside loop)
   const filteredReservations = useMemo(() => {
-    const rawSearch = deferredSearch ? deferredSearch.trim() : '';
+    const rawSearch = filters.search ? filters.search.trim() : '';
     const hasSearch = Boolean(rawSearch);
     const fuzzyMatchIds = hasSearch ? getFuzzyMatchIds(activeReservations, rawSearch) : null;
 
@@ -151,7 +148,7 @@ export function useFilteredReservations(reservations: Reservation[]): UseFiltere
 
       return true;
     });
-  }, [activeReservations, filters, deferredSearch, conflictReservationIds]);
+  }, [activeReservations, filters, conflictReservationIds]);
 
   return {
     filters,
@@ -160,7 +157,7 @@ export function useFilteredReservations(reservations: Reservation[]): UseFiltere
     setIsFilterBarOpen,
     hasActiveFilters,
     resetFilters,
-    conflictsCount,
+    conflicts,
     conflictReservationIds,
     filteredReservations,
     activeReservations

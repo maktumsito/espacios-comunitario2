@@ -47,7 +47,7 @@ interface ReservationDetailModalProps {
   onClose: () => void;
   onEdit: (reserva: Reservation) => void;
   onDuplicate?: (reserva: Reservation) => void;
-  onDelete?: (id: string, isSeries?: boolean, seriesId?: string) => void | Promise<void>;
+  onDelete?: (id: string, isSeries?: boolean, seriesId?: string) => void;
   onRequestDelete?: (reserva: Reservation) => void;
   onToggleRealizada?: (reserva: Reservation) => void;
   onUpdateReservation?: (updated: Reservation) => void;
@@ -89,8 +89,8 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
     confirmLabel?: string;
     cancelLabel?: string;
     variant?: 'danger' | 'warning' | 'info' | 'primary';
-    onConfirm: () => void | Promise<void>;
-    onCancel?: () => void | Promise<void>;
+    onConfirm: () => void;
+    onCancel?: () => void;
   }>({
     isOpen: false,
     title: '',
@@ -104,8 +104,8 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
     confirmLabel?: string;
     cancelLabel?: string;
     variant?: 'danger' | 'warning' | 'info' | 'primary';
-    onConfirm: () => void | Promise<void>;
-    onCancel?: () => void | Promise<void>;
+    onConfirm: () => void;
+    onCancel?: () => void;
   }) => {
     setConfirmModal({
       ...cfg,
@@ -682,13 +682,13 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                         confirmLabel: 'Eliminar Toda la Serie',
                         cancelLabel: 'Solo Esta Sesión',
                         variant: 'danger',
-                        onConfirm: async () => {
-                          await onDelete(reservation.id, true, reservation.recurrenteId || reservation.serieRecurrente);
+                        onConfirm: () => {
+                          onDelete(reservation.id, true, reservation.recurrenteId || reservation.serieRecurrente);
                           closeConfirm();
                           onClose();
                         },
-                        onCancel: async () => {
-                          await onDelete(reservation.id, false);
+                        onCancel: () => {
+                          onDelete(reservation.id, false);
                           closeConfirm();
                           onClose();
                         }
@@ -700,8 +700,8 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                       message: `Se eliminará la reserva "${reservation.tipoActividad}" agendada en ${reservation.espacio} el día ${formatDateDDMMYYYY(reservation.fecha)}.`,
                       confirmLabel: 'Eliminar Reserva',
                       variant: 'danger',
-                      onConfirm: async () => {
-                        await onDelete(reservation.id, false);
+                      onConfirm: () => {
+                        onDelete(reservation.id, false);
                         closeConfirm();
                         onClose();
                       }
@@ -888,7 +888,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         onConfirm={confirmModal.onConfirm}
         onCancel={() => {
           if (confirmModal.onCancel) {
-            return confirmModal.onCancel();
+            confirmModal.onCancel();
           } else {
             closeConfirm();
           }

@@ -1,4 +1,3 @@
-import { normalizeSpaceName } from '../data/spacesData';
 import { Reservation, BookingConflict, SpaceBlock } from '../types';
 import { getDeletedIds } from './deletedReservationsStore';
 
@@ -50,7 +49,9 @@ export function normalizeSpace(spaceName?: string): string {
   const cached = spaceNormCache.get(spaceName);
   if (cached !== undefined) return cached;
 
-  const result = normalizeSpaceName(spaceName)
+  const result = spaceName
+    .trim()
+    .toUpperCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ');

@@ -1,6 +1,6 @@
 import { SpaceInfo, LoanType, ActivityTypeItem } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
-import { collection, doc, setDoc, onSnapshot, writeBatch } from 'firebase/firestore';
+import { collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { getDb } from '../firebase/config';
 
 const SPACES_STORAGE_KEY = 'espacios_comunitarios_spaces_v2';
@@ -157,7 +157,7 @@ async function saveConfigDocToFirestore(docId: string, data: any): Promise<void>
     const db = getDb();
     await setDoc(doc(db, CONFIG_COLLECTION, docId), { data, updatedAt: new Date().toISOString() }, { merge: true });
   } catch (err) {
-    throw err;
+    console.error(`Error saving ${docId} to Firestore config:`, err);
   }
 }
 
@@ -190,9 +190,9 @@ export function subscribeToAdminConfig(
           const spaces = getStoredSpaces();
           const loans = getStoredLoanTypes();
           const activities = getStoredActivityTypes();
-          void saveConfigDocToFirestore('espacios', spaces).catch(console.error);
-          void saveConfigDocToFirestore('tipos_prestamo', loans).catch(console.error);
-          void saveConfigDocToFirestore('tipos_actividad', activities).catch(console.error);
+          saveConfigDocToFirestore('espacios', spaces);
+          saveConfigDocToFirestore('tipos_prestamo', loans);
+          saveConfigDocToFirestore('tipos_actividad', activities);
           return;
         }
 
@@ -239,7 +239,7 @@ export function getStoredSpaces(): SpaceInfo[] {
   return SPACES_LIST;
 }
 
-export async function saveSpaceItem(space: SpaceInfo ): Promise<SpaceInfo[]> {
+export function saveSpaceItem(space: SpaceInfo): SpaceInfo[] {
   const current = getStoredSpaces();
   const index = current.findIndex(s => s.id === space.id || s.name.toUpperCase() === space.name.toUpperCase());
   let updated: SpaceInfo[];
@@ -249,34 +249,34 @@ export async function saveSpaceItem(space: SpaceInfo ): Promise<SpaceInfo[]> {
   } else {
     updated = [...current, { ...space, isCustom: true }];
   }
-  await saveConfigDocToFirestore('espacios', updated);
   try {
     if (isBrowser) localStorage.setItem(SPACES_STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
     console.error('Error saving space to localStorage:', e);
   }
+  saveConfigDocToFirestore('espacios', updated);
   return updated;
 }
 
-export async function deleteSpaceItem(id: string ): Promise<SpaceInfo[]> {
+export function deleteSpaceItem(id: string): SpaceInfo[] {
   const current = getStoredSpaces();
   const updated = current.filter(s => s.id !== id);
-  await saveConfigDocToFirestore('espacios', updated);
   try {
     if (isBrowser) localStorage.setItem(SPACES_STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
     console.error('Error deleting space from localStorage:', e);
   }
+  saveConfigDocToFirestore('espacios', updated);
   return updated;
 }
 
-export async function reorderSpaces(newSpaces: SpaceInfo[] ): Promise<SpaceInfo[]> {
-  await saveConfigDocToFirestore('espacios', newSpaces);
+export function reorderSpaces(newSpaces: SpaceInfo[]): SpaceInfo[] {
   try {
     if (isBrowser) localStorage.setItem(SPACES_STORAGE_KEY, JSON.stringify(newSpaces));
   } catch (e) {
     console.error('Error reordering spaces in localStorage:', e);
   }
+  saveConfigDocToFirestore('espacios', newSpaces);
   return newSpaces;
 }
 
@@ -296,7 +296,7 @@ export function getStoredLoanTypes(): LoanType[] {
   return DEFAULT_LOAN_TYPES;
 }
 
-export async function saveLoanTypeItem(loan: LoanType ): Promise<LoanType[]> {
+export function saveLoanTypeItem(loan: LoanType): LoanType[] {
   const current = getStoredLoanTypes();
   const index = current.findIndex(l => l.id === loan.id || l.name.toUpperCase() === loan.name.toUpperCase());
   let updated: LoanType[];
@@ -306,24 +306,24 @@ export async function saveLoanTypeItem(loan: LoanType ): Promise<LoanType[]> {
   } else {
     updated = [...current, { ...loan, isCustom: true }];
   }
-  await saveConfigDocToFirestore('tipos_prestamo', updated);
   try {
     if (isBrowser) localStorage.setItem(LOANS_STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
     console.error('Error saving loan type to localStorage:', e);
   }
+  saveConfigDocToFirestore('tipos_prestamo', updated);
   return updated;
 }
 
-export async function deleteLoanTypeItem(id: string ): Promise<LoanType[]> {
+export function deleteLoanTypeItem(id: string): LoanType[] {
   const current = getStoredLoanTypes();
   const updated = current.filter(l => l.id !== id);
-  await saveConfigDocToFirestore('tipos_prestamo', updated);
   try {
     if (isBrowser) localStorage.setItem(LOANS_STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
     console.error('Error deleting loan type from localStorage:', e);
   }
+  saveConfigDocToFirestore('tipos_prestamo', updated);
   return updated;
 }
 
@@ -343,7 +343,7 @@ export function getStoredActivityTypes(): ActivityTypeItem[] {
   return DEFAULT_ACTIVITY_ITEMS;
 }
 
-export async function saveActivityTypeItem(act: ActivityTypeItem ): Promise<ActivityTypeItem[]> {
+export function saveActivityTypeItem(act: ActivityTypeItem): ActivityTypeItem[] {
   const current = getStoredActivityTypes();
   const index = current.findIndex(a => a.id === act.id || a.name.toUpperCase() === act.name.toUpperCase());
   let updated: ActivityTypeItem[];
@@ -353,38 +353,35 @@ export async function saveActivityTypeItem(act: ActivityTypeItem ): Promise<Acti
   } else {
     updated = [...current, { ...act, isCustom: true }];
   }
-  await saveConfigDocToFirestore('tipos_actividad', updated);
   try {
     if (isBrowser) localStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
     console.error('Error saving activity type to localStorage:', e);
   }
+  saveConfigDocToFirestore('tipos_actividad', updated);
   return updated;
 }
 
-export async function deleteActivityTypeItem(id: string ): Promise<ActivityTypeItem[]> {
+export function deleteActivityTypeItem(id: string): ActivityTypeItem[] {
   const current = getStoredActivityTypes();
   const updated = current.filter(a => a.id !== id);
-  await saveConfigDocToFirestore('tipos_actividad', updated);
   try {
     if (isBrowser) localStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
     console.error('Error deleting activity type from localStorage:', e);
   }
+  saveConfigDocToFirestore('tipos_actividad', updated);
   return updated;
 }
 
-export async function resetConfigToDefaults(): Promise<void> {
-  // All configuration documents commit together.
-  const db = getDb();
-  const batch = writeBatch(db);
-  for (const [id, data] of [['espacios', SPACES_LIST], ['tipos_prestamo', DEFAULT_LOAN_TYPES], ['tipos_actividad', DEFAULT_ACTIVITY_ITEMS]] as const) {
-    batch.set(doc(db, CONFIG_COLLECTION, id), { data, updatedAt: new Date().toISOString() });
-  }
-  await batch.commit();
+export function resetConfigToDefaults() {
   if (isBrowser) {
     localStorage.removeItem(SPACES_STORAGE_KEY);
     localStorage.removeItem(LOANS_STORAGE_KEY);
     localStorage.removeItem(ACTIVITIES_STORAGE_KEY);
   }
+  saveConfigDocToFirestore('espacios', SPACES_LIST);
+  saveConfigDocToFirestore('tipos_prestamo', DEFAULT_LOAN_TYPES);
+  saveConfigDocToFirestore('tipos_actividad', DEFAULT_ACTIVITY_ITEMS);
 }
+

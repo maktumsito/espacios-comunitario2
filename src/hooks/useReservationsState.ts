@@ -102,12 +102,6 @@ export function useReservationsState(): UseReservationsStateReturn {
         setLastSyncTime(customEvent.detail.lastSyncTime);
       }
     };
-    const handleWriteProgress = (event: Event) => {
-      const result = (event as CustomEvent).detail;
-      if (!isMounted || !result) return;
-      setReservations(prev=> { const map = new Map(prev.map(r=>[r.id,r])); result.deletedIds.forEach((id: string)=>map.delete(id)); result.reservations.forEach((r: Reservation)=>map.set(r.id,r)); return [...map.values()]; });
-    };
-    window.addEventListener('reservation-write-progress', handleWriteProgress);
     window.addEventListener('cache-sync-updated', handleCacheSyncUpdated);
 
     const unsubscribe = subscribeToReservations(
@@ -139,7 +133,6 @@ export function useReservationsState(): UseReservationsStateReturn {
 
     return () => {
       isMounted = false;
-      window.removeEventListener('reservation-write-progress', handleWriteProgress);
       window.removeEventListener('cache-sync-updated', handleCacheSyncUpdated);
       if (typeof unsubscribe === 'function') {
         unsubscribe();

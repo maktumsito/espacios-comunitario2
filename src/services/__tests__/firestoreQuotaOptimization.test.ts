@@ -87,7 +87,7 @@ describe('Firestore Quota Optimization & Conflict Purge Suite', () => {
   });
 
   describe('Dynamic Minute Conflict Resolution (Without Static Array)', () => {
-    it('requires persistence confirmation before cleaning minute-offset collisions', async () => {
+    it('detects minute-offset collisions dynamically and deletes the non-closed-hour reservation', async () => {
       const candidates: Reservation[] = [
         {
           id: 'RES_CLOSED_HOUR',
@@ -115,7 +115,11 @@ describe('Firestore Quota Optimization & Conflict Purge Suite', () => {
         }
       ];
 
-      await expect(cleanConflictingMinuteReservations(candidates)).rejects.toThrow(/conexión/i);
+      const res = await cleanConflictingMinuteReservations(candidates);
+      expect(res.deletedCount).toBe(1);
+      expect(res.deletedReservations[0].id).toBe('RES_MINUTE_OFFSET');
+      expect(res.remainingReservations.length).toBe(1);
+      expect(res.remainingReservations[0].id).toBe('RES_CLOSED_HOUR');
     });
 
     it('preserves non-conflicting reservations on separate spaces or non-overlapping hours', async () => {

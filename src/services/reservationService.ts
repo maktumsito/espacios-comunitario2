@@ -13,9 +13,6 @@ import {
 } from 'firebase/firestore';
 import { getDb } from '../firebase/config';
 import { Reservation } from '../types';
-import { getStoredAuthUser, userCanCreateReservations, userCanEditReservations, userCanDeleteReservations } from './authService';
-import { writeReservations, getPendingOperations, type WriteOptions, type WriteResult } from './reservationWriter';
-export { getPendingOperations, ReservationWriteError, ReservationVersionError } from './reservationWriter';
 import { INITIAL_RESERVATIONS } from '../data/initialData';
 import { isChileanHoliday, verifyHolidayOverrideKey } from '../utils/holidayUtils';
 import { normalizeSpaceName } from '../data/spacesData';
@@ -979,63 +976,467 @@ export async function loadHistoricalReservationsRange(
 }
 
 // ============================================================================
-// MUTATIONS (CONFIRMED WRITES AND CURRENT-CACHE MERGING)
+// MUTATIONS (OPTIMISTIC CACHING WITH HASH RECALCULATION)
 // ============================================================================
 
-export async function commitReservationChanges(reservas: readonly Reservation[], options: WriteOptions = {}): Promise<WriteResult> {
-  const db = getDb();
-  if (!db) throw new Error('No hay conexión con la base de datos. El borrador se conservará para reintentar.');
-  return writeReservations(db, reservas, cleanReservationForFirestore, {
-    actor: getStoredAuthUser()?.username,
-    ...options,
-    onProgress: (result) => {
-      const map = new Map(getLocalCache().map(r => [r.id, r]));
-      result.deletedIds.forEach(id => map.delete(id));
-      recordDeletedIds(result.deletedIds);
-      result.reservations.forEach(r => map.set(r.id, r));
-      unrecordDeletedIds(result.reservations.map(r => r.id));
-      setLocalCache(Array.from(map.values()).sort(compareReservationsByDate));
-      setLastSyncTime(Date.now());
-      if (isBrowser) window.dispatchEvent(new CustomEvent('reservation-write-progress', { detail: result }));
-      options.onProgress?.(result);
+export async function saveReservation(reserva: Reservation): Promise<void> {
+  // If reservation is already explicitly marked as deleted, avoid resurrecting or saving it
+  if (isReservationExplicitlyDeleted(reserva)) {
+    console.warn(`[saveReservation] Se omitió guardar la reserva ${reserva.id} porque está marcada como eliminada.`);
+    return;
+  }
+
+  // Strict time range validation (horaInicio < horaFin or terminaDiaSiguiente)
+  const timeCheck = validateTimeRange(reserva.horaInicio, reserva.horaFin, Boolean(reserva.terminaDiaSiguiente));
+  if (!timeCheck.isValid) {
+    throw new Error(`Validación de Horarios fallida: ${timeCheck.error || `La hora de término (${reserva.horaFin}) debe ser posterior a la de inicio (${reserva.horaInicio}).`}`);
+  }
+
+  // Schema validation with Zod
+  const validation = validateReservationWithZod(reserva);
+  if (!validation.success) {
+    console.warn(`[Validation Warning] Reserva ${reserva.id} contiene campos no válidos:`, validation.errors);
+  }
+
+  // Validation for Chilean Holidays: require CCD authorization key
+  if (isChileanHoliday(reserva.fecha) && !verifyHolidayOverrideKey(reserva.claveAutorizacion || '')) {
+    throw new Error(`La fecha ${reserva.fecha} corresponde a un día feriado en Chile y requiere la clave de autorización especial "CCD".`);
+  }
+
+  unrecordDeletedId(reserva.id);
+
+  // Optimistic Cache Update with Versioning & Hash Refresh
+  const current = getLocalCache();
+  const index = current.findIndex(r => r.id === reserva.id);
+  const previousRes = index >= 0 ? current[index] : null;
+  const nowIso = new Date().toISOString();
+
+  let updated: Reservation[];
+  if (index >= 0) {
+    updated = [...current];
+    updated[index] = { ...reserva, updatedAt: nowIso };
+  } else {
+    updated = [{ ...reserva, createdAt: nowIso, updatedAt: nowIso }, ...current];
+  }
+  setLocalCache(updated);
+
+  try {
+    const db = getDb();
+    const docRef = doc(db, COLLECTION_NAME, reserva.id);
+    const cleaned = cleanReservationForFirestore({
+      ...reserva,
+      updatedAt: nowIso
+    });
+
+    const canonSpace = normalizeSpaceName(reserva.espacio);
+    const slotDocId = `${reserva.fecha.trim()}_${encodeURIComponent(canonSpace)}`;
+    const slotDocRef = doc(db, SLOTS_COLLECTION, slotDocId);
+
+    // If reservation changed space or date, clean previous slotDocRef
+    const prevCanonSpace = previousRes ? normalizeSpaceName(previousRes.espacio) : null;
+    const oldSlotDocId = previousRes && (previousRes.fecha.trim() !== reserva.fecha.trim() || prevCanonSpace !== canonSpace)
+      ? `${previousRes.fecha.trim()}_${encodeURIComponent(prevCanonSpace!)}`
+      : null;
+    const oldSlotDocRef = oldSlotDocId ? doc(db, SLOTS_COLLECTION, oldSlotDocId) : null;
+
+    // Atomically check availability and commit reservation with runTransaction
+    await runTransaction(db, async (transaction) => {
+      // 1. Read target slot
+      const slotSnap = await transaction.get(slotDocRef);
+      // 2. Read old slot if space or date changed
+      const oldSlotSnap = oldSlotDocRef ? await transaction.get(oldSlotDocRef) : null;
+
+      const startMin = timeToMinutes(reserva.horaInicio);
+      let endMin = timeToMinutes(reserva.horaFin);
+      if ((reserva.horaFin === '00:00' || reserva.horaFin === '24:00' || endMin === 0) && startMin > 0 && !reserva.terminaDiaSiguiente) {
+        endMin = 1440;
+      }
+
+      const isActiva = !reserva.estado || reserva.estado === 'activa';
+      const deletedSet = getDeletedIds();
+
+      let existingBookings: Array<{
+        id: string;
+        horaInicio: string;
+        horaFin: string;
+        startMin: number;
+        endMin: number;
+        responsable: string;
+        estado: string;
+      }> = [];
+
+      if (slotSnap.exists()) {
+        const data = slotSnap.data();
+        const rawBookings = Array.isArray(data.bookings) ? data.bookings : [];
+        existingBookings = rawBookings.filter(b => !deletedSet.has(b.id) && b.estado !== 'eliminada');
+      }
+
+      if (isActiva && !isChileanHoliday(reserva.fecha)) {
+        for (const b of existingBookings) {
+          if (b.id !== reserva.id && (b.estado === 'activa' || !b.estado) && !deletedSet.has(b.id)) {
+            if (b.startMin < endMin && startMin < b.endMin) {
+              throw new Error(
+                `Conflicto de concurrencia: El espacio "${reserva.espacio}" ya fue reservado en el horario ${b.horaInicio} - ${b.horaFin} por ${b.responsable || 'otro usuario'}.`
+              );
+            }
+          }
+        }
+      }
+
+      // Purge from previous slot document if space or date changed
+      if (oldSlotDocRef && oldSlotSnap && oldSlotSnap.exists()) {
+        const oldData = oldSlotSnap.data();
+        const oldBookings = Array.isArray(oldData.bookings) ? oldData.bookings : [];
+        const filteredOld = oldBookings.filter(b => b.id !== reserva.id && !deletedSet.has(b.id) && b.estado !== 'eliminada');
+        transaction.set(oldSlotDocRef, {
+          bookings: filteredOld,
+          updatedAt: nowIso
+        }, { merge: true });
+      }
+
+      const remainingBookings = existingBookings.filter(b => b.id !== reserva.id && !deletedSet.has(b.id) && b.estado !== 'eliminada');
+      if (isActiva) {
+        remainingBookings.push({
+          id: reserva.id,
+          horaInicio: reserva.horaInicio,
+          horaFin: reserva.horaFin,
+          startMin,
+          endMin,
+          responsable: reserva.responsable || '',
+          estado: reserva.estado || 'activa'
+        });
+      }
+
+      transaction.set(slotDocRef, {
+        fecha: reserva.fecha.trim(),
+        espacio: canonSpace,
+        bookings: remainingBookings,
+        updatedAt: nowIso
+      }, { merge: true });
+
+      transaction.set(docRef, cleaned, { merge: true });
+    });
+    setLastSyncTime(Date.now());
+  } catch (error: any) {
+    console.error('Firestore transaction error in saveReservation:', error?.message || error);
+    throw error;
+  }
+}
+
+export async function saveReservationsBatch(reservas: readonly Reservation[]): Promise<void> {
+  if (!reservas.length) return;
+
+  const deletedSet = getDeletedIds();
+  // Filter out any reservations that are explicitly marked as deleted / soft-deleted
+  const activeReservas = reservas.filter(r => !isReservationExplicitlyDeleted(r, deletedSet));
+  if (!activeReservas.length) return;
+
+  // Strict time range validation (horaInicio < horaFin or terminaDiaSiguiente)
+  for (const r of activeReservas) {
+    const timeCheck = validateTimeRange(r.horaInicio, r.horaFin, Boolean(r.terminaDiaSiguiente));
+    if (!timeCheck.isValid) {
+      throw new Error(`Validación de Horarios fallida en reserva (${r.fecha} ${r.horaInicio} a ${r.horaFin}): ${timeCheck.error || 'La hora de término debe ser posterior a la de inicio.'}`);
+    }
+  }
+
+  // Schema validation warnings for batch
+  activeReservas.forEach((r) => {
+    const val = validateReservationWithZod(r);
+    if (!val.success) {
+      console.warn(`[Batch Validation Warning] Reserva ${r.id} (${r.fecha} ${r.horaInicio}):`, val.errors);
     }
   });
-}
 
-export async function saveReservation(reserva: Reservation, options: WriteOptions = {}): Promise<WriteResult> {
-  return commitReservationChanges([reserva], options);
-}
+  // Validation for Chilean Holidays in Batch
+  for (const r of activeReservas) {
+    if (isChileanHoliday(r.fecha) && !verifyHolidayOverrideKey(r.claveAutorizacion || '')) {
+      throw new Error(`La fecha ${r.fecha} corresponde a un día feriado en Chile y requiere la clave de autorización especial "CCD".`);
+    }
+  }
 
-export async function saveReservationsBatch(reservas: readonly Reservation[], options: WriteOptions = {}): Promise<WriteResult> {
-  return commitReservationChanges(reservas, options);
-}
+  unrecordDeletedIds(activeReservas.map(r => r.id));
 
-export async function resumeReservationOperation(id: string): Promise<WriteResult> {
-  const operation = getPendingOperations().find(o => o.id === id);
-  if (!operation) throw new Error('La operación ya fue completada o no está disponible.');
-  const user = getStoredAuthUser();
-  if (!user || (operation.actor && operation.actor !== user.username) || operation.reservations.some(r=>r.version ? !userCanEditReservations(user) : !userCanCreateReservations(user)) || (operation.deletedIds.length && !userCanDeleteReservations(user))) throw new Error('No tienes permisos para reanudar esta operación.');
-  return commitReservationChanges(operation.reservations.filter(r=>!operation.confirmedIds.includes(r.id)), {
-    operationId: operation.id, deletedIds: operation.deletedIds.filter(id => !operation.confirmedIds.includes(id)),
-    allowConflictOverride: operation.allowConflictOverride, intent: operation.intent
+  // Single-pass optimistic local cache update
+  const current = getLocalCache();
+  const currentMap = new Map<string, Reservation>();
+  current.forEach(r => currentMap.set(r.id, r));
+
+  const nowIso = new Date().toISOString();
+  activeReservas.forEach(r => {
+    const existing = currentMap.get(r.id);
+    currentMap.set(r.id, {
+      ...r,
+      createdAt: existing?.createdAt || nowIso,
+      updatedAt: nowIso
+    });
   });
+
+  const updated = Array.from(currentMap.values()).sort(compareReservationsByDate);
+  setLocalCache(updated);
+
+  // Parallelized Batched Writes
+  try {
+    const db = getDb();
+    const batchPromises: Promise<void>[] = [];
+
+    for (let i = 0; i < activeReservas.length; i += FIRESTORE_MAX_BATCH_SIZE) {
+      const chunk = activeReservas.slice(i, i + FIRESTORE_MAX_BATCH_SIZE);
+      const batch = writeBatch(db);
+
+      chunk.forEach(item => {
+        const docRef = doc(db, COLLECTION_NAME, item.id);
+        const cleaned = cleanReservationForFirestore({
+          ...item,
+          updatedAt: nowIso
+        });
+        batch.set(docRef, cleaned, { merge: true });
+      });
+
+      batchPromises.push(batch.commit());
+    }
+
+    await Promise.all(batchPromises);
+
+    // Concurrency index update: synchronize schedule_slots for batch reservations
+    const slotsMap = new Map<string, { fecha: string; espacio: string; bookings: any[] }>();
+    activeReservas.forEach(r => {
+      if (!r.fecha || !r.espacio) return;
+      const isActiva = !r.estado || r.estado === 'activa';
+      if (!isActiva) return;
+      const canonSpace = normalizeSpaceName(r.espacio);
+      const slotDocId = `${r.fecha.trim()}_${encodeURIComponent(canonSpace)}`;
+      const startMin = timeToMinutes(r.horaInicio);
+      let endMin = timeToMinutes(r.horaFin);
+      if ((r.horaFin === '00:00' || r.horaFin === '24:00' || endMin === 0) && startMin > 0 && !r.terminaDiaSiguiente) {
+        endMin = 1440;
+      }
+      let slotData = slotsMap.get(slotDocId);
+      if (!slotData) {
+        slotData = { fecha: r.fecha.trim(), espacio: canonSpace, bookings: [] };
+        slotsMap.set(slotDocId, slotData);
+      }
+      slotData.bookings.push({
+        id: r.id,
+        horaInicio: r.horaInicio,
+        horaFin: r.horaFin,
+        startMin,
+        endMin,
+        responsable: r.responsable || '',
+        estado: r.estado || 'activa'
+      });
+    });
+
+    if (slotsMap.size > 0) {
+      const slotEntries = Array.from(slotsMap.entries());
+      const CONCURRENCY_LIMIT = 5;
+      (async () => {
+        for (let i = 0; i < slotEntries.length; i += CONCURRENCY_LIMIT) {
+          const chunk = slotEntries.slice(i, i + CONCURRENCY_LIMIT);
+          await Promise.all(
+            chunk.map(async ([slotId, { fecha, espacio, bookings }]) => {
+              try {
+                const slotRef = doc(db, SLOTS_COLLECTION, slotId);
+                await runTransaction(db, async (tx) => {
+                  const snap = await tx.get(slotRef);
+                  let existingBookings: any[] = [];
+                  if (snap.exists()) {
+                    const data = snap.data();
+                    existingBookings = Array.isArray(data.bookings) ? data.bookings : [];
+                  }
+                  const incomingIds = new Set(bookings.map((b) => b.id));
+                  const merged = existingBookings.filter((b) => !incomingIds.has(b.id)).concat(bookings);
+                  tx.set(slotRef, { fecha, espacio, bookings: merged, updatedAt: nowIso }, { merge: true });
+                });
+              } catch {
+                // Ignore non-critical background slot sync error
+              }
+            })
+          );
+        }
+      })().catch(() => {});
+    }
+
+    setLastSyncTime(Date.now());
+  } catch (error: any) {
+    console.error('Firestore batch write error in saveReservationsBatch:', error?.message || error);
+    throw error;
+  }
 }
 
-export async function deleteReservationById(id: string): Promise<WriteResult> {
-  return commitReservationChanges([], { deletedIds: [id] });
+export async function deleteReservationById(id: string): Promise<void> {
+  recordDeletedId(id);
+
+  const current = getLocalCache();
+  const target = current.find(r => r.id === id);
+  setLocalCache(current.filter(r => r.id !== id));
+
+  try {
+    const db = getDb();
+    const docRef = doc(db, COLLECTION_NAME, id);
+    if (target) {
+      const canonSpace = normalizeSpaceName(target.espacio);
+      const slotDocId = `${target.fecha.trim()}_${encodeURIComponent(canonSpace)}`;
+      const slotDocRef = doc(db, SLOTS_COLLECTION, slotDocId);
+      await runTransaction(db, async (tx) => {
+        const slotSnap = await tx.get(slotDocRef);
+        if (slotSnap.exists()) {
+          const data = slotSnap.data();
+          const existingBookings = Array.isArray(data.bookings) ? data.bookings : [];
+          const remaining = existingBookings.filter(b => b.id !== id);
+          tx.set(slotDocRef, { bookings: remaining, updatedAt: new Date().toISOString() }, { merge: true });
+        }
+        tx.delete(docRef);
+      });
+    } else {
+      await deleteDoc(docRef);
+    }
+    setLastSyncTime(Date.now());
+  } catch (error: any) {
+    console.warn('Deleted locally (remote notice):', error?.message || error);
+    throw error;
+  }
 }
 
 export async function deleteReservationsBatch(ids: string[]): Promise<number> {
-  const result = await commitReservationChanges([], { deletedIds: ids });
-  return result.deletedIds.length;
+  if (!ids.length) return 0;
+  const idsSet = new Set(ids);
+
+  recordDeletedIds(ids);
+
+  const current = getLocalCache();
+  const remaining = current.filter(r => !idsSet.has(r.id));
+  setLocalCache(remaining);
+
+  try {
+    const db = getDb();
+    const batchPromises: Promise<void>[] = [];
+
+    for (let i = 0; i < ids.length; i += FIRESTORE_MAX_BATCH_SIZE) {
+      const chunk = ids.slice(i, i + FIRESTORE_MAX_BATCH_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach(id => batch.delete(doc(db, COLLECTION_NAME, id)));
+      batchPromises.push(batch.commit());
+    }
+
+    // Clean schedule_slots for deleted batch in background
+    const slotKeysToClean = new Set<string>();
+    current.forEach(r => {
+      if (idsSet.has(r.id) && r.fecha && r.espacio) {
+        slotKeysToClean.add(`${r.fecha.trim()}_${encodeURIComponent(normalizeSpaceName(r.espacio))}`);
+      }
+    });
+
+    if (slotKeysToClean.size > 0) {
+      const keys = Array.from(slotKeysToClean);
+      const CONCURRENCY_LIMIT = 5;
+      (async () => {
+        for (let i = 0; i < keys.length; i += CONCURRENCY_LIMIT) {
+          const chunk = keys.slice(i, i + CONCURRENCY_LIMIT);
+          await Promise.all(
+            chunk.map(async (slotId) => {
+              try {
+                const slotRef = doc(db, SLOTS_COLLECTION, slotId);
+                await runTransaction(db, async (tx) => {
+                  const snap = await tx.get(slotRef);
+                  if (snap.exists()) {
+                    const data = snap.data();
+                    const bookings = Array.isArray(data.bookings) ? data.bookings : [];
+                    const rem = bookings.filter((b) => !idsSet.has(b.id));
+                    tx.set(slotRef, { bookings: rem, updatedAt: new Date().toISOString() }, { merge: true });
+                  }
+                });
+              } catch {
+                // ignore non-critical slot clean
+              }
+            })
+          );
+        }
+      })().catch(() => {});
+    }
+
+    await Promise.all(batchPromises);
+    setLastSyncTime(Date.now());
+  } catch (error: any) {
+    console.warn('Batch deletion notice (safe in versioned local cache):', error?.message || error);
+  }
+
+  return ids.length;
 }
 
 export async function deleteSeriesByRecurrenteId(recurrenteId: string, knownIds?: string[]): Promise<number> {
-  const ids = new Set(knownIds || []);
-  getLocalCache().forEach(r => { if (r.recurrenteId === recurrenteId || r.serieRecurrente === recurrenteId) ids.add(r.id); });
-  return deleteReservationsBatch([...ids]);
+  const current = getLocalCache();
+  const knownSet = new Set(knownIds || []);
+  const toDelete = current.filter(r => r.recurrenteId === recurrenteId || r.serieRecurrente === recurrenteId || knownSet.has(r.id));
+  
+  // Combine all IDs to ensure nothing is missed
+  const allIdsToDelete = Array.from(new Set([...toDelete.map(r => r.id), ...(knownIds || [])]));
+  if (!allIdsToDelete.length) return 0;
+
+  recordDeletedIds(allIdsToDelete);
+  const deleteSet = new Set(allIdsToDelete);
+  setLocalCache(current.filter(r => !deleteSet.has(r.id) && r.recurrenteId !== recurrenteId && r.serieRecurrente !== recurrenteId));
+
+  try {
+    const db = getDb();
+    const batchPromises: Promise<void>[] = [];
+
+    for (let i = 0; i < allIdsToDelete.length; i += FIRESTORE_MAX_BATCH_SIZE) {
+      const chunk = allIdsToDelete.slice(i, i + FIRESTORE_MAX_BATCH_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach(id => batch.delete(doc(db, COLLECTION_NAME, id)));
+      batchPromises.push(batch.commit());
+    }
+
+    // Clean schedule_slots for deleted series reservations in background
+    const slotKeysToClean = new Set<string>();
+    toDelete.forEach(r => {
+      if (r.fecha && r.espacio) {
+        slotKeysToClean.add(`${r.fecha.trim()}_${encodeURIComponent(normalizeSpaceName(r.espacio))}`);
+      }
+    });
+
+    if (slotKeysToClean.size > 0) {
+      const keys = Array.from(slotKeysToClean);
+      const CONCURRENCY_LIMIT = 5;
+      (async () => {
+        for (let i = 0; i < keys.length; i += CONCURRENCY_LIMIT) {
+          const chunk = keys.slice(i, i + CONCURRENCY_LIMIT);
+          await Promise.all(
+            chunk.map(async (slotId) => {
+              try {
+                const slotRef = doc(db, SLOTS_COLLECTION, slotId);
+                await runTransaction(db, async (tx) => {
+                  const snap = await tx.get(slotRef);
+                  if (snap.exists()) {
+                    const data = snap.data();
+                    const bookings = Array.isArray(data.bookings) ? data.bookings : [];
+                    const remaining = bookings.filter((b) => !deleteSet.has(b.id));
+                    tx.set(slotRef, { bookings: remaining, updatedAt: new Date().toISOString() }, { merge: true });
+                  }
+                });
+              } catch {
+                // ignore non-critical slot clean
+              }
+            })
+          );
+        }
+      })().catch(() => {});
+    }
+
+    await Promise.all(batchPromises);
+    setLastSyncTime(Date.now());
+  } catch (error: any) {
+    console.warn('Series deletion notice (safe in versioned local cache):', error?.message || error);
+    throw error;
+  }
+
+  return allIdsToDelete.length;
 }
 
+/**
+ * Uploads all reservations to Firestore with hash verification.
+ * If target dataset hash matches the last known Firestore hash, skips redundant write batches.
+ */
 export async function seedAllToFirestore(
   reservations: readonly Reservation[],
   force = false
@@ -1051,14 +1452,42 @@ export async function seedAllToFirestore(
     }
 
     const db = getDb();
-    const remote = await getDocs(collection(db, COLLECTION_NAME));
-    const previous = new Map(remote.docs.map(d=>[d.id,d.data() as Reservation]));
-    const targets = reservations.map(r=>({ ...r, version: previous.get(r.id)?.version || 0 }));
-    const targetIds = new Set(targets.map(r=>r.id));
-    const deletedIds = force ? remote.docs.filter(d=>!targetIds.has(d.id)).map(d=>d.id) : [];
-    const result = await commitReservationChanges(targets, { deletedIds, allowConflictOverride: force });
-    const confirmed = force ? result.reservations : getLocalCache();
-    setLocalCache(confirmed, { lastFirestoreHash: calculateReservationsHash(confirmed), lastSyncTime: Date.now() });
+    const batchPromises: Promise<void>[] = [];
+
+    if (force) {
+      try {
+        const existingSnap = await getDocs(collection(db, COLLECTION_NAME));
+        const targetIds = new Set(reservations.map((r) => r.id));
+        const docsToDelete = existingSnap.docs.filter((d) => !targetIds.has(d.id));
+        for (let i = 0; i < docsToDelete.length; i += FIRESTORE_MAX_BATCH_SIZE) {
+          const chunk = docsToDelete.slice(i, i + FIRESTORE_MAX_BATCH_SIZE);
+          const delBatch = writeBatch(db);
+          chunk.forEach((d) => delBatch.delete(d.ref));
+          batchPromises.push(delBatch.commit());
+        }
+      } catch (err) {
+        console.warn('Obsolete docs cleanup notice during seed/restore:', err);
+      }
+    }
+
+    for (let i = 0; i < reservations.length; i += FIRESTORE_MAX_BATCH_SIZE) {
+      const chunk = reservations.slice(i, i + FIRESTORE_MAX_BATCH_SIZE);
+      const batch = writeBatch(db);
+
+      chunk.forEach((item) => {
+        const docRef = doc(db, COLLECTION_NAME, item.id);
+        const cleaned = cleanReservationForFirestore(item);
+        batch.set(docRef, cleaned, { merge: true });
+      });
+
+      batchPromises.push(batch.commit());
+    }
+
+    await Promise.all(batchPromises);
+    setLocalCache(reservations, {
+      lastFirestoreHash: targetHash,
+      lastSyncTime: Date.now()
+    });
 
     return { count: reservations.length, skipped: false };
   } catch (error: any) {
@@ -1202,11 +1631,31 @@ export async function deleteAllHolidayReservations(): Promise<{
 }> {
   const current = getLocalCache();
   // Protect reservations that have explicit authorization (e.g. key CCD or extended schedule)
-  const toDelete = current.filter((r) => isChileanHoliday(r.fecha) && !r.claveAutorizacion && !r.claveAutorizacionFeriado && !r.horarioExtendidoAutorizado);
+  const toDelete = current.filter((r) => isChileanHoliday(r.fecha) && !r.claveAutorizacion && !r.horarioExtendidoAutorizado);
   const remaining = current.filter((r) => !toDelete.some(del => del.id === r.id));
 
   if (toDelete.length > 0) {
-    await deleteReservationsBatch(toDelete.map(r => r.id));
+    const deletedIds = toDelete.map((r) => r.id);
+    recordDeletedIds(deletedIds);
+    setLocalCache(remaining);
+
+    try {
+      const db = getDb();
+      const batchPromises: Promise<void>[] = [];
+
+      for (let i = 0; i < toDelete.length; i += FIRESTORE_MAX_BATCH_SIZE) {
+        const chunk = toDelete.slice(i, i + FIRESTORE_MAX_BATCH_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach((r) => {
+          batch.delete(doc(db, COLLECTION_NAME, r.id));
+        });
+        batchPromises.push(batch.commit());
+      }
+
+      await Promise.all(batchPromises);
+    } catch (error: any) {
+      console.warn('Notice deleting holiday reservations in Firestore (cached locally):', error?.message || error);
+    }
   }
 
   return {
@@ -1298,7 +1747,27 @@ export async function cleanConflictingMinuteReservations(currentReservations?: R
   const remaining = current.filter((r) => !idsToDelete.has(r.id));
 
   if (toDelete.length > 0) {
-    await deleteReservationsBatch(toDelete.map(r => r.id));
+    const toDeleteIdsList = toDelete.map((r) => r.id);
+    recordDeletedIds(toDeleteIdsList);
+    setLocalCache(remaining);
+
+    try {
+      const db = getDb();
+      const batchPromises: Promise<void>[] = [];
+
+      for (let i = 0; i < toDelete.length; i += FIRESTORE_MAX_BATCH_SIZE) {
+        const chunk = toDelete.slice(i, i + FIRESTORE_MAX_BATCH_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach((r) => {
+          batch.delete(doc(db, COLLECTION_NAME, r.id));
+        });
+        batchPromises.push(batch.commit());
+      }
+
+      await Promise.all(batchPromises);
+    } catch (error: any) {
+      console.warn('Notice deleting minute conflict reservations in Firestore (cached locally):', error?.message || error);
+    }
   }
 
   return {

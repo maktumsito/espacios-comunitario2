@@ -45,7 +45,7 @@ interface ImportExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   reservations: Reservation[];
-  onImportReservations: (newReservations: Reservation[]) => Promise<void>;
+  onImportReservations: (newReservations: Reservation[]) => void;
   onSyncAllToFirebase: () => Promise<{ count: number; error?: string }>;
   currentUser?: AuthUser | null;
   onRestoreFromBackup?: (restoredReservations: Reservation[]) => void;
@@ -120,7 +120,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
     try {
       const record = await createDatabaseBackup({
         tipo: 'manual',
-        creadoPor: currentUser?.name || currentUser?.username || 'Administrador'
+        creadoPor: currentUser?.name || currentUser?.username || 'Administrador',
+        customReservations: reservations
       });
       setBackupMessage({
         type: 'success',
@@ -170,8 +171,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
               onRestoreFromBackup(restoredList);
             } else if (restoredList) {
               // If in-memory reservations need refresh
-              // The restore service has already persisted these rows.
-              await onRestoreFromBackup?.(restoredList);
+              onImportReservations(restoredList);
             }
           } else {
             setBackupMessage({
@@ -281,9 +281,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
           onConfirm: async () => {
             setConfirmDialog(prev => ({ ...prev, isOpen: false }));
             setSyncStatus({ type: 'loading', msg: 'Restaurando reservas desde archivo JSON...' });
-            try {
-            await onImportReservations(reservationsList);
-            const res = { error: undefined as string | undefined };
+            onImportReservations(reservationsList);
+            const res = await onSyncAllToFirebase();
             if (res.error) {
               setSyncStatus({ type: 'error', msg: res.error });
             } else {
@@ -292,7 +291,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                 msg: `¡Copia restaurada exitosamente! ${reservationsList.length} reservas registradas en Firebase.`
               });
             }
-            } catch (error: any) { setSyncStatus({ type: "error", msg: error?.message || "No se pudo importar." }); }
           }
         });
       } catch (err) {
@@ -321,12 +319,12 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
     setIsUploading(true);
     const reader = new FileReader();
 
-    reader.onload = async (event) => {
+    reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
         const parsed = parseCsvRows(text);
         if (parsed.length > 0) {
-          await onImportReservations(parsed);
+          onImportReservations(parsed);
           setImportedCount(parsed.length);
           setSyncStatus({
             type: 'success',
@@ -338,11 +336,11 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
             msg: 'No se pudieron extraer filas válidas del archivo CSV.'
           });
         }
-      } catch (err: any) {
-        console.error('Error importing CSV', err);
+      } catch (err) {
+        console.error('Error parsing CSV', err);
         setSyncStatus({
           type: 'error',
-          msg: err?.message || 'Error al importar el archivo CSV.'
+          msg: 'Error al leer el archivo CSV.'
         });
       } finally {
         setIsUploading(false);
@@ -383,9 +381,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
     }
 
     setSyncStatus({ type: 'loading', msg: `Cargando las ${INITIAL_RESERVATIONS.length} reservas de la plantilla base a Firestore...` });
-    try {
-    await onImportReservations(INITIAL_RESERVATIONS);
-    const res = { error: undefined as string | undefined };
+    onImportReservations(INITIAL_RESERVATIONS);
+    const res = await onSyncAllToFirebase();
     if (res.error) {
       setSyncStatus({ type: 'error', msg: res.error });
     } else {
@@ -394,7 +391,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
         msg: `¡Plantilla base restaurada! ${INITIAL_RESERVATIONS.length} reservas registradas en la base de datos.`
       });
     }
-    } catch (error: any) { setSyncStatus({ type: "error", msg: error?.message || "No se pudo importar." }); }
   };
 
   const nextBackupDateStr = calculateNextBackupDate(backupConfig.lastBackupTimestamp, backupConfig.intervalDays);

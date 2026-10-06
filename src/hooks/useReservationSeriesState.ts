@@ -205,36 +205,27 @@ export function useReservationSeriesState({
   const excludeReservationIds = useMemo(() => {
     if (isDuplicating || !editingReservation) return [];
     const ids: string[] = [];
-    if (!isEditingRecurring && editingReservation.id) ids.push(editingReservation.id);
-    if (!isEditingRecurring && formData.id && formData.id !== editingReservation.id) ids.push(formData.id);
+    if (editingReservation.id) ids.push(editingReservation.id);
+    if (formData.id && formData.id !== editingReservation.id) ids.push(formData.id);
 
-    // If editing recurring series, exclude reservations in current scope or full series
+    // If editing recurring series, exclude all reservations affected in current scope
     if (isEditingRecurring) {
-      if (updateScope === 'single' && bookingMode === 'single') {
+      if (updateScope === 'single') {
         ids.push(editingReservation.id);
-      } else if (updateScope === 'series') {
-        // Exclude all series members so none conflict with their own expanded dates
-        seriesReservations.forEach((r) => ids.push(r.id));
       } else {
         affectedReservations.forEach((r) => ids.push(r.id));
       }
     }
     return Array.from(new Set(ids));
-  }, [editingReservation, formData.id, isDuplicating, isEditingRecurring, updateScope, bookingMode, seriesReservations, affectedReservations]);
+  }, [editingReservation, formData.id, isDuplicating, isEditingRecurring, updateScope, affectedReservations]);
 
   const excludeSeriesId = useMemo(() => {
     if (isDuplicating || !editingReservation) return undefined;
-    const sId =
-      editingReservation.serieRecurrente ||
-      editingReservation.recurrenteId ||
-      seriesReservations[0]?.serieRecurrente ||
-      seriesReservations[0]?.recurrenteId;
-
     if (isEditingRecurring && updateScope === 'series') {
-      return sId || undefined;
+      return editingReservation.serieRecurrente || editingReservation.recurrenteId || undefined;
     }
     return undefined;
-  }, [editingReservation, isDuplicating, isEditingRecurring, updateScope, bookingMode, seriesReservations]);
+  }, [editingReservation, isDuplicating, isEditingRecurring, updateScope]);
 
   return {
     isEditingRecurring,

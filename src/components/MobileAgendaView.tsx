@@ -1,4 +1,3 @@
-import { VirtualCardGrid } from './common/VirtualCardGrid';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Reservation, SpaceInfo, SpaceBlock, SpaceRating } from '../types';
 import {
@@ -71,7 +70,7 @@ const MONTH_NAMES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
-const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
+export const MobileAgendaView: React.FC<MobileAgendaViewProps> = ({
   reservations,
   allReservations,
   conflictReservationIds,
@@ -304,285 +303,6 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
 
 
   const isTodayActive = selectedDayIso === formatDateYYYYMMDD(new Date());
-
-  const renderReservation = (res: Reservation) => {
-            const spaceInfo = spaceMap.get(normalizeSpaceName(res.espacio));
-            const spaceColor = spaceInfo?.color || '#2563eb';
-            const isConflict = conflictReservationIds?.has(res.id);
-            const liveState = getLiveStatus(res.horaInicio, res.horaFin);
-            const isExpanded = expandedCards.has(res.id);
-            const existingRating = ratingByReservationId.get(res.id);
-            const isRealizada = res.realizada === 'Sí';
-            const typeVisual = getReservationTypeVisual(res);
-            const isActionMenuOpen = activeActionMenuId === res.id;
-            const mainTitle = (res.descripcion && res.descripcion.trim()) ? res.descripcion.trim() : res.tipoActividad;
-            const displayTitle = formatDisplayTitle(mainTitle);
-
-            return (
-              <article
-                key={res.id}
-                id={`mobile-reservation-card-${res.id}`}
-                onClick={() => onSelectReservation(res)}
-                className={`relative bg-white rounded-xl border transition-all overflow-hidden cursor-pointer ${
-                  isConflict
-                    ? 'border-rose-300 ring-2 ring-rose-200/60 bg-rose-50/20'
-                    : liveState?.status === 'live'
-                    ? 'border-blue-300 ring-2 ring-blue-100'
-                    : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                {/* Visual reservation-type stripe on left */}
-                <div
-                  className="absolute left-0 top-0 bottom-0 w-1.5"
-                  style={{ backgroundColor: isConflict ? '#e11d48' : typeVisual.accent }}
-                />
-
-                <div className="pl-3.5 pr-3 py-2.5 space-y-2">
-                  {/* Card Header: Time slot + Status */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center space-x-2">
-                      <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md text-slate-800 font-bold text-xs font-mono tabular-nums">
-                        <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                        <span>{res.horaInicio} - {res.horaFin}</span>
-                      </div>
-                      {res.terminaDiaSiguiente && (
-                        <span className="text-[10px] font-extrabold bg-indigo-100 text-indigo-900 px-1.5 py-0.5 rounded">
-                          +1 día
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center space-x-1.5">
-                      {liveState?.status === 'live' && (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                          <span>EN CURSO</span>
-                        </span>
-                      )}
-
-                      {isConflict && (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-extrabold">
-                          <AlertTriangle className="w-3 h-3 text-rose-600" />
-                          <span>TOPAMIENTO</span>
-                        </span>
-                      )}
-
-                      {res.importante === 'Sí' && (
-                        <span className="p-1 rounded-md bg-amber-100 text-amber-800" title="Actividad Importante">
-                          <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-600" />
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Space & Activity Title */}
-                  <div>
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5 min-w-0">
-                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: spaceColor }} />
-                        <span className="truncate">{res.espacio}</span>
-                      </span>
-                    </div>
-
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug line-clamp-2 break-words" title={mainTitle}>
-                      {displayTitle || 'Sin descripción'}
-                    </h4>
-                  </div>
-
-                  {/* Badges and metadata */}
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                    {res.actividadRecurrente === 'Sí' && (
-                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200">
-                        <Repeat className="w-3 h-3" />
-                        <span>Serie {res.indiceEnSerie ? `${res.indiceEnSerie}/${res.totalEnSerie || '?'}` : 'Recurrente'}</span>
-                      </span>
-                    )}
-
-                    {res.requiereCartaCompromiso && (
-                      <span
-                        className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-md font-semibold border ${
-                          res.cartaCompromisoAdjunta
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : res.cartaCompromisoDescargada
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
-                            : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}
-                      >
-                        <FileCheck className="w-3 h-3" />
-                        <span>
-                          {res.cartaCompromisoAdjunta
-                            ? 'Carta Adjunta'
-                            : res.cartaCompromisoDescargada
-                            ? 'Carta Descargada'
-                            : 'Carta Pendiente'}
-                        </span>
-                      </span>
-                    )}
-
-                    {res.equipamientoSolicitado && res.equipamientoSolicitado.length > 0 && (
-                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold">
-                        <span>📦 {res.equipamientoSolicitado.length} equipos</span>
-                      </span>
-                    )}
-
-                    {existingRating && (
-                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold border border-amber-200">
-                        <Star className="w-3 h-3 fill-amber-500 text-amber-600" />
-                        <span>{existingRating.puntajeGeneral} ★ ({existingRating.auxiliarName})</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Expandable comments / equipment preview */}
-                  {(res.comentarios || (res.equipamientoSolicitado && res.equipamientoSolicitado.length > 0)) && (
-                    <div>
-                      {isExpanded ? (
-                        <div className="mt-1 p-2.5 rounded-xl bg-slate-100/80 text-xs text-slate-700 space-y-1.5 animate-fadeIn">
-                          {res.comentarios && (
-                            <p className="text-[11px]">
-                              <strong className="text-slate-900">Comentarios:</strong> {res.comentarios}
-                            </p>
-                          )}
-                          {res.equipamientoSolicitado && res.equipamientoSolicitado.length > 0 && (
-                            <div className="text-[11px]">
-                              <strong className="text-slate-900">Equipamiento:</strong>
-                              <ul className="list-disc pl-4 space-y-0.5 mt-0.5">
-                                {res.equipamientoSolicitado.map((eq, i) => (
-                                  <li key={i}>{eq.quantity}x {eq.equipmentName} {eq.notes ? `(${eq.notes})` : ''}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => toggleCardExpand(res.id, e)}
-                            className="text-blue-700 text-[11px] font-bold flex items-center space-x-1 cursor-pointer pt-1"
-                          >
-                            <span>Menos detalles</span>
-                            <ChevronUp className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(e) => toggleCardExpand(res.id, e)}
-                          className="text-blue-700 text-[11px] font-semibold flex items-center space-x-1 cursor-pointer hover:underline"
-                        >
-                          <span>Ver notas y equipos</span>
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Primary state and compact overflow actions */}
-                  <div
-                    className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* Left: Asistencia / Realizada toggle */}
-                    {onToggleRealizada && canEdit ? (
-                      <button
-                        type="button"
-                        onClick={() => onToggleRealizada(res)}
-                        className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer ${
-                          isRealizada
-                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                            : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
-                        }`}
-                        title={isRealizada ? 'Marcar como pendiente' : 'Marcar como realizada'}
-                      >
-                        {isRealizada ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        ) : (
-                          <Circle className="w-4 h-4 text-slate-400" />
-                        )}
-                        <span>{isRealizada ? 'Realizada' : 'Pendiente'}</span>
-                      </button>
-                    ) : <div />}
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveActionMenuId(isActionMenuOpen ? null : res.id)}
-                      aria-expanded={isActionMenuOpen}
-                      aria-label="Mostrar acciones de la reserva"
-                      className="min-h-[44px] min-w-[44px] rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex items-center justify-center transition cursor-pointer"
-                    >
-                      <MoreHorizontal className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  {isActionMenuOpen && (
-                    <div
-                      className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-2 animate-fadeIn"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {onOpenRating && (
-                        <button
-                          type="button"
-                          onClick={() => onOpenRating(res, existingRating)}
-                          className={`min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 text-xs font-semibold transition cursor-pointer ${
-                            existingRating
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-                          }`}
-                          title={existingRating ? 'Ver/editar calificación de auxiliar' : 'Calificar espacio (Auxiliares)'}
-                        >
-                          <Star className={`w-4 h-4 ${existingRating ? 'fill-amber-500 text-amber-600' : 'text-slate-600'}`} />
-                          <span>Calificar</span>
-                        </button>
-                      )}
-
-                      {canEdit && (
-                        <button
-                          type="button"
-                          onClick={() => onEditReservation(res)}
-                          aria-label="Editar reserva"
-                          className="min-h-[44px] px-3 py-2 rounded-lg bg-white border border-slate-200 text-blue-700 hover:bg-blue-50 flex items-center justify-center gap-1.5 text-xs font-semibold transition cursor-pointer"
-                          title="Editar reserva"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          <span>Editar</span>
-                        </button>
-                      )}
-
-                      {onDuplicateReservation && canCreate && (
-                        <button
-                          type="button"
-                          onClick={() => onDuplicateReservation(res)}
-                          aria-label="Duplicar reserva"
-                          className="min-h-[44px] px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs font-semibold transition cursor-pointer"
-                          title="Duplicar reserva"
-                        >
-                          <Copy className="w-4 h-4" />
-                          <span>Duplicar</span>
-                        </button>
-                      )}
-
-                      {(onDeleteReservation || onRequestDelete) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (canDelete && onDeleteReservation) {
-                              onDeleteReservation(res.id, res.actividadRecurrente === 'Sí', res.recurrenteId);
-                            } else if (onRequestDelete) {
-                              onRequestDelete(res);
-                            }
-                          }}
-                          aria-label={canDelete ? "Eliminar reserva" : "Solicitar eliminación de reserva"}
-                          className="min-h-[44px] px-3 py-2 rounded-lg bg-white border border-slate-200 text-rose-600 hover:bg-rose-50 flex items-center justify-center gap-1.5 text-xs font-semibold transition cursor-pointer"
-                          title={canDelete ? "Eliminar reserva" : "Solicitar eliminación"}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          <span>Eliminar</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </article>
-            );
-  };
 
   return (
     <div id="mobile-agenda-view-container" className="w-full max-w-3xl mx-auto pb-24 text-slate-900 animate-fadeIn">
@@ -954,9 +674,284 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
             )}
           </div>
         ) : (
-          filteredDayReservations.length > 50
-            ? <VirtualCardGrid items={filteredDayReservations} renderItem={renderReservation} fixedColumns={1} maxHeight={620} estimatedRowHeight={220} />
-            : filteredDayReservations.map(renderReservation)
+          filteredDayReservations.map((res) => {
+            const spaceInfo = spaceMap.get(normalizeSpaceName(res.espacio));
+            const spaceColor = spaceInfo?.color || '#2563eb';
+            const isConflict = conflictReservationIds?.has(res.id);
+            const liveState = getLiveStatus(res.horaInicio, res.horaFin);
+            const isExpanded = expandedCards.has(res.id);
+            const existingRating = ratingByReservationId.get(res.id);
+            const isRealizada = res.realizada === 'Sí';
+            const typeVisual = getReservationTypeVisual(res);
+            const isActionMenuOpen = activeActionMenuId === res.id;
+            const mainTitle = (res.descripcion && res.descripcion.trim()) ? res.descripcion.trim() : res.tipoActividad;
+            const displayTitle = formatDisplayTitle(mainTitle);
+
+            return (
+              <article
+                key={res.id}
+                id={`mobile-reservation-card-${res.id}`}
+                onClick={() => onSelectReservation(res)}
+                className={`relative bg-white rounded-xl border transition-all overflow-hidden cursor-pointer ${
+                  isConflict
+                    ? 'border-rose-300 ring-2 ring-rose-200/60 bg-rose-50/20'
+                    : liveState?.status === 'live'
+                    ? 'border-blue-300 ring-2 ring-blue-100'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {/* Visual reservation-type stripe on left */}
+                <div
+                  className="absolute left-0 top-0 bottom-0 w-1.5"
+                  style={{ backgroundColor: isConflict ? '#e11d48' : typeVisual.accent }}
+                />
+
+                <div className="pl-3.5 pr-3 py-2.5 space-y-2">
+                  {/* Card Header: Time slot + Status */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md text-slate-800 font-bold text-xs font-mono tabular-nums">
+                        <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        <span>{res.horaInicio} - {res.horaFin}</span>
+                      </div>
+                      {res.terminaDiaSiguiente && (
+                        <span className="text-[10px] font-extrabold bg-indigo-100 text-indigo-900 px-1.5 py-0.5 rounded">
+                          +1 día
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center space-x-1.5">
+                      {liveState?.status === 'live' && (
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                          <span>EN CURSO</span>
+                        </span>
+                      )}
+
+                      {isConflict && (
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-extrabold">
+                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                          <span>TOPAMIENTO</span>
+                        </span>
+                      )}
+
+                      {res.importante === 'Sí' && (
+                        <span className="p-1 rounded-md bg-amber-100 text-amber-800" title="Actividad Importante">
+                          <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-600" />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Space & Activity Title */}
+                  <div>
+                    <div className="flex items-center space-x-2 mb-1">
+                      <span className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5 min-w-0">
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: spaceColor }} />
+                        <span className="truncate">{res.espacio}</span>
+                      </span>
+                    </div>
+
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug line-clamp-2 break-words" title={mainTitle}>
+                      {displayTitle || 'Sin descripción'}
+                    </h4>
+                  </div>
+
+                  {/* Badges and metadata */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    {res.actividadRecurrente === 'Sí' && (
+                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200">
+                        <Repeat className="w-3 h-3" />
+                        <span>Serie {res.indiceEnSerie ? `${res.indiceEnSerie}/${res.totalEnSerie || '?'}` : 'Recurrente'}</span>
+                      </span>
+                    )}
+
+                    {res.requiereCartaCompromiso && (
+                      <span
+                        className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-md font-semibold border ${
+                          res.cartaCompromisoAdjunta
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : res.cartaCompromisoDescargada
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}
+                      >
+                        <FileCheck className="w-3 h-3" />
+                        <span>
+                          {res.cartaCompromisoAdjunta
+                            ? 'Carta Adjunta'
+                            : res.cartaCompromisoDescargada
+                            ? 'Carta Descargada'
+                            : 'Carta Pendiente'}
+                        </span>
+                      </span>
+                    )}
+
+                    {res.equipamientoSolicitado && res.equipamientoSolicitado.length > 0 && (
+                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold">
+                        <span>📦 {res.equipamientoSolicitado.length} equipos</span>
+                      </span>
+                    )}
+
+                    {existingRating && (
+                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold border border-amber-200">
+                        <Star className="w-3 h-3 fill-amber-500 text-amber-600" />
+                        <span>{existingRating.puntajeGeneral} ★ ({existingRating.auxiliarName})</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Expandable comments / equipment preview */}
+                  {(res.comentarios || (res.equipamientoSolicitado && res.equipamientoSolicitado.length > 0)) && (
+                    <div>
+                      {isExpanded ? (
+                        <div className="mt-1 p-2.5 rounded-xl bg-slate-100/80 text-xs text-slate-700 space-y-1.5 animate-fadeIn">
+                          {res.comentarios && (
+                            <p className="text-[11px]">
+                              <strong className="text-slate-900">Comentarios:</strong> {res.comentarios}
+                            </p>
+                          )}
+                          {res.equipamientoSolicitado && res.equipamientoSolicitado.length > 0 && (
+                            <div className="text-[11px]">
+                              <strong className="text-slate-900">Equipamiento:</strong>
+                              <ul className="list-disc pl-4 space-y-0.5 mt-0.5">
+                                {res.equipamientoSolicitado.map((eq, i) => (
+                                  <li key={i}>{eq.quantity}x {eq.equipmentName} {eq.notes ? `(${eq.notes})` : ''}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => toggleCardExpand(res.id, e)}
+                            className="text-blue-700 text-[11px] font-bold flex items-center space-x-1 cursor-pointer pt-1"
+                          >
+                            <span>Menos detalles</span>
+                            <ChevronUp className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => toggleCardExpand(res.id, e)}
+                          className="text-blue-700 text-[11px] font-semibold flex items-center space-x-1 cursor-pointer hover:underline"
+                        >
+                          <span>Ver notas y equipos</span>
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Primary state and compact overflow actions */}
+                  <div
+                    className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Left: Asistencia / Realizada toggle */}
+                    {onToggleRealizada && canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => onToggleRealizada(res)}
+                        className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer ${
+                          isRealizada
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+                        }`}
+                        title={isRealizada ? 'Marcar como pendiente' : 'Marcar como realizada'}
+                      >
+                        {isRealizada ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <Circle className="w-4 h-4 text-slate-400" />
+                        )}
+                        <span>{isRealizada ? 'Realizada' : 'Pendiente'}</span>
+                      </button>
+                    ) : <div />}
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveActionMenuId(isActionMenuOpen ? null : res.id)}
+                      aria-expanded={isActionMenuOpen}
+                      aria-label="Mostrar acciones de la reserva"
+                      className="min-h-[44px] min-w-[44px] rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex items-center justify-center transition cursor-pointer"
+                    >
+                      <MoreHorizontal className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {isActionMenuOpen && (
+                    <div
+                      className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-2 animate-fadeIn"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {onOpenRating && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenRating(res, existingRating)}
+                          className={`min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 text-xs font-semibold transition cursor-pointer ${
+                            existingRating
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                          }`}
+                          title={existingRating ? 'Ver/editar calificación de auxiliar' : 'Calificar espacio (Auxiliares)'}
+                        >
+                          <Star className={`w-4 h-4 ${existingRating ? 'fill-amber-500 text-amber-600' : 'text-slate-600'}`} />
+                          <span>Calificar</span>
+                        </button>
+                      )}
+
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => onEditReservation(res)}
+                          aria-label="Editar reserva"
+                          className="min-h-[44px] px-3 py-2 rounded-lg bg-white border border-slate-200 text-blue-700 hover:bg-blue-50 flex items-center justify-center gap-1.5 text-xs font-semibold transition cursor-pointer"
+                          title="Editar reserva"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          <span>Editar</span>
+                        </button>
+                      )}
+
+                      {onDuplicateReservation && canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => onDuplicateReservation(res)}
+                          aria-label="Duplicar reserva"
+                          className="min-h-[44px] px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center gap-1.5 text-xs font-semibold transition cursor-pointer"
+                          title="Duplicar reserva"
+                        >
+                          <Copy className="w-4 h-4" />
+                          <span>Duplicar</span>
+                        </button>
+                      )}
+
+                      {(onDeleteReservation || onRequestDelete) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (canDelete && onDeleteReservation) {
+                              onDeleteReservation(res.id, res.actividadRecurrente === 'Sí', res.recurrenteId);
+                            } else if (onRequestDelete) {
+                              onRequestDelete(res);
+                            }
+                          }}
+                          aria-label={canDelete ? "Eliminar reserva" : "Solicitar eliminación de reserva"}
+                          className="min-h-[44px] px-3 py-2 rounded-lg bg-white border border-slate-200 text-rose-600 hover:bg-rose-50 flex items-center justify-center gap-1.5 text-xs font-semibold transition cursor-pointer"
+                          title={canDelete ? "Eliminar reserva" : "Solicitar eliminación"}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Eliminar</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </article>
+            );
+          })
         )}
       </div>
 
@@ -977,6 +972,3 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
     </div>
   );
 };
-
-export const MobileAgendaView = React.memo(MobileAgendaViewComponent);
-

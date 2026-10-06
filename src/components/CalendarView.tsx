@@ -653,7 +653,7 @@ interface CalendarViewProps {
   isHistoricalLoading?: boolean;
 }
 
-const CalendarViewComponent: React.FC<CalendarViewProps> = ({
+export const CalendarView: React.FC<CalendarViewProps> = ({
   reservations,
   spaces = SPACES_LIST,
   selectedDate: propSelectedDate,
@@ -822,6 +822,3 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
     </div>
   );
 };
-
-export const CalendarView = React.memo(CalendarViewComponent);
-

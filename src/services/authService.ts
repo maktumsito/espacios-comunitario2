@@ -383,7 +383,7 @@ export function subscribeToUsers(
 /**
  * Guarda o actualiza un usuario individual y lo sincroniza con Firestore
  */
-export async function saveUserAccount(user: UserAccount, originalUsername?: string): Promise<UserAccount[]> {
+export function saveUserAccount(user: UserAccount, originalUsername?: string): UserAccount[] {
   const current = getAllAuthorizedUsers();
   const targetUsername = (originalUsername || user.username).trim().toLowerCase();
   
@@ -406,14 +406,24 @@ export async function saveUserAccount(user: UserAccount, originalUsername?: stri
     updatedList = [...current, cleanUser];
   }
 
-  const db = getDb();
-  const batch = writeBatch(db);
-  batch.set(doc(db, USERS_COLLECTION, sanitizeUsernameDocId(cleanUser.username)), cleanUserForFirestore(cleanUser));
-  if (originalUsername && originalUsername.trim().toLowerCase() !== cleanUser.username) {
-    batch.delete(doc(db, USERS_COLLECTION, sanitizeUsernameDocId(originalUsername)));
-  }
-  await batch.commit();
   saveAllAuthorizedUsers(updatedList);
+
+  // Sync to Firestore in background
+  try {
+    const db = getDb();
+    const targetDocId = sanitizeUsernameDocId(cleanUser.username);
+    setDoc(doc(db, USERS_COLLECTION, targetDocId), cleanUserForFirestore(cleanUser), { merge: true })
+      .catch((err) => console.error('Error saving user to Firestore:', err));
+
+    // If username was renamed, delete old document from Firestore
+    if (originalUsername && originalUsername.trim().toLowerCase() !== cleanUser.username) {
+      const oldDocId = sanitizeUsernameDocId(originalUsername);
+      deleteDoc(doc(db, USERS_COLLECTION, oldDocId))
+        .catch((err) => console.error('Error deleting renamed user from Firestore:', err));
+    }
+  } catch (err) {
+    console.error('Error initiating user Firestore sync:', err);
+  }
 
   return updatedList;
 }
@@ -514,7 +524,7 @@ export function userCanDeleteReservations(user?: AuthUser | UserAccount | null):
 /**
  * Elimina un usuario por su username y lo borra de Firestore
  */
-export async function deleteUserAccount(username: string): Promise<{ success: boolean; message?: string; users: UserAccount[] }> {
+export function deleteUserAccount(username: string): { success: boolean; message?: string; users: UserAccount[] } {
   const current = getAllAuthorizedUsers();
   const cleanUsername = username.trim().toLowerCase();
 
@@ -549,8 +559,16 @@ export async function deleteUserAccount(username: string): Promise<{ success: bo
   }
 
   const updatedList = current.filter((u) => u.username.trim().toLowerCase() !== cleanUsername);
-  await deleteDoc(doc(getDb(), USERS_COLLECTION, sanitizeUsernameDocId(cleanUsername)));
   saveAllAuthorizedUsers(updatedList);
+
+  // Delete from Firestore in background
+  try {
+    const db = getDb();
+    deleteDoc(doc(db, USERS_COLLECTION, sanitizeUsernameDocId(cleanUsername)))
+      .catch((err) => console.error('Error deleting user from Firestore:', err));
+  } catch (err) {
+    console.error('Error initiating user Firestore delete:', err);
+  }
 
   return { success: true, users: updatedList };
 }
@@ -620,8 +638,7 @@ export async function changeUserPassword(
   };
 
   // Guardar y sincronizar con Firestore
-  try { await saveUserAccount(updatedUser, userAccount.username); }
-  catch (err: any) { return { success: false, message: err?.message || "No se pudo guardar la nueva clave." }; }
+  saveUserAccount(updatedUser, userAccount.username);
 
   // Si el usuario actual en sesión es el mismo, actualizar datos de sesión
   const currentSession = getStoredAuthUser();
@@ -652,15 +669,27 @@ export async function adminResetUserPassword(
 /**
  * Restablece los usuarios a la lista por defecto y los sube a Firestore
  */
-export async function resetUsersToDefault(): Promise<UserAccount[]> {
-  const db = getDb();
-  const snap = await getDocs(collection(db, USERS_COLLECTION));
-  if (snap.size + DEFAULT_USERS.length > 450) throw new Error('Demasiados usuarios para restablecer de forma atómica.');
-  const batch = writeBatch(db);
-  snap.forEach(d=>batch.delete(d.ref));
-  DEFAULT_USERS.forEach(u=>batch.set(doc(db,USERS_COLLECTION,sanitizeUsernameDocId(u.username)),cleanUserForFirestore(u)));
-  await batch.commit();
+export function resetUsersToDefault(): UserAccount[] {
   saveAllAuthorizedUsers(DEFAULT_USERS);
+
+  try {
+    const db = getDb();
+    // Fetch all existing users from Firestore and overwrite with DEFAULT_USERS
+    getDocs(collection(db, USERS_COLLECTION))
+      .then((snap) => {
+        const batch = writeBatch(db);
+        snap.forEach((d) => batch.delete(d.ref));
+        for (const u of DEFAULT_USERS) {
+          const docRef = doc(db, USERS_COLLECTION, sanitizeUsernameDocId(u.username));
+          batch.set(docRef, cleanUserForFirestore(u));
+        }
+        return batch.commit();
+      })
+      .catch((err) => console.error('Error resetting users in Firestore:', err));
+  } catch (err) {
+    console.error('Error initiating user reset to defaults:', err);
+  }
+
   return [...DEFAULT_USERS];
 }
 

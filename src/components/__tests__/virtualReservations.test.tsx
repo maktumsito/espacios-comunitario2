@@ -3,7 +3,6 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VirtualCardGrid } from '../common/VirtualCardGrid';
-import { MobileAgendaView } from '../MobileAgendaView';
 import { DailyUsageView } from '../DailyUsageView';
 import { intersectsViewport } from '../../hooks/useTimelineViewport';
 import type { Reservation } from '../../types';
@@ -81,28 +80,4 @@ describe('Reservation virtualization', () => {
     rerender(<DailyUsageView {...props} selectedDate={new Date(2026, 8, 23)} />);
     expect(container.querySelector('[data-reservation-id="overnight"]')).toBeNull();
   });
-});
-
-it('keeps controls inside a virtual card reachable before moving to another card',()=> {
-  const items=Array.from({length:100},(_,i)=>({id:`actions-${i}`}));
-  render(<VirtualCardGrid items={items} fixedColumns={1} renderItem={item=><><button>{item.id} first</button><button>{item.id} last</button></>} />);
-  const first=screen.getByRole('button',{name:'actions-0 first'});
-  act(()=>first.focus());fireEvent.keyDown(first,{key:'Tab'});
-  expect(document.activeElement).toBe(first); // Browser performs the normal internal Tab; it is not intercepted.
-  const last=screen.getByRole('button',{name:'actions-0 last'});act(()=>last.focus());fireEvent.keyDown(last,{key:'Tab'});
-  expect(document.activeElement?.textContent).toBe('actions-1 first');
-  fireEvent.keyDown(document.activeElement!,{key:'Tab',shiftKey:true});
-  expect(document.activeElement?.textContent).toBe('actions-0 last');
-});
-
-it('virtualizes dense mobile days and reveals offscreen reservations on scroll',()=> {
-  HTMLElement.prototype.scrollIntoView=vi.fn();
-  const rows=Array.from({length:500},(_,i)=>reservation(`mobile-${i}`,10));
-  const {container}=render(<MobileAgendaView reservations={rows} spaces={[]} selectedDate={new Date(2026,8,22)} onDateChange={()=>{}} onSelectReservation={()=>{}} onEditReservation={()=>{}} />);
-  expect(container.querySelectorAll('article').length).toBeLessThan(20);
-  const scroller=container.querySelector('.overflow-y-auto.pr-1')!;
-  fireEvent.scroll(scroller,{target:{scrollTop:49000}});
-  expect(container.querySelectorAll('article').length).toBeLessThan(20);
-  expect(container.querySelectorAll('article').length).toBeGreaterThan(0);
-  expect(container.querySelector('[data-agenda-reservation-id="mobile-0"]')).toBeNull();
 });

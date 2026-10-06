@@ -100,8 +100,15 @@ export async function saveSpaceBlock(block: SpaceBlock): Promise<SpaceBlock> {
     createdAt: block.createdAt || new Date().toISOString()
   };
 
+  // Update local cache optimistically
+  const current = getLocalCachedBlocks();
+  const index = current.findIndex((b) => b.id === finalBlock.id);
+  const updated = index >= 0
+    ? current.map((b) => (b.id === finalBlock.id ? finalBlock : b))
+    : [finalBlock, ...current];
+  setLocalCachedBlocks(updated);
+
   const db = getDb();
-  if (!db) throw new Error("No hay conexión con la base de datos. Conserva los datos y reintenta.");
   if (db) {
     try {
       const docRef = doc(db, COLLECTION_NAME, finalBlock.id);
@@ -112,10 +119,6 @@ export async function saveSpaceBlock(block: SpaceBlock): Promise<SpaceBlock> {
     }
   }
 
-  const current = getLocalCachedBlocks();
-  setLocalCachedBlocks(current.some(b => b.id === finalBlock.id)
-    ? current.map(b => b.id === finalBlock.id ? finalBlock : b)
-    : [finalBlock, ...current]);
   return finalBlock;
 }
 
@@ -123,13 +126,16 @@ export async function saveSpaceBlock(block: SpaceBlock): Promise<SpaceBlock> {
  * Delete a space block
  */
 export async function deleteSpaceBlock(id: string): Promise<void> {
+  // Update local cache optimistically
+  const current = getLocalCachedBlocks();
+  const updated = current.filter((b) => b.id !== id);
+  setLocalCachedBlocks(updated);
+
   const db = getDb();
-  if (!db) throw new Error("No hay conexión con la base de datos. Conserva los datos y reintenta.");
   if (db) {
     try {
       const docRef = doc(db, COLLECTION_NAME, id);
       await deleteDoc(docRef);
-      setLocalCachedBlocks(getLocalCachedBlocks().filter(b => b.id !== id));
     } catch (err) {
       console.error('Error eliminando bloqueo en Firestore:', err);
       throw err;

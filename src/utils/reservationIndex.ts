@@ -33,19 +33,15 @@ export function buildReservationDateIndex(
   reservations: readonly Reservation[]
 ): Map<string, Reservation[]> {
   const index = new Map<string, Reservation[]>();
-  const idsByDate = new Map<string, Set<string>>();
 
   const appendToDate = (dateKey: string, r: Reservation) => {
     let list = index.get(dateKey);
     if (!list) {
       list = [];
       index.set(dateKey, list);
-      idsByDate.set(dateKey, new Set());
     }
     // Avoid duplicate additions
-    const ids = idsByDate.get(dateKey)!;
-    if (!ids.has(r.id)) {
-      ids.add(r.id);
+    if (!list.some((existing) => existing.id === r.id)) {
       list.push(r);
     }
   };

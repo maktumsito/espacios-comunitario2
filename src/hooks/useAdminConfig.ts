@@ -49,20 +49,20 @@ export interface UseAdminConfigReturn {
   userAccounts: UserAccount[];
   setUserAccounts: React.Dispatch<React.SetStateAction<UserAccount[]>>;
 
-  handleSaveSpace: (space: SpaceInfo) => Promise<void>;
-  handleDeleteSpace: (id: string) => Promise<void>;
-  handleReorderSpaces: (newSpaces: SpaceInfo[]) => Promise<void>;
-  handleSaveLoanType: (loan: LoanType) => Promise<void>;
-  handleDeleteLoanType: (id: string) => Promise<void>;
-  handleSaveActivityType: (act: ActivityTypeItem) => Promise<void>;
-  handleDeleteActivityType: (id: string) => Promise<void>;
-  handleSaveEquipment: (item: EquipmentItem) => Promise<void>;
-  handleDeleteEquipment: (id: string) => Promise<void>;
-  handleResetEquipment: () => Promise<void>;
-  handleResetDefaults: () => Promise<void>;
-  handleSaveUser: (user: UserAccount, originalUsername?: string) => Promise<void>;
-  handleDeleteUser: (username: string) => Promise<{ success: boolean; message?: string; users?: UserAccount[] }>;
-  handleResetUsers: () => Promise<void>;
+  handleSaveSpace: (space: SpaceInfo) => void;
+  handleDeleteSpace: (id: string) => void;
+  handleReorderSpaces: (newSpaces: SpaceInfo[]) => void;
+  handleSaveLoanType: (loan: LoanType) => void;
+  handleDeleteLoanType: (id: string) => void;
+  handleSaveActivityType: (act: ActivityTypeItem) => void;
+  handleDeleteActivityType: (id: string) => void;
+  handleSaveEquipment: (item: EquipmentItem) => void;
+  handleDeleteEquipment: (id: string) => void;
+  handleResetEquipment: () => void;
+  handleResetDefaults: () => void;
+  handleSaveUser: (user: UserAccount, originalUsername?: string) => void;
+  handleDeleteUser: (username: string) => { success: boolean; message?: string; users?: UserAccount[] };
+  handleResetUsers: () => void;
 }
 
 export function useAdminConfig(
@@ -124,77 +124,77 @@ export function useAdminConfig(
     };
   }, []);
 
-  const handleSaveSpace = useCallback(async (space: SpaceInfo) => {
-    const updated = await saveSpaceItem(space);
+  const handleSaveSpace = useCallback((space: SpaceInfo) => {
+    const updated = saveSpaceItem(space);
     setSpaces(updated);
   }, []);
 
-  const handleDeleteSpace = useCallback(async (id: string) => {
-    const updated = await deleteSpaceItem(id);
+  const handleDeleteSpace = useCallback((id: string) => {
+    const updated = deleteSpaceItem(id);
     setSpaces(updated);
   }, []);
 
-  const handleReorderSpaces = useCallback(async (newSpaces: SpaceInfo[]) => {
-    const updated = await reorderSpaces(newSpaces);
+  const handleReorderSpaces = useCallback((newSpaces: SpaceInfo[]) => {
+    const updated = reorderSpaces(newSpaces);
     setSpaces(updated);
   }, []);
 
-  const handleSaveLoanType = useCallback(async (loan: LoanType) => {
-    const updated = await saveLoanTypeItem(loan);
+  const handleSaveLoanType = useCallback((loan: LoanType) => {
+    const updated = saveLoanTypeItem(loan);
     setLoanTypes(updated);
   }, []);
 
-  const handleDeleteLoanType = useCallback(async (id: string) => {
-    const updated = await deleteLoanTypeItem(id);
+  const handleDeleteLoanType = useCallback((id: string) => {
+    const updated = deleteLoanTypeItem(id);
     setLoanTypes(updated);
   }, []);
 
-  const handleSaveActivityType = useCallback(async (act: ActivityTypeItem) => {
-    const updated = await saveActivityTypeItem(act);
+  const handleSaveActivityType = useCallback((act: ActivityTypeItem) => {
+    const updated = saveActivityTypeItem(act);
     setActivityTypes(updated);
   }, []);
 
-  const handleDeleteActivityType = useCallback(async (id: string) => {
-    const updated = await deleteActivityTypeItem(id);
+  const handleDeleteActivityType = useCallback((id: string) => {
+    const updated = deleteActivityTypeItem(id);
     setActivityTypes(updated);
   }, []);
 
-  const handleSaveEquipment = useCallback(async (item: EquipmentItem) => {
-    const updated = await saveEquipmentItem(item);
+  const handleSaveEquipment = useCallback((item: EquipmentItem) => {
+    const updated = saveEquipmentItem(item);
     setEquipment(updated);
   }, []);
 
-  const handleDeleteEquipment = useCallback(async (id: string) => {
-    const updated = await deleteEquipmentItem(id);
+  const handleDeleteEquipment = useCallback((id: string) => {
+    const updated = deleteEquipmentItem(id);
     setEquipment(updated);
   }, []);
 
-  const handleResetEquipment = useCallback(async () => {
-    const updated = await resetEquipmentToDefaults();
+  const handleResetEquipment = useCallback(() => {
+    const updated = resetEquipmentToDefaults();
     setEquipment(updated);
   }, []);
 
-  const handleResetDefaults = useCallback(async () => {
-    await resetConfigToDefaults();
+  const handleResetDefaults = useCallback(() => {
+    resetConfigToDefaults();
     setSpaces(getStoredSpaces());
     setLoanTypes(getStoredLoanTypes());
     setActivityTypes(getStoredActivityTypes());
     setEquipment(getStoredEquipment());
   }, []);
 
-  const handleSaveUser = useCallback(async (user: UserAccount, originalUsername?: string) => {
+  const handleSaveUser = useCallback((user: UserAccount, originalUsername?: string) => {
     if (!isCoordinatorOrAdmin(currentUser)) {
       onToast(
         'Permiso denegado: Solo usuarios con perfil Administrador o Coordinador están autorizados para crear o modificar usuarios.',
         'error'
       );
-      throw new Error('No tienes permiso para guardar usuarios.');
+      return;
     }
-    const updated = await saveUserAccount(user, originalUsername);
+    const updated = saveUserAccount(user, originalUsername);
     setUserAccounts(updated);
   }, [currentUser, onToast]);
 
-  const handleDeleteUser = useCallback(async (username: string) => {
+  const handleDeleteUser = useCallback((username: string) => {
     if (!isCoordinatorOrAdmin(currentUser)) {
       onToast(
         'Permiso denegado: Solo usuarios con perfil Administrador o Coordinador están autorizados para eliminar usuarios.',
@@ -205,14 +205,14 @@ export function useAdminConfig(
         message: 'Permiso denegado: Solo Administradores y Coordinadores pueden eliminar usuarios.'
       };
     }
-    const res = await deleteUserAccount(username);
+    const res = deleteUserAccount(username);
     if (res.success && res.users) {
       setUserAccounts(res.users);
     }
     return res;
   }, [currentUser, onToast]);
 
-  const handleResetUsers = useCallback(async () => {
+  const handleResetUsers = useCallback(() => {
     if (!isCoordinatorOrAdmin(currentUser)) {
       onToast(
         'Permiso denegado: Solo usuarios con perfil Administrador o Coordinador están autorizados para restablecer usuarios.',
@@ -220,7 +220,7 @@ export function useAdminConfig(
       );
       return;
     }
-    const updated = await resetUsersToDefault();
+    const updated = resetUsersToDefault();
     setUserAccounts(updated);
   }, [currentUser, onToast]);
 

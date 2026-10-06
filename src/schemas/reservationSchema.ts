@@ -58,13 +58,9 @@ export const PhoneSchema = z
 /**
  * Zod schema for single date format (YYYY-MM-DD)
  */
-// Native Zod calendar regex avoids allocating Dates or custom refinement contexts
-// per row, while preserving Gregorian leap-year and century checks.
-const calendarDateRegex = new RegExp(`^(?!0000)${z.regexes.date.source.slice(1)}`);
 export const DateStringSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'Formato de fecha inválido (debe ser AAAA-MM-DD).' })
-  .regex(calendarDateRegex, { message: 'La fecha indicada no existe.' });
+  .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'Formato de fecha inválido (debe ser AAAA-MM-DD).' });
 
 /**
  * Zod schema for time string (HH:mm)
@@ -78,14 +74,14 @@ export const TimeStringSchema = z
  */
 export const ReservationSchema = z
   .object({
-    id: z.string().min(1, 'El ID de la reserva es obligatorio.').max(128).regex(/^[^/]+$/, 'ID de reserva inválido.'),
+    id: z.string().min(1, 'El ID de la reserva es obligatorio.'),
     fecha: DateStringSchema,
     horaInicio: TimeStringSchema,
-    horaFin: TimeStringSchema.or(z.literal('24:00')),
-    espacio: z.string().min(1, 'El espacio o sala es obligatorio.').max(150),
-    responsable: z.string().min(2, 'El nombre del solicitante o responsable debe tener al menos 2 caracteres.').max(200),
-    tipoActividad: z.string().min(1, 'El tipo de actividad es obligatorio.').max(100),
-    descripcion: z.string().min(1, 'La descripción o nombre de la actividad es obligatorio.').max(2000),
+    horaFin: TimeStringSchema,
+    espacio: z.string().min(1, 'El espacio o sala es obligatorio.'),
+    responsable: z.string().min(2, 'El nombre del solicitante o responsable debe tener al menos 2 caracteres.'),
+    tipoActividad: z.string().min(1, 'El tipo de actividad es obligatorio.'),
+    descripcion: z.string().min(1, 'La descripción o nombre de la actividad es obligatorio.'),
     actividadRecurrente: z.string().default('No'),
     rut: RutSchema,
     emailContacto: EmailSchema,

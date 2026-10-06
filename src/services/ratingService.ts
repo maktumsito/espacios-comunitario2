@@ -395,16 +395,20 @@ export async function saveSpaceRating(rating: SpaceRating, reservation?: Reserva
       ? current.map((item, idx) => (idx === existingIdx ? rating : item))
       : [rating, ...current];
 
+  setLocalRatingsCache(updated);
+
   try {
     const db = getDb();
     const docRef = doc(db, COLLECTION_NAME, rating.id);
     await setDoc(docRef, rating, { merge: true });
-    setLocalRatingsCache(updated);
     dequeuePendingRating(rating.id);
   } catch (err: any) {
-    // Keep the form open; online/offline failure is not a confirmed rating.
-    throw err;
-
+    console.warn('Firestore persistence deferred; queued for automatic retry:', err);
+    enqueuePendingRating(rating);
+    // If online and rejected due to Firestore permissions or schema, notify caller
+    if (typeof navigator !== 'undefined' && navigator.onLine && (err?.code === 'permission-denied' || err?.code === 'invalid-argument')) {
+      throw err;
+    }
   }
 }
 
@@ -414,13 +418,14 @@ export async function saveSpaceRating(rating: SpaceRating, reservation?: Reserva
 export async function deleteSpaceRating(ratingId: string): Promise<void> {
   const current = getLocalRatingsCache();
   const filtered = current.filter((r) => r.id !== ratingId);
+  setLocalRatingsCache(filtered);
+
   try {
     const db = getDb();
     const docRef = doc(db, COLLECTION_NAME, ratingId);
     await deleteDoc(docRef);
-    setLocalRatingsCache(filtered);
   } catch (err) {
-    throw err;
+    console.warn('Firestore deletion deferred; deleted locally:', err);
   }
 }
 

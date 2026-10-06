@@ -91,7 +91,7 @@ const DEFAULT_ORDERED_SPACES: string[] = [
   'BOX 1'
 ];
 
-const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
+export const DailyUsageView: React.FC<DailyUsageViewProps> = ({
   reservations,
   allReservations,
   conflictReservationIds,
@@ -353,19 +353,12 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     }
   }, [globalFilters?.search]);
 
-  // Debounced propagation of search changes to globalFilters
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (onFilterChange && globalFilters && globalFilters.search !== searchQuery) {
-        onFilterChange({ ...globalFilters, search: searchQuery });
-      }
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [searchQuery, globalFilters, onFilterChange]);
-
-  // Handle search changes in DailyUsageView
+  // Handle search changes in DailyUsageView and propagate to globalFilters
   const handleDailySearchChange = (val: string) => {
     setSearchQuery(val);
+    if (onFilterChange && globalFilters) {
+      onFilterChange({ ...globalFilters, search: val });
+    }
   };
 
   // Clear all filters handler (recovering all hidden activities)
@@ -1932,6 +1925,4 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     </div>
   );
 };
-
-export const DailyUsageView = React.memo(DailyUsageViewComponent);
 

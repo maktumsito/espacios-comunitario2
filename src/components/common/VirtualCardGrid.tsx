@@ -4,23 +4,20 @@ import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 const columnCount = () => window.innerWidth >= 1024 ? 4 : window.innerWidth >= 768 ? 3 : window.innerWidth >= 640 ? 2 : 1;
 
 /** Row virtualization preserves the existing responsive reading order. */
-export function VirtualCardGrid<T extends { id: string }>({ items, renderItem, fixedColumns, maxHeight = 240, estimatedRowHeight = 92 }: {
+export function VirtualCardGrid<T extends { id: string }>({ items, renderItem }: {
   items: T[];
-  fixedColumns?: number;
-  maxHeight?: number;
-  estimatedRowHeight?: number;
   renderItem: (item: T) => React.ReactNode;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [columns, setColumns] = useState(()=>fixedColumns || columnCount());
+  const [columns, setColumns] = useState(columnCount);
   const [focusedId, setFocusedId] = useState<string | null>(null);
-  const pendingFocus = useRef<{id:string;last:boolean} | null>(null);
+  const pendingFocus = useRef<string | null>(null);
   const nodes = useRef(new Map<string, HTMLDivElement>());
   const focusedIndex = items.findIndex(item => item.id === focusedId);
   const virtualizer = useVirtualizer({
     count: Math.ceil(items.length / columns),
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => estimatedRowHeight,
+    estimateSize: () => 92,
     overscan: 1,
     gap: 10,
     getItemKey: row => `${columns}:${items[row * columns].id}`,
@@ -31,16 +28,15 @@ export function VirtualCardGrid<T extends { id: string }>({ items, renderItem, f
     },
   });
   useLayoutEffect(() => {
-    const resize = () => setColumns(fixedColumns || columnCount());
+    const resize = () => setColumns(columnCount());
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
-  }, [fixedColumns]);
+  }, []);
   useLayoutEffect(() => { virtualizer.measure(); }, [columns, items, virtualizer]);
   useLayoutEffect(() => {
-    const target = pendingFocus.current;
-    if (!target) return;
-    const buttons = nodes.current.get(target.id)?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]');
-    const button = target.last ? buttons?.[buttons.length-1] : buttons?.[0];
+    const id = pendingFocus.current;
+    if (!id) return;
+    const button = nodes.current.get(id)?.querySelector<HTMLButtonElement>('button');
     if (button) {
       pendingFocus.current = null;
       button.focus({ preventScroll: true });
@@ -48,7 +44,7 @@ export function VirtualCardGrid<T extends { id: string }>({ items, renderItem, f
   });
 
   return (
-    <div ref={scrollRef} className="overflow-y-auto pr-1" style={{ height: Math.min(maxHeight, virtualizer.getTotalSize()) }}>
+    <div ref={scrollRef} className="overflow-y-auto pr-1" style={{ height: Math.min(240, virtualizer.getTotalSize()) }}>
       <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
         {virtualizer.getVirtualItems().map(row => (
           <div key={row.key} data-index={row.index} ref={virtualizer.measureElement}
@@ -60,13 +56,10 @@ export function VirtualCardGrid<T extends { id: string }>({ items, renderItem, f
                 onBlurCapture={() => setFocusedId(current => current === item.id ? null : current)}
                 onKeyDownCapture={event => {
                   if (event.key !== 'Tab') return;
-                  const controls = event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]');
-                  const boundary = event.shiftKey ? controls[0] : controls[controls.length-1];
-                  if (event.target !== boundary) return;
                   const index = row.index * columns + offset + (event.shiftKey ? -1 : 1);
                   if (index < 0 || index >= items.length) return;
                   event.preventDefault();
-                  pendingFocus.current = {id:items[index].id,last:event.shiftKey};
+                  pendingFocus.current = items[index].id;
                   setFocusedId(items[index].id);
                   virtualizer.scrollToIndex(Math.floor(index / columns), { align: 'auto' });
                 }}>
