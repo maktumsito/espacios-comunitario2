@@ -58,7 +58,7 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
             </h4>
           </div>
           <p className="text-xs text-indigo-700/90 leading-relaxed">
-            Esta reserva forma parte de una actividad periódica. Elige a qué reservas deseas aplicar los cambios de horario, espacio o datos:
+            Elige a qué sesiones pendientes aplicar los cambios. Las sesiones anteriores a hoy quedan intactas y fuera de la revisión.
           </p>
         </div>
       </div>
@@ -130,7 +130,7 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
             {updateScope === 'series' && <Check className="w-3.5 h-3.5 text-emerald-300" />}
           </div>
           <span className={`text-[11px] leading-tight ${updateScope === 'series' ? 'text-indigo-100' : 'text-indigo-700'}`}>
-            Las {seriesCount} reservas completas
+            Las {seriesCount} reservas pendientes desde hoy
           </span>
         </button>
 
@@ -303,7 +303,7 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
             <strong>Resumen del impacto:</strong> Se actualizarán <strong>{affectedReservations.length} reserva(s)</strong>.
             {updateScope === 'single' && ' Los cambios se aplicarán exclusivamente a esta fecha; el resto de la serie no se alterará.'}
             {updateScope === 'future' && ` Se aplicará a las reservas desde el ${formatDateDDMMYYYY(editingReservation.fecha)} en adelante. Las anteriores se mantendrán intactas.`}
-            {updateScope === 'series' && ` Se aplicará a la totalidad de las ${seriesCount} reservas de la serie.`}
+            {updateScope === 'series' && ` Se aplicará a las ${seriesCount} reservas pendientes de la serie. Las sesiones pasadas se mantienen intactas.`}
             {updateScope === 'dateRange' && ` Se aplicará a las ${affectedReservations.length} reservas comprendidas en el rango seleccionado.`}
             {updateScope === 'selected' && ` Se aplicará exclusivamente a las ${affectedReservations.length} reservas que has marcado con el selector.`}
           </p>

@@ -13,7 +13,8 @@ export interface WriteResult {
   reservations: Reservation[];
 }
 export interface WriteOptions {
-  intent?: 'create';
+  requireAtomic?: boolean;
+  intent?: 'create' | 'update';
   actor?: string;
   operationId?: string;
   deletedIds?: string[];
@@ -61,7 +62,7 @@ export function prepareReservation(r: Reservation): Reservation {
 
 // Persist the payload before the first write. A reload can retry with the SAME IDs.
 const JOURNAL_KEY = 'reservation_pending_operations_v1';
-export interface PendingOperation { id: string; actor?: string; reservations: Reservation[]; deletedIds: string[]; confirmedIds: string[]; allowConflictOverride: boolean; intent?: 'create'; }
+export interface PendingOperation { id: string; actor?: string; reservations: Reservation[]; deletedIds: string[]; confirmedIds: string[]; allowConflictOverride: boolean; intent?: 'create' | 'update'; requireAtomic?: boolean; }
 export function getPendingOperations(): PendingOperation[] {
   if (typeof localStorage === 'undefined') return [];
   try {
@@ -149,8 +150,9 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
     }
   }
   const chunks = planWriteChunks(items, previous, deletedIds);
+  if (options.requireAtomic && chunks.length > 1) throw new Error('La serie excede el límite de un movimiento atómico. Usa un alcance más pequeño. No se modificó ninguna reserva.');
   const tracked = getPendingOperations().find(o=>o.id===operationId);
-  const operation: PendingOperation = { id: operationId, actor: options.actor, reservations: tracked?.reservations || items, deletedIds: tracked?.deletedIds || deletedIds, confirmedIds: tracked?.confirmedIds || [], allowConflictOverride: Boolean(options.allowConflictOverride), intent: options.intent };
+  const operation: PendingOperation = { id: operationId, actor: options.actor, reservations: tracked?.reservations || items, deletedIds: tracked?.deletedIds || deletedIds, confirmedIds: tracked?.confirmedIds || [], allowConflictOverride: Boolean(options.allowConflictOverride), intent: options.intent, ...(options.requireAtomic ? {requireAtomic: true} : {}) };
   updateJournal(operation);
   const byId = new Map(items.map(r=>[r.id,r]));
   try {
@@ -223,6 +225,7 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
           // The operation marker makes retry safe even if acknowledgement was lost.
           if ((existing as any)?.lastOperationId === operationId) { saved.push(existing!); continue; }
           if(options.intent==='create' && existing) throw new ReservationVersionError(existing);
+          if(options.intent==='update' && !existing) throw new Error('La reserva fue eliminada por otro usuario. No se volverá a crear.');
           if (!existing && (next.version || 0) > 0) throw new Error('La reserva fue eliminada por otro usuario. No se volverá a crear.');
           if ((existing?.version || 0) !== (next.version || 0)) throw new ReservationVersionError(existing!);
           const confirmed = { ...next, version: (existing?.version||0)+1,

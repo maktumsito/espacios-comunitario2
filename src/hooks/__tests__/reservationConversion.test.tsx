@@ -3,7 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useReservationSaveHandler } from '../useReservationSaveHandler';
 import { conversionBase as base, conversionProps } from '../../test/reservationConversionFixture';
-beforeEach(()=>localStorage.clear());afterEach(cleanup);
+beforeEach(()=>{localStorage.clear();vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-06T15:00:00Z'));});afterEach(()=>{cleanup();vi.useRealTimers();});
 
 it('converts a normal booking to all remaining dates after omitting conflicting days',async()=>{
   const save=vi.fn().mockResolvedValue(true),p=conversionProps(save);
@@ -56,4 +56,31 @@ it('preserves date-specific schedules and a second room while converting',async(
   const rows=save.mock.calls[0][4].updatedReservations;expect(rows).toHaveLength(3);
   expect(rows[0]).toMatchObject({id:base.id,fecha:'2026-10-13',horaInicio:'12:00'});
   expect(rows[1]).toMatchObject({fecha:'2026-10-13',espacio:'SALA 3',horaInicio:'14:00'});
+});
+it('reviews and updates only pending dates, ignoring historical conflicts and maintenance',async()=>{
+  const save=vi.fn().mockResolvedValue(true),p=conversionProps(save);
+  const source={...base,fecha:'2026-10-13',actividadRecurrente:'Sí',serieRecurrente:'existing'};
+  const past={...source,id:'past',fecha:'2026-10-05'};
+  const future={...source,id:'future',fecha:'2026-10-20'};
+  p.editingReservation=source;p.formData={...source,horaInicio:'12:00',horaFin:'13:00'};
+  p.isEditingRecurring=true;p.isEditingSingleOccurrence=false;p.updateScope='series';p.generateFullSeries=true;
+  p.affectedReservations=[past,source,future];p.excludeReservationIds=[past.id,source.id,future.id];
+  p.generatedDates=p.rawPatternDates=['2026-10-05','2026-10-13','2026-10-20'];
+  p.allReservations=[past,source,future,{...past,id:'occupied-past',horaInicio:'12:00',horaFin:'13:00'}];
+  p.spaceBlocks=[{id:'past-block',espacio:'SALA 2',fechaInicio:'2026-10-05',fechaFin:'2026-10-05',todoElDia:true,activo:true,motivo:'Mantención',descripcion:'Pasada',createdAt:''}];
+  const {result}=renderHook(()=>useReservationSaveHandler(p));await act(()=>result.current.executeSave());
+  expect(save).toHaveBeenCalledOnce();
+  const batch=save.mock.calls[0][4];
+  expect(batch.updatedReservations.map((r:any)=>r.fecha)).toEqual(['2026-10-13','2026-10-20']);
+  expect(batch.updatedReservations.some((r:any)=>r.id===past.id)).toBe(false);
+  expect(batch.deletedIds||[]).not.toContain(past.id);
+});
+it('restricts this-and-following editing to dates on or after the selected occurrence',async()=>{
+  const save=vi.fn().mockResolvedValue(true),p=conversionProps(save);
+  const source={...base,fecha:'2026-10-13',actividadRecurrente:'Sí',serieRecurrente:'existing'};
+  const earlier={...source,id:'earlier',fecha:'2026-10-06'},later={...source,id:'later',fecha:'2026-10-20'};
+  p.editingReservation=source;p.formData=source;p.isEditingRecurring=true;p.isEditingSingleOccurrence=false;p.updateScope='future';p.generateFullSeries=true;
+  p.affectedReservations=[source,later];p.excludeReservationIds=[source.id,later.id];p.allReservations=[earlier,source,later];
+  const {result}=renderHook(()=>useReservationSaveHandler(p));await act(()=>result.current.executeSave());
+  expect(save.mock.calls[0][4].updatedReservations.map((r:any)=>r.fecha)).toEqual(['2026-10-13','2026-10-20']);
 });

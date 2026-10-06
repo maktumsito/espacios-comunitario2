@@ -107,6 +107,8 @@ import {
 } from 'date-fns';
 import { formatDateDDMMYYYY, getDayOfWeekFromDateString, generateRecurrenceDates } from '../utils/dateUtils';
 import { buildReplacementBatch } from '../utils/reservationReplacement';
+import { getSeriesEditStartDate, isRecurringSeriesReservation } from '../utils/recurringEdits';
+import { getChileLocalDateString } from '../utils/dateUtils';
 
 interface SeriesItemSlot {
   fecha: string;
@@ -264,12 +266,15 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
   // Progressive Wizard UX State (5 steps)
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const editToday = getChileLocalDateString();
   const specificDates = useMemo(() => {
     const seriesId = !isDuplicating && (editingReservation?.serieRecurrente || editingReservation?.recurrenteId);
     const exceptions = new Set(allReservations.filter(r => r.reemplazadaPorReservaId && seriesId &&
       (r.serieRecurrente || r.recurrenteId) === seriesId).map(r => r.fecha));
-    return selectedSpecificDates.filter(date => !exceptions.has(date));
-  }, [selectedSpecificDates, allReservations, editingReservation, isDuplicating]);
+    const cutoff = !isDuplicating && editingReservation && isRecurringSeriesReservation(editingReservation)
+      ? getSeriesEditStartDate(updateScope, editingReservation.fecha, editToday) : '';
+    return selectedSpecificDates.filter(date => !exceptions.has(date) && date >= cutoff);
+  }, [selectedSpecificDates, allReservations, editingReservation, isDuplicating, updateScope, editToday]);
   const [isWizardMode, setIsWizardMode] = useState<boolean>(!editingReservation || isDuplicating);
   const [isEditingLoading, setIsEditingLoading] = useState<boolean>(false);
 
@@ -695,7 +700,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       // Check if editing a series: load full series context and per-day / per-date schedules
       const sId = !isCopy && !isMultiSpace && (editingReservation.serieRecurrente || editingReservation.recurrenteId);
       if (sId && allReservations) {
-        const matches = allReservations.filter((r) => r.serieRecurrente === sId || r.recurrenteId === sId);
+        const matches = allReservations.filter((r) => (r.serieRecurrente === sId || r.recurrenteId === sId) &&
+          r.fecha >= getChileLocalDateString() && !r.reemplazadaPorReservaId && !['cancelada', 'eliminada', 'rechazada'].includes(r.estado || ''));
         if (matches.length > 0) {
           const sortedMatches = [...matches].sort((a, b) => {
             if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
@@ -1014,6 +1020,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     handleApplyRecommendation,
     candidateConflictDates
   } = useReservationConflictResolution({
+    conflictReviewFrom: isEditingRecurring ? getSeriesEditStartDate(updateScope, editingReservation!.fecha, editToday) : undefined,
     formData,
     allReservations,
     excludeReservationIds,

@@ -37,6 +37,17 @@ function seed(row: Reservation) {
 }
 beforeEach(() => { localStorage.clear(); memory.rows.clear(); memory.fail = false; memory.loseAck = false; memory.beforeCommit = undefined; memory.commits = 0; seed(original); });
 describe('single occurrence replacement transaction', () => {
+  it('does not recreate an already removed legacy occurrence during a movement', async () => {
+    const removed = { ...original, id: 'removed', version: 0, espacio: 'SALA 3' };
+    await expect(writeReservations({} as any,[removed],clean,{intent:'update',requireAtomic:true})).rejects.toThrow(/eliminada por otro usuario/);
+    expect(memory.rows.has('reservas/removed')).toBe(false);
+  });
+  it('rejects an oversized atomic movement before any chunk is written', async () => {
+    const rows=Array.from({length:500},(_,i)=>({...original,id:`move-${i}`,version:0,espacio:`ROOM ${i}`}));
+    await expect(writeReservations({} as any,rows,clean,{requireAtomic:true})).rejects.toThrow(/atómico/);
+    expect(memory.commits).toBe(0);expect(memory.rows.has('reservas/move-0')).toBe(false);
+    expect(getPendingOperations()).toEqual([]);
+  });
   it('suspends only the original, links both records and swaps availability in one commit', async () => {
     const future = { ...original, id: 'future', fecha: '2026-10-13' }; seed(future);
     await writeReservations({} as any, batch(), clean);

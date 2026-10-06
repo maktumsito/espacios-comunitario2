@@ -30,6 +30,8 @@ import { WEEKDAYS } from '../utils/dateUtils';
 import { CustomScheduleSlot, ConflictSavePayload } from '../types';
 import { AuthUser } from '../services/authService';
 import { filterOutChileanHolidays } from '../utils/holidayUtils';
+import { getSeriesEditStartDate } from '../utils/recurringEdits';
+import { getChileLocalDateString } from '../utils/dateUtils';
 
 export interface SeriesItemSlot {
   fecha: string;
@@ -242,10 +244,23 @@ export function useReservationSaveHandler({
       ...(overridesPayload?.formDataUpdates || {})
     };
     const effectiveBookingMode = overridesPayload?.bookingMode || bookingMode;
-    const effectiveSpecificDates: string[] = overridesPayload?.specificDates
+    const today = getChileLocalDateString();
+    if (isEditingRecurring && editingReservation && updateScope === 'single' && editingReservation.fecha < today) {
+      abortWithFeedback('Esta sesión ya pasó. Elige un alcance hacia adelante para mantener intacto el historial.');
+      return;
+    }
+    const editCutoff = isEditingRecurring && editingReservation ? getSeriesEditStartDate(updateScope, editingReservation.fecha, today) : '';
+    const inEditScope = (date: string) => {
+      if (!isEditingRecurring || updateScope === 'single') return true;
+      if (date < editCutoff) return false;
+      if (updateScope === 'dateRange') return Boolean(rangeStartDate && rangeEndDate) && date >= (rangeStartDate < rangeEndDate ? rangeStartDate : rangeEndDate) && date <= (rangeStartDate > rangeEndDate ? rangeStartDate : rangeEndDate);
+      if (updateScope === 'selected') return affectedReservations.some(r => r.fecha === date);
+      return true;
+    };
+    const effectiveSpecificDates: string[] = (overridesPayload?.specificDates
       ? [...overridesPayload.specificDates]
-      : [...specificDates];
-    const selectedDateHolidayAnalysis = overridesPayload?.specificDates
+      : [...specificDates]).filter(inEditScope);
+    const selectedDateHolidayAnalysis = overridesPayload?.specificDates || isEditingRecurring
       ? filterOutChileanHolidays(effectiveSpecificDates)
       : specificHolidayAnalysis;
     const effectiveDateSchedules: Record<string, CustomScheduleSlot> = overridesPayload?.dateSchedules
@@ -259,6 +274,8 @@ export function useReservationSaveHandler({
       overridesPayload?.secondSpaceUpdates?.startTime ?? singleSecondStartTime;
     const effectiveSecondEndTime =
       overridesPayload?.secondSpaceUpdates?.endTime ?? singleSecondEndTime;
+    const effectiveRawPatternDates = rawPatternDates.filter(inEditScope);
+    const effectivePatternHolidayAnalysis = isEditingRecurring ? filterOutChileanHolidays(effectiveRawPatternDates) : patternHolidayAnalysis;
 
     if (!effectiveFormData.responsable?.trim()) {
       abortWithFeedback('Por favor completa el nombre del responsable de la actividad.');
@@ -383,19 +400,19 @@ export function useReservationSaveHandler({
         finalDates = effectiveSpecificDates;
       }
     } else if (isPattern) {
-      if (includeHolidaysInSeries && !isHolidayAuthorized && patternHolidayAnalysis.omittedHolidays.length > 0) {
+      if (includeHolidaysInSeries && !isHolidayAuthorized && effectivePatternHolidayAnalysis.omittedHolidays.length > 0) {
         abortWithFeedback(
           '🚫 Para incluir los días feriados en la serie semanal, debes ingresar la clave de autorización especial "CCD" correcta.'
         );
         return;
       }
 
-      if (generatedDates.length === 0) {
+      if (generatedDates.filter(inEditScope).length === 0) {
         if (recurrenceEndDate < recurrenceStartDate) {
           abortWithFeedback('🚫 Error: La Fecha Término de la serie no puede ser anterior a la Fecha Inicio.');
         } else if (
-          rawPatternDates.length > 0 &&
-          patternHolidayAnalysis.omittedHolidays.length === rawPatternDates.length
+          effectiveRawPatternDates.length > 0 &&
+          effectivePatternHolidayAnalysis.omittedHolidays.length === effectiveRawPatternDates.length
         ) {
           abortWithFeedback(
             '🚫 Todas las fechas coincidentes con el patrón son feriados en Chile y fueron omitidas. Para autorizarlas debes ingresar la clave especial CCD.'
@@ -407,7 +424,7 @@ export function useReservationSaveHandler({
         }
         return;
       }
-      finalDates = [...generatedDates];
+      finalDates = generatedDates.filter(inEditScope);
     } else {
       const targetSingleDate = effectiveFormData.fecha || editingReservation?.fecha;
 
@@ -987,7 +1004,7 @@ export function useReservationSaveHandler({
           // MULTI-OCCURRENCE / SERIES EXPANSION UPDATE (future, series, dateRange, selected)
           const deletedSet = getDeletedIds();
           const cleanAffected = (isConvertingToSeries ? [editingReservation] : affectedReservations).filter(
-            (orig) => !deletedSet.has(orig.id) && orig.estado !== 'eliminada' && isReservationActiveForAvailability(orig)
+            (orig) => (isConvertingToSeries || inEditScope(orig.fecha)) && !deletedSet.has(orig.id) && orig.estado !== 'eliminada' && isReservationActiveForAvailability(orig)
           );
 
           if (cleanAffected.length === 0 && (!finalDates || finalDates.length === 0)) {
@@ -1215,6 +1232,7 @@ export function useReservationSaveHandler({
           const batchResult = await Promise.resolve(
             onSave(updatedList[0], true, undefined, true, {
               scope: isConvertingToSeries ? 'series' : updateScope,
+              sourceReservationId: editingReservation.id,
               updatedReservations: updatedList,
               affectedIds: updatedList.map((r) => r.id),
               deletedIds: idsToDelete.length > 0 ? idsToDelete : undefined,

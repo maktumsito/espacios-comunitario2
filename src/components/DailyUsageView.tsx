@@ -535,7 +535,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
     // Snapping to 15-minute intervals
     const origStartMin = timeToMinutes(draggedReservation.horaInicio);
-    const origEndMin = timeToMinutes(draggedReservation.horaFin);
+    const rawEndMin = timeToMinutes(draggedReservation.horaFin);
+    const origEndMin = rawEndMin + (draggedReservation.terminaDiaSiguiente || rawEndMin === 0 && origStartMin > 0 ? 1440 : 0);
     const duration = Math.max(30, origEndMin - origStartMin);
 
     const relativeMinutes = (offsetY / HOUR_HEIGHT) * 60;
@@ -628,7 +629,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
       ...draggedReservation,
       espacio: spaceName,
       horaInicio: dragTargetInfo.startTime,
-      horaFin: dragTargetInfo.endTime
+      horaFin: dragTargetInfo.endTime,
+      terminaDiaSiguiente: false
     };
 
     const prevRes = draggedReservation;

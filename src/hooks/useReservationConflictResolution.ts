@@ -10,6 +10,7 @@ import {
 import { formatDateDDMMYYYY, getDayOfWeekFromDateString } from '../utils/dateUtils';
 
 interface UseReservationConflictResolutionProps {
+  conflictReviewFrom?: string;
   formData: Partial<Reservation>;
   allReservations: Reservation[];
   excludeReservationIds: string[];
@@ -42,6 +43,7 @@ interface UseReservationConflictResolutionProps {
 }
 
 export function useReservationConflictResolution({
+  conflictReviewFrom,
   formData,
   allReservations,
   excludeReservationIds,
@@ -74,7 +76,8 @@ export function useReservationConflictResolution({
 }: UseReservationConflictResolutionProps) {
   const availabilityIndex = useMemo(()=>buildAvailabilityIndex(allReservations),[allReservations]);
   const checkIndexedConflict: typeof checkSingleConflict = (candidate, _all, excluded, series) =>
-    checkSingleConflict(candidate, getAvailabilityCandidates(availabilityIndex,candidate), excluded, series);
+    conflictReviewFrom && candidate.fecha && candidate.fecha < conflictReviewFrom ? [] :
+      checkSingleConflict(candidate, getAvailabilityCandidates(availabilityIndex,candidate), excluded, series);
   // Conflict calculation for individual date slots (primary slot 1 or secondary slot 2)
   const getDateSlotConflict = (
     dateStr: string,
@@ -158,6 +161,8 @@ export function useReservationConflictResolution({
     if (!formData.fecha || !formData.espacio || !formData.horaInicio || !formData.horaFin) return [];
     return checkIndexedConflict(formData, allReservations, excludeReservationIds, excludeSeriesId);
   }, [
+    conflictReviewFrom,
+    conflictReviewFrom,
     formData.fecha,
     formData.horaInicio,
     formData.horaFin,
@@ -606,6 +611,7 @@ export function useReservationConflictResolution({
 
     return datesWithConflicts;
   }, [
+    conflictReviewFrom,
     bookingMode,
     isEditingSingleOccurrence,
     editingReservation?.fecha,

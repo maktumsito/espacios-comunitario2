@@ -16,7 +16,7 @@ export function PendingReservationOperations({ user }: { user: AuthUser | null }
   const visible = operations.filter(o => !o.actor || o.actor === user.username);
   const resume = async (o: PendingOperation) => {
     if (busy) return;
-    const canWrite = o.reservations.every(r => r.version ? userCanEditReservations(user) : userCanCreateReservations(user));
+    const canWrite = o.reservations.every(r => o.intent === 'update' || r.version ? userCanEditReservations(user) : userCanCreateReservations(user));
     if (!canWrite || (o.deletedIds.length > 0 && !userCanDeleteReservations(user))) { setError('No tienes permisos para reanudar esta operación.'); return; }
     setBusy(o.id); setError('');
     try { await resumeReservationOperation(o.id); }

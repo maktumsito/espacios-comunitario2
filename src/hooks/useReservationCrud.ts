@@ -1,9 +1,12 @@
 import { useCallback, useRef } from 'react';
 import { addWeeks, format, parseISO } from 'date-fns';
-import { Reservation, BatchUpdateInfo, isSingleDayMultiSpaceReservation } from '../types';
+import { Reservation, BatchUpdateInfo, isSingleDayMultiSpaceReservation, SpaceBlock } from '../types';
 import { normalizeSpaceName } from '../data/spacesData';
 import { buildReplacementBatch, preserveReplacementExceptions } from '../utils/reservationReplacement';
 import { calculateEquipmentAvailability, getStoredEquipment } from '../services/equipmentService';
+import { buildReservationMoveBatch, getSeriesEditStartDate, type RecurringMoveScope } from '../utils/recurringEdits';
+import { getChileLocalDateString } from '../utils/dateUtils';
+import { checkLoanScheduleLimit } from '../utils/validationUtils';
 import { isChileanHoliday } from '../utils/holidayUtils';
 import {
   saveReservation,
@@ -34,6 +37,7 @@ import {
   getConstituentSpaces
 } from '../utils/conflictDetector';
 import { getTimeIntervalsForReservation } from '../utils/conflictDetector';
+import { findMaintenanceBlockConflicts, formatBlockConflictMessage } from '../utils/conflictDetector';
 import {
   AuthUser,
   userCanCreateReservations,
@@ -42,6 +46,7 @@ import {
 } from '../services/authService';
 
 export interface UseReservationCrudProps {
+  spaceBlocks?: readonly SpaceBlock[];
   reservations: Reservation[];
   setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
   currentUser: AuthUser | null;
@@ -70,6 +75,7 @@ export interface UseReservationCrudProps {
 }
 
 export interface UseReservationCrudReturn {
+  handleMoveReservation: (original: Reservation, target: Reservation, scope: RecurringMoveScope) => Promise<boolean>;
   handleCreateOrUpdate: (
     reserva: Reservation,
     generateSeries?: boolean,
@@ -100,6 +106,7 @@ export interface UseReservationCrudReturn {
 }
 
 export function useReservationCrud({
+  spaceBlocks = [],
   reservations,
   setReservations,
   currentUser,
@@ -527,10 +534,16 @@ export function useReservationCrud({
     if (saveInFlight.current) return false;
     saveInFlight.current = true;
     try {
+      const today = getChileLocalDateString();
       const seriesIdForExceptions = reserva.serieRecurrente || reserva.recurrenteId;
+      const editScope = batchUpdateInfo?.scope || (updateWholeSeries ? 'series' : 'single');
+      const sourceDate = reservations.find(r => r.id === batchUpdateInfo?.sourceReservationId)?.fecha || reserva.fecha;
+      const editCutoff = getSeriesEditStartDate(editScope, sourceDate, today);
       const exceptionHistory = !batchUpdateInfo?.replacementOriginal && seriesIdForExceptions &&
         (updateWholeSeries || batchUpdateInfo && batchUpdateInfo.scope !== 'single')
-        ? await queryReservationsBySeries(seriesIdForExceptions) : reservations;
+        ? await queryReservationsBySeries(seriesIdForExceptions, editCutoff) : reservations;
+      const protectedIds = new Set([...reservations, ...exceptionHistory].filter(r =>
+        seriesIdForExceptions && (r.serieRecurrente || r.recurrenteId) === seriesIdForExceptions && r.fecha < editCutoff).map(r => r.id));
       if (batchUpdateInfo?.replacementOriginal) {
         if (!userCanEditReservations(currentUser) || !userCanCreateReservations(currentUser)) throw new Error('No tienes permiso para reemplazar esta sesión.');
         const original = batchUpdateInfo.replacementOriginal;
@@ -559,28 +572,28 @@ export function useReservationCrud({
         const { scope, updatedReservations, affectedIds } = batchUpdateInfo;
         if (!batchUpdateInfo.replacementOriginal && scope !== 'single') {
           const exceptionIds = new Set(exceptionHistory.filter(r => r.reemplazadaPorReservaId).map(r => r.id));
-          batchUpdateInfo = { ...batchUpdateInfo, deletedIds: batchUpdateInfo.deletedIds?.filter(id => !exceptionIds.has(id)) };
+          batchUpdateInfo = { ...batchUpdateInfo, deletedIds: batchUpdateInfo.deletedIds?.filter(id => !exceptionIds.has(id) && !protectedIds.has(id)) };
         }
         const deletedSet = getDeletedIds();
         const activeUpdated = (batchUpdateInfo.replacementOriginal || scope === 'single' ? updatedReservations : preserveReplacementExceptions(updatedReservations, exceptionHistory)).filter(
-          (r) => !deletedSet.has(r.id) && r.estado !== 'eliminada'
+          (r) => !deletedSet.has(r.id) && r.estado !== 'eliminada' &&
+            (scope === 'single' || !seriesIdForExceptions || r.fecha >= editCutoff && !protectedIds.has(r.id))
         );
+        if (scope === 'single' && seriesIdForExceptions && activeUpdated.some(r => r.fecha < today || protectedIds.has(r.id))) throw new Error('La sesión ya pasó. Elige un alcance hacia adelante para conservar el historial.');
         if (activeUpdated.length === 0) {
           triggerSyncToast('No se encontraron reservas activas para actualizar.', 'warning');
           return false;
         }
 
-        const existingIds = new Set(reservations.map(r=>r.id));
+        const existingIds = new Set([...reservations, ...exceptionHistory].map(r=>r.id));
         if (activeUpdated.some(r=>!existingIds.has(r.id)) && !userCanCreateReservations(currentUser)) throw new Error('No tienes permiso para agregar nuevas ocurrencias.');
         if (batchUpdateInfo.deletedIds?.length && !userCanDeleteReservations(currentUser)) throw new Error('No tienes permiso para eliminar ocurrencias.');
-        const cleanAffectedIds = affectedIds.filter((id) => !deletedSet.has(id));
+        const cleanAffectedIds = affectedIds.filter((id) => !deletedSet.has(id) && (scope === 'single' || !protectedIds.has(id)));
         const cleanReservations = reservations.filter(
           (r) => !deletedSet.has(r.id) && isReservationActiveForAvailability(r, deletedSet)
         );
 
-        const seriesIdToExclude = scope === 'series'
-          ? (reserva.serieRecurrente || reserva.recurrenteId || activeUpdated.find((r) => r.serieRecurrente || r.recurrenteId)?.serieRecurrente)
-          : undefined;
+        const seriesIdToExclude = undefined;
 
         // Validate conflicts excluding affected reservations and current series
         const conflictsFound = detectBatchConflicts(
@@ -676,8 +689,9 @@ export function useReservationCrud({
         const deletedSet = getDeletedIds();
 
         // Find all active reservations in the series (strictly exclude deleted items)
-        const seriesMatches = reservations.filter(
+        const seriesMatches = [...new Map([...reservations, ...exceptionHistory].map(r => [r.id, r])).values()].filter(
           (r) =>
+            r.fecha >= editCutoff &&
             !exceptionHistory.some(e => e.id === r.id && e.reemplazadaPorReservaId) &&
             !deletedSet.has(r.id) &&
             r.estado !== 'eliminada' &&
@@ -694,7 +708,7 @@ export function useReservationCrud({
 
           if (explicitSlots.length > 0) {
             // Re-sync with explicit slots (supports multiple segments per day, e.g. 2 spaces/times on Monday & Wednesday)
-            const safeSlots = explicitSlots.filter(item => !exceptionHistory.some(e => e.reemplazadaPorReservaId && e.fecha === item.fecha));
+            const safeSlots = explicitSlots.filter(item => item.fecha >= editCutoff && !exceptionHistory.some(e => e.reemplazadaPorReservaId && e.fecha === item.fecha));
             const totalCount = safeSlots.length;
             const existingByDate = new Map<string, Reservation[]>();
             seriesMatches.forEach((m) => {
@@ -811,8 +825,7 @@ export function useReservationCrud({
           const conflictsFound = detectBatchConflicts(
             updatedSeriesList,
             cleanReservations,
-            new Set(seriesMatches.map((m) => m.id)),
-            finalSeriesId
+            new Set(seriesMatches.map((m) => m.id))
           );
 
           if (conflictsFound.length > 0 && !allowConflictOverride) {
@@ -864,6 +877,10 @@ export function useReservationCrud({
       // -------------------------------------------------------------
       // CASE 2: CREATE NEW SERIES OR MULTI-SEGMENT RESERVATIONS
       // -------------------------------------------------------------
+      if (updateWholeSeries && seriesIdForExceptions) {
+        triggerSyncToast('No hay sesiones pendientes para actualizar. Las sesiones pasadas se conservan.', 'warning');
+        return false;
+      }
       const isMultiSlot = explicitSlots.length > 0;
       const isSeriesCreation = generateSeries || isMultiSlot || (reserva.actividadRecurrente === 'Sí' && explicitSlots.length > 1);
 
@@ -1112,6 +1129,53 @@ export function useReservationCrud({
     } finally { saveInFlight.current = false; }
   }, [reservations, currentUser, triggerSyncToast, setReservations, setIsReservationModalOpen, setEditingReservation, setConflictReportData]);
 
+  const handleMoveReservation = useCallback(async (original: Reservation, target: Reservation, scope: RecurringMoveScope): Promise<boolean> => {
+    if (saveInFlight.current) return false;
+    if (!userCanEditReservations(currentUser)) {
+      triggerSyncToast('No tienes permiso para mover reservas.', 'error'); return false;
+    }
+    saveInFlight.current = true;
+    try {
+      const today = getChileLocalDateString();
+      const startDate = getSeriesEditStartDate(scope, original.fecha, today);
+      const liveRows = scope === 'single' ? reservations : await queryReservationsBySeries(original.serieRecurrente || original.recurrenteId || '', startDate);
+      const liveOriginal = liveRows.find(r => r.id === original.id);
+      if (liveOriginal && !isReservationActiveForAvailability(liveOriginal)) throw new Error('La sesión ya no está activa. Recarga la agenda.');
+      if ((!liveOriginal && original.fecha >= startDate) || liveOriginal && (liveOriginal.version || 0) !== (original.version || 0)) {
+        throw new Error('La reserva cambió por otro usuario. Recarga la agenda antes de moverla.');
+      }
+      const batch = buildReservationMoveBatch(original, target, scope, liveRows, today);
+      const blocks = findMaintenanceBlockConflicts(batch.updatedReservations, spaceBlocks);
+      if (blocks.length) throw new Error(formatBlockConflictMessage(blocks[0]));
+      const history = [...new Map([...reservations, ...liveRows].map(r => [r.id, r])).values()];
+      const conflicts = detectBatchConflicts(batch.updatedReservations, history, new Set(batch.affectedIds));
+      if (conflicts.length) throw new Error(formatConflictMessage(conflicts[0]));
+      const afterMove = [...history.filter(r => !batch.affectedIds.includes(r.id) && isReservationActiveForAvailability(r)), ...batch.updatedReservations];
+      for (const row of batch.updatedReservations) {
+        if (checkLoanScheduleLimit(row.horaInicio, row.horaFin, Boolean(row.terminaDiaSiguiente)).requiresAuthorization && !row.horarioExtendidoAutorizado) {
+          throw new Error(`El horario del ${row.fecha} requiere autorización. Ajusta esa sesión desde el formulario.`);
+        }
+        for (const interval of getTimeIntervalsForReservation(row)) {
+          const availability = calculateEquipmentAvailability(interval.date, interval.startMin, interval.endMin, afterMove, getStoredEquipment(), [row.id]);
+          for (const request of row.equipamientoSolicitado || []) {
+            const item = availability.find(a => a.item.id === request.equipmentId);
+            if (!item || request.quantity > item.availableQuantity) throw new Error(`Equipamiento no disponible el ${row.fecha}: ${request.equipmentName}.`);
+          }
+        }
+      }
+      const result = await commitReservationChanges(batch.updatedReservations, { requireAtomic: true, allowConflictOverride: false, intent: 'update' });
+      applyConfirmed(result);
+      void safeAudit({ action: 'UPDATE', description: batch.description!, reservaId: original.id, user: currentUser,
+        reservaTitle: original.tipoActividad, reservaFecha: original.fecha, reservaEspacio: target.espacio,
+        previousState: history.filter(r => batch.affectedIds.includes(r.id)), newState: result.reservations });
+      triggerSyncToast(`✓ Movimiento confirmado (${result.reservations.length} reservas).`, 'success');
+      return true;
+    } catch (err: any) {
+      triggerSyncToast(err?.message || 'No se pudo mover la actividad. No se aplicó el movimiento.', 'error');
+      return false;
+    } finally { saveInFlight.current = false; }
+  }, [reservations, currentUser, spaceBlocks, triggerSyncToast, setReservations]);
+
   const handleMergeReservations = useCallback(async (
     targetReservationId: string,
     sourceReservationId: string
@@ -1260,6 +1324,7 @@ export function useReservationCrud({
   }, [reservations, currentUser, triggerSyncToast, setReservations]);
 
   return {
+    handleMoveReservation,
     handleCreateOrUpdate,
     handleDelete,
     handleConfirmDeleteSingle,

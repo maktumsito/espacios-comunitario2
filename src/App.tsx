@@ -16,6 +16,7 @@ import {
 import { fetchReservationById } from './services/reservationService';
 import { canReplaceOccurrence } from './utils/reservationReplacement';
 import { useReplacementReminders } from './hooks/useReplacementReminders';
+import { isRecurringSeriesReservation } from './utils/recurringEdits';
 import { PendingReservationOperations } from './components/PendingReservationOperations';
 import { Navbar } from './components/Navbar';
 import { FilterBar } from './components/FilterBar';
@@ -53,6 +54,10 @@ const ReservationDetailModal = lazyWithRetry(
 const ReplacementReminderModal = lazyWithRetry(
   () => import('./components/ReplacementReminderModal').then(m => ({ default: m.ReplacementReminderModal })),
   'ReplacementReminderModal'
+);
+const RecurringMoveScopeModal = lazyWithRetry(
+  () => import('./components/RecurringMoveScopeModal').then(m => ({ default: m.RecurringMoveScopeModal })),
+  'RecurringMoveScopeModal'
 );
 const GlobalCommandPalette = lazyWithRetry(
   () => import('./components/GlobalCommandPalette').then((m) => ({ default: m.GlobalCommandPalette })),
@@ -125,6 +130,7 @@ import { checkAndRunScheduledBackup } from './services/backupService';
 import { getActiveDraftSummary, removeStoredDraft, ActiveDraftSummary } from './hooks/useReservationAutosave';
 
 export default function App() {
+  const [pendingSeriesMove, setPendingSeriesMove] = useState<{ original: Reservation; target: Reservation; resolve: (result: boolean) => void } | null>(null);
   const [replacementSource, setReplacementSource] = useState<Reservation | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(getStoredAuthUser());
   const [currentView, setCurrentView] = useState<ViewMode>(() => getInitialViewMode());
@@ -538,6 +544,7 @@ export default function App() {
   // Reservation CRUD Operations Hook
   const {
     handleCreateOrUpdate,
+    handleMoveReservation,
     handleDelete,
     handleConfirmDeleteSingle,
     handleConfirmDeleteSeries,
@@ -553,6 +560,7 @@ export default function App() {
     handleDuplicateReservation,
     handleMergeReservations
   } = useReservationCrud({
+    spaceBlocks,
     reservations,
     setReservations,
     currentUser,
@@ -607,8 +615,14 @@ export default function App() {
     !isInitialLoading && !isReservationModalOpen && !isDetailModalOpen && !isDeleteModalOpen &&
     !isImportExportModalOpen && !isAuditLogOpen && !isPendingDeletionsModalOpen && !isChangePasswordOpen &&
     !isPasswordPromptOpen && !isRatingModalOpen && !isGlobalPrintModalOpen && !isGmailDispatchModalOpen &&
-    !isNotificationCenterOpen && !conflictReportData.isOpen
+    !isNotificationCenterOpen && !conflictReportData.isOpen && !pendingSeriesMove
   );
+  useEffect(() => {
+    if (!currentUser && pendingSeriesMove) {
+      pendingSeriesMove.resolve(false);
+      setPendingSeriesMove(null);
+    }
+  }, [currentUser, pendingSeriesMove]);
 
   if (!currentUser) {
     return <LoginScreen onLoginSuccess={handleAuthSuccess} />;
@@ -1027,8 +1041,19 @@ export default function App() {
                   setIsReservationModalOpen(true);
                 }, 'crear una reserva en este horario');
               }}
-              onUpdateReservation={(reserva) => {
-                requireAuth(() => handleCreateOrUpdate(reserva), 'actualizar esta reserva');
+              onUpdateReservation={(target) => {
+                if (!userCanEditReservations(currentUser) || pendingSeriesMove) {
+                  triggerSyncToast('No tienes permiso para mover reservas o hay un movimiento pendiente.', 'error');
+                  return false;
+                }
+                const original = reservations.find(r => r.id === target.id);
+                if (!original || (original.version || 0) !== (target.version || 0)) {
+                  triggerSyncToast('La reserva cambió. Recarga la agenda antes de moverla.', 'error'); return false;
+                }
+                if (isRecurringSeriesReservation(original)) {
+                  return new Promise<boolean>(resolve => setPendingSeriesMove({ original, target, resolve }));
+                }
+                return handleMoveReservation(original, target, 'single');
               }}
               onReorderSpaces={(newSpaces) => {
                 handleReorderSpaces(newSpaces);
@@ -1299,6 +1324,15 @@ export default function App() {
       />
 
       {/* Modals */}
+      {pendingSeriesMove && <Suspense fallback={null}>
+        <RecurringMoveScopeModal original={pendingSeriesMove.original} target={pendingSeriesMove.target}
+          onCancel={() => { pendingSeriesMove.resolve(false); setPendingSeriesMove(null); }}
+          onConfirm={async scope => {
+            const success = await handleMoveReservation(pendingSeriesMove.original, pendingSeriesMove.target, scope);
+            if (success) { pendingSeriesMove.resolve(true); setPendingSeriesMove(null); }
+            return success;
+          }} />
+      </Suspense>}
       {replacementReminder && <Suspense fallback={null}>
         <ReplacementReminderModal key={replacementReminder.id} replacement={replacementReminder}
           original={reservations.find(r => r.id === replacementReminder.reemplazaReservaId)}

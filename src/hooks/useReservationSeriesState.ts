@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Reservation, SpaceRating, UpdateScope, isSingleDayMultiSpaceReservation } from '../types';
-import { generateRecurrenceDates } from '../utils/dateUtils';
+import { generateRecurrenceDates, getChileLocalDateString } from '../utils/dateUtils';
+import { getSeriesEditStartDate } from '../utils/recurringEdits';
 import {
   filterOutChileanHolidays,
   getChileanHolidayInfo,
@@ -47,6 +48,7 @@ export function useReservationSeriesState({
   holidayOverrideKey,
   ratings = []
 }: UseReservationSeriesStateProps) {
+  const today = getChileLocalDateString();
   // Detect if current editing reservation belongs to a recurring series (never when duplicating or single-day multi-space)
   const isEditingRecurring = useMemo(() => {
     if (isDuplicating || !editingReservation) return false;
@@ -72,6 +74,7 @@ export function useReservationSeriesState({
     if (!editingReservation || isDuplicating || isSingleDayMultiSpaceReservation(editingReservation)) return [];
     const deletedSet = getDeletedIds();
     const isCleanActive = (r: Reservation) =>
+      r.fecha >= today && !r.reemplazadaPorReservaId &&
       !deletedSet.has(r.id) &&
       r.estado !== 'eliminada' &&
       (r as any).eliminada !== true &&
@@ -105,11 +108,9 @@ export function useReservationSeriesState({
       if (matches.length > 0) return matches;
     }
     return isCleanActive(editingReservation) ? [editingReservation] : [];
-  }, [editingReservation, isDuplicating, allReservations]);
+  }, [editingReservation, isDuplicating, allReservations, today]);
 
-  const seriesCount = seriesReservations.length > 0
-    ? seriesReservations.length
-    : (editingReservation?.totalEnSerie || (editingReservation?.actividadRecurrente === 'Sí' ? 1 : 0));
+  const seriesCount = seriesReservations.length;
 
   // The subset of reservations affected based on the selected updateScope
   const affectedReservations = useMemo<Reservation[]>(() => {
@@ -121,7 +122,7 @@ export function useReservationSeriesState({
       (r as any).eliminada !== true &&
       isReservationActiveForAvailability(r);
 
-    const safeEditingRes = isCleanActive(editingReservation) ? [editingReservation] : [];
+    const safeEditingRes = isCleanActive(editingReservation) && (!isEditingRecurring || editingReservation.fecha >= today) ? [editingReservation] : [];
 
     if (!isEditingRecurring || isDuplicating) {
       return safeEditingRes;
@@ -132,10 +133,10 @@ export function useReservationSeriesState({
     if (updateScope === 'future') {
       const refDate = editingReservation.fecha;
       const res = seriesReservations.filter((r) => r.fecha >= refDate);
-      return res.length > 0 ? res : safeEditingRes;
+      return res;
     }
     if (updateScope === 'series') {
-      return seriesReservations.length > 0 ? seriesReservations : safeEditingRes;
+      return seriesReservations;
     }
     if (updateScope === 'dateRange') {
       if (!rangeStartDate || !rangeEndDate) return [];
@@ -146,7 +147,7 @@ export function useReservationSeriesState({
     }
     if (updateScope === 'selected') {
       const res = seriesReservations.filter((r) => selectedOccurrenceIds.has(r.id));
-      return res.length > 0 ? res : (selectedOccurrenceIds.has(editingReservation.id) && isCleanActive(editingReservation) ? [editingReservation] : []);
+      return res;
     }
     return safeEditingRes;
   }, [
@@ -157,7 +158,8 @@ export function useReservationSeriesState({
     seriesReservations,
     rangeStartDate,
     rangeEndDate,
-    selectedOccurrenceIds
+    selectedOccurrenceIds,
+    today
   ]);
 
   // Raw Pattern Dates generator with strictly inclusive end date boundary
@@ -167,8 +169,9 @@ export function useReservationSeriesState({
     const seriesId = !isDuplicating && (editingReservation?.serieRecurrente || editingReservation?.recurrenteId);
     const exceptions = new Set(allReservations.filter(r => r.reemplazadaPorReservaId && seriesId &&
       (r.serieRecurrente || r.recurrenteId) === seriesId).map(r => r.fecha));
-    return generateRecurrenceDates(recurrenceStartDate, recurrenceEndDate, selectedDays).filter(date => !exceptions.has(date));
-  }, [bookingMode, recurrenceStartDate, recurrenceEndDate, selectedDays, editingReservation, isDuplicating, allReservations]);
+    const cutoff = isEditingRecurring ? getSeriesEditStartDate(updateScope, editingReservation!.fecha, today) : '';
+    return generateRecurrenceDates(recurrenceStartDate, recurrenceEndDate, selectedDays).filter(date => !exceptions.has(date) && date >= cutoff);
+  }, [bookingMode, recurrenceStartDate, recurrenceEndDate, selectedDays, editingReservation, isDuplicating, allReservations, isEditingRecurring, updateScope, today]);
 
   // Chilean holiday analysis for pattern recurrence
   const patternHolidayAnalysis = useMemo(() => {
@@ -216,7 +219,7 @@ export function useReservationSeriesState({
       if (updateScope === 'single' && bookingMode === 'single') {
         ids.push(editingReservation.id);
       } else if (updateScope === 'series') {
-        // Exclude all series members so none conflict with their own expanded dates
+        // Exclude pending members; historical reservations keep their occupancy.
         seriesReservations.forEach((r) => ids.push(r.id));
       } else {
         affectedReservations.forEach((r) => ids.push(r.id));
@@ -225,19 +228,8 @@ export function useReservationSeriesState({
     return Array.from(new Set(ids));
   }, [editingReservation, formData.id, isDuplicating, isEditingRecurring, updateScope, bookingMode, seriesReservations, affectedReservations]);
 
-  const excludeSeriesId = useMemo(() => {
-    if (isDuplicating || !editingReservation) return undefined;
-    const sId =
-      editingReservation.serieRecurrente ||
-      editingReservation.recurrenteId ||
-      seriesReservations[0]?.serieRecurrente ||
-      seriesReservations[0]?.recurrenteId;
-
-    if (isEditingRecurring && updateScope === 'series') {
-      return sId || undefined;
-    }
-    return undefined;
-  }, [editingReservation, isDuplicating, isEditingRecurring, updateScope, bookingMode, seriesReservations]);
+  // Explicit IDs define the scope; historical members retain their occupancy.
+  const excludeSeriesId: string | undefined = undefined;
 
   return {
     isEditingRecurring,
