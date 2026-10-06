@@ -1,24 +1,40 @@
 /**
- * Development Firestore Read Tracker
- * Tracks read operations per module to monitor quota consumption and detect unoptimized listeners.
+ * Estimates observed server reads in this browser session, per Pacific quota day.
+ * This is not the project-wide billing counter (rules, indexes and other clients are excluded).
  */
 
 interface FirestoreReadStats {
   [module: string]: number;
 }
 
-const READS_STORAGE_KEY = 'dev_firestore_reads_tracker_v1';
+const READS_STORAGE_KEY = 'dev_firestore_reads_tracker_v2';
 
 let inMemoryReads: FirestoreReadStats = {};
+let trackedDay = '';
+
+function quotaDay(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
 
 function loadPersistedReads(): FirestoreReadStats {
+  const today = quotaDay();
+  if (trackedDay !== today) {
+    trackedDay = today;
+    inMemoryReads = {};
+  }
   if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
     return inMemoryReads;
   }
   try {
     const raw = sessionStorage.getItem(READS_STORAGE_KEY);
     if (raw) {
-      inMemoryReads = JSON.parse(raw);
+      const persisted = JSON.parse(raw);
+      if (persisted.day === today && persisted.reads && typeof persisted.reads === 'object') {
+        inMemoryReads = Object.fromEntries(Object.entries(persisted.reads)
+          .filter(([, count]) => typeof count === 'number' && Number.isFinite(count) && count >= 0)) as FirestoreReadStats;
+      }
     }
   } catch {
     // ignore
@@ -29,7 +45,7 @@ function loadPersistedReads(): FirestoreReadStats {
 function persistReads(): void {
   if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') return;
   try {
-    sessionStorage.setItem(READS_STORAGE_KEY, JSON.stringify(inMemoryReads));
+    sessionStorage.setItem(READS_STORAGE_KEY, JSON.stringify({ day: trackedDay, reads: inMemoryReads }));
   } catch {
     // ignore
   }
@@ -40,7 +56,7 @@ function persistReads(): void {
  * In development, prints an informational debug notice.
  */
 export function recordFirestoreRead(module: string, count: number): void {
-  if (!module || count <= 0) return;
+  if (!module || !Number.isFinite(count) || count <= 0) return;
   loadPersistedReads();
 
   inMemoryReads[module] = (inMemoryReads[module] || 0) + count;
@@ -50,7 +66,7 @@ export function recordFirestoreRead(module: string, count: number): void {
     const totalModule = inMemoryReads[module];
     const totalAll = getTotalFirestoreReads();
     console.debug(
-      `📊 [Firestore Read Tracker] ${module}: +${count} lectura(s) | Módulo: ${totalModule} | Total Sesión: ${totalAll}`
+      `📊 [Firestore Read Tracker] ${module}: +${count} lectura(s) | Módulo: ${totalModule} | Estimación diaria de esta sesión: ${totalAll}`
     );
   }
 }

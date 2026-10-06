@@ -1,6 +1,7 @@
+import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import { SpaceInfo, LoanType, ActivityTypeItem } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
-import { collection, doc, setDoc, onSnapshot, writeBatch } from 'firebase/firestore';
+import { collection, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { getDb } from '../firebase/config';
 
 const SPACES_STORAGE_KEY = 'espacios_comunitarios_spaces_v2';
@@ -186,6 +187,7 @@ export function subscribeToAdminConfig(
       colRef,
       (snapshot) => {
         if (snapshot.empty) {
+          if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
           // Seed defaults to Firestore so all devices have shared configuration
           const spaces = getStoredSpaces();
           const loans = getStoredLoanTypes();

@@ -1,9 +1,9 @@
+import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import {
   collection,
   doc,
   setDoc,
   writeBatch,
-  onSnapshot,
   getDocs,
   query,
   orderBy,

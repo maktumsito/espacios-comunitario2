@@ -1,5 +1,6 @@
+import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import { EquipmentItem, Reservation } from '../types';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { getDb } from '../firebase/config';
 import { isTimeOverlapping, isDateExemptFromConflicts, getTimeIntervalsForReservation, isReservationActiveForAvailability } from '../utils/conflictDetector';
 

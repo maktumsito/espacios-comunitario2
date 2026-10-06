@@ -674,7 +674,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
     if (!onLoadHistoricalMonth) return;
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
-    const activeStart = getActiveWindowStartDate(90);
+    const activeStart = getActiveWindowStartDate();
     const monthStartStr = `${year}-${String(month).padStart(2, '0')}-01`;
     if (monthStartStr < activeStart) {
       onLoadHistoricalMonth(year, month);

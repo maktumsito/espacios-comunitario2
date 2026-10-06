@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeFirestore, getFirestore, Firestore, doc, getDocFromServer, setLogLevel, connectFirestoreEmulator } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, Firestore, doc, getDocFromServer, setLogLevel, connectFirestoreEmulator, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { firestoreReadPolicy } from './readPolicy';
 import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 const localTestMode = (import.meta as any).env?.VITE_LOCAL_TEST_MODE === 'true' || (typeof process !== 'undefined' && process.env.VITE_LOCAL_TEST_MODE === 'true');
@@ -28,7 +29,10 @@ export function getDb(): Firestore {
     const databaseId = localTestMode ? '(default)' : (firebaseConfig as Record<string, any>).firestoreDatabaseId;
     const settings = {
       experimentalAutoDetectLongPolling: true,
-      ignoreUndefinedProperties: true
+      ignoreUndefinedProperties: true,
+      ...(!localTestMode && firestoreReadPolicy.persistentCache && typeof window !== 'undefined' && typeof indexedDB !== 'undefined'
+        ? { localCache: persistentLocalCache({ cacheSizeBytes: firestoreReadPolicy.cacheSizeBytes, tabManager: persistentMultipleTabManager() }) }
+        : {})
     };
 
     try {

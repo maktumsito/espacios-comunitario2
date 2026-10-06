@@ -1,9 +1,9 @@
+import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import {
   collection,
   doc,
   setDoc,
   deleteDoc,
-  onSnapshot,
   Unsubscribe
 } from 'firebase/firestore';
 import { getDb } from '../firebase/config';

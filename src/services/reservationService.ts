@@ -1,8 +1,9 @@
+import { firestoreReadPolicy } from '../firebase/readPolicy';
+import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import {
   collection,
   doc,
   deleteDoc,
-  onSnapshot,
   writeBatch,
   getDocs,
   getDoc,
@@ -472,7 +473,7 @@ export function getLocalCache(): Reservation[] {
   const deletedSet = getDeletedIds();
 
   // Fast path: In-memory cache is valid
-  if (inMemoryReservationsCache && inMemoryReservationsCache.length > 0) {
+  if (inMemoryReservationsCache !== null) {
     return inMemoryReservationsCache.filter(
       r => !isReservationExplicitlyDeleted(r, deletedSet) && !isChileanHoliday(r.fecha)
     );
@@ -485,7 +486,7 @@ export function getLocalCache(): Reservation[] {
     const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (cached) {
       const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         const filtered = parsed.filter(
           r => !isReservationExplicitlyDeleted(r, deletedSet) && !isChileanHoliday(r.fecha)
         );
@@ -627,6 +628,8 @@ export function subscribeToReservations(
   onData: (reservations: Reservation[], isFromFirestore: boolean, isRevalidating?: boolean, lastSyncTime?: number | null) => void,
   onError: (error: any) => void
 ): Unsubscribe {
+  let subscribed = true;
+  let serverConfirmed = false;
   // Emit local versioned cache immediately (0ms perceived UI delay)
   const initial = getLocalCache();
   const initialMeta = getLocalCacheMetadata();
@@ -635,6 +638,7 @@ export function subscribeToReservations(
   // Asynchronously hydrate from IndexedDB if in-memory cache is cold or default
   if (!inMemoryReservationsCache || inMemoryReservationsCache.length <= INITIAL_RESERVATIONS.length) {
     getIndexedDbReservations().then((idbData) => {
+      if (!subscribed || serverConfirmed) return;
       if (idbData && idbData.length > 0) {
         const deletedSet = getDeletedIds();
         const filtered = idbData.filter(
@@ -652,11 +656,7 @@ export function subscribeToReservations(
     const db = getDb();
     const reservasCol = collection(db, COLLECTION_NAME);
 
-    // QUOTA OPTIMIZATION: Always subscribe strictly to active reservations (last 90 days onward)
-    // to slash Firestore read consumption by >90% regardless of whether local cache is initially populated.
-    const d = new Date();
-    d.setDate(d.getDate() - 90);
-    const activeWindowStartDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const activeWindowStartDate = getActiveWindowStartDate();
 
     const activeQuery = query(
       reservasCol,
@@ -667,9 +667,13 @@ export function subscribeToReservations(
     const unsubscribe = onSnapshot(
       activeQuery,
       (snapshot) => {
+        if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) {
+          onData(getLocalCache(), false, !snapshot.metadata.fromCache, getLastSyncTime());
+          return;
+        }
+        serverConfirmed = true;
         const deletedSet = getDeletedIds();
         if (!snapshot.empty) {
-          recordFirestoreRead('reservas', snapshot.docs.length);
           const list: Reservation[] = [];
 
           snapshot.forEach((docSnap) => {
@@ -716,10 +720,10 @@ export function subscribeToReservations(
           });
           onData(sorted, true, false, syncTimestamp);
         } else {
-          // If active window is empty, notify subscribers with existing local cache or empty state.
-          // Never trigger automatic seedAllToFirestore here to avoid exhausting write quotas.
-          const local = getLocalCache();
-          onData(local, true, false, getLocalCacheMetadata()?.lastSyncTime ?? Date.now());
+          const historical = getLocalCache().filter(r => r.fecha < activeWindowStartDate);
+          const syncTimestamp = Date.now();
+          setLocalCache(historical, { lastSyncTime: syncTimestamp });
+          onData(historical, true, false, syncTimestamp);
         }
       },
       (error) => {
@@ -732,7 +736,7 @@ export function subscribeToReservations(
       }
     );
 
-    return unsubscribe;
+    return () => { subscribed = false; unsubscribe(); };
   } catch (err) {
     console.warn('Firestore initialization error:', err);
     onError(err);
@@ -772,6 +776,10 @@ export function subscribeToReservationsByDateRange(
     const unsubscribe = onSnapshot(
       rangeQuery,
       (snapshot) => {
+        if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) {
+          onData(getLocalCache().filter(r => r.fecha >= startDate && r.fecha <= endDate), false, false);
+          return;
+        }
         const deletedSet = getDeletedIds();
         const list: Reservation[] = [];
 
@@ -817,47 +825,59 @@ export async function fetchReservationsByDateRange(
   startDate: string,
   endDate: string
 ): Promise<Reservation[]> {
-  try {
-    const db = getDb();
-    const reservasCol = collection(db, COLLECTION_NAME);
-    const rangeQuery = query(
-      reservasCol,
-      where('fecha', '>=', startDate),
-      where('fecha', '<=', endDate),
-      orderBy('fecha', 'asc')
-    );
+  if (!startDate || !endDate || startDate > endDate) return [];
+  const key = `${startDate}:${endDate}`;
+  const local = () => getLocalCache().filter(r => r.fecha >= startDate && r.fecha <= endDate);
+  if (isDateRangeFresh(key)) return local();
+  const pending = pendingDateRanges.get(key);
+  if (pending) return pending;
 
-    const snapshot = await getDocs(rangeQuery);
-    const deletedSet = getDeletedIds();
-    const list: Reservation[] = [];
-
-    snapshot.forEach((docSnap) => {
-      const rawData = docSnap.data();
-      if (deletedSet.has(docSnap.id) || isReservationExplicitlyDeleted(rawData, deletedSet)) {
-        if (rawData && (rawData.estado === 'eliminada' || rawData.eliminada === true)) {
-          recordDeletedId(docSnap.id);
-        }
-        return;
+  const request = (async () => {
+    try {
+      const rangeQuery = query(collection(getDb(), COLLECTION_NAME),
+        where('fecha', '>=', startDate), where('fecha', '<=', endDate), orderBy('fecha', 'asc'));
+      const snapshot = await getDocs(rangeQuery);
+      if (snapshot.metadata.fromCache) return local();
+      recordFirestoreRead('reservas_historicas', Math.max(1, snapshot.size));
+      const deletedSet = getDeletedIds();
+      const list = snapshot.docs
+        .filter(d => {
+          const data = d.data();
+          if (data.estado === 'eliminada' || data.eliminada === true) recordDeletedId(d.id);
+          return !deletedSet.has(d.id) && !isReservationExplicitlyDeleted(data, deletedSet);
+        })
+        .map(d => normalizeReservationFromFirestore(d.id, d.data()))
+        .sort(compareReservationsByDate);
+      const otherDates = getLocalCache().filter(r => r.fecha < startDate || r.fecha > endDate);
+      setLocalCache([...otherDates, ...list].sort(compareReservationsByDate));
+      dateRangeSyncTimes.set(key, Date.now());
+      for (const [range, time] of dateRangeSyncTimes) {
+        if (Date.now() - time >= firestoreReadPolicy.historicalCacheMs) dateRangeSyncTimes.delete(range);
       }
-      list.push(normalizeReservationFromFirestore(docSnap.id, rawData));
-    });
-
-    return list.sort((a, b) => {
-      if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
-      return a.horaInicio.localeCompare(b.horaInicio);
-    });
-  } catch (e) {
-    console.warn('fetchReservationsByDateRange failed, serving from local cache:', e);
-    const local = getLocalCache();
-    return local.filter(r => r.fecha >= startDate && r.fecha <= endDate);
-  }
+      if (isBrowser) {
+        try {
+          // Persist freshness only when the canonical cache is also available after reload.
+          if (localStorage.getItem(LOCAL_STORAGE_KEY)) {
+            localStorage.setItem(DATE_RANGE_SYNC_KEY, JSON.stringify(Object.fromEntries(dateRangeSyncTimes)));
+          }
+        } catch { /* Storage unavailable: retain the in-memory cache. */ }
+      }
+      return list;
+    } catch (error) {
+      console.warn('Date-range query failed, serving local cache:', error);
+      return local();
+    }
+  })();
+  pendingDateRanges.set(key, request);
+  try { return await request; }
+  finally { pendingDateRanges.delete(key); }
 }
 
 // ============================================================================
 // HISTORICAL PARTITIONING (ON-DEMAND MONTH / RANGE LOADER)
 // ============================================================================
 
-export const DEFAULT_ACTIVE_WINDOW_DAYS = 90;
+export const DEFAULT_ACTIVE_WINDOW_DAYS = firestoreReadPolicy.activeWindowDays;
 
 export function getActiveWindowStartDate(daysBack: number = DEFAULT_ACTIVE_WINDOW_DAYS): string {
   const d = new Date();
@@ -865,10 +885,31 @@ export function getActiveWindowStartDate(daysBack: number = DEFAULT_ACTIVE_WINDO
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-const loadedHistoricalMonthsSet = new Set<string>();
+const DATE_RANGE_SYNC_KEY = 'reservas_date_range_sync_v1';
+const pendingDateRanges = new Map<string, Promise<Reservation[]>>();
+const dateRangeSyncTimes = new Map<string, number>();
+
+function isDateRangeFresh(key: string): boolean {
+  if (isBrowser && dateRangeSyncTimes.size === 0) {
+    try {
+      if (localStorage.getItem(LOCAL_STORAGE_KEY)) {
+        const stored = JSON.parse(localStorage.getItem(DATE_RANGE_SYNC_KEY) || '{}');
+        for (const [range, time] of Object.entries(stored)) {
+          if (typeof time === 'number') dateRangeSyncTimes.set(range, time);
+        }
+      }
+    } catch { /* Ignore corrupt or unavailable storage. */ }
+  }
+  const time = dateRangeSyncTimes.get(key);
+  const age = time === undefined ? Infinity : Date.now() - time;
+  return age >= 0 && age < firestoreReadPolicy.historicalCacheMs;
+}
 
 export function isHistoricalMonthLoaded(yearMonth: string): boolean {
-  return loadedHistoricalMonthsSet.has(yearMonth.slice(0, 7));
+  const monthKey = yearMonth.slice(0, 7);
+  const [year, month] = monthKey.split('-').map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  return isDateRangeFresh(`${monthKey}-01:${monthKey}-${String(lastDay).padStart(2, '0')}`);
 }
 
 /**
@@ -880,103 +921,15 @@ export async function loadHistoricalReservationsMonth(
   year: number,
   month: number
 ): Promise<Reservation[]> {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return [];
   const monthKey = `${year}-${String(month).padStart(2, '0')}`;
-  if (loadedHistoricalMonthsSet.has(monthKey)) {
-    const local = getLocalCache();
-    return local.filter(r => r.fecha.startsWith(monthKey));
-  }
-
-  const startDate = `${monthKey}-01`;
-  const lastDayDate = new Date(year, month, 0);
-  const endDate = `${monthKey}-${String(lastDayDate.getDate()).padStart(2, '0')}`;
-
-  try {
-    const db = getDb();
-    const reservasCol = collection(db, COLLECTION_NAME);
-    const rangeQuery = query(
-      reservasCol,
-      where('fecha', '>=', startDate),
-      where('fecha', '<=', endDate),
-      orderBy('fecha', 'asc')
-    );
-
-    const snapshot = await getDocs(rangeQuery);
-    recordFirestoreRead('reservas_historicas', snapshot.docs.length);
-
-    const deletedSet = getDeletedIds();
-    const list: Reservation[] = [];
-
-    snapshot.forEach((docSnap) => {
-      const rawData = docSnap.data();
-      if (deletedSet.has(docSnap.id) || isReservationExplicitlyDeleted(rawData, deletedSet)) {
-        if (rawData && (rawData.estado === 'eliminada' || rawData.eliminada === true)) {
-          recordDeletedId(docSnap.id);
-        }
-        return;
-      }
-      list.push(normalizeReservationFromFirestore(docSnap.id, rawData));
-    });
-
-    loadedHistoricalMonthsSet.add(monthKey);
-
-    const current = getLocalCache();
-    const otherMonths = current.filter(r => !r.fecha.startsWith(monthKey));
-    const merged = [...otherMonths, ...list].sort(compareReservationsByDate);
-    setLocalCache(merged);
-
-    return list;
-  } catch (err: any) {
-    console.warn(`Notice loading historical partition for ${monthKey}:`, err?.message || err);
-    const local = getLocalCache();
-    return local.filter(r => r.fecha.startsWith(monthKey));
-  }
+  const lastDay = new Date(year, month, 0).getDate();
+  return fetchReservationsByDateRange(`${monthKey}-01`, `${monthKey}-${String(lastDay).padStart(2, '0')}`);
 }
 
-/**
- * Loads reservations for an arbitrary historical date range on demand.
- */
-export async function loadHistoricalReservationsRange(
-  startDate: string,
-  endDate: string
-): Promise<Reservation[]> {
-  if (!startDate || !endDate || startDate > endDate) return [];
-  try {
-    const db = getDb();
-    const reservasCol = collection(db, COLLECTION_NAME);
-    const rangeQuery = query(
-      reservasCol,
-      where('fecha', '>=', startDate),
-      where('fecha', '<=', endDate),
-      orderBy('fecha', 'asc')
-    );
-
-    const snapshot = await getDocs(rangeQuery);
-    recordFirestoreRead('reservas_historicas', snapshot.docs.length);
-
-    const deletedSet = getDeletedIds();
-    const list: Reservation[] = [];
-
-    snapshot.forEach((docSnap) => {
-      const rawData = docSnap.data();
-      if (deletedSet.has(docSnap.id) || isReservationExplicitlyDeleted(rawData, deletedSet)) {
-        if (rawData && (rawData.estado === 'eliminada' || rawData.eliminada === true)) {
-          recordDeletedId(docSnap.id);
-        }
-        return;
-      }
-      list.push(normalizeReservationFromFirestore(docSnap.id, rawData));
-    });
-
-    const current = getLocalCache();
-    const otherDates = current.filter(r => r.fecha < startDate || r.fecha > endDate);
-    const merged = [...otherDates, ...list].sort(compareReservationsByDate);
-    setLocalCache(merged);
-
-    return list;
-  } catch (err: any) {
-    console.warn(`Notice loading historical range [${startDate}, ${endDate}]:`, err?.message || err);
-    return [];
-  }
+/** Loads a historical range using the same deduplication and freshness policy as months. */
+export async function loadHistoricalReservationsRange(startDate: string, endDate: string): Promise<Reservation[]> {
+  return fetchReservationsByDateRange(startDate, endDate);
 }
 
 // ============================================================================

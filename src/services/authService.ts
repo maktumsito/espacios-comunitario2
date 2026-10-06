@@ -1,9 +1,9 @@
+import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import {
   collection,
   doc,
   setDoc,
   deleteDoc,
-  onSnapshot,
   getDocs,
   getDoc,
   writeBatch
@@ -360,7 +360,7 @@ export function subscribeToUsers(
           // If Firestore collection is empty, seed defaults and provide local cache
           const local = getAllAuthorizedUsers();
           onUpdate(local, true);
-          seedDefaultUsersToFirestore();
+          if (!snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites) seedDefaultUsersToFirestore();
         }
       },
       (err) => {
