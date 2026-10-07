@@ -97,14 +97,58 @@ it('moves all pending sessions atomically while preserving past sessions and rep
   expect(mocks.save.mock.calls[0][1]).toEqual({requireAtomic:true,allowConflictOverride:false,intent:'update'});
   expect(mocks.save.mock.calls[0][0].every((r:Reservation)=>r.espacio==='SALA 3'&&r.horaInicio==='11:00')).toBe(true);
 });
-it('checks every moved future date and saves nothing if a later date is occupied', async () => {
+it.each(['future', 'series'] as const)('skips occupied dates and continues moving later available sessions for %s', async scope => {
   const source={...row,actividadRecurrente:'Sí',serieRecurrente:'series'};
   const future={...source,id:'future',fecha:'2026-10-13'};
+  const later={...source,id:'later',fecha:'2026-10-20'};
   const occupied={...row,id:'occupied',fecha:future.fecha,espacio:'SALA 3'};
-  const p=props();p.reservations=[source,future,occupied];mocks.series.mockResolvedValue([source,future]);
+  const p=props();p.reservations=[source,future,later,occupied];mocks.series.mockResolvedValue([source,future,later]);
+  mocks.save.mockImplementation(async(rows:Reservation[])=>({reservations:rows,deletedIds:[],confirmedIds:rows.map(r=>r.id),pendingIds:[]}));
+  const {result}=renderHook(()=>useReservationCrud(p));
+  await act(async()=>expect(await result.current.handleMoveReservation(source,{...source,espacio:'SALA 3'},scope)).toBe(true));
+  expect(mocks.save.mock.calls[0][0]).toEqual([{...source,espacio:'SALA 3',terminaDiaSiguiente:false},{...later,espacio:'SALA 3',terminaDiaSiguiente:false}]);
+  expect(mocks.save.mock.calls[0][1]).toEqual({requireAtomic:true,allowConflictOverride:false,intent:'update'});
+  const updated=(p.setReservations as any).mock.calls[0][0](p.reservations);
+  expect(updated.find((r:Reservation)=>r.id===future.id)).toEqual(future);
+  expect(p.triggerSyncToast).toHaveBeenCalledWith(expect.stringContaining('Sesiones omitidas por falta de disponibilidad: 1'), 'warning');
+  expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({previousState:[source,later],description:expect.stringContaining('Omitidas 1 sesiones')}));
+});
+it('skips maintenance blocks and an occupied selected session while continuing to available dates', async () => {
+  const source={...row,actividadRecurrente:'Sí',serieRecurrente:'series'};
+  const blocked={...source,id:'blocked',fecha:'2026-10-13'};
+  const later={...source,id:'later',fecha:'2026-10-20'};
+  const occupied={...row,id:'occupied',espacio:'SALA 3'};
+  const p=props();p.reservations=[source,blocked,later,occupied];mocks.series.mockResolvedValue([source,blocked,later]);
+  p.spaceBlocks=[{id:'block',espacio:'SALA 3',fechaInicio:blocked.fecha,fechaFin:blocked.fecha,todoElDia:true,motivo:'Mantención',descripcion:'Obras',activo:true,createdAt:''}];
+  mocks.save.mockImplementation(async(rows:Reservation[])=>({reservations:rows,deletedIds:[],confirmedIds:rows.map(r=>r.id),pendingIds:[]}));
+  const {result}=renderHook(()=>useReservationCrud(p));
+  await act(async()=>expect(await result.current.handleMoveReservation(source,{...source,espacio:'SALA 3'},'future')).toBe(true));
+  expect(mocks.save.mock.calls[0][0]).toEqual([{...later,espacio:'SALA 3',terminaDiaSiguiente:false}]);
+});
+it('saves nothing when every destination date is occupied', async () => {
+  const source={...row,actividadRecurrente:'Sí',serieRecurrente:'series'};
+  const p=props();p.reservations=[source,{...row,id:'occupied',espacio:'SALA 3'}];mocks.series.mockResolvedValue([source]);
   const {result}=renderHook(()=>useReservationCrud(p));
   await act(async()=>expect(await result.current.handleMoveReservation(source,{...source,espacio:'SALA 3'},'future')).toBe(false));
   expect(mocks.save).not.toHaveBeenCalled();expect(p.setReservations).not.toHaveBeenCalled();
+  expect(p.triggerSyncToast).toHaveBeenCalledWith(expect.stringContaining('Todas se conservaron sin cambios'), 'warning');
+});
+it('still rejects an occupied destination when moving only one session', async () => {
+  const p=props();p.reservations=[row,{...row,id:'occupied',espacio:'SALA 3'}];
+  const {result}=renderHook(()=>useReservationCrud(p));
+  await act(async()=>expect(await result.current.handleMoveReservation(row,{...row,espacio:'SALA 3'},'single')).toBe(false));
+  expect(mocks.save).not.toHaveBeenCalled();
+});
+it('rechecks retained original slots after skipping an overnight session', async () => {
+  const source={...row,horaInicio:'23:00',horaFin:'01:00',terminaDiaSiguiente:true,horarioExtendidoAutorizado:true,actividadRecurrente:'Sí',serieRecurrente:'series'};
+  const next={...source,id:'next',fecha:'2026-10-07',horaInicio:'02:00',horaFin:'04:00',terminaDiaSiguiente:false};
+  const later={...next,id:'later',fecha:'2026-10-20'};
+  const occupied={...row,id:'occupied',horaInicio:'22:00',horaFin:'23:00'};
+  const p=props();p.reservations=[source,next,later,occupied];mocks.series.mockResolvedValue([source,next,later]);
+  mocks.save.mockImplementation(async(rows:Reservation[])=>({reservations:rows,deletedIds:[],confirmedIds:rows.map(r=>r.id),pendingIds:[]}));
+  const {result}=renderHook(()=>useReservationCrud(p));
+  await act(async()=>expect(await result.current.handleMoveReservation(source,{...source,horaInicio:'21:00',horaFin:'23:00',terminaDiaSiguiente:false},'future')).toBe(true));
+  expect(mocks.save.mock.calls[0][0]).toEqual([{...later,horaInicio:'00:00',horaFin:'02:00'}]);
 });
 it('does not overwrite a source that changed while the move scope popup was open', async () => {
   const source={...row,actividadRecurrente:'Sí',serieRecurrente:'series'};

@@ -45,7 +45,7 @@ export function RecurringMoveScopeModal({ original, target, onCancel, onConfirm 
         </label>)}
       </fieldset>
       {isPast && <p>La sesión arrastrada ya pasó y se conservará sin cambios.</p>}
-      <p className="text-slate-600">Las sesiones pasadas y las suspensiones por reemplazo se mantienen intactas al mover la serie. Si hay horarios distintos, se desplazan por la misma diferencia de tiempo.</p>
+      <p className="text-slate-600">Al mover desde esta fecha en adelante, se omiten las sesiones en que el espacio está ocupado o bloqueado y se continúa con las disponibles. Las sesiones omitidas, las pasadas y las suspensiones por reemplazo se mantienen sin cambios. Si hay horarios distintos, se desplazan por la misma diferencia de tiempo.</p>
       {error && <p role="alert" className="text-rose-700">{error}</p>}
     </div>
   </BaseModal>;

@@ -1176,11 +1176,29 @@ export function useReservationCrud({
         throw new Error('La reserva cambió por otro usuario. Recarga la agenda antes de moverla.');
       }
       const batch = buildReservationMoveBatch(original, target, scope, liveRows, today);
-      const blocks = findMaintenanceBlockConflicts(batch.updatedReservations, spaceBlocks);
-      if (blocks.length) throw new Error(formatBlockConflictMessage(blocks[0]));
       const history = [...new Map([...reservations, ...liveRows].map(r => [r.id, r])).values()];
-      const conflicts = detectBatchConflicts(batch.updatedReservations, history, new Set(batch.affectedIds));
-      if (conflicts.length) throw new Error(formatConflictMessage(conflicts[0]));
+      const requestedCount = batch.updatedReservations.length;
+      // Recheck after each omission: its original slot remains occupied and can
+      // prevent another session from moving (including across midnight).
+      while (batch.updatedReservations.length) {
+        const blocks = findMaintenanceBlockConflicts(batch.updatedReservations, spaceBlocks);
+        const conflicts = detectBatchConflicts(batch.updatedReservations, history, new Set(batch.affectedIds));
+        if (scope === 'single') {
+          if (blocks.length) throw new Error(formatBlockConflictMessage(blocks[0]));
+          if (conflicts.length) throw new Error(formatConflictMessage(conflicts[0]));
+        }
+        const unavailableIds = new Set([...blocks, ...conflicts].map(c => c.reserva.id));
+        if (!unavailableIds.size) break;
+        batch.updatedReservations = batch.updatedReservations.filter(r => !unavailableIds.has(r.id));
+        batch.affectedIds = batch.updatedReservations.map(r => r.id);
+      }
+      if (!batch.updatedReservations.length) {
+        triggerSyncToast('No hay sesiones disponibles para mover. Todas se conservaron sin cambios.', 'warning');
+        return false;
+      }
+      const skippedCount = requestedCount - batch.updatedReservations.length;
+      batch.description = batch.description!.replace(`Movidas ${requestedCount} reservas`, `Movidas ${batch.updatedReservations.length} reservas`);
+      if (skippedCount) batch.description += ` Omitidas ${skippedCount} sesiones sin disponibilidad; se conservan sin cambios.`;
       const afterMove = [...history.filter(r => !batch.affectedIds.includes(r.id) && isReservationActiveForAvailability(r)), ...batch.updatedReservations];
       for (const row of batch.updatedReservations) {
         if (checkLoanScheduleLimit(row.horaInicio, row.horaFin, Boolean(row.terminaDiaSiguiente)).requiresAuthorization && !row.horarioExtendidoAutorizado) {
@@ -1199,7 +1217,7 @@ export function useReservationCrud({
       void safeAudit({ action: 'UPDATE', description: batch.description!, reservaId: original.id, user: currentUser,
         reservaTitle: original.tipoActividad, reservaFecha: original.fecha, reservaEspacio: target.espacio,
         previousState: history.filter(r => batch.affectedIds.includes(r.id)), newState: result.reservations });
-      triggerSyncToast(`✓ Movimiento confirmado (${result.reservations.length} reservas).`, 'success');
+      triggerSyncToast(`✓ Movimiento confirmado (${result.reservations.length} reservas).${skippedCount ? ` Sesiones omitidas por falta de disponibilidad: ${skippedCount}. Se conservaron sin cambios.` : ''}`, skippedCount ? 'warning' : 'success');
       return true;
     } catch (err: any) {
       triggerSyncToast(err?.message || 'No se pudo mover la actividad. No se aplicó el movimiento.', 'error');
