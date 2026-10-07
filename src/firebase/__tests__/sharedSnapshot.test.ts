@@ -66,4 +66,13 @@ describe('shared Firestore subscriptions', () => {
     expect(sdk.listen).toHaveBeenCalledTimes(1);
     stop(); stopSecond();
   });
+
+  it('allows an explicit resubscription after a terminal error when no consumers remain', () => {
+    const stop = sharedOnSnapshot(queryRef, vi.fn(), vi.fn());
+    sdk.error({ code: 'unavailable' });
+    stop();
+    const stopRetry = sharedOnSnapshot(queryRef, vi.fn(), vi.fn());
+    expect(sdk.listen).toHaveBeenCalledTimes(2);
+    stopRetry();
+  });
 });

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Reservation } from '../types';
 import {
   subscribeToReservations,
+  subscribeToReservationsByDateRange,
   getLocalCache,
   getLastSyncTime,
   loadHistoricalReservationsMonth,
@@ -12,8 +13,12 @@ import {
   hasMinuteConflictMigrationRun
 } from '../services/migrations/cleanMinuteConflictsMigration';
 import { triggerSonnerToast } from '../services/toastNotificationService';
+import type { ReservationDateRange } from '../utils/reservationReadScope';
 
 export interface UseReservationsStateReturn {
+  isReadScopeReady: boolean;
+  readError: boolean;
+  retryRead: () => void;
   reservations: Reservation[];
   setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
   isFirebaseConnected: boolean;
@@ -31,7 +36,18 @@ export interface UseReservationsStateReturn {
   loadHistoricalRange: (startDate: string, endDate: string) => Promise<Reservation[]>;
 }
 
-export function useReservationsState(): UseReservationsStateReturn {
+export function useReservationsState({ enabled = true, dateRange, allowMaintenance = true }: {
+  enabled?: boolean;
+  dateRange?: ReservationDateRange;
+  allowMaintenance?: boolean;
+} = {}): UseReservationsStateReturn {
+  const startDate = dateRange?.startDate;
+  const endDate = dateRange?.endDate;
+  const scopeKey = `${enabled}:${startDate ?? 'active'}:${endDate ?? ''}`;
+  const [confirmedScope, setConfirmedScope] = useState<string | null>(null);
+  const [readError, setReadError] = useState(false);
+  const [readAttempt, setReadAttempt] = useState(0);
+  const retryRead = useCallback(() => setReadAttempt(attempt => attempt + 1), []);
   const [reservations, setReservations] = useState<Reservation[]>(() => getLocalCache());
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
   const [isFirebaseSyncing, setIsFirebaseSyncing] = useState(false);
@@ -62,12 +78,12 @@ export function useReservationsState(): UseReservationsStateReturn {
 
   // One-time automatic idempotent cleanup migration for obsolete minute conflict IDs
   useEffect(() => {
-    if (!hasMinuteConflictMigrationRun()) {
+    if (enabled && allowMaintenance && !hasMinuteConflictMigrationRun()) {
       executeMinuteConflictCleanupMigration().catch((err) => {
         console.warn('Background minute conflict migration notice:', err);
       });
     }
-  }, []);
+  }, [enabled, allowMaintenance]);
 
   // On-demand historical partition loaders
   const loadHistoricalMonth = useCallback(async (year: number, month: number): Promise<Reservation[]> => {
@@ -94,7 +110,16 @@ export function useReservationsState(): UseReservationsStateReturn {
 
   // Subscribe to Firebase Firestore real-time updates & cache sync events
   useEffect(() => {
+    if (!enabled) {
+      setReservations([]);
+      setIsFirebaseConnected(false);
+      setIsFirebaseSyncing(false);
+      return;
+    }
     let isMounted = true;
+    setReadError(false);
+    setConfirmedScope(null);
+    const inRange = (r: Reservation) => !startDate || !endDate || (r.fecha >= startDate && r.fecha <= endDate);
 
     const handleCacheSyncUpdated = (e: Event) => {
       const customEvent = e as CustomEvent<{ lastSyncTime?: number | null }>;
@@ -105,19 +130,17 @@ export function useReservationsState(): UseReservationsStateReturn {
     const handleWriteProgress = (event: Event) => {
       const result = (event as CustomEvent).detail;
       if (!isMounted || !result) return;
-      setReservations(prev=> { const map = new Map(prev.map(r=>[r.id,r])); result.deletedIds.forEach((id: string)=>map.delete(id)); result.reservations.forEach((r: Reservation)=>map.set(r.id,r)); return [...map.values()]; });
+      setReservations(prev=> { const map = new Map(prev.map(r=>[r.id,r])); result.deletedIds.forEach((id: string)=>map.delete(id)); result.reservations.forEach((r: Reservation)=> { map.delete(r.id); if (inRange(r)) map.set(r.id,r); }); return [...map.values()]; });
     };
     window.addEventListener('reservation-write-progress', handleWriteProgress);
     window.addEventListener('cache-sync-updated', handleCacheSyncUpdated);
 
-    const unsubscribe = subscribeToReservations(
-      (data, isLiveFromFirestore, isRevalidating, syncTime) => {
+    const onData = (data: Reservation[], isLiveFromFirestore: boolean, isRevalidating?: boolean, syncTime?: number | null) => {
         if (!isMounted) return;
         setReservations(data);
         setIsInitialLoading(false);
-        if (isLiveFromFirestore) {
-          setIsFirebaseConnected(true);
-        }
+        setIsFirebaseConnected(isLiveFromFirestore);
+        if (isLiveFromFirestore) setConfirmedScope(scopeKey);
         setIsFirebaseSyncing(!!isRevalidating);
         if (syncTime) {
           setLastSyncTime(syncTime);
@@ -127,15 +150,18 @@ export function useReservationsState(): UseReservationsStateReturn {
             setLastSyncTime(currentMetaSync);
           }
         }
-      },
-      (error) => {
+      };
+    const onError = (error: unknown) => {
         if (!isMounted) return;
         console.warn('Firebase sync notice:', error);
         setIsInitialLoading(false);
         setIsFirebaseConnected(false);
         setIsFirebaseSyncing(false);
-      }
-    );
+        setReadError(true);
+      };
+    const unsubscribe = startDate && endDate
+      ? subscribeToReservationsByDateRange(startDate, endDate, onData, onError)
+      : subscribeToReservations(onData, onError);
 
     return () => {
       isMounted = false;
@@ -145,9 +171,12 @@ export function useReservationsState(): UseReservationsStateReturn {
         unsubscribe();
       }
     };
-  }, []);
+  }, [enabled, startDate, endDate, scopeKey, readAttempt]);
 
   return {
+    isReadScopeReady: enabled && confirmedScope === scopeKey,
+    readError,
+    retryRead,
     reservations,
     setReservations,
     isFirebaseConnected,

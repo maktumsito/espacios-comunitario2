@@ -2,6 +2,12 @@
 
 La carga en tiempo real incluye los últimos 30 días y las reservas futuras. El historial anterior se consulta al navegar por los meses del calendario. No se borran documentos del servidor.
 
+Los usuarios sin permisos de crear, editar ni eliminar reservas usan una consulta en tiempo real acotada al mes visible en calendario, horario diario y agenda móvil. El calendario incluye los días de las semanas adyacentes y la consulta añade el día anterior para reservas nocturnas. Navegar cambia la suscripción; el historial visible de estos usuarios también se actualiza en tiempo real, sin una consulta histórica adicional. Antes de iniciar sesión no se suscriben reservas.
+
+Las vistas generales (estadísticas, espacios, topamientos y administración), las búsquedas sin un rango completo de fechas y los modales de exportación, impresión o despacho conservan la carga general de la ventana activa. Al ampliar desde una consulta mensual, las vistas generales y esos modales esperan confirmación del servidor para evitar presentar o exportar una lista parcial. Los filtros con ambas fechas amplían el rango mensual para incluir el intervalo solicitado. Los permisos siguen sincronizados en vivo y un cambio de permisos actualiza la política de consulta; no hay una lista fija de tres editores.
+
+El equipamiento se suscribe al abrir el formulario de reserva o su pestaña administrativa. Para lectores, las evaluaciones se suscriben en las vistas y modales que las muestran; los editores conservan su sincronización para el aviso de reporte del lunes. Los lectores no ejecutan la migración automática de reservas ni las comprobaciones periódicas de respaldo y purga de slots. Las transacciones y comprobaciones de concurrencia al guardar siguen activas.
+
 Configuración en `.env` (requiere volver a compilar):
 
 | Variable | Valor predeterminado | Rango |

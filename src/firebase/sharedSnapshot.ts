@@ -31,6 +31,13 @@ export function sharedOnSnapshot<T extends DocumentData>(ref: Query<T>, next: (s
 export function sharedOnSnapshot<T extends DocumentData>(ref: DocumentReference<T>, next: (snapshot: DocumentSnapshot<T>) => void, error?: (error: FirestoreError) => void): Unsubscribe;
 export function sharedOnSnapshot(ref: Reference, next: (snapshot: any) => void, error?: (error: FirestoreError) => void): Unsubscribe {
   let entry = [...entries].find(item => sameReference(item.ref, ref));
+  // A terminal SDK error can be retried explicitly after the last consumer leaves.
+  if (entry?.failure && !entry.subscribers.size) {
+    clearTimeout(entry.timer);
+    entry.unsubscribe();
+    entries.delete(entry);
+    entry = undefined;
+  }
   const subscriber = { next, error };
   if (entry) {
     clearTimeout(entry.timer);

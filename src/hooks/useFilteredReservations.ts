@@ -62,13 +62,18 @@ export interface UseFilteredReservationsReturn {
   activeReservations: Reservation[];
 }
 
-export function useFilteredReservations(reservations: Reservation[]): UseFilteredReservationsReturn {
-  const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
+export function useFilteredReservations(reservations: Reservation[], controlled?: {
+  filters: FilterState;
+  setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
+}): UseFilteredReservationsReturn {
+  const [localFilters, setLocalFilters] = useState<FilterState>(INITIAL_FILTERS);
+  const filters = controlled?.filters ?? localFilters;
+  const setFilters = controlled?.setFilters ?? setLocalFilters;
   const [isFilterBarOpen, setIsFilterBarOpen] = useState<boolean>(false);
 
   const resetFilters = useCallback(() => {
     setFilters(INITIAL_FILTERS);
-  }, []);
+  }, [setFilters]);
 
   const hasActiveFilters = Boolean(
     filters.search?.trim() ||

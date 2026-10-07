@@ -652,6 +652,7 @@ interface CalendarViewProps {
   onSelectReservation: (reserva: Reservation) => void;
   onNewReservationForDate: (dateStr: string) => void;
   onLoadHistoricalMonth?: (year: number, month: number) => Promise<any>;
+  onVisibleMonthChange?: (date: Date) => void;
   isHistoricalLoading?: boolean;
 }
 
@@ -664,6 +665,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   onSelectReservation,
   onNewReservationForDate,
   onLoadHistoricalMonth,
+  onVisibleMonthChange,
   isHistoricalLoading = false
 }) => {
   const [currentDate, setCurrentDate] = useState<Date>(() => propSelectedDate || new Date());
@@ -754,18 +756,23 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
 
   // Stable navigation callbacks
   const handlePrevMonth = useCallback(() => {
-    setCurrentDate((prev) => subMonths(prev, 1));
-  }, []);
+    const next = subMonths(currentDate, 1);
+    setCurrentDate(next);
+    onVisibleMonthChange?.(next);
+  }, [currentDate, onVisibleMonthChange]);
 
   const handleNextMonth = useCallback(() => {
-    setCurrentDate((prev) => addMonths(prev, 1));
-  }, []);
+    const next = addMonths(currentDate, 1);
+    setCurrentDate(next);
+    onVisibleMonthChange?.(next);
+  }, [currentDate, onVisibleMonthChange]);
 
   const handleToday = useCallback(() => {
     const now = new Date();
     setCurrentDate(now);
     setSelectedDay(now);
-  }, []);
+    onVisibleMonthChange?.(now);
+  }, [onVisibleMonthChange]);
 
   const handleSelectDay = useCallback((day: Date) => {
     setSelectedDay(day);

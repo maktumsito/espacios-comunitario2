@@ -18,11 +18,14 @@ export interface UseRatingsStateReturn {
   checkRatingAllowed: (reservation: Reservation) => { allowed: boolean; reason?: string };
 }
 
-export function useRatingsState(reservations: Reservation[]): UseRatingsStateReturn {
+export function useRatingsState(reservations: Reservation[], {
+  enabled = true, automaticEmailEnabled = true,
+}: { enabled?: boolean; automaticEmailEnabled?: boolean } = {}): UseRatingsStateReturn {
   const [ratings, setRatings] = useState<SpaceRating[]>(() => getLocalRatingsCache());
 
   // Subscribe to Space Ratings from Firestore & Local Storage
   useEffect(() => {
+    if (!enabled) return;
     const unsubRatings = subscribeToRatings(
       (data) => {
         setRatings(data);
@@ -37,11 +40,11 @@ export function useRatingsState(reservations: Reservation[]): UseRatingsStateRet
         unsubRatings();
       }
     };
-  }, []);
+  }, [enabled]);
 
   // Automated Monday Email Check for Birthday Loans
   useEffect(() => {
-    if (ratings.length > 0 || reservations.length > 0) {
+    if (enabled && automaticEmailEnabled && (ratings.length > 0 || reservations.length > 0)) {
       checkAutomaticMondayEmail(ratings, reservations, (report) => {
         console.log(
           `[Envío Automático Lunes] Reporte generado para ${report.recipients.join(', ')} con ${report.ratingsCount} calificaciones de cumpleaños.`
@@ -68,7 +71,7 @@ export function useRatingsState(reservations: Reservation[]): UseRatingsStateRet
         });
       });
     }
-  }, [ratings, reservations]);
+  }, [ratings, reservations, enabled, automaticEmailEnabled]);
 
   const handleSaveRating = useCallback(async (rating: SpaceRating, targetReservation?: Reservation | null) => {
     await saveSpaceRating(rating, targetReservation || undefined);

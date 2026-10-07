@@ -97,7 +97,8 @@ const ApplicantDirectoryView = lazyWithRetry(
 );
 import { AppModalsContainer } from './components/AppModalsContainer';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { useFilteredReservations } from './hooks/useFilteredReservations';
+import { useFilteredReservations, INITIAL_FILTERS } from './hooks/useFilteredReservations';
+import { canWriteReservations, getReservationReadScope } from './utils/reservationReadScope';
 import { useReservationCrud } from './hooks/useReservationCrud';
 import { initGmailAuthListener } from './services/gmailDispatchService';
 import {
@@ -139,28 +140,11 @@ export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>(() => getInitialViewMode());
   const [adminSubTab, setAdminSubTab] = useState<'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring'>('spaces');
   const [selectedDailyDate, setSelectedDailyDate] = useState<Date>(() => new Date());
+  const [reservationFilters, setReservationFilters] = useState<FilterState>(INITIAL_FILTERS);
+  const canWrite = canWriteReservations(currentUser);
 
   // 1. Network Status Hook
   const { isOnline, showReconnectedAlert } = useNetworkStatus();
-
-  // 2. Reservations State Hook
-  const {
-    reservations,
-    setReservations,
-    isFirebaseConnected,
-    setIsFirebaseConnected,
-    isFirebaseSyncing,
-    setIsFirebaseSyncing,
-    lastSyncTime,
-    setLastSyncTime,
-    isInitialLoading,
-    isHistoricalLoading,
-    syncStatusToast,
-    setSyncStatusToast,
-    triggerSyncToast,
-    loadHistoricalMonth,
-    loadHistoricalRange
-  } = useReservationsState();
 
   // 3. Modals & Dialogs Hook
   const {
@@ -237,6 +221,21 @@ export default function App() {
     openGmailDispatchModal
   } = useReservationModals();
 
+  const reservationReadScope = getReservationReadScope(
+    currentUser, currentView, selectedDailyDate, reservationFilters,
+    isImportExportModalOpen || isGlobalPrintModalOpen || isGmailDispatchModalOpen || isReservationModalOpen,
+  );
+  const {
+    reservations, setReservations, isFirebaseConnected, setIsFirebaseConnected,
+    isFirebaseSyncing, setIsFirebaseSyncing, lastSyncTime, setLastSyncTime,
+    isInitialLoading, isHistoricalLoading, syncStatusToast, setSyncStatusToast,
+    triggerSyncToast, loadHistoricalMonth, loadHistoricalRange,
+    isReadScopeReady, readError, retryRead,
+  } = useReservationsState({
+    enabled: Boolean(currentUser), dateRange: reservationReadScope, allowMaintenance: canWrite,
+  });
+  const generalDataPending = !canWrite && !reservationReadScope && !isReadScopeReady;
+
   // 4. Admin Configuration Hook
   const {
     spaces,
@@ -263,7 +262,10 @@ export default function App() {
     handleSaveUser,
     handleDeleteUser,
     handleResetUsers
-  } = useAdminConfig(currentUser, triggerSyncToast);
+  } = useAdminConfig(currentUser, triggerSyncToast, {
+    equipmentEnabled: Boolean(currentUser) && (isReservationModalOpen ||
+      (currentView === 'admin' && adminSubTab === 'equipment')),
+  });
 
   // 5. Ratings State Hook
   const {
@@ -272,7 +274,12 @@ export default function App() {
     handleSaveRating,
     handleDeleteRating,
     checkRatingAllowed
-  } = useRatingsState(reservations);
+  } = useRatingsState(reservations, {
+    enabled: Boolean(currentUser) && (canWrite || currentView === 'mobile' || currentView === 'ratings' ||
+      currentView === 'admin' || currentView === 'maintenance' || isDetailModalOpen ||
+      isReservationModalOpen || isRatingModalOpen),
+    automaticEmailEnabled: canWrite,
+  });
 
   // 6. Audit Logs Hook (On-demand listener only when modal is open)
   const { auditLogs } = useAuditLogs(isAuditLogOpen);
@@ -341,7 +348,7 @@ export default function App() {
     conflictReservationIds,
     filteredReservations,
     activeReservations
-  } = useFilteredReservations(reservations);
+  } = useFilteredReservations(reservations, { filters: reservationFilters, setFilters: setReservationFilters });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
 
   // Global Keyboard Shortcuts (Ctrl+K, Cmd+K, '/', Alt+N)
@@ -394,6 +401,7 @@ export default function App() {
     let isMounted = true;
 
     const executeScheduledBackupCheck = async () => {
+      if (!canWrite) return;
       try {
         const currentResList = reservationsRef.current;
         if (!currentResList || currentResList.length === 0) return;
@@ -419,7 +427,7 @@ export default function App() {
       }
     };
 
-    if (reservations.length > 0) {
+    if (canWrite && reservations.length > 0) {
       executeScheduledBackupCheck();
       // Purge expired concurrency schedule_slots (> 30 days old, throttled to run at most once a week)
       purgeExpiredScheduleSlots(30).catch((purgeErr) => {
@@ -436,7 +444,7 @@ export default function App() {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [reservations.length > 0]);
+  }, [reservations.length > 0, canWrite]);
 
   const handleOpenRatingModal = (reservation: Reservation, rating?: SpaceRating) => {
     if (!rating) {
@@ -862,6 +870,17 @@ export default function App() {
 
       {/* Revalidation Banner for cloud synchronization feedback */}
       <RevalidationBanner isRevalidating={isFirebaseSyncing} />
+      {generalDataPending && (
+        <div role="status" className="p-4 text-center text-slate-600">
+          {readError ? 'No se pudieron cargar las reservas. Comprueba tu conexión.' : 'Cargando reservas para esta vista...'}
+          {readError && <button type="button" onClick={retryRead} className="ml-3 text-blue-600 underline">Reintentar</button>}
+          {(isImportExportModalOpen || isGlobalPrintModalOpen || isGmailDispatchModalOpen) && (
+            <button type="button" className="ml-3 text-blue-600 underline" onClick={() => {
+              setIsImportExportModalOpen(false); setIsGlobalPrintModalOpen(false); setIsGmailDispatchModalOpen(false);
+            }}>Cancelar</button>
+          )}
+        </div>
+      )}
 
       {/* Main View Area */}
       <main className={`flex-1 w-full mx-auto ${
@@ -869,6 +888,7 @@ export default function App() {
           ? 'max-w-none px-1.5 sm:px-3 lg:px-4 py-1.5'
           : 'max-w-[1680px] px-3 sm:px-4 md:px-6 py-4'
       }`}>
+        {!generalDataPending && <>
         <PendingReservationOperations user={currentUser} />
         {/* Banner de Recuperación de Borrador de Reserva tras Recarga Accidental */}
         {activeDraft && !isReservationModalOpen && (
@@ -973,7 +993,8 @@ export default function App() {
               spaces={spaces}
               selectedDate={selectedDailyDate}
               spaceBlocks={spaceBlocks}
-              onLoadHistoricalMonth={loadHistoricalMonth}
+              onVisibleMonthChange={setSelectedDailyDate}
+              onLoadHistoricalMonth={reservationReadScope ? undefined : loadHistoricalMonth}
               isHistoricalLoading={isHistoricalLoading}
               onNavigateToDay={(day) => {
                 setSelectedDailyDate(day);
@@ -1291,6 +1312,7 @@ export default function App() {
             />
           </Suspense>
         )}
+        </>}
       </main>
 
       {/* Application Footer with 'Última actualización: [Fecha/Hora]' */}
@@ -1300,6 +1322,10 @@ export default function App() {
         isFirebaseConnected={isFirebaseConnected}
         totalReservations={reservations.length}
         onManualSync={async () => {
+          if (!canWrite) {
+            retryRead();
+            return;
+          }
           try {
             const res = await handleSyncAllToFirebase();
             if (res && !res.error) {
@@ -1506,10 +1532,13 @@ export default function App() {
           setSelectedReservation(res);
           setIsDetailModalOpen(true);
         }}
-        isImportExportModalOpen={isImportExportModalOpen}
+        isImportExportModalOpen={isImportExportModalOpen && !generalDataPending}
         onCloseImportExportModal={() => setIsImportExportModalOpen(false)}
         onImportReservations={handleImportReservations}
-        onSyncAllToFirebase={handleSyncAllToFirebase}
+        onSyncAllToFirebase={canWrite ? handleSyncAllToFirebase : async () => {
+          retryRead();
+          return { count: 0, skipped: true };
+        }}
         onRestoreFromBackup={(restored) => {
           setReservations(restored);
         }}
@@ -1522,7 +1551,7 @@ export default function App() {
         }}
         conflictReportData={conflictReportData}
         onCloseConflictReport={() => setConflictReportData((prev) => ({ ...prev, isOpen: false }))}
-        isGlobalPrintModalOpen={isGlobalPrintModalOpen}
+        isGlobalPrintModalOpen={isGlobalPrintModalOpen && !generalDataPending}
         globalPrintInitialDate={globalPrintInitialDate}
         onClosePrintModal={() => {
           setIsGlobalPrintModalOpen(false);
@@ -1563,7 +1592,7 @@ export default function App() {
             saveAuthUser(updatedUser);
           }
         }}
-        isGmailDispatchModalOpen={isGmailDispatchModalOpen}
+        isGmailDispatchModalOpen={isGmailDispatchModalOpen && !generalDataPending}
         gmailDispatchInitialDate={gmailDispatchInitialDate}
         gmailDispatchFilterMode={gmailDispatchFilterMode}
         gmailDispatchReservationId={gmailDispatchReservationId}

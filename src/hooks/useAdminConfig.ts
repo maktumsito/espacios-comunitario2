@@ -67,7 +67,8 @@ export interface UseAdminConfigReturn {
 
 export function useAdminConfig(
   currentUser: AuthUser | null,
-  onToast: (msg: string, type?: 'success' | 'info' | 'error' | 'warning') => void
+  onToast: (msg: string, type?: 'success' | 'info' | 'error' | 'warning') => void,
+  { equipmentEnabled = true }: { equipmentEnabled?: boolean } = {},
 ): UseAdminConfigReturn {
   const [spaces, setSpaces] = useState<SpaceInfo[]>(() => getStoredSpaces());
   const [loanTypes, setLoanTypes] = useState<LoanType[]>(() => getStoredLoanTypes());
@@ -103,6 +104,7 @@ export function useAdminConfig(
 
   // Subscribe to Equipment Configuration from Firestore & Local Events
   useEffect(() => {
+    if (!equipmentEnabled) return;
     const unsubEquipment = subscribeToEquipment((data) => {
       if (Array.isArray(data) && data.length > 0) {
         setEquipment(data);
@@ -122,7 +124,7 @@ export function useAdminConfig(
       if (typeof unsubEquipment === 'function') unsubEquipment();
       window.removeEventListener('app_equipment_changed', handleEquipmentUpdate);
     };
-  }, []);
+  }, [equipmentEnabled]);
 
   const handleSaveSpace = useCallback(async (space: SpaceInfo) => {
     const updated = await saveSpaceItem(space);

@@ -53,3 +53,20 @@ it('keeps a confirmed empty cache empty and prevents delayed IndexedDB hydration
   expect(onData.mock.calls.at(-1)?.[0]).toEqual([]);
   stop();
 });
+
+it('reconciles additions, edits and removals inside a live date range while preserving other cached months', async () => {
+  const service = await import('../reservationService');
+  service.setLocalCache([row('old', '2026-10-05'), row('future', '2027-01-04')]);
+  const onData = vi.fn();
+  const stop = service.subscribeToReservationsByDateRange('2026-10-01', '2026-10-31', onData, vi.fn());
+  expect(onData.mock.calls.at(-1)?.[0].map((r: any) => r.id)).toEqual(['old']);
+  sdk.next(snapshot([row('new', '2026-10-07')]));
+  expect(onData.mock.calls.at(-1)?.[0].map((r: any) => r.id)).toEqual(['new']);
+  expect(service.getLocalCache().map(r => r.id).sort()).toEqual(['future', 'new']);
+  sdk.next(snapshot([{ ...row('new', '2026-10-07'), descripcion: 'Cambio remoto' }]));
+  expect(onData.mock.calls.at(-1)?.[0][0].descripcion).toBe('Cambio remoto');
+  sdk.next(snapshot([]));
+  expect(onData.mock.calls.at(-1)?.[0]).toEqual([]);
+  expect(service.getLocalCache().map(r => r.id)).toEqual(['future']);
+  stop();
+});
