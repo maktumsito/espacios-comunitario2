@@ -37,7 +37,7 @@ export function RecurringMoveScopeModal({ original, target, onCancel, onConfirm 
         <legend className="font-semibold mb-2">¿A qué reservas aplicar el movimiento?</legend>
         {([
           ['single', 'Solo esta reserva', 'Se modifica únicamente la sesión arrastrada.'],
-          ['series', 'Toda la serie', 'Se modifican todas las sesiones pendientes desde hoy.'],
+          ['series', 'Serie desde esta fecha', 'Se modifican las sesiones desde la fecha seleccionada en adelante.'],
           ['future', 'Desde esta en adelante', `Se modifican las sesiones desde el ${formatDateDDMMYYYY(original.fecha)}, sin incluir fechas pasadas.`],
         ] as const).map(([value, label, description]) => <label key={value} className="flex items-start gap-3 rounded-xl border border-indigo-200 p-3 cursor-pointer">
           <input type="radio" name="move-scope" value={value} disabled={value === 'single' && isPast} checked={scope === value} onChange={() => setScope(value)} className="mt-1" />

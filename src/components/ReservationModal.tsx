@@ -726,7 +726,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       const sId = !isCopy && !isMultiSpace && (editingReservation.serieRecurrente || editingReservation.recurrenteId);
       if (sId && allReservations) {
         const matches = allReservations.filter((r) => (r.serieRecurrente === sId || r.recurrenteId === sId) &&
-          r.fecha >= getChileLocalDateString() && !r.reemplazadaPorReservaId && !['cancelada', 'eliminada', 'rechazada'].includes(r.estado || ''));
+          r.fecha >= getSeriesEditStartDate('series', editingReservation.fecha) && !r.reemplazadaPorReservaId && !['cancelada', 'eliminada', 'rechazada'].includes(r.estado || ''));
         if (matches.length > 0) {
           const sortedMatches = [...matches].sort((a, b) => {
             if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
@@ -757,7 +757,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
         }
       } else {
         if (editingReservation.fechaInicioRecurrencia) {
-          setRecurrenceStartDate(editingReservation.fechaInicioRecurrencia);
+          setRecurrenceStartDate(isCopy ? editingReservation.fechaInicioRecurrencia : getSeriesEditStartDate('series', editingReservation.fecha));
         } else if (editingReservation.fecha) {
           setRecurrenceStartDate(editingReservation.fecha);
         }
@@ -1214,7 +1214,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     if (editingReservation) {
       const sId = editingReservation.serieRecurrente || editingReservation.recurrenteId;
       if (sId && allReservations && allReservations.length > 0) {
-        const matches = allReservations.filter((r) => r.serieRecurrente === sId || r.recurrenteId === sId);
+        const matches = allReservations.filter((r) => (r.serieRecurrente === sId || r.recurrenteId === sId) &&
+          r.fecha >= getSeriesEditStartDate('series', editingReservation.fecha));
         if (matches.length > 0) {
           return matches.map((r) => ({
             fecha: r.fecha,

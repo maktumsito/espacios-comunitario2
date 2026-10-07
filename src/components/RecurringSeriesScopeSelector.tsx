@@ -58,7 +58,7 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
             </h4>
           </div>
           <p className="text-xs text-indigo-700/90 leading-relaxed">
-            Elige a qué sesiones pendientes aplicar los cambios. Las sesiones anteriores a hoy quedan intactas y fuera de la revisión.
+            Elige a qué sesiones pendientes aplicar los cambios. Las sesiones anteriores a la fecha seleccionada quedan intactas y fuera de la revisión.
           </p>
         </div>
       </div>
@@ -125,12 +125,12 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
           <div className="flex items-center justify-between w-full mb-1">
             <span className="text-xs font-bold flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5" />
-              Toda la serie
+              Serie desde esta fecha
             </span>
             {updateScope === 'series' && <Check className="w-3.5 h-3.5 text-emerald-300" />}
           </div>
           <span className={`text-[11px] leading-tight ${updateScope === 'series' ? 'text-indigo-100' : 'text-indigo-700'}`}>
-            Las {seriesCount} reservas pendientes desde hoy
+            Las {seriesCount} reservas desde la fecha seleccionada
           </span>
         </button>
 
@@ -203,6 +203,7 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
               <input
                 id="input-range-start-date"
                 type="date"
+                min={editingReservation.fecha}
                 value={rangeStartDate}
                 onChange={(e) => setRangeStartDate(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500"
@@ -213,6 +214,7 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
               <input
                 id="input-range-end-date"
                 type="date"
+                min={editingReservation.fecha}
                 value={rangeEndDate}
                 onChange={(e) => setRangeEndDate(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500"
@@ -303,7 +305,7 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
             <strong>Resumen del impacto:</strong> Se actualizarán <strong>{affectedReservations.length} reserva(s)</strong>.
             {updateScope === 'single' && ' Los cambios se aplicarán exclusivamente a esta fecha; el resto de la serie no se alterará.'}
             {updateScope === 'future' && ` Se aplicará a las reservas desde el ${formatDateDDMMYYYY(editingReservation.fecha)} en adelante. Las anteriores se mantendrán intactas.`}
-            {updateScope === 'series' && ` Se aplicará a las ${seriesCount} reservas pendientes de la serie. Las sesiones pasadas se mantienen intactas.`}
+            {updateScope === 'series' && ` Se aplicará a las ${seriesCount} reservas pendientes de la serie. Las sesiones anteriores a esta fecha se mantienen intactas.`}
             {updateScope === 'dateRange' && ` Se aplicará a las ${affectedReservations.length} reservas comprendidas en el rango seleccionado.`}
             {updateScope === 'selected' && ` Se aplicará exclusivamente a las ${affectedReservations.length} reservas que has marcado con el selector.`}
           </p>

@@ -19,7 +19,7 @@ it('asks for the scope and does not save until the user confirms',async()=>{
 it('cancels without saving and keeps the scope available if validation fails',async()=>{
   const save=vi.fn().mockResolvedValue(false),cancel=vi.fn();
   render(<RecurringMoveScopeModal original={original} target={{...original,espacio:'SALA 3'}} onCancel={cancel} onConfirm={save}/>);
-  fireEvent.click(screen.getByRole('radio',{name:/Toda la serie/}));
+  fireEvent.click(screen.getByRole('radio',{name:/Serie desde esta fecha/}));
   fireEvent.click(screen.getByText('Confirmar movimiento'));
   await waitFor(()=>expect(screen.getByRole('alert')).toBeTruthy());
   expect(save).toHaveBeenCalledWith('series');

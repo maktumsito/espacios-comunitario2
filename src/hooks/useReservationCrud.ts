@@ -538,7 +538,7 @@ export function useReservationCrud({
       const today = getChileLocalDateString();
       const seriesIdForExceptions = reserva.serieRecurrente || reserva.recurrenteId;
       const editScope = batchUpdateInfo?.scope || (updateWholeSeries ? 'series' : 'single');
-      const sourceDate = reservations.find(r => r.id === batchUpdateInfo?.sourceReservationId)?.fecha || reserva.fecha;
+      const sourceDate = reservations.find(r => r.id === (batchUpdateInfo?.sourceReservationId || reserva.id))?.fecha || reserva.fecha;
       const editCutoff = getSeriesEditStartDate(editScope, sourceDate, today);
       const exceptionHistory = !batchUpdateInfo?.replacementOriginal && seriesIdForExceptions &&
         (updateWholeSeries || batchUpdateInfo && batchUpdateInfo.scope !== 'single')
@@ -734,7 +734,7 @@ export function useReservationCrud({
             // Re-sync with explicit slots (supports multiple segments per day, e.g. 2 spaces/times on Monday & Wednesday)
             const history=[...new Map([...reservations,...exceptionHistory].map(r=>[r.id,r])).values()];
             const originalSource=history.find(r=>r.id===reserva.id)||reserva;
-            const safeSlots = scopedScheduleSlots(explicitSlots,{scope:'series',source:reserva,history,today});
+            const safeSlots = scopedScheduleSlots(explicitSlots,{scope:'series',source:originalSource,history,today});
             const totalCount = safeSlots.length;
             const existingByDate = new Map<string, Reservation[]>();
             seriesMatches.forEach((m) => {

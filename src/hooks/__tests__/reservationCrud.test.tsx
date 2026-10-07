@@ -77,7 +77,7 @@ it('preserves authoritative exceptions and excludes their deletion during a scop
   await act(async () => expect(await result.current.handleCreateOrUpdate(future, false, undefined, false, {
     scope: 'series', updatedReservations: [{ ...source, id: 'regenerated' }, { ...future, descripcion: 'Actualizado' }], affectedIds: [future.id], deletedIds: [source.id],
   })).toBe(true));
-  expect(mocks.series).toHaveBeenCalledWith('series', '2026-10-06');
+  expect(mocks.series).toHaveBeenCalledWith('series', '2026-10-13');
   expect(mocks.save).toHaveBeenCalledWith([{ ...future, descripcion: 'Actualizado' }], { deletedIds: [], allowConflictOverride: undefined, requireAtomic: true, intent: 'update' });
 });
 
@@ -92,8 +92,8 @@ it('moves all pending sessions atomically while preserving past sessions and rep
   mocks.save.mockImplementation(async (rows: Reservation[]) => ({reservations:rows,deletedIds:[],confirmedIds:rows.map(r=>r.id),pendingIds:[]}));
   const {result}=renderHook(()=>useReservationCrud(p));
   await act(async()=>expect(await result.current.handleMoveReservation(source,{...source,espacio:'SALA 3',horaInicio:'11:00',horaFin:'12:00'},'series')).toBe(true));
-  expect(mocks.series).toHaveBeenCalledWith('series','2026-10-06');
-  expect(mocks.save.mock.calls[0][0].map((r:Reservation)=>r.id)).toEqual(['today',source.id,'future']);
+  expect(mocks.series).toHaveBeenCalledWith('series','2026-10-13');
+  expect(mocks.save.mock.calls[0][0].map((r:Reservation)=>r.id)).toEqual([source.id,'future']);
   expect(mocks.save.mock.calls[0][1]).toEqual({requireAtomic:true,allowConflictOverride:false,intent:'update'});
   expect(mocks.save.mock.calls[0][0].every((r:Reservation)=>r.espacio==='SALA 3'&&r.horaInicio==='11:00')).toBe(true);
 });
@@ -113,8 +113,8 @@ it('does not overwrite a source that changed while the move scope popup was open
   await act(async()=>expect(await result.current.handleMoveReservation(source,{...source,espacio:'SALA 3'},'series')).toBe(false));
   expect(mocks.save).not.toHaveBeenCalled();
 });
-it('guards historical IDs against deletion and reuse during series edits', async () => {
-  const past={...row,id:'past',fecha:'2026-10-05',actividadRecurrente:'Sí',serieRecurrente:'series'};
+it.each(['2026-10-05', '2026-10-06'])('guards IDs before the selected date against deletion and reuse (%s)', async fecha => {
+  const past={...row,id:'past',fecha,actividadRecurrente:'Sí',serieRecurrente:'series'};
   const future={...past,id:'future',fecha:'2026-10-13'};
   const p=props();p.reservations=[past,future];mocks.series.mockResolvedValue([future]);
   mocks.save.mockImplementation(async(rows:Reservation[])=>({reservations:rows,deletedIds:[],confirmedIds:rows.map(r=>r.id),pendingIds:[]}));

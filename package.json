@@ -17,6 +17,8 @@
     "measure:browser": "node scripts/measure-browser.cjs after",
     "slots:check": "tsx scripts/rebuild-schedule-slots.ts",
     "slots:rebuild": "tsx scripts/rebuild-schedule-slots.ts --apply",
+    "reservations:group:preview": "tsx scripts/group-independent-reservations.ts",
+    "reservations:group:apply": "tsx scripts/group-independent-reservations.ts --apply",
     "measure:persistence": "node scripts/measure-persistence.cjs after"
   },
   "dependencies": {

@@ -11,8 +11,9 @@ export function isRecurringSeriesReservation(r: Reservation): boolean {
   return Boolean(r.serieRecurrente || r.recurrenteId) && !isSingleDayMultiSpaceReservation(r);
 }
 
-export function getSeriesEditStartDate(scope: UpdateScope, sourceDate: string, today = getChileLocalDateString()): string {
-  return scope === 'future' && sourceDate > today ? sourceDate : today;
+export function getSeriesEditStartDate(_scope: UpdateScope, sourceDate: string, today = getChileLocalDateString()): string {
+  // Every edit scope starts at the selected occurrence, never an earlier session.
+  return sourceDate > today ? sourceDate : today;
 }
 
 export function buildReservationMoveBatch(original: Reservation, target: Reservation, scope: RecurringMoveScope,

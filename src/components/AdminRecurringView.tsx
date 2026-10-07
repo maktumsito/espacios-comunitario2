@@ -32,6 +32,7 @@ import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { detectBatchConflicts } from '../utils/conflictDetector';
 import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from './common/PaginationControls';
+import { IndependentReservationGrouping } from './IndependentReservationGrouping';
 
 const WEEKDAYS = [
   { dayNum: 1, key: 'lunes', short: 'Lun', full: 'Lunes' },
@@ -721,6 +722,8 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
           <span>Nueva Actividad Recurrente</span>
         </button>
       </div>
+
+      <IndependentReservationGrouping />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">

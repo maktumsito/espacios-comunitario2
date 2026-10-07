@@ -5,7 +5,7 @@ import type { Reservation } from '../../types';
 beforeEach(()=>localStorage.clear());
 const base:Reservation={id:'selected',fecha:'2026-10-13',horaInicio:'10:00',horaFin:'11:00',espacio:'SALA 2',responsable:'Vecino',tipoActividad:'Taller',descripcion:'Taller semanal',actividadRecurrente:'Sí',serieRecurrente:'series',estado:'activa',version:3};
 const rows=[{...base,id:'past',fecha:'2026-10-05'},{...base,id:'today',fecha:'2026-10-06'},base,{...base,id:'future',fecha:'2026-10-20'},{...base,id:'exception',fecha:'2026-10-27',estado:'cancelada',reemplazadaPorReservaId:'replacement'}];
-it.each([['single',['selected']],['series',['today','selected','future']],['future',['selected','future']]] as const)('applies %s only to its pending scope', (scope,ids)=>{
+it.each([['single',['selected']],['series',['selected','future']],['future',['selected','future']]] as const)('applies %s only to its pending scope', (scope,ids)=>{
   const batch=buildReservationMoveBatch(base,{...base,espacio:'SALA 3',horaInicio:'11:00',horaFin:'12:00'},scope,rows,'2026-10-06');
   expect(batch.affectedIds).toEqual(ids);
   expect(batch.updatedReservations.every(r=>r.espacio==='SALA 3'&&r.horaInicio==='11:00'&&r.horaFin==='12:00')).toBe(true);
