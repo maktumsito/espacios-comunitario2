@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Reservation, SpaceInfo, ViewMode } from '../types';
 import {
@@ -27,7 +28,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { fuzzySearchReservations, fuzzySearchItems } from '../utils/fuzzySearch';
 import { ConfirmationModal } from './common/ConfirmationModal';
-import { isTopmostDialog, trapDialogTab } from '../utils/dialogKeyboard';
+import { isTopmostDialog } from '../utils/dialogKeyboard';
 
 interface PaletteCommandItem {
   id: string;
@@ -116,32 +117,12 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
     if (isOpen) {
       setQuery('');
       setSelectedIndex(0);
-      const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      const previousOverflow = document.body.style.overflow;
       const timer = setTimeout(() => {
         if (isTopmostDialog(dialogRef.current)) inputRef.current?.focus();
       }, 50);
-      document.body.style.overflow = 'hidden';
-      return () => {
-        clearTimeout(timer);
-        document.body.style.overflow = previousOverflow;
-        if (previousFocus?.isConnected) previousFocus.focus();
-      };
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleDialogKey = (event: KeyboardEvent) => {
-      if (!dialogRef.current || event.defaultPrevented || event.isComposing || !isTopmostDialog(dialogRef.current)) return;
-      if (event.key === 'Escape') {
-        if (event.repeat) return;
-        event.preventDefault(); event.stopPropagation(); onClose();
-      } else trapDialogTab(event, dialogRef.current);
-    };
-    window.addEventListener('keydown', handleDialogKey);
-    return () => window.removeEventListener('keydown', handleDialogKey);
-  }, [isOpen, onClose]);
 
   // Unique applicants index derived from reservations
   const applicantsList = useMemo(() => {
@@ -541,7 +522,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
+    <ModalOverlay onClose={onClose}
       id="global-command-palette"
       ref={dialogRef}
       tabIndex={-1}
@@ -549,7 +530,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Buscador rápido global y comandos"
-      className="fixed inset-0 z-[65] flex items-start justify-center pt-16 sm:pt-24 px-3 sm:px-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 flex items-start justify-center pt-16 sm:pt-24 px-3 sm:px-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -886,6 +867,6 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
       />
-    </div>
+    </ModalOverlay>
   );
 };

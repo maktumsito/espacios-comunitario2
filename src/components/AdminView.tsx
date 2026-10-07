@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { SpaceInfo, LoanType, ActivityTypeItem, EquipmentItem, Reservation, SpaceBlock, SpaceRating, ApplicantSummary } from '../types';
 import {
@@ -2421,7 +2422,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
       {/* --- MODAL FORM: CREATE / EDIT USER --- */}
       {isUserFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto animate-fadeIn">
+        <ModalOverlay onClose={() => setIsUserFormOpen(false)} className="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto my-8 animate-scaleUp">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -2715,12 +2716,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* --- MODAL CONFIRM DELETE USER --- */}
       {userToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn">
+        <ModalOverlay onClose={() => setUserToDelete(null)} className="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
             <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 mx-auto">
               <Trash2 className="w-6 h-6" />
@@ -2748,12 +2749,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* --- MODAL FORM: CREATE / EDIT SPACE --- */}
       {isSpaceFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
+        <ModalOverlay onClose={() => setIsSpaceFormOpen(false)} className="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center space-x-2.5">
@@ -2872,12 +2873,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* --- MODAL FORM: CREATE / EDIT ACTIVITY & LOAN TYPE --- */}
       {isActivityFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
+        <ModalOverlay onClose={() => setIsActivityFormOpen(false)} className="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center space-x-2.5">
@@ -2998,12 +2999,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* --- MODAL FORM: CREATE / EDIT EQUIPMENT --- */}
       {isEquipmentFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto animate-fadeIn">
+        <ModalOverlay onClose={() => setIsEquipmentFormOpen(false)} className="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto my-8 animate-scaleUp">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center space-x-2.5">
@@ -3114,12 +3115,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* --- MODAL CONFIRM DELETE EQUIPMENT --- */}
       {equipmentToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn">
+        <ModalOverlay onClose={() => setEquipmentToDelete(null)} className="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
             <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 mx-auto">
               <Trash2 className="w-6 h-6" />
@@ -3147,7 +3148,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
       {/* --- CONFIRMATION MODAL --- */}
       {confirmDialog && (

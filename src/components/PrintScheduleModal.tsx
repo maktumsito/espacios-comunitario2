@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import { showPrintBlob } from '../utils/printWindow';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Reservation, SpaceInfo } from '../types';
@@ -724,7 +725,7 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/70 backdrop-blur-xs p-2 sm:p-4">
+    <ModalOverlay onClose={() => { if (!isGeneratingPdf) onClose(); }} className="fixed inset-0 flex items-center justify-center overflow-y-auto bg-slate-900/70 backdrop-blur-xs p-2 sm:p-4">
       {/* Modal Container */}
       <div
         id="print-modal-dialog"
@@ -1112,6 +1113,6 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 };

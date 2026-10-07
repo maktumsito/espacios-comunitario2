@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Reservation, SpaceInfo } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
@@ -262,7 +263,7 @@ RUT: ${rutStr || '____________________________________'}
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:static">
+    <ModalOverlay onClose={onClose} className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:static">
       <div className="bg-slate-100 rounded-3xl shadow-2xl max-w-4xl w-full border border-slate-300 overflow-hidden my-4 flex flex-col max-h-[94vh] print:max-h-none print:shadow-none print:border-none print:rounded-none print:m-0 print:bg-white">
         
         {/* Modal Top Bar (Hidden in Print) */}
@@ -871,6 +872,6 @@ RUT: ${rutStr || '____________________________________'}
         </div>
 
       </div>
-    </div>
+    </ModalOverlay>
   );
 };

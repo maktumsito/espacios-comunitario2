@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useId, useRef } from 'react';
 import { X } from 'lucide-react';
-import { getDialogFocusables, isTopmostDialog, trapDialogTab } from '../../utils/dialogKeyboard';
+import { isTopmostDialog } from '../../utils/dialogKeyboard';
+import { ModalOverlay } from './ModalOverlay';
 
 export interface BaseModalProps {
   isOpen: boolean;
@@ -36,12 +37,6 @@ const MAX_WIDTH_MAP = {
   full: 'max-w-[95vw]'
 };
 
-const Z_INDEX_MAP = {
-  base: 'z-50',
-  nested: 'z-[55]',
-  alert: 'z-[60]'
-};
-
 export const BaseModal: React.FC<BaseModalProps> = ({
   isOpen,
   onClose,
@@ -63,98 +58,35 @@ export const BaseModal: React.FC<BaseModalProps> = ({
   footerClassName = 'px-5 py-3.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0'
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
-  const titleId = id ? `${id}-title` : 'modal-title';
-  const descId = id ? `${id}-desc` : undefined;
-
-  const previousActiveElementRef = useRef<HTMLElement | null>(null);
-
-  // 1. Esc Key listener
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented && !e.repeat && !e.isComposing && isTopmostDialog(modalRef.current)) {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  // 2. Body scroll lock & Save previous focused element
-  useEffect(() => {
-    if (!isOpen) return;
-
-    previousActiveElementRef.current = document.activeElement as HTMLElement;
-
-    const originalOverflow = document.body.style.overflow;
-    const originalPaddingRight = document.body.style.paddingRight;
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-
-    document.body.style.overflow = 'hidden';
-    if (scrollbarWidth > 0) {
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
-    }
-
-    return () => {
-      document.body.style.overflow = originalOverflow;
-      document.body.style.paddingRight = originalPaddingRight;
-      if (previousActiveElementRef.current?.isConnected && typeof previousActiveElementRef.current.focus === 'function') {
-        previousActiveElementRef.current.focus();
-        previousActiveElementRef.current = null;
-      }
-    };
-  }, [isOpen]);
-
-  // 3. Focus trap: Initial focus and Tab/Shift+Tab cycling
-  useEffect(() => {
-    if (!isOpen || !modalRef.current) return;
-
-    const getFocusable = (): HTMLElement[] => {
-      if (!modalRef.current) return [];
-      return getDialogFocusables(modalRef.current);
-    };
-
-    const focusables = getFocusable();
-    if (focusables.length > 0 && isTopmostDialog(modalRef.current)) {
-      focusables[0]?.focus();
-    }
-
-    const handleTabKey = (e: KeyboardEvent) => {
-      if (modalRef.current) trapDialogTab(e, modalRef.current);
-    };
-
-    window.addEventListener('keydown', handleTabKey);
-    return () => window.removeEventListener('keydown', handleTabKey);
-  }, [isOpen]);
+  const generatedId = useId();
+  const titleId = `${id || generatedId}-title`;
+  const descId = `${id || generatedId}-desc`;
 
   if (!isOpen) return null;
 
-  const zClass = Z_INDEX_MAP[layer] || 'z-50';
   const widthClass = MAX_WIDTH_MAP[maxWidth] || 'max-w-2xl';
 
   return (
-    <div
+    <ModalOverlay
+      ref={modalRef}
+      onClose={onClose}
+      data-modal-kind={layer}
       id={id}
       role={role}
       aria-modal="true"
       aria-labelledby={title ? titleId : undefined}
       aria-describedby={subtitle && descId ? descId : undefined}
-      className={`fixed inset-0 ${zClass} flex items-center justify-center p-3 sm:p-4 overflow-y-auto`}
+      className={`fixed inset-0 flex items-center justify-center p-3 sm:p-4 overflow-y-auto`}
     >
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-        onClick={closeOnBackdrop ? onClose : undefined}
+        onClick={() => { if (closeOnBackdrop && isTopmostDialog(modalRef.current)) onClose(); }}
         aria-hidden="true"
       />
 
       {/* Modal Container */}
       <div
-        ref={modalRef}
         tabIndex={-1}
         className={`relative w-full ${widthClass} bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col max-h-[90vh] my-auto z-10 animate-in fade-in zoom-in-95 duration-200 ${containerClassName}`}
         onClick={(e) => e.stopPropagation()}
@@ -215,6 +147,6 @@ export const BaseModal: React.FC<BaseModalProps> = ({
           </footer>
         )}
       </div>
-    </div>
+    </ModalOverlay>
   );
 };

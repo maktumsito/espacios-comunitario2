@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Repeat,
@@ -33,6 +34,7 @@ import { detectBatchConflicts } from '../utils/conflictDetector';
 import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from './common/PaginationControls';
 import { IndependentReservationGrouping } from './IndependentReservationGrouping';
+import { ConfirmationModal } from './common/ConfirmationModal';
 
 const WEEKDAYS = [
   { dayNum: 1, key: 'lunes', short: 'Lun', full: 'Lunes' },
@@ -107,6 +109,7 @@ const RecurringSeriesCard = React.memo<RecurringSeriesCardProps>(({
   onEditReservation,
   onDeleteReservation
 }) => {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   // Formatted days string
   const daysLabel = series.diasSemana
     .map((d) => WEEKDAYS.find((w) => w.dayNum === d)?.short || '')
@@ -205,11 +208,7 @@ const RecurringSeriesCard = React.memo<RecurringSeriesCardProps>(({
           {onDeleteReservation && series.reservations[0] && (
             <button
               type="button"
-              onClick={async () => {
-                if (confirm(`¿Estás seguro de eliminar la serie recurrente completa de "${series.tipoActividad}" (${series.totalSesiones} ${series.totalSesiones === 1 ? 'sesión' : 'sesiones'})? Esta acción cancelará todas las fechas programadas.`)) {
-                  await onDeleteReservation(series.reservations[0].id, series.seriesId);
-                }
-              }}
+              onClick={() => setConfirmDelete(true)}
               className="min-h-[40px] p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-200 transition cursor-pointer"
               title="Eliminar todas las sesiones de la serie"
             >
@@ -266,6 +265,18 @@ const RecurringSeriesCard = React.memo<RecurringSeriesCardProps>(({
           </div>
         </div>
       )}
+      <ConfirmationModal
+        isOpen={confirmDelete}
+        title="Eliminar serie recurrente"
+        message={`Se cancelarán las ${series.totalSesiones} sesiones de "${series.tipoActividad}".`}
+        confirmLabel="Eliminar serie"
+        variant="danger"
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={async () => {
+          if (onDeleteReservation) await onDeleteReservation(series.reservations[0].id, series.seriesId);
+          setConfirmDelete(false);
+        }}
+      />
     </div>
   );
 });
@@ -871,7 +882,7 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
 
       {/* MODAL: Modificar hasta qué fecha se repite */}
       {modifyingSeries && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+        <ModalOverlay onClose={() => { if (!isUpdatingEndDate) setModifyingSeries(null); }} className="fixed inset-0 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
             {/* Modal Header */}
             <div className="px-5 py-4 bg-emerald-600 text-white flex items-center justify-between">
@@ -1059,12 +1070,12 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* MODAL: Nueva Actividad Recurrente */}
       {isNewModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+        <ModalOverlay onClose={() => { if (!isCreatingNew) setIsNewModalOpen(false); }} className="fixed inset-0 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
             {/* Modal Header */}
             <div className="px-5 py-4 bg-blue-600 text-white flex items-center justify-between">
@@ -1343,7 +1354,7 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   );

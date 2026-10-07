@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
@@ -737,9 +738,9 @@ export const GmailDispatchModal: React.FC<GmailDispatchModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
+    <ModalOverlay onClose={() => { if (!isSending) onClose(); }}
       id="modal-gmail-dispatch"
-      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+      className="fixed inset-0 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
     >
       <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95">
         {/* Modal Header */}
@@ -2140,7 +2141,7 @@ export const GmailDispatchModal: React.FC<GmailDispatchModalProps> = ({
 
       {/* Mandatory User Confirmation Dialog according to Google Workspace guidelines */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-60 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <ModalOverlay onClose={() => { if (!isSending) setShowConfirmModal(false); }} className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 space-y-4 animate-in fade-in zoom-in-95">
             <div className="flex items-start space-x-3">
               <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
@@ -2194,8 +2195,8 @@ export const GmailDispatchModal: React.FC<GmailDispatchModalProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
-    </div>
+    </ModalOverlay>
   );
 };

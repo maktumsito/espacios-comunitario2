@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useMemo } from 'react';
 import { Reservation } from '../types';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
@@ -177,11 +178,11 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
   };
 
   return (
-    <div
+    <ModalOverlay onClose={() => { if (!isMerging) onClose(); }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="merge-modal-title"
-      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn"
+      className="fixed inset-0 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn"
     >
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
@@ -432,6 +433,6 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 };

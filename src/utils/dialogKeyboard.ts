@@ -26,8 +26,8 @@ export function isTopmostDialog(element: HTMLElement | null): boolean {
 }
 
 export function getDialogFocusables(element: HTMLElement): HTMLElement[] {
-  return Array.from(element.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]'))
-    .filter(node => node.tabIndex >= 0 && !node.matches(':disabled') && isVisible(node));
+  return Array.from(element.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, iframe, object, embed, summary, [contenteditable], audio[controls], video[controls], [tabindex]'))
+    .filter(node => node.tabIndex >= 0 && !node.matches(':disabled, input[type="hidden"]') && isVisible(node));
 }
 
 export function trapDialogTab(event: KeyboardEvent, element: HTMLElement): void {

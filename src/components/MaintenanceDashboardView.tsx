@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useMemo } from 'react';
 import { SpaceBlock, SpaceInfo } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
@@ -392,7 +393,7 @@ export const MaintenanceDashboardView: React.FC<MaintenanceDashboardViewProps> =
 
       {/* Delete Single Confirmation Dialog */}
       {blockToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <ModalOverlay onClose={() => { if (!isDeleting) setBlockToDelete(null); }} className="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl p-5 max-w-sm w-full border border-slate-200 shadow-2xl space-y-4">
             <div className="flex items-center space-x-3 text-rose-600">
               <AlertTriangle className="w-6 h-6" />
@@ -419,12 +420,12 @@ export const MaintenanceDashboardView: React.FC<MaintenanceDashboardViewProps> =
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* Purge Secondary Confirmation Dialog */}
       {showPurgeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <ModalOverlay onClose={() => { if (!isPurgingPast) setShowPurgeModal(false); }} className="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl p-5 max-w-sm w-full border border-rose-200 shadow-2xl space-y-4">
             <div className="flex items-center space-x-3 text-rose-600">
               <AlertTriangle className="w-6 h-6 shrink-0" />
@@ -463,7 +464,7 @@ export const MaintenanceDashboardView: React.FC<MaintenanceDashboardViewProps> =
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   );

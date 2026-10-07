@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useMemo } from 'react';
 import { SpaceBlock, SpaceInfo } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
@@ -212,7 +213,7 @@ export const SpaceBlockModal: React.FC<SpaceBlockModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+    <ModalOverlay onClose={() => { if (!isSaving) onClose(); }} className="fixed inset-0 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Header */}
         <div className="px-5 py-4 bg-amber-500 text-white flex items-center justify-between">
@@ -574,6 +575,6 @@ export const SpaceBlockModal: React.FC<SpaceBlockModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </ModalOverlay>
   );
 };

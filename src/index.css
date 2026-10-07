@@ -16,10 +16,10 @@
   
   --z-dropdown: 40;
   --z-modal-backdrop: 45;
-  --z-modal: 50;
-  --z-dialog: 55;
-  --z-alert: 60;
-  --z-toast: 70;
+  --z-modal: 100;
+  --z-dialog: 101;
+  --z-alert: 102;
+  --z-toast: 1000;
 }
 
 :root {
@@ -165,7 +165,7 @@ body {
   }
 
   /* Remove modal constraints for print */
-  .fixed.inset-0.z-50 {
+  [data-modal-layer] {
     position: static !important;
     background: transparent !important;
     padding: 0 !important;
@@ -173,6 +173,12 @@ body {
     overflow: visible !important;
     backdrop-filter: none !important;
     display: block !important;
+  }
+
+  body:has([data-modal-layer]) > :not([data-modal-layer]),
+  [data-modal-layer][aria-hidden="true"],
+  [data-notification-layer] {
+    display: none !important;
   }
 
   #print-modal-dialog {

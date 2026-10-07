@@ -1,3 +1,4 @@
+import { NotificationPortal } from './common/NotificationPortal';
 import { useTimelineViewport, intersectsViewport } from '../hooks/useTimelineViewport';
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from 'react';
 import { Reservation, SpaceInfo, FilterState, SpaceBlock } from '../types';
@@ -168,7 +169,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
       left: `${left}px`,
       top: `${top}px`,
       width: `${popupWidth}px`,
-      zIndex: 9999,
+      // Passive previews stay below modal windows and status notifications.
+      zIndex: 50,
       pointerEvents: 'none',
     };
   }, []);
@@ -872,7 +874,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     <div className="w-full space-y-2 pb-1 relative">
       {/* Toast Notification Banner */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 flex items-center space-x-3 animate-in fade-in slide-in-from-top-4 duration-200">
+        <NotificationPortal><div className="fixed top-20 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 flex items-center space-x-3 animate-in fade-in slide-in-from-top-4 duration-200">
           <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
             <Check className="w-4 h-4" />
           </div>
@@ -882,7 +884,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
               <div className="text-[11px] text-slate-300 font-mono">{toastMessage.sub}</div>
             )}
           </div>
-        </div>
+        </div></NotificationPortal>
       )}
 
       {/* Top Banner if there are conflicts on this day */}

@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useEffect, useRef } from 'react';
 import { ViewMode } from '../types';
 import { AuthUser, isCoordinatorOrAdmin, getSessionRemainingMs, refreshSession } from '../services/authService';
@@ -95,6 +96,25 @@ const NavbarComponent: React.FC<NavbarProps> = ({
 
   const toolsMenuRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const closeDrawerOnDesktop = () => { if (window.innerWidth >= 768) setIsMobileDrawerOpen(false); };
+    window.addEventListener('resize', closeDrawerOnDesktop);
+    return () => window.removeEventListener('resize', closeDrawerOnDesktop);
+  }, []);
+
+  useEffect(() => {
+    if (!isToolsMenuOpen && !isUserMenuOpen) return;
+    const closeMenus = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.repeat || event.isComposing) return;
+      event.preventDefault();
+      const menu = isUserMenuOpen ? userMenuRef.current : toolsMenuRef.current;
+      setIsToolsMenuOpen(false); setIsUserMenuOpen(false);
+      menu?.querySelector('button')?.focus();
+    };
+    window.addEventListener('keydown', closeMenus);
+    return () => window.removeEventListener('keydown', closeMenus);
+  }, [isToolsMenuOpen, isUserMenuOpen]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -688,11 +708,11 @@ const NavbarComponent: React.FC<NavbarProps> = ({
 
       {/* Mobile Tools Drawer Modal (Clean touch-friendly interface) */}
       {isMobileDrawerOpen && (
-        <div
+        <ModalOverlay onClose={() => setIsMobileDrawerOpen(false)}
           role="dialog"
           aria-modal="true"
           aria-label="Menú de herramientas móviles"
-          className="fixed inset-0 z-50 md:hidden flex flex-col justify-end bg-slate-900/60 backdrop-blur-xs animate-in fade-in"
+          className="fixed inset-0 md:hidden flex flex-col justify-end bg-slate-900/60 backdrop-blur-xs animate-in fade-in"
           onClick={() => setIsMobileDrawerOpen(false)}
         >
           <div
@@ -834,7 +854,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </header>
   );

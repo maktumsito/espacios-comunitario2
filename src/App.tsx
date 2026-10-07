@@ -1,3 +1,4 @@
+import { NotificationPortal } from './components/common/NotificationPortal';
 import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { Reservation, ViewMode, FilterState, isSingleDayMultiSpaceReservation, BatchUpdateInfo, SpaceRating } from './types';
 import { normalizeSpaceName } from './data/spacesData';
@@ -1679,7 +1680,7 @@ export default function App() {
 
       {/* Instant Sync Status Toast */}
       {syncStatusToast && (
-        <div
+        <NotificationPortal><div
           id="sync-status-toast"
           role="status"
           aria-live="polite"
@@ -1713,12 +1714,12 @@ export default function App() {
           >
             ×
           </button>
-        </div>
+        </div></NotificationPortal>
       )}
 
       {/* Floating Notification Toast for Automated 15-day Backups */}
       {backupToast && backupToast.show && (
-        <div
+        <NotificationPortal><div
           id="auto-backup-toast"
           className="fixed bottom-5 right-5 z-50 max-w-md bg-slate-900 text-white rounded-2xl p-4 shadow-2xl border border-emerald-500/40 flex items-start space-x-3 animate-in fade-in slide-in-from-bottom-5"
         >
@@ -1744,7 +1745,7 @@ export default function App() {
           >
             &times;
           </button>
-        </div>
+        </div></NotificationPortal>
       )}
     </div>
   );

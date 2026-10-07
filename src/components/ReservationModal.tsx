@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Reservation, SpaceInfo, LoanType, ActivityTypeItem, SpaceRating, EquipmentItem, isSingleDayMultiSpaceReservation, SpaceBlock } from '../types';
 import { SPACES_LIST, ACTIVITY_TYPES, normalizeSpaceName } from '../data/spacesData';
@@ -1486,7 +1487,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Crear o editar reserva" className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <ModalOverlay onClose={() => { if (!isSubmittingRef.current) onClose(); }} role="dialog" aria-modal="true" aria-label="Crear o editar reserva" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full border border-slate-100 overflow-hidden my-6">
         {/* Header */}
         <ReservationModalHeader
@@ -1935,7 +1936,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
         deleteConfirmModal={deleteConfirmModal}
         setDeleteConfirmModal={setDeleteConfirmModal}
       />
-    </div>
+    </ModalOverlay>
   );
 };
 

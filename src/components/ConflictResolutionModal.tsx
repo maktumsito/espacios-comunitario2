@@ -1,3 +1,4 @@
+import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useMemo } from 'react';
 import { Reservation, SpaceInfo, CustomScheduleSlot, ConflictSavePayload } from '../types';
 import { checkSingleConflict, timeToMinutes, formatMinutesToTime } from '../utils/conflictDetector';
@@ -823,7 +824,7 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-xs overflow-y-auto animate-fadeIn">
+    <ModalOverlay onClose={onClose} className="fixed inset-0 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-xs overflow-y-auto animate-fadeIn">
       <div className="bg-white rounded-3xl shadow-2xl border-2 border-rose-300 max-w-4xl w-full my-6 overflow-hidden flex flex-col max-h-[92vh] text-slate-900">
         {/* Header */}
         <div className="px-6 py-5 bg-gradient-to-r from-slate-950 via-rose-950 to-slate-900 text-white flex items-start justify-between shrink-0">
@@ -1339,6 +1340,6 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 };
