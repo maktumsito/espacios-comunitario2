@@ -31,6 +31,16 @@ export interface UserAccount extends AuthUser {
   passwordHash: string;
 }
 
+/** Google identities must match an explicitly registered email, never a substring. */
+export function findAuthorizedGoogleAccount(email: string, users: readonly UserAccount[]): AuthUser | null {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+  const account = users.find(user => (user.email || user.username).trim().toLowerCase() === normalized);
+  if (!account) return null;
+  const { passwordHash: _password, ...safe } = account;
+  return safe;
+}
+
 export const SALT = 'espacios_community_salt_2026';
 
 export const DEFAULT_USERS: UserAccount[] = [
@@ -215,27 +225,38 @@ export function resetFailedAttempts(username?: string): void {
 // Session Token Helpers
 // -------------------------------------------------------------
 const SESSION_TOKEN_STORAGE_KEY = 'espacios_auth_token_v2';
+let verifiedSessionToken = '';
 
-export function createAuthSessionToken(user: AuthUser): string {
-  const payload = {
-    u: user.username,
-    r: user.role,
-    t: Date.now()
-  };
-  const token = typeof btoa !== 'undefined' ? btoa(JSON.stringify(payload)) : Buffer.from(JSON.stringify(payload)).toString('base64');
-  if (isBrowser) {
-    try {
-      sessionStorage.setItem(SESSION_TOKEN_STORAGE_KEY, token);
-      localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, token);
-    } catch {
-      // ignore
-    }
+async function requestVerifiedSession(path: string, body: Record<string, string>): Promise<{
+  success: boolean; user?: AuthUser; error?: string; remainingSeconds?: number; status?: number; expiresAt?: number;
+}> {
+  const response = await fetch(`/api/auth/${path}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json',
+      ...(getAuthSessionToken() ? { Authorization: `Bearer ${getAuthSessionToken()}` } : {}) }, body: JSON.stringify(body),
+  });
+  const result = await response.json();
+  if (!response.ok || !result.success || !result.user || typeof result.token !== 'string') {
+    return { success: false, error: result.error || 'La cuenta no tiene acceso.',
+      remainingSeconds: result.remainingSeconds, status: response.status };
   }
-  return token;
+  verifiedSessionToken = result.token;
+  try {
+    sessionStorage.setItem(SESSION_TOKEN_STORAGE_KEY, result.token);
+    localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, result.token);
+  } catch { /* The current browser session can still use its in-memory token. */ }
+  return { success: true, user: result.user, expiresAt: typeof result.expiresAt === 'number' ? result.expiresAt : undefined };
+}
+
+export async function authenticateGoogleSession(username: string, idToken: string): Promise<AuthUser> {
+  const result = await requestVerifiedSession('google-session', { username, idToken });
+  if (!result.success || !result.user) throw new Error(result.error || 'Google no confirmó el acceso.');
+  saveAuthUser(result.user);
+  return result.user;
 }
 
 export function getAuthSessionToken(): string {
   if (!isBrowser) return '';
+  if (verifiedSessionToken) return verifiedSessionToken;
   try {
     return sessionStorage.getItem(SESSION_TOKEN_STORAGE_KEY) || localStorage.getItem(SESSION_TOKEN_STORAGE_KEY) || '';
   } catch {
@@ -589,11 +610,11 @@ export async function changeUserPassword(
   if (!userAccount) {
     try {
       const db = getDb();
-      const snap = await getDocs(collection(db, USERS_COLLECTION));
-      if (!snap.empty) {
-        currentUsers = snap.docs.map((d) => d.data() as UserAccount);
+      const snap = await getDoc(doc(db, USERS_COLLECTION, sanitizeUsernameDocId(cleanUsername)));
+      if (snap.exists()) {
+        userAccount = snap.data() as UserAccount;
+        currentUsers = [...currentUsers, userAccount];
         saveAllAuthorizedUsers(currentUsers);
-        userAccount = currentUsers.find((u) => u.username.trim().toLowerCase() === cleanUsername);
       }
     } catch (err) {
       console.warn('Error consultando Firestore para cambio de clave:', err);
@@ -676,91 +697,29 @@ export const AUTHORIZED_USERS = DEFAULT_USERS;
 export async function authenticateUser(
   username: string,
   passwordInput: string,
-  customUsersList?: UserAccount[]
+  _customUsersList?: UserAccount[]
 ): Promise<{ success: boolean; user?: AuthUser; error?: string; remainingSeconds?: number }> {
   const cleanUsername = username.trim().toLowerCase();
   const cleanPass = passwordInput.trim();
-
-  if (!cleanUsername) {
-    return { success: false, error: 'Por favor selecciona o ingresa tu usuario.' };
-  }
-  if (!cleanPass) {
-    return { success: false, error: 'Por favor ingresa tu clave de acceso.' };
-  }
-
-  // 1. Verificación de bloqueo por intentos fallidos (Anti-Brute Force)
+  if (!cleanUsername || !cleanPass) return { success: false, error: 'Usuario y contraseña son obligatorios.' };
   const lockout = getLockoutStatus(cleanUsername);
-  if (lockout.isLocked) {
-    return {
-      success: false,
-      error: `Acceso bloqueado por seguridad tras múltiples intentos fallidos. Por favor espera ${lockout.remainingSeconds} segundos antes de reintentar.`,
-      remainingSeconds: lockout.remainingSeconds
-    };
-  }
-
-  // 2. Localizar cuenta de usuario
-  let users = customUsersList && customUsersList.length > 0 ? customUsersList : getAllAuthorizedUsers();
-  let found = users.find((u) => u.username.trim().toLowerCase() === cleanUsername);
-
-  // Si no está en cache local, consultar Firestore
-  if (!found) {
-    try {
-      const db = getDb();
-      const docSnap = await getDoc(doc(db, USERS_COLLECTION, sanitizeUsernameDocId(cleanUsername)));
-      if (docSnap.exists()) {
-        found = docSnap.data() as UserAccount;
-        saveUserAccount(found);
-      }
-    } catch (err) {
-      console.warn('Direct Firestore user lookup failed:', err);
+  if (lockout.isLocked) return { success: false, error: 'Acceso bloqueado temporalmente.', remainingSeconds: lockout.remainingSeconds };
+  try {
+    const result = await requestVerifiedSession('session', { username: cleanUsername, password: cleanPass });
+    if (!result.success || !result.user) {
+      if (result.status === 401 || result.status === 429) recordFailedAttempt(cleanUsername);
+      return result;
     }
+    resetFailedAttempts(cleanUsername);
+    saveAuthUser(result.user);
+    return { success: true, user: result.user };
+  } catch {
+    return { success: false, error: 'No se pudo verificar la cuenta en el servidor. Intenta nuevamente.' };
   }
-
-  if (!found) {
-    recordFailedAttempt(cleanUsername);
-    return { success: false, error: 'Usuario no encontrado en el sistema.' };
-  }
-
-  // 3. Verificación de clave con hash SHA-256
-  const isValid = await verifyPassword(cleanPass, found.passwordHash);
-  if (!isValid) {
-    const failRes = recordFailedAttempt(cleanUsername);
-    if (failRes.isLocked) {
-      return {
-        success: false,
-        error: `Acceso bloqueado por seguridad: has superado el límite de 5 intentos. Espera ${failRes.remainingSeconds} segundos.`,
-        remainingSeconds: failRes.remainingSeconds
-      };
-    }
-    return {
-      success: false,
-      error: `Clave de acceso incorrecta. Intentos restantes antes del bloqueo: ${MAX_FAILED_ATTEMPTS - failRes.attempts}.`
-    };
-  }
-
-  // 4. Éxito: restablecer intentos fallidos
-  resetFailedAttempts(cleanUsername);
-
-  // Si la clave estaba en texto plano en la base de datos, migrarla automáticamente a hash SHA-256
-  if (found.passwordHash === cleanPass) {
-    try {
-      const secureHash = await hashPassword(cleanPass);
-      const upgradedUser: UserAccount = { ...found, passwordHash: secureHash };
-      saveUserAccount(upgradedUser);
-    } catch {
-      // ignore
-    }
-  }
-
-  const { passwordHash: _, ...userSafe } = found;
-  createAuthSessionToken(userSafe);
-  saveAuthUser(userSafe);
-
-  return { success: true, user: userSafe };
 }
 
 /**
- * Autentica sincrónicamente con soporte para hash SHA-256 y texto plano
+ * Previsualiza una cuenta legada en el formulario, sin emitir ni cambiar la sesión.
  */
 export function authenticateByPassword(passwordInput: string, customUsersList?: UserAccount[]): AuthUser | null {
   const cleanPass = passwordInput.trim();
@@ -775,7 +734,6 @@ export function authenticateByPassword(passwordInput: string, customUsersList?: 
 
   if (found) {
     const { passwordHash: _, ...userSafe } = found;
-    createAuthSessionToken(userSafe);
     return userSafe;
   }
 
@@ -786,37 +744,14 @@ export function authenticateByPassword(passwordInput: string, customUsersList?: 
  * Autentica de forma asíncrona verificando hash criptográfico contra la base de datos
  */
 export async function authenticateByPasswordAsync(passwordInput: string, customUsersList?: UserAccount[]): Promise<AuthUser | null> {
-  const cleanPass = passwordInput.trim();
-  if (!cleanPass) return null;
-
-  const users = customUsersList || getAllAuthorizedUsers();
-  for (const u of users) {
-    if (await verifyPassword(cleanPass, u.passwordHash)) {
-      const { passwordHash: _, ...userSafe } = u;
-      createAuthSessionToken(userSafe);
-      return userSafe;
+  const password = passwordInput.trim();
+  if (!password) return null;
+  for (const account of customUsersList || getAllAuthorizedUsers()) {
+    if (await verifyPassword(password, account.passwordHash)) {
+      const result = await requestVerifiedSession('session', { username: account.username, password });
+      return result.success ? result.user || null : null;
     }
   }
-
-  // Fallback direct Firestore lookup
-  try {
-    const db = getDb();
-    const snap = await getDocs(collection(db, USERS_COLLECTION));
-    if (!snap.empty) {
-      const freshUsers = snap.docs.map((d) => d.data() as UserAccount);
-      saveAllAuthorizedUsers(freshUsers);
-      for (const u of freshUsers) {
-        if (await verifyPassword(cleanPass, u.passwordHash)) {
-          const { passwordHash: _, ...userSafe } = u;
-          createAuthSessionToken(userSafe);
-          return userSafe;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Error en consulta directa a Firestore para autenticación:', err);
-  }
-
   return null;
 }
 
@@ -929,7 +864,7 @@ export function isSessionExpired(): boolean {
 /**
  * Renueva o reinicia el reloj de la sesión por hasta 1 hora adicional
  */
-export function refreshSession(durationMs: number = SESSION_DURATION_MS): void {
+export async function refreshSession(durationMs: number = SESSION_DURATION_MS): Promise<void> {
   if (!isBrowser) return;
   try {
     const userRaw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
@@ -937,12 +872,14 @@ export function refreshSession(durationMs: number = SESSION_DURATION_MS): void {
       clearAuthUser();
       return;
     }
+    const refreshed = await requestVerifiedSession('session/refresh', {});
+    if (!refreshed.success) throw new Error(refreshed.error || 'Inicia sesión nuevamente para renovar el acceso.');
     const boundedDuration = Math.min(Math.max(durationMs, 60000), SESSION_DURATION_MS);
     const now = Date.now();
-    const expiresAt = now + boundedDuration;
+    const expiresAt = Math.min(now + boundedDuration, refreshed.expiresAt ?? Infinity);
     localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, expiresAt.toString());
   } catch (err) {
-    console.error('Error refreshing session', err);
+    throw err;
   }
 }
 
@@ -983,6 +920,7 @@ export function saveAuthUser(user: AuthUser, durationMs: number = SESSION_DURATI
 }
 
 export function clearAuthUser(): void {
+  verifiedSessionToken = '';
   if (!isBrowser) return;
   try {
     localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
@@ -995,4 +933,3 @@ export function clearAuthUser(): void {
     console.error('Error clearing auth user', err);
   }
 }
-

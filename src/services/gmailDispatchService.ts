@@ -516,7 +516,20 @@ export const DEFAULT_GMAIL_DISPATCH_CONFIG: GmailDispatchConfig = {
 /**
  * Loads the saved dispatch configuration from Firestore (or local fallback)
  */
+let dispatchConfigCache: { value: GmailDispatchConfig; expiresAt: number } | undefined;
+let pendingDispatchConfig: Promise<GmailDispatchConfig> | undefined;
+let dispatchConfigGeneration = 0;
+
 export async function loadGmailDispatchConfig(): Promise<GmailDispatchConfig> {
+  if (dispatchConfigCache && dispatchConfigCache.expiresAt > Date.now()) return structuredClone(dispatchConfigCache.value);
+  if (pendingDispatchConfig) return structuredClone(await pendingDispatchConfig);
+  const request = fetchGmailDispatchConfig(dispatchConfigGeneration);
+  pendingDispatchConfig = request;
+  try { return structuredClone(await request); }
+  finally { if (pendingDispatchConfig === request) pendingDispatchConfig = undefined; }
+}
+
+async function fetchGmailDispatchConfig(generation: number): Promise<GmailDispatchConfig> {
   try {
     const db = getDb();
     const docRef = doc(db, CONFIG_COLLECTION, GMAIL_CONFIG_DOC_ID);
@@ -525,10 +538,14 @@ export async function loadGmailDispatchConfig(): Promise<GmailDispatchConfig> {
     if (snap.exists()) {
       const data = snap.data();
       if (data && data.data && typeof data.data === 'object') {
-        return {
+        const value = {
           ...DEFAULT_GMAIL_DISPATCH_CONFIG,
           ...(data.data as Partial<GmailDispatchConfig>)
         };
+        if (!snap.metadata.fromCache && generation === dispatchConfigGeneration) {
+          dispatchConfigCache = { value, expiresAt: Date.now() + 60_000 };
+        }
+        return generation === dispatchConfigGeneration ? value : loadGmailDispatchConfig();
       }
     }
   } catch (err) {
@@ -559,13 +576,6 @@ export async function saveGmailDispatchConfig(config: GmailDispatchConfig, userI
   };
 
   try {
-    // Save to local cache first
-    localStorage.setItem('espacios_gmail_dispatch_cfg', JSON.stringify(payloadToSave));
-  } catch {
-    // ignore
-  }
-
-  try {
     const db = getDb();
     const docRef = doc(db, CONFIG_COLLECTION, GMAIL_CONFIG_DOC_ID);
     await setDoc(docRef, {
@@ -573,6 +583,10 @@ export async function saveGmailDispatchConfig(config: GmailDispatchConfig, userI
       data: payloadToSave,
       updatedAt: new Date().toISOString()
     }, { merge: true });
+    dispatchConfigGeneration++;
+    pendingDispatchConfig = undefined;
+    dispatchConfigCache = { value: structuredClone(payloadToSave), expiresAt: Date.now() + 60_000 };
+    try { localStorage.setItem('espacios_gmail_dispatch_cfg', JSON.stringify(payloadToSave)); } catch { /* Cache is optional. */ }
     return true;
   } catch (err) {
     console.error('[GmailDispatch] Failed to save config to Firestore:', err);

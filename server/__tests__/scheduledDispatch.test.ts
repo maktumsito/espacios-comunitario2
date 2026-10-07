@@ -1,7 +1,7 @@
 import express from 'express';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
-import { registerScheduledCheck, singleFlight, type ScheduledDispatchResult } from '../scheduledDispatch';
+import { registerScheduledCheck, singleFlight, scheduledRetryGate, type ScheduledDispatchResult } from '../scheduledDispatch';
 
 const secret = 'test-scheduler-token-32-characters-minimum';
 async function withRoute(configured: string | undefined, execute: (force: boolean) => Promise<ScheduledDispatchResult>, run: (url: string) => Promise<void>) {
@@ -15,6 +15,22 @@ async function withRoute(configured: string | undefined, execute: (force: boolea
 }
 
 describe('external scheduled dispatch', () => {
+  it('backs off delivery failures but does not cache normal skips or successful checks', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const execute = vi.fn().mockResolvedValueOnce({ success: false, message: 'Delivery failed' })
+        .mockResolvedValueOnce({ success: false, skipped: true, message: 'Not due' })
+        .mockResolvedValue({ success: true, message: 'Delivered' });
+      const check = scheduledRetryGate(execute);
+      await check();
+      vi.advanceTimersByTime(60_000);
+      await check();
+      expect(execute).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(4 * 60_000);
+      await check(); await check();
+      expect(execute).toHaveBeenCalledTimes(3);
+    } finally { vi.useRealTimers(); }
+  });
   it('fails closed when unconfigured or unauthenticated', async () => {
     const execute = vi.fn();
     await withRoute(undefined, execute, async url => {

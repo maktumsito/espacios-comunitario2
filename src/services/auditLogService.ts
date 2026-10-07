@@ -3,8 +3,6 @@ import {
   collection,
   doc,
   setDoc,
-  writeBatch,
-  getDocs,
   query,
   orderBy,
   limit,
@@ -29,8 +27,7 @@ import {
 } from './reservationService';
 import {
   getIndexedDbAuditLogs,
-  setIndexedDbAuditLogs,
-  clearIndexedDbAuditLogs
+  setIndexedDbAuditLogs
 } from '../utils/indexedDbStorage';
 import { sanitizeAuditEntriesForLocalStorage } from './storageService';
 
@@ -618,27 +615,8 @@ export function initializeAuditBaselineFromReservations(
 }
 
 /**
- * Clears or purges audit history from memory, localStorage, IndexedDB and Firestore.
+ * Remote audit records are immutable. Kept for callers from older UI versions.
  */
 export async function purgeAuditLogs(): Promise<void> {
-  saveAuditHistory([]);
-  try {
-    await clearIndexedDbAuditLogs();
-  } catch (e) {
-    console.warn('Error clearing IndexedDB audit logs:', e);
-  }
-  try {
-    const db = getDb();
-    const auditCol = collection(db, AUDIT_COLLECTION_NAME);
-    const snapshot = await getDocs(auditCol);
-    const docs = snapshot.docs;
-    for (let i = 0; i < docs.length; i += 450) {
-      const chunk = docs.slice(i, i + 450);
-      const batch = writeBatch(db);
-      chunk.forEach((d) => batch.delete(d.ref));
-      await batch.commit();
-    }
-  } catch (err) {
-    console.warn('Error purging Firestore audit logs:', err);
-  }
+  throw new Error('Los registros de auditoría se conservan y no pueden eliminarse.');
 }

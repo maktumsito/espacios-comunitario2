@@ -39,6 +39,16 @@ it('reuses confirmed history after reload without another server query', async (
   expect(sdk.getDocs).toHaveBeenCalledTimes(1);
 });
 
+it('reuses a confirmed containing interval, but queries it again when its TTL expires', async () => {
+  const service = await import('../reservationService');
+  await service.loadHistoricalReservationsRange('2025-01-01', '2025-12-31');
+  await service.loadHistoricalReservationsMonth(2025, 11);
+  expect(sdk.getDocs).toHaveBeenCalledTimes(1);
+  vi.advanceTimersByTime(60 * 60_000);
+  await service.loadHistoricalReservationsMonth(2025, 11);
+  expect(sdk.getDocs).toHaveBeenCalledTimes(2);
+});
+
 it('does not mark failed or offline queries as synchronized and allows retry', async () => {
   const service = await import('../reservationService');
   sdk.getDocs.mockRejectedValueOnce(new Error('offline'));

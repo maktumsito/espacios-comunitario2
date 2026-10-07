@@ -4,11 +4,13 @@ import {
   UserAccount,
   getAllAuthorizedUsers,
   authenticateUser,
+  findAuthorizedGoogleAccount,
+  authenticateGoogleSession,
   subscribeToUsers,
   getLockoutStatus
 } from '../services/authService';
 import { auth } from '../firebase/config';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import {
   Lock,
   Eye,
@@ -133,35 +135,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       const result = await signInWithPopup(auth, provider);
       const email = result.user?.email || '';
 
-      // Match against admin or users list
-      const matchedUser = usersList.find(
-        (u) => u.username.toLowerCase() === email.toLowerCase() || email.toLowerCase().includes(u.username.toLowerCase())
-      );
-
-      if (email === 'cristianshute@gmail.com' || matchedUser?.isMasterAdmin) {
-        onLoginSuccess({
-          username: 'cristian shute',
-          name: 'Cristian Shute',
-          role: 'Administrador',
-          initials: 'CS',
-          avatarColor: 'bg-blue-600',
-          createdAt: new Date().toISOString(),
-          isMasterAdmin: true
-        });
-      } else if (matchedUser) {
-        onLoginSuccess(matchedUser);
-      } else {
-        // Sign in with Google account identity
-        onLoginSuccess({
-          username: email.split('@')[0],
-          name: result.user.displayName || email.split('@')[0],
-          role: 'Administrador',
-          initials: (result.user.displayName || 'US').slice(0, 2).toUpperCase(),
-          avatarColor: 'bg-indigo-600',
-          createdAt: new Date().toISOString(),
-          isMasterAdmin: false
-        });
+      const matchedUser = result.user.emailVerified ? findAuthorizedGoogleAccount(email, usersList) : null;
+      if (!matchedUser) {
+        await signOut(auth);
+        setErrorMessage('Esta cuenta de Google no tiene acceso asignado. Ingrese con su usuario y contraseña.');
+        return;
       }
+      onLoginSuccess(await authenticateGoogleSession(matchedUser.username, await result.user.getIdToken()));
     } catch (err: any) {
       console.warn('Google sign-in status:', err?.message || err);
       setErrorMessage('No se completó el inicio con Google. Por favor ingrese con su usuario y contraseña asignada.');

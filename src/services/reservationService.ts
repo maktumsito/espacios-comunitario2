@@ -829,6 +829,11 @@ export async function fetchReservationsByDateRange(
   const key = `${startDate}:${endDate}`;
   const local = () => getLocalCache().filter(r => r.fecha >= startDate && r.fecha <= endDate);
   if (isDateRangeFresh(key)) return local();
+  // A confirmed parent interval already contains every document needed by this request.
+  for (const range of dateRangeSyncTimes.keys()) {
+    const [coveredStart, coveredEnd] = range.split(':');
+    if (coveredStart <= startDate && coveredEnd >= endDate && isDateRangeFresh(range)) return local();
+  }
   const pending = pendingDateRanges.get(key);
   if (pending) return pending;
 
@@ -960,11 +965,17 @@ export async function saveReservation(reserva: Reservation, options: WriteOption
   return commitReservationChanges([reserva], options);
 }
 
+const pendingReservationReads = new Map<string, Promise<Reservation | null>>();
 export async function fetchReservationById(id: string): Promise<Reservation | null> {
+  const pending = pendingReservationReads.get(id);
+  if (pending) return pending;
   const db = getDb();
   if (!db) throw new Error('No hay conexión para consultar la actividad relacionada.');
-  const snapshot = await getDoc(doc(db, COLLECTION_NAME, id));
-  return snapshot.exists() ? normalizeReservationFromFirestore(snapshot.id, snapshot.data()) : null;
+  const request = getDoc(doc(db, COLLECTION_NAME, id)).then(snapshot =>
+    snapshot.exists() ? normalizeReservationFromFirestore(snapshot.id, snapshot.data()) : null);
+  pendingReservationReads.set(id, request);
+  try { return await request; }
+  finally { if (pendingReservationReads.get(id) === request) pendingReservationReads.delete(id); }
 }
 
 export async function saveReservationsBatch(reservas: readonly Reservation[], options: WriteOptions = {}): Promise<WriteResult> {
@@ -1089,15 +1100,14 @@ export async function queryReservationsByDateRange(
     ...(canonSpace ? [where('espacio', '==', canonSpace)] : []),
     where('fecha', '>=', startDate),
     where('fecha', '<=', endDate),
-    orderBy('fecha'),
-    orderBy('horaInicio')
+    orderBy('fecha')
   ];
   const snapshot = await getDocs(query(reservasCol, ...constraints));
   const results: Reservation[] = [];
   snapshot.forEach((docSnap) => {
     results.push(normalizeReservationFromFirestore(docSnap.id, docSnap.data()));
   });
-  return results;
+  return results.sort(compareReservationsByDate);
 }
 
 /**

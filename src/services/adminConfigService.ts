@@ -1,7 +1,7 @@
 import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import { SpaceInfo, LoanType, ActivityTypeItem } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
-import { collection, doc, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, setDoc, writeBatch, query, where, documentId } from 'firebase/firestore';
 import { getDb } from '../firebase/config';
 
 const SPACES_STORAGE_KEY = 'espacios_comunitarios_spaces_v2';
@@ -180,7 +180,8 @@ export function subscribeToAdminConfig(
 
   try {
     const db = getDb();
-    const colRef = collection(db, CONFIG_COLLECTION);
+    const colRef = query(collection(db, CONFIG_COLLECTION),
+      where(documentId(), 'in', ['espacios', 'tipos_prestamo', 'tipos_actividad']));
 
     // 2. [REVALIDATE] Silently update from Firestore
     const unsubscribe = onSnapshot(

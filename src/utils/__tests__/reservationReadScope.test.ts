@@ -23,6 +23,14 @@ it('uses actual write permissions, including create-only and delete-only account
   expect(getReservationReadScope({ ...reader, isMasterAdmin: true }, 'daily', date, INITIAL_FILTERS)).toBeUndefined();
 });
 
+it('loads only the selected day plus the overnight preceding day for daily and timeline readers', () => {
+  for (const view of ['daily', 'timeline'] as const) {
+    expect(getReservationReadScope(reader, view, date, INITIAL_FILTERS)).toEqual({
+      startDate: '2026-10-06', endDate: '2026-10-07',
+    });
+  }
+});
+
 it('keeps general views, exports, unbounded filters and global search complete', () => {
   expect(getReservationReadScope(reader, 'analytics', date, INITIAL_FILTERS)).toBeUndefined();
   expect(getReservationReadScope(reader, 'calendar', date, INITIAL_FILTERS, true)).toBeUndefined();

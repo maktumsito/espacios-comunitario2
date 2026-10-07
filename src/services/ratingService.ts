@@ -1,5 +1,5 @@
 import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
-import { collection, doc, setDoc, deleteDoc, Unsubscribe, query, limit } from 'firebase/firestore';
+import { collection, doc, deleteDoc, Unsubscribe, query, limit } from 'firebase/firestore';
 import { getDb } from '../firebase/config';
 import { SpaceRating, Reservation } from '../types';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
@@ -58,13 +58,11 @@ export async function syncPendingRatingsQueue(): Promise<void> {
   const queue = getPendingRatingsQueue();
   if (queue.length === 0) return;
 
-  const db = getDb();
   const remaining: SpaceRating[] = [];
 
   for (const rating of queue) {
     try {
-      const docRef = doc(db, COLLECTION_NAME, rating.id);
-      await setDoc(docRef, rating, { merge: true });
+      await saveSpaceRating(rating);
     } catch (err) {
       console.warn(`Retry sync failed for rating ${rating.id}:`, err);
       remaining.push(rating);
@@ -249,7 +247,7 @@ export function isRatingAllowedForReservation(
     const endH = parseInt(timeParts[0], 10) || 0;
     const endM = parseInt(timeParts[1], 10) || 0;
 
-    const eventEndTime = new Date(year, month - 1, day, endH, endM, 0);
+    const eventEndTime = new Date(year, month - 1, day + (r.terminaDiaSiguiente ? 1 : 0), endH, endM, 0);
 
     // If the event hasn't finished yet compared to current reference time
     if (eventEndTime.getTime() > referenceDate.getTime()) {
@@ -329,7 +327,9 @@ export function subscribeToRatings(
           setLocalRatingsCache(list);
           onData(list, true);
         } else {
-          onData(getLocalRatingsCache(), true);
+          if (snapshot.metadata.fromCache) return onData(getLocalRatingsCache(), false);
+          setLocalRatingsCache([]);
+          onData([], true);
         }
       },
       (error) => {
@@ -349,64 +349,35 @@ export function subscribeToRatings(
  * Performs strict client and server-side validation against future event rating.
  */
 export async function saveSpaceRating(rating: SpaceRating, reservation?: Reservation): Promise<void> {
-  // Resolve reservation from cache if omitted by caller
-  const targetReservation = reservation || getLocalCache().find((r) => r.id === rating.reservationId);
-
-  // Perform strict client-side and server-side validation
-  if (targetReservation) {
-    const check = isRatingAllowedForReservation(targetReservation);
-    if (!check.allowed) {
-      throw new Error(check.reason || 'No está permitido calificar un evento antes de su término.');
-    }
-
-    // Call server endpoint for authoritative time validation
-    try {
-      const token = getAuthSessionToken();
-      const response = await fetch('/api/ratings/validate-and-save', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ rating, reservation: targetReservation })
-      });
-
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error || `Validación rechazada por el servidor (HTTP ${response.status}).`);
-      }
-    } catch (apiErr: any) {
-      // Re-throw any server rejection or validation failure.
-      // Only permit proceeding in local offline mode if device is truly offline.
-      const isNetworkOffline = typeof navigator !== 'undefined' && (!navigator.onLine || apiErr instanceof TypeError);
-      if (!isNetworkOffline) {
-        throw apiErr;
-      }
-      console.warn('Backend validation deferred (device is offline):', apiErr);
-    }
+  const target = reservation || getLocalCache().find(row => row.id === rating.reservationId);
+  if (target) {
+    const eligibility = isRatingAllowedForReservation(target);
+    if (!eligibility.allowed) throw new Error(eligibility.reason || 'La actividad no puede evaluarse todavía.');
   }
 
+  // The server validates even when the reservation is outside the visible cache.
+  // A network failure preserves the form/queue without writing unvalidated data.
+  const token = getAuthSessionToken();
+  const response = await fetch('/api/ratings/validate-and-save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ rating, reservation: target }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || `Validación rechazada por el servidor (HTTP ${response.status}).`);
+  }
+  const confirmed = await response.json();
+  if (!confirmed.success || !confirmed.rating?.id || confirmed.rating.reservationId !== rating.reservationId) {
+    throw new Error('El servidor no confirmó la evaluación guardada. Intenta nuevamente.');
+  }
+  const saved = confirmed.rating as SpaceRating;
   const current = getLocalRatingsCache();
-  const existingIdx = current.findIndex(
-    (r) => r.id === rating.id || r.reservationId === rating.reservationId
-  );
-
-  const updated =
-    existingIdx >= 0
-      ? current.map((item, idx) => (idx === existingIdx ? rating : item))
-      : [rating, ...current];
-
-  try {
-    const db = getDb();
-    const docRef = doc(db, COLLECTION_NAME, rating.id);
-    await setDoc(docRef, rating, { merge: true });
-    setLocalRatingsCache(updated);
-    dequeuePendingRating(rating.id);
-  } catch (err: any) {
-    // Keep the form open; online/offline failure is not a confirmed rating.
-    throw err;
-
-  }
+  const exists = current.some(row => row.id === saved.id || row.reservationId === saved.reservationId);
+  setLocalRatingsCache(exists
+    ? current.map(row => row.id === saved.id || row.reservationId === saved.reservationId ? saved : row)
+    : [saved, ...current]);
+  dequeuePendingRating(rating.id);
 }
 
 /**

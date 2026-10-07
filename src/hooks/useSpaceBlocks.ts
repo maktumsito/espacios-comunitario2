@@ -8,24 +8,28 @@ import {
 } from '../services/spaceBlockService';
 
 interface UseSpaceBlocksOptions {
+  enabled?: boolean;
+  startDate?: string;
   triggerSyncToast?: (message: string, type: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
 export function useSpaceBlocks(options: UseSpaceBlocksOptions = {}) {
-  const { triggerSyncToast } = options;
+  const { triggerSyncToast, enabled = true, startDate } = options;
   const [spaceBlocks, setSpaceBlocks] = useState<SpaceBlock[]>(() => getLocalCachedBlocks());
 
   useEffect(() => {
+    if (!enabled) { setSpaceBlocks([]); return; }
     const unsub = subscribeToSpaceBlocks(
       (blocks) => {
         setSpaceBlocks(blocks);
       },
       (err) => {
         console.warn('Error sincronizando bloqueos de espacios:', err);
-      }
+      },
+      startDate,
     );
     return () => unsub();
-  }, []);
+  }, [enabled, startDate]);
 
   const handleSaveBlock = useCallback(
     async (block: SpaceBlock) => {

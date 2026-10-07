@@ -1,5 +1,6 @@
 import { splitBackupPayload } from '../utils/backupChunks';
-import { doc, getDoc, setDoc, getDocs, collection, deleteDoc, query, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, getDocsFromServer, collection, deleteDoc, query, orderBy, limit, where, documentId } from 'firebase/firestore';
+import { claimScheduledBackup, finishScheduledBackup } from './backupScheduleCoordinator';
 import { getDb } from '../firebase/config';
 import { Reservation, SpaceInfo, LoanType, ActivityTypeItem, EquipmentItem, SpaceRating } from '../types';
 import { getLocalCache, seedAllToFirestore, setLocalCache, normalizeReservationFromFirestore } from './reservationService';
@@ -174,12 +175,14 @@ export async function saveBackupScheduleConfig(cfg: Partial<BackupScheduleConfig
     intervalDays: typeof cfg.intervalDays === 'number' && cfg.intervalDays > 0 ? cfg.intervalDays : current.intervalDays
   };
 
+  const patch = { ...cfg, ...(cfg.intervalDays !== undefined ? { intervalDays: updated.intervalDays } : {}) };
+
   // Also sync to Firestore under configuracion_sistema for multi-device agreement
   try {
     const db = getDb();
     const configDocRef = doc(db, 'configuracion_sistema', 'backup_schedule_config');
     await setDoc(configDocRef, {
-      data: updated,
+      ...(Object.keys(patch).length ? { data: patch } : {}),
       updatedAt: new Date().toISOString()
     }, { merge: true });
   } catch (err) {
@@ -256,14 +259,34 @@ export async function createDatabaseBackup(options: CreateBackupOptions = {}): P
       const creadoPor = options.creadoPor || (tipo === 'automatica_15_dias' ? 'Sistema (Automático cada 15 días)' : 'Usuario Administrador');
 
   // 1. Gather all collections
-  const rawReservations = options.customReservations ?? (await getDocs(collection(getDb(),'reservas'))).docs.map(d=>normalizeReservationFromFirestore(d.id,d.data()));
-  const reservations = Array.isArray(rawReservations) ? [...rawReservations] : [];
-  const spaces = getStoredSpaces();
-  const loanTypes = getStoredLoanTypes();
-  const activityTypes = getStoredActivityTypes();
-  const equipment = getStoredEquipment();
-  const ratings = getLocalRatingsCache();
-  const allUsers = getAllAuthorizedUsers();
+  let reservations = [...(options.customReservations ?? [])];
+  let spaces = getStoredSpaces();
+  let loanTypes = getStoredLoanTypes();
+  let activityTypes = getStoredActivityTypes();
+  let equipment = getStoredEquipment();
+  let ratings = getLocalRatingsCache();
+  let allUsers = getAllAuthorizedUsers();
+  if (options.customReservations === undefined) {
+    const db = getDb();
+    // Backups must include history and ratings outside the visible/limited listeners.
+    const [reservationSnapshot, ratingSnapshot, userSnapshot, configSnapshot] = await Promise.all([
+      getDocsFromServer(collection(db, 'reservas')),
+      getDocsFromServer(collection(db, 'calificaciones_espacios')),
+      getDocsFromServer(collection(db, 'usuarios_sistema')),
+      getDocsFromServer(query(collection(db, 'configuracion_sistema'),
+        where(documentId(), 'in', ['espacios', 'tipos_prestamo', 'tipos_actividad', 'equipamiento']))),
+    ]);
+    reservations = reservationSnapshot.docs.map(d => normalizeReservationFromFirestore(d.id, d.data()));
+    ratings = ratingSnapshot.docs.map(d => ({ ...d.data(), id: d.id } as SpaceRating));
+    allUsers = userSnapshot.docs.map(d => d.data() as UserAccount);
+    for (const document of configSnapshot.docs) {
+      const data = document.data();
+      if (document.id === 'espacios' && Array.isArray(data.data)) spaces = data.data;
+      if (document.id === 'tipos_prestamo' && Array.isArray(data.data)) loanTypes = data.data;
+      if (document.id === 'tipos_actividad' && Array.isArray(data.data)) activityTypes = data.data;
+      if (document.id === 'equipamiento' && Array.isArray(data.items)) equipment = data.items;
+    }
+  }
 
   // Sanitize user accounts (remove password hashes from export)
   const sanitizedUsers = allUsers.map(({ passwordHash, ...safeUser }) => safeUser);
@@ -287,12 +310,12 @@ export async function createDatabaseBackup(options: CreateBackupOptions = {}): P
 
   const cleanDateForId = dateStr.replace(/-/g, '');
   const timeSuffix = now.toTimeString().slice(0, 8).replace(/:/g, '');
-  const id = `BACKUP_${cleanDateForId}_${timeSuffix}_${tipo === 'automatica_15_dias' ? 'AUTO15D' : 'MANUAL'}`;
+  const id = `BACKUP_${cleanDateForId}_${timeSuffix}_${tipo === 'automatica_15_dias' ? 'AUTO15D' : 'MANUAL'}_${crypto.randomUUID().slice(0, 8)}`;
 
   // Idempotency check: if an identical backup was already created (same date, minute, size KB, and reservations count), reuse it
   const candidateSig = `${dateStr}_${isoStr.slice(11, 16)}_${Math.round(tamanoBytes / 1024)}KB_${reservations.length}RSV`;
   const localHistory = getLocalBackupHistory();
-  const existingDuplicate = localHistory.find(b => getBackupIdentitySignature(b) === candidateSig);
+  const existingDuplicate = localHistory.find(b => getBackupIdentitySignature(b) === candidateSig && b.checksum === checksum);
 
   if (existingDuplicate) {
     console.log(`[BackupService] Respaldo idéntico detectado (${existingDuplicate.id}, ${candidateSig}), omitiendo creación duplicada por idempotencia.`);
@@ -425,7 +448,16 @@ export interface ScheduledBackupCheckResult {
 export async function checkAndRunScheduledBackup(
   customReservations?: Reservation[]
 ): Promise<ScheduledBackupCheckResult> {
-  const config = getBackupScheduleConfig();
+  const db = getDb();
+  if (!db) throw new Error('No hay conexión para comprobar la programación de respaldos.');
+  const claim = await claimScheduledBackup(db, getBackupScheduleConfig());
+  const config = claim.config;
+  try { localStorage.setItem(BACKUP_CONFIG_STORAGE_KEY, JSON.stringify(config)); } catch { /* Memory/storage may be unavailable. */ }
+
+  if (claim.busy) return {
+    triggered: false, reason: 'Otro dispositivo está creando la copia programada.',
+    nextScheduledDate: calculateNextBackupDate(config.lastBackupTimestamp, config.intervalDays), daysRemaining: 0,
+  };
 
   if (!config.enabled) {
     return {
@@ -443,7 +475,7 @@ export async function checkAndRunScheduledBackup(
   const daysRemaining = getDaysUntilNextBackup(config.lastBackupTimestamp, config.intervalDays);
 
   // If never run or if interval has elapsed
-  if (!config.lastBackupTimestamp || elapsedMs >= intervalMs) {
+  if (claim.owner && (!config.lastBackupTimestamp || elapsedMs >= intervalMs)) {
     console.log(`[BackupService] Ejecutando copia de seguridad automática de 15 días (Tiempo transcurrido: ${Math.round(elapsedMs / MS_PER_DAY)} días)...`);
     
     try {
@@ -451,6 +483,10 @@ export async function checkAndRunScheduledBackup(
         tipo: 'automatica_15_dias',
         creadoPor: 'Sistema (Automático cada 15 días)',
         customReservations
+      });
+
+      await finishScheduledBackup(db, claim, backup).catch(error => {
+        console.warn('Copia confirmada; no se pudo liberar la comprobación programada:', error);
       });
 
       return {
@@ -461,6 +497,7 @@ export async function checkAndRunScheduledBackup(
         daysRemaining: config.intervalDays
       };
     } catch (err: any) {
+      await finishScheduledBackup(db, claim).catch(() => {});
       console.error('[BackupService] Falló la creación de la copia de seguridad programada:', err);
       return {
         triggered: false,
@@ -534,7 +571,7 @@ export async function getDatabaseBackupsList(): Promise<DatabaseBackupMetadata[]
   const signatureMap = new Map<string, DatabaseBackupMetadata>();
 
   for (const item of list) {
-    const signature = getBackupIdentitySignature(item);
+    const signature = `${getBackupIdentitySignature(item)}:${item.checksum || item.id}`;
 
     const existing = signatureMap.get(signature);
     if (!existing) {

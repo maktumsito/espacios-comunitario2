@@ -19,6 +19,17 @@ export function singleFlight<T>(execute: () => Promise<T>): () => Promise<T> {
   };
 }
 
+/** Failed deliveries retry after a bounded pause; skips and successful checks stay fresh. */
+export function scheduledRetryGate<T extends ScheduledDispatchResult>(execute: () => Promise<T>, delayMs = 5 * 60_000) {
+  let failure: { result: T; retryAt: number } | undefined;
+  return singleFlight(async () => {
+    if (failure && Date.now() < failure.retryAt) return failure.result;
+    const result = await execute();
+    failure = !result.success && !result.skipped ? { result, retryAt: Date.now() + delayMs } : undefined;
+    return result;
+  });
+}
+
 export function registerScheduledCheck(
   app: Express,
   getSecret: () => string | undefined,

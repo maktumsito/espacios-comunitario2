@@ -4,6 +4,8 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  query,
+  where,
   Unsubscribe
 } from 'firebase/firestore';
 import { getDb } from '../firebase/config';
@@ -54,20 +56,21 @@ export function setLocalCachedBlocks(blocks: SpaceBlock[]): void {
  */
 export function subscribeToSpaceBlocks(
   onUpdate: (blocks: SpaceBlock[]) => void,
-  onError?: (err: any) => void
+  onError?: (err: any) => void,
+  startDate?: string,
 ): Unsubscribe {
   // Emit initial local cache immediately
-  const initial = getLocalCachedBlocks();
-  if (initial.length > 0) {
-    onUpdate(initial);
-  }
+  const initial = getLocalCachedBlocks().filter(block => !startDate || block.fechaFin >= startDate);
+  onUpdate(initial);
 
   const db = getDb();
   if (!db) {
     return () => {};
   }
 
-  const collRef = collection(db, COLLECTION_NAME);
+  const collRef = startDate
+    ? query(collection(db, COLLECTION_NAME), where('fechaFin', '>=', startDate))
+    : collection(db, COLLECTION_NAME);
   return onSnapshot(
     collRef,
     (snapshot) => {

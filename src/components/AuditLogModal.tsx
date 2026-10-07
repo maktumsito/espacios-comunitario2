@@ -21,7 +21,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { AuditChangeLogEntry, AuditActionType, Reservation } from '../types';
-import { restoreAuditChange, purgeAuditLogs, initializeAuditBaselineFromReservations } from '../services/auditLogService';
+import { restoreAuditChange, initializeAuditBaselineFromReservations } from '../services/auditLogService';
 import { AuthUser, isCoordinatorOrAdmin } from '../services/authService';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { BaseModal } from './common/BaseModal';
@@ -209,22 +209,6 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
             setIsRestoringId(null);
           }
         }, 40);
-      }
-    });
-  };
-
-  const handlePurgeLogs = async () => {
-    if (!isAuthorized) return;
-    setConfirmDialog({
-      isOpen: true,
-      title: 'Vaciar Historial de Auditoría',
-      message: '¿Estás seguro de que deseas vaciar el historial de cambios y auditoría? Esta acción no se puede deshacer.',
-      variant: 'danger',
-      confirmLabel: 'Vaciar Historial',
-      onConfirm: async () => {
-        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
-        await purgeAuditLogs();
-        setFeedbackMessage({ type: 'success', text: 'El historial de cambios ha sido purgado correctamente.' });
       }
     });
   };
@@ -643,16 +627,6 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
                 >
                   <Download className="w-3.5 h-3.5 text-slate-500" />
                   <span>Exportar CSV</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handlePurgeLogs}
-                  className="px-3 py-1.5 bg-white hover:bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-2xs cursor-pointer"
-                  title="Vaciar todo el historial de auditoría"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Vaciar Registro</span>
                 </button>
 
                 <button

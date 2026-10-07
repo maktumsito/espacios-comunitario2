@@ -24,6 +24,9 @@ export class GmailConnection {
   private key: Buffer;
   private fetch: typeof fetch;
   private pendingRefresh: Promise<Credential | null> | null = null;
+  private credentialCache?: { value: Credential | null; expiresAt: number };
+  private pendingCredential: Promise<Credential | null> | null = null;
+  private credentialGeneration = 0;
   readonly oauthConfigured: boolean;
 
   constructor(private options: GmailConnectionOptions) {
@@ -59,9 +62,27 @@ export class GmailConnection {
 
   private async storedCredential(): Promise<Credential | null> {
     if (!this.oauthConfigured) return null;
-    const encrypted = await this.options.store.read();
-    const credential = encrypted ? this.unseal<Credential>(encrypted) : null;
-    return credential?.email === this.options.sender && credential.refreshToken ? credential : null;
+    if (this.credentialCache && this.credentialCache.expiresAt > Date.now()) return this.credentialCache.value;
+    if (this.pendingCredential) return this.pendingCredential;
+    const generation = this.credentialGeneration;
+    const request = (async () => {
+      const encrypted = await this.options.store.read();
+      const credential = encrypted ? this.unseal<Credential>(encrypted) : null;
+      const value = credential?.email === this.options.sender && credential.refreshToken ? credential : null;
+      if (generation !== this.credentialGeneration) return this.storedCredential();
+      this.credentialCache = { value, expiresAt: Date.now() + 60_000 };
+      return value;
+    })();
+    this.pendingCredential = request;
+    try { return await request; }
+    finally { if (this.pendingCredential === request) this.pendingCredential = null; }
+  }
+
+  private async writeCredential(value: Credential | null): Promise<void> {
+    await this.options.store.write(value ? this.seal(value) : null);
+    this.credentialGeneration++;
+    this.pendingCredential = null;
+    this.credentialCache = { value, expiresAt: Date.now() + 60_000 };
   }
 
   private async tokenExchange(parameters: Record<string, string>): Promise<Record<string, any>> {
@@ -71,7 +92,7 @@ export class GmailConnection {
     });
     const data = await response.json();
     if (!response.ok) {
-      if (data.error === 'invalid_grant' && parameters.grant_type === 'refresh_token') await this.options.store.write(null);
+      if (data.error === 'invalid_grant' && parameters.grant_type === 'refresh_token') await this.writeCredential(null);
       const error = new Error(data.error === 'invalid_grant' ? 'La autorización de Google fue revocada o venció. Vuelve a conectar la cuenta.' : 'Google no pudo renovar la autorización de correo. Intenta nuevamente.');
       if (data.error === 'invalid_grant') error.name = 'GmailAuthorizationExpired';
       throw error;
@@ -98,7 +119,7 @@ export class GmailConnection {
       if (!forceRefresh && credential.expiresAt > Date.now() + 60_000) return credential;
       const data = await this.tokenExchange({ grant_type: 'refresh_token', refresh_token: credential.refreshToken! });
       const updated = { ...credential, accessToken: data.access_token, expiresAt: Date.now() + Number(data.expires_in) * 1000, refreshToken: data.refresh_token || credential.refreshToken };
-      await this.options.store.write(this.seal(updated));
+      await this.writeCredential(updated);
       return updated;
     })();
     try { return (await this.pendingRefresh)?.accessToken || null; }
@@ -169,7 +190,7 @@ export class GmailConnection {
         const previous = await this.storedCredential();
         const credential = { email, accessToken: data.access_token, refreshToken: data.refresh_token || previous?.refreshToken, expiresAt: Date.now() + Number(data.expires_in) * 1000 };
         if (!credential.refreshToken) throw new Error('Google no entregó autorización permanente. Vuelve a conectar y acepta el permiso.');
-        await this.options.store.write(this.seal(credential));
+        await this.writeCredential(credential);
         this.setCookie(res, SESSION_COOKIE, { email, manager: true, expiresAt: Date.now() + 30 * 24 * 3600_000 }, 30 * 24 * 3600_000);
         success = true;
       } catch { /* Do not expose authorization codes or token exchange responses in logs or HTML. */ }
@@ -182,7 +203,7 @@ export class GmailConnection {
         const session = this.cookie<{ manager?: boolean; email?: string; expiresAt: number }>(req, SESSION_COOKIE);
         if (await this.storedCredential()) {
           if (!session?.manager || session.email !== this.options.sender || session.expiresAt <= Date.now()) return res.status(403).json({ error: 'Desconecta la cuenta desde el navegador donde autorizaste la conexión permanente.' });
-          await this.options.store.write(null);
+          await this.writeCredential(null);
         }
         res.clearCookie(SESSION_COOKIE, { path: '/api/email' });
         res.json({ success: true });

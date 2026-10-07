@@ -1,6 +1,10 @@
-import { isPurgeableScheduleSlot } from './server/scheduleSlotCleanup';
+import { isPurgeableScheduleSlot, guardedSlotCleanup } from './server/scheduleSlotCleanup';
+import { fetchDispatchReservations, fetchOldSlotPage } from './server/firestoreQueries';
+import { buildConfirmedRating, reservationEndDate } from './server/ratingValidation';
+import { AppSessions, requireReservationWriter } from './server/appSession';
+import { SharedServerDocument } from './server/sharedDocument';
 import { GmailConnection } from './server/gmailConnection';
-import { registerScheduledCheck, singleFlight } from './server/scheduledDispatch';
+import { registerScheduledCheck, scheduledRetryGate } from './server/scheduledDispatch';
 import { selectDispatchReservations, isDispatchLoan as isLoan, isDispatchableReservation } from './src/utils/activityDispatchSelection';
 import express from 'express';
 import path from 'path';
@@ -12,19 +16,16 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   initializeFirestore,
   getFirestore,
-  collection,
-  getDocs,
   doc,
-  getDoc,
+  getDocFromServer,
   setDoc,
-  deleteDoc,
-  writeBatch,
   runTransaction,
   connectFirestoreEmulator,
   Firestore
 } from 'firebase/firestore';
 
-import type { Reservation, SpaceRating } from './src/types';
+import type { Reservation } from './src/types';
+import type { UserAccount } from './src/services/authService';
 import {
   generateDailySchedulePdf,
   getDailySchedulePdfFilename,
@@ -96,7 +97,7 @@ const gmailConnection = new GmailConnection({
     async read() {
       const db = getServerDb();
       if (!db) throw new Error('Base de datos de credenciales no disponible.');
-      const snap = await getDoc(doc(db, 'configuracion_sistema', 'gmail_oauth_credentials'));
+      const snap = await getDocFromServer(doc(db, 'configuracion_sistema', 'gmail_oauth_credentials'));
       return snap.exists() ? snap.data().encrypted || null : null;
     },
     async write(encrypted) {
@@ -105,6 +106,25 @@ const gmailConnection = new GmailConnection({
       await setDoc(doc(db, 'configuracion_sistema', 'gmail_oauth_credentials'), { encrypted, updatedAt: new Date().toISOString() });
     }
   }
+});
+
+const appSessions = new AppSessions(async username => {
+  const db = getServerDb();
+  if (!db) throw new Error('Firestore no disponible.');
+  const id = encodeURIComponent(username.trim().toLowerCase()).replace(/\./g, '_');
+  const snapshot = await getDocFromServer(doc(db, 'usuarios_sistema', id));
+  return snapshot.exists() ? snapshot.data() as UserAccount : null;
+}, process.env.AUTH_SESSION_SECRET || ((process.env.GMAIL_TOKEN_ENCRYPTION_KEY || process.env.GMAIL_OAUTH_CLIENT_SECRET)
+  ? crypto.createHash('sha256').update(`app-session:${process.env.GMAIL_TOKEN_ENCRYPTION_KEY || process.env.GMAIL_OAUTH_CLIENT_SECRET}`).digest('hex')
+  : undefined),
+async token => {
+  if (!firebaseConfig?.apiKey) return null;
+  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(firebaseConfig.apiKey)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: token }),
+  });
+  if (!response.ok) return null;
+  const identity = (await response.json()).users?.[0];
+  return identity?.emailVerified === true && typeof identity.email === 'string' ? identity.email : null;
 });
 
 // Helper to get time in America/Santiago
@@ -404,7 +424,7 @@ async function logDispatchToFirestore(data: Record<string, any>) {
 async function getDocWithRetry(docRef: any, maxRetries = 2, delayMs = 1500) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await getDoc(docRef);
+      return await getDocFromServer(docRef);
     } catch (err: any) {
       const isTransient = err?.code === 'unavailable' ||
         err?.code === 'deadline-exceeded' ||
@@ -416,77 +436,12 @@ async function getDocWithRetry(docRef: any, maxRetries = 2, delayMs = 1500) {
       throw err;
     }
   }
-  return await getDoc(docRef);
-}
-
-// Helper for transient-resilient Firestore collection queries with automatic retry
-async function getDocsWithRetry(colRef: any, maxRetries = 2, delayMs = 1500) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await getDocs(colRef);
-    } catch (err: any) {
-      const isTransient = err?.code === 'unavailable' ||
-        err?.code === 'deadline-exceeded' ||
-        (err?.message && (err.message.includes('temporarily unavailable') || err.message.includes('unavailable')));
-      if (isTransient && attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
-        continue;
-      }
-      throw err;
-    }
-  }
-  return await getDocs(colRef);
-}
-
-// Fetch all reservations from Firestore
-async function fetchAllReservationsServer(): Promise<Reservation[]> {
-  const db = getServerDb();
-  if (!db) return [];
-  try {
-    const snap = await getDocsWithRetry(collection(db, 'reservas'));
-    const list: Reservation[] = [];
-    snap.forEach((d: any) => {
-      list.push({ id: d.id, ...(d.data() as any) } as Reservation);
-    });
-    return list;
-  } catch (e: any) {
-    const isTransient = e?.code === 'unavailable' ||
-      e?.code === 'deadline-exceeded' ||
-      (e?.message && (e.message.includes('temporarily unavailable') || e.message.includes('unavailable')));
-    if (isTransient) {
-      console.warn('[Server] Firestore temporalmente no disponible al obtener reservas (se reintentará automáticamente):', e?.message || e);
-    } else {
-      console.error('[Server] Error fetching reservations:', e);
-    }
-    return [];
-  }
-}
-
-// Fetch all space ratings from Firestore
-async function fetchAllRatingsServer(): Promise<SpaceRating[]> {
-  const db = getServerDb();
-  if (!db) return [];
-  try {
-    const snap = await getDocsWithRetry(collection(db, 'calificaciones_espacios'));
-    const list: SpaceRating[] = [];
-    snap.forEach((d: any) => {
-      list.push({ id: d.id, ...(d.data() as any) } as SpaceRating);
-    });
-    return list;
-  } catch (e: any) {
-    const isTransient = e?.code === 'unavailable' ||
-      e?.code === 'deadline-exceeded' ||
-      (e?.message && (e.message.includes('temporarily unavailable') || e.message.includes('unavailable')));
-    if (isTransient) {
-      console.warn('[Server] Firestore temporalmente no disponible al obtener calificaciones:', e?.message || e);
-    } else {
-      console.error('[Server] Error fetching ratings:', e);
-    }
-    return [];
-  }
+  return await getDocFromServer(docRef);
 }
 
 // Background Automated Scheduler for Daily Printable Activities Sheets
+let confirmedDispatchDate: string | null = null;
+let dispatchConfiguration: SharedServerDocument | undefined;
 async function executeScheduledDispatchInternal(force = false): Promise<{
   success: boolean;
   skipped?: boolean;
@@ -502,9 +457,21 @@ async function executeScheduledDispatchInternal(force = false): Promise<{
     return { success: false, message: 'Base de datos Firestore no disponible en el servidor.' };
   }
 
+  const santiago = getSantiagoTime();
+  if (!force && confirmedDispatchDate === santiago.dateStr) {
+    return { success: false, skipped: true, message: 'El despacho de hoy ya fue confirmado.' };
+  }
+
   try {
-    const configSnap = await getDocWithRetry(doc(db, 'configuracion_sistema', 'gmail_dispatch_config'));
-    const configRaw = configSnap.exists() ? (configSnap.data() as any) : null;
+    const ref = doc(db, 'configuracion_sistema', 'gmail_dispatch_config');
+    let configRaw: any;
+    if (force) {
+      const configSnap = await getDocWithRetry(ref);
+      configRaw = configSnap.exists() ? configSnap.data() : null;
+    } else {
+      dispatchConfiguration ??= new SharedServerDocument(ref);
+      configRaw = await dispatchConfiguration.read();
+    }
     const config = configRaw?.data || configRaw;
     const schedule = config?.schedule;
 
@@ -515,8 +482,6 @@ async function executeScheduledDispatchInternal(force = false): Promise<{
     if (!schedule.enabled && !force) {
       return { success: false, skipped: true, message: 'El envío automático programado está deshabilitado.' };
     }
-
-    const santiago = getSantiagoTime();
 
     if (!force) {
       // 1. Date Range Check (fechaInicio <= today <= fechaFin)
@@ -558,7 +523,7 @@ async function executeScheduledDispatchInternal(force = false): Promise<{
     }
 
     // 6. Fetch reservations from Firestore and filter according to configured dispatchFilterMode
-    const allReservations = await fetchAllReservationsServer();
+    const allReservations = await fetchDispatchReservations(db, activityDates);
     const filterMode = config?.dispatchFilterMode || 'solo_prestamos';
     const emailReservations = selectDispatchReservations(allReservations, {
       dates: activityDates,
@@ -655,6 +620,8 @@ async function executeScheduledDispatchInternal(force = false): Promise<{
     });
 
     if (result.success) {
+      // A failed Firestore timestamp write must not resend an already delivered email.
+      confirmedDispatchDate = santiago.dateStr;
       const nowIso = new Date().toISOString();
       // Record last dispatch timestamp
       const updatedSchedule = {
@@ -729,7 +696,7 @@ async function executeScheduledDispatchInternal(force = false): Promise<{
   }
 }
 
-const checkScheduledDispatch = singleFlight(() => executeScheduledDispatchInternal(false));
+const checkScheduledDispatch = scheduledRetryGate(() => executeScheduledDispatchInternal(false));
 export function executeScheduledDispatchServer(force = false) {
   return force ? executeScheduledDispatchInternal(true) : checkScheduledDispatch();
 }
@@ -737,9 +704,10 @@ export function executeScheduledDispatchServer(force = false) {
 let schedulerInterval: NodeJS.Timeout | null = null;
 
 // Automatic backend cleanup of historical concurrency slots older than 30 days
-export async function purgeExpiredSlotsServer(daysOld = 30): Promise<{ purgedCount: number; message: string }> {
+export const purgeExpiredSlotsServer = guardedSlotCleanup(executeExpiredSlotsCleanup);
+async function executeExpiredSlotsCleanup(daysOld = 30): Promise<{ purgedCount: number; message: string }> {
   const db = getServerDb();
-  if (!db) return { purgedCount: 0, message: 'Firestore no disponible en el servidor' };
+  if (!db) throw new Error('Firestore no disponible en el servidor');
 
   try {
     const now = Date.now();
@@ -749,35 +717,28 @@ export async function purgeExpiredSlotsServer(daysOld = 30): Promise<{ purgedCou
     const d = String(cutoffDate.getDate()).padStart(2, '0');
     const cutoffDateStr = `${y}-${m}-${d}`;
 
-    const snap = await getDocs(collection(db, 'schedule_slots'));
-    const expiredDocs: string[] = [];
-
-    snap.forEach((docSnap) => {
-      const id = docSnap.id;
-      if (isPurgeableScheduleSlot(id, docSnap.data(), cutoffDateStr)) {
-        expiredDocs.push(id);
-      }
-    });
-
-    if (expiredDocs.length === 0) {
-      return { purgedCount: 0, message: 'No hay slots expirados pendientes de limpieza.' };
-    }
-
     let purgedCount = 0;
-    for (let i = 0; i < expiredDocs.length; i += 400) {
-      const chunk = expiredDocs.slice(i, i + 400);
-      purgedCount += await runTransaction(db, async tx => {
-        const snapshots = await Promise.all(chunk.map(id => tx.get(doc(db, 'schedule_slots', id))));
-        const eligible = snapshots.filter(snapshot => snapshot.exists() && isPurgeableScheduleSlot(snapshot.id, snapshot.data()!, cutoffDateStr));
-        eligible.forEach(snapshot => tx.delete(snapshot.ref));
-        return eligible.length;
-      });
+    let cursor: import('firebase/firestore').QueryDocumentSnapshot | undefined;
+    for (;;) {
+      const page = await fetchOldSlotPage(db, cutoffDateStr, cursor);
+      const expiredIds = page.docs.filter(snapshot =>
+        isPurgeableScheduleSlot(snapshot.id, snapshot.data(), cutoffDateStr)).map(snapshot => snapshot.id);
+      if (expiredIds.length) {
+        purgedCount += await runTransaction(db, async tx => {
+          const snapshots = await Promise.all(expiredIds.map(id => tx.get(doc(db, 'schedule_slots', id))));
+          const eligible = snapshots.filter(snapshot => snapshot.exists() && isPurgeableScheduleSlot(snapshot.id, snapshot.data()!, cutoffDateStr));
+          eligible.forEach(snapshot => tx.delete(snapshot.ref));
+          return eligible.length;
+        });
+      }
+      if (page.size < 400) break;
+      cursor = page.docs[page.docs.length - 1];
     }
     return { purgedCount, message: `Se purgaron ${purgedCount} índices vacíos anteriores al ${cutoffDateStr}.` };
 
   } catch (err: any) {
     console.warn('[Server Cleanup] Error en purga automática de slots:', err);
-    return { purgedCount: 0, message: `Error en purga: ${err?.message || String(err)}` };
+    throw err;
   }
 }
 
@@ -897,50 +858,14 @@ async function startServer() {
     return true;
   }
 
-  // Authentication middleware to protect sensitive backend endpoints
-  function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
-    const authHeader = req.headers['authorization'] || req.headers['x-auth-session'];
-    if (!authHeader) {
-      return res.status(401).json({
-        success: false,
-        error: 'Autenticación requerida: No se proporcionó token de sesión.'
-      });
-    }
+  // Only server-issued, signed sessions can authorize API requests.
+  appSessions.register(app);
+  const requireAuth = appSessions.requireAuth;
+  if (!localTestMode) gmailConnection.register(app, (req, res, next) => {
+    void requireAuth(req, res, () => requireReservationWriter(req, res, next));
+  });
 
-    const rawToken = (Array.isArray(authHeader) ? authHeader[0] : authHeader).replace(/^Bearer\s+/i, '').trim();
-    if (!rawToken) {
-      return res.status(401).json({
-        success: false,
-        error: 'Token de autenticación vacío.'
-      });
-    }
-
-    try {
-      const payload = JSON.parse(Buffer.from(rawToken, 'base64').toString('utf8'));
-      if (!payload || !payload.u) {
-        return res.status(403).json({
-          success: false,
-          error: 'Sesión no válida o expirada.'
-        });
-      }
-      (req as any).user = payload;
-      next();
-    } catch {
-      if (rawToken.length >= 20) {
-        (req as any).user = { u: 'token_user', r: 'authenticated' };
-        next();
-      } else {
-        return res.status(401).json({
-          success: false,
-          error: 'Token de sesión corrupto o no autorizado.'
-        });
-      }
-    }
-  }
-
-  if (!localTestMode) gmailConnection.register(app, requireAuth);
-
-  app.post('/api/email/send', requireAuth, async (req, res) => {
+  app.post('/api/email/send', requireAuth, requireReservationWriter, async (req, res) => {
     try {
       const user = (req as any).user;
       const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
@@ -989,7 +914,7 @@ async function startServer() {
   // Trigger scheduled automated dispatch manually / on-demand
   registerScheduledCheck(app, () => process.env.EMAIL_SCHEDULER_SECRET, executeScheduledDispatchServer);
 
-  app.post('/api/email/trigger-scheduled', requireAuth, async (req, res) => {
+  app.post('/api/email/trigger-scheduled', requireAuth, requireReservationWriter, async (req, res) => {
     try {
       const force = req.body?.force !== false;
       const result = await executeScheduledDispatchServer(force);
@@ -1008,7 +933,7 @@ async function startServer() {
       const db = getServerDb();
       if (!db) return res.status(500).json({ error: 'DB not available' });
 
-      const configSnap = await getDoc(doc(db, 'configuracion_sistema', 'gmail_dispatch_config'));
+      const configSnap = await getDocFromServer(doc(db, 'configuracion_sistema', 'gmail_dispatch_config'));
       const configRaw = configSnap.exists() ? (configSnap.data() as any) : null;
       const config = configRaw?.data || configRaw;
       const schedule = config?.schedule;
@@ -1018,7 +943,7 @@ async function startServer() {
       const specificDays = schedule?.diasActividadesEspecificos || [6, 0];
       let activityDates = calculateActivityDatesForDispatchDate(santiago.dateStr, alcance, specificDays);
 
-      const allReservations = await fetchAllReservationsServer();
+      const allReservations = await fetchDispatchReservations(db, activityDates);
       const filterMode = config?.dispatchFilterMode || 'solo_prestamos';
       const emailReservations = selectDispatchReservations(allReservations, {
         dates: activityDates,
@@ -1076,7 +1001,7 @@ async function startServer() {
   // -------------------------------------------------------------
   // VALIDATION & RATINGS API (Rechaza evaluación de eventos futuros con datos oficiales de Firestore)
   // -------------------------------------------------------------
-  app.post('/api/ratings/validate-and-save', requireAuth, async (req, res) => {
+  app.post('/api/ratings/validate-and-save', requireAuth, requireReservationWriter, async (req, res) => {
     try {
       const { rating, reservation } = req.body;
       if (!rating) {
@@ -1100,21 +1025,19 @@ async function startServer() {
       // Consultar reserva autoritativa directamente desde Firestore para evitar manipulación del cliente
       if (db) {
         try {
-          let snap = await getDoc(doc(db, 'reservas_comunitarias_v2', reservationId));
-          if (!snap.exists()) {
-            snap = await getDoc(doc(db, 'reservas', reservationId));
-          }
+          const snap = await getDocFromServer(doc(db, 'reservas', reservationId));
           if (snap.exists()) {
             dbReservation = snap.data();
           }
         } catch (dbErr) {
           console.warn('[Server] Error fetching authoritative reservation from Firestore:', dbErr);
+          return res.status(503).json({ success: false, error: 'No se pudo verificar la reserva oficial. Intenta nuevamente.' });
         }
       }
 
       // Si no se encontró en la base de datos, fallback o error
       if (!dbReservation) {
-        if (reservation && reservation.fecha && reservation.horaFin) {
+        if (localTestMode && reservation && reservation.fecha && reservation.horaFin) {
           dbReservation = reservation;
         } else {
           return res.status(404).json({
@@ -1125,7 +1048,7 @@ async function startServer() {
       }
 
       const santiago = getSantiagoTime();
-      const eventDate = String(dbReservation.fecha || '').trim();
+      const eventDate = reservationEndDate(dbReservation);
       const eventEndTime = String(dbReservation.horaFin || '23:59').trim();
 
       // Comparación estricta de tiempo de finalización contra hora de Santiago (Chile)
@@ -1142,22 +1065,8 @@ async function startServer() {
 
       // Sanitizar payload estricto antes de guardar en Firestore
       const cleanRatingId = String(rating.id || `calif_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`).trim().slice(0, 128);
-      const cleanRating = {
-        id: cleanRatingId,
-        reservaId: reservationId,
-        fecha: eventDate,
-        espacio: String(dbReservation.espacio || rating.espacio || '').slice(0, 150),
-        responsable: String(dbReservation.responsable || rating.responsable || '').slice(0, 200),
-        tipoActividad: String(dbReservation.tipoActividad || rating.tipoActividad || '').slice(0, 100),
-        puntaje: Math.max(1, Math.min(5, Number(rating.puntaje || rating.puntajeGeneral) || 5)),
-        estadoLimpieza: String(rating.estadoLimpieza || 'Bueno').slice(0, 50),
-        entregaHorario: String(rating.entregaHorario || 'A Tiempo').slice(0, 50),
-        cuidadoMobiliario: String(rating.cuidadoMobiliario || 'Bueno').slice(0, 50),
-        cumplioReglamento: String(rating.cumplioReglamento || 'Sí').slice(0, 50),
-        observaciones: String(rating.observaciones || '').slice(0, 2000),
-        evaluadoPor: String(rating.evaluadoPor || (req as any).user?.u || 'Administrador').slice(0, 100),
-        fechaEvaluacion: new Date().toISOString()
-      };
+      const cleanRating = buildConfirmedRating(rating, { ...dbReservation, id: reservationId },
+        cleanRatingId, String((req as any).user?.u || 'Administrador').slice(0, 100), new Date().toISOString());
 
       if (db) {
         await setDoc(doc(db, 'calificaciones_espacios', cleanRating.id), cleanRating, { merge: true });
@@ -1167,7 +1076,8 @@ async function startServer() {
         success: true,
         valid: true,
         message: 'Calificación validada contra reserva oficial y guardada en Firestore.',
-        ratingId: cleanRating.id
+        ratingId: cleanRating.id,
+        rating: cleanRating
       });
     } catch (e: any) {
       console.error('[Server] Error validating rating:', e);
@@ -1178,7 +1088,7 @@ async function startServer() {
   // -------------------------------------------------------------
   // ADMIN CLEANUP & MAINTENANCE API (Executed safely from backend)
   // -------------------------------------------------------------
-  app.post('/api/admin/purge-expired-slots', requireAuth, async (req, res) => {
+  app.post('/api/admin/purge-expired-slots', requireAuth, requireReservationWriter, async (req, res) => {
     try {
       const daysOld = Number(req.body?.daysOld) || 30;
       const result = await purgeExpiredSlotsServer(daysOld);

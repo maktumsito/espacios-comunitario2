@@ -118,6 +118,7 @@ import { addWeeks, format, parseISO } from 'date-fns';
 import {
   AuthUser,
   getStoredAuthUser,
+  getAuthSessionToken,
   saveAuthUser,
   clearAuthUser,
   getAllAuthorizedUsers,
@@ -136,7 +137,14 @@ export default function App() {
   const editorLoadRequest = useRef(0);
   const [pendingSeriesMove, setPendingSeriesMove] = useState<{ original: Reservation; target: Reservation; resolve: (result: boolean) => void } | null>(null);
   const [replacementSource, setReplacementSource] = useState<Reservation | null>(null);
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(getStoredAuthUser());
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    const stored = getStoredAuthUser();
+    if (stored && !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(getAuthSessionToken())) {
+      clearAuthUser();
+      return null;
+    }
+    return stored;
+  });
   const [currentView, setCurrentView] = useState<ViewMode>(() => getInitialViewMode());
   const [adminSubTab, setAdminSubTab] = useState<'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring'>('spaces');
   const [selectedDailyDate, setSelectedDailyDate] = useState<Date>(() => new Date());
@@ -271,8 +279,8 @@ export default function App() {
   const {
     ratings,
     setRatings,
-    handleSaveRating,
-    handleDeleteRating,
+    handleSaveRating: saveRating,
+    handleDeleteRating: deleteRating,
     checkRatingAllowed
   } = useRatingsState(reservations, {
     enabled: Boolean(currentUser) && (canWrite || currentView === 'mobile' || currentView === 'ratings' ||
@@ -282,6 +290,14 @@ export default function App() {
   });
 
   // 6. Audit Logs Hook (On-demand listener only when modal is open)
+  const handleSaveRating = async (rating: SpaceRating, target?: Reservation | null) => {
+    if (!canWrite) throw new Error('Esta cuenta tiene acceso de solo lectura.');
+    await saveRating(rating, target);
+  };
+  const handleDeleteRating = async (id: string) => {
+    if (!canWrite) throw new Error('Esta cuenta tiene acceso de solo lectura.');
+    await deleteRating(id);
+  };
   const { auditLogs } = useAuditLogs(isAuditLogOpen);
 
   // 7. Space Maintenance Blocks State & Synchronization Hook
@@ -290,7 +306,7 @@ export default function App() {
     setSpaceBlocks,
     handleSaveBlock,
     handleDeleteBlock
-  } = useSpaceBlocks({ triggerSyncToast });
+  } = useSpaceBlocks({ triggerSyncToast, enabled: Boolean(currentUser), startDate: reservationReadScope?.startDate });
 
   // Real-time synchronization of currentUser permissions when userAccounts updates in Firestore
   useEffect(() => {

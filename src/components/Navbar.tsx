@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ViewMode } from '../types';
 import { AuthUser, isCoordinatorOrAdmin, getSessionRemainingMs, refreshSession } from '../services/authService';
+import { showToast } from '../services/toastNotificationService';
 import {
   Calendar,
   Clock,
@@ -517,9 +518,13 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                         <span>Sesión restante: {sessionMinutesLeft} min</span>
                         <button
                           type="button"
-                          onClick={() => {
-                            refreshSession();
-                            setSessionMinutesLeft(60);
+                          onClick={async () => {
+                            try {
+                              await refreshSession();
+                              setSessionMinutesLeft(Math.ceil(getSessionRemainingMs() / 60_000));
+                            } catch (error) {
+                              showToast.error(error instanceof Error ? error.message : 'No se pudo renovar la sesión.');
+                            }
                           }}
                           className="text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
                         >

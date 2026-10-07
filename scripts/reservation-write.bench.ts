@@ -1,5 +1,7 @@
 import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator, getDocs, collection, terminate } from 'firebase/firestore';
 import type { Reservation } from '../src/types';
@@ -13,8 +15,8 @@ let service:any;let baselineConfig:any;
 const results:any[]=[];
 beforeAll(async()=> {
   if(phase==='before') {
-    service=await import('../work/baseline-source/src/services/reservationService');
-    baselineConfig=await import('../work/baseline-source/src/firebase/config');
+    service=await import(pathToFileURL(resolve('work/baseline-source/src/services/reservationService.ts')).href);
+    baselineConfig=await import(pathToFileURL(resolve('work/baseline-source/src/firebase/config.ts')).href);
   } else service=await import('../src/services/reservationService');
 });
 afterAll(async()=> {

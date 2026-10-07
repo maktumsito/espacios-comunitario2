@@ -22,6 +22,10 @@ export function getReservationReadScope(
   if ((from || to || filters.search.trim()) && !(from && to)) return undefined;
   let start = startOfMonth(date);
   let end = endOfMonth(date);
+  if (view === 'daily' || view === 'timeline') {
+    start = date;
+    end = date;
+  }
   if (view === 'calendar') {
     start = startOfWeek(start, { weekStartsOn: 1 });
     end = endOfWeek(end, { weekStartsOn: 1 });

@@ -26,6 +26,30 @@ async function withRoutes(connection: GmailConnection, run: (base: string) => Pr
 }
 
 describe('Gmail server authorization', () => {
+  it('shares credential reads across browsers, caches absence, and revalidates after 60 seconds', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const config = options();
+    const read = vi.spyOn(config.store, 'read');
+    const connection = new GmailConnection(config);
+    const req = { headers: {} } as Request;
+    await Promise.all(Array.from({ length: 50 }, () => connection.status(req)));
+    expect(read).toHaveBeenCalledTimes(1);
+    await connection.status(req);
+    expect(read).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(60_000);
+    await config.store.write(connection.seal({ email, accessToken: 'valid', refreshToken: 'refresh', expiresAt: Date.now() + 3600_000 }));
+    expect((await connection.status(req)).persistent).toBe(true);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not cache failed credential reads as a disconnected state', async () => {
+    const config = options();
+    const read = vi.spyOn(config.store, 'read').mockRejectedValueOnce(new Error('offline'));
+    const connection = new GmailConnection(config);
+    await expect(connection.status({ headers: {} } as Request)).rejects.toThrow('offline');
+    expect((await connection.status({ headers: {} } as Request)).persistent).toBe(false);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
   it('does not treat an unverified SMTP password as an OAuth authorization', async () => {
     vi.stubEnv('SMTP_PASS', 'unverified-password');
     vi.stubEnv('SMTP_USER', email);
