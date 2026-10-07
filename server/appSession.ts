@@ -28,8 +28,11 @@ export class AppSessions {
 
   constructor(private readAccount: (username: string) => Promise<UserAccount | null>, secret?: string,
     private verifyGoogleToken?: (token: string) => Promise<string | null>) {
-    this.key = secret || crypto.randomBytes(32).toString('base64url');
-    if (this.key.length < 32) throw new Error('AUTH_SESSION_SECRET debe tener al menos 32 caracteres.');
+    if (secret && secret.trim().length > 0) {
+      this.key = secret.length >= 32 ? secret : crypto.createHash('sha256').update(secret).digest('hex');
+    } else {
+      this.key = crypto.randomBytes(32).toString('base64url');
+    }
   }
 
   async account(username: string): Promise<UserAccount | null> {

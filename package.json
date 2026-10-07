@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --define:import.meta.env={} --sourcemap --outfile=dist/server.cjs",
-    "start": "node dist/server.cjs",
+    "start": "node -e \"if(!require('fs').existsSync('dist/server.cjs')){require('child_process').execSync('npm run build',{stdio:'inherit'})}\" && node dist/server.cjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:journal": "node scripts/test-reservation-journal.cjs",

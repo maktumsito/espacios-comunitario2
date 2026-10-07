@@ -38,6 +38,8 @@ import { formatDateDDMMYYYY } from './src/utils/dateUtils';
 dotenv.config();
 const localTestMode = process.env.VITE_LOCAL_TEST_MODE === 'true';
 
+// The container routes ingress through nginx on port 8080 to localhost:3000.
+// The container startup probe also probes port 3000. Therefore, the server must listen on 3000.
 const PORT = 3000;
 const TIMEZONE = 'America/Santiago';
 
@@ -1127,28 +1129,20 @@ async function startServer() {
   // -------------------------------------------------------------
   // VITE MIDDLEWARE (Development) or STATIC ASSETS (Production)
   // -------------------------------------------------------------
-  const isCompiledBundle = (typeof __filename !== 'undefined' && __filename.endsWith('server.cjs')) ||
+  const distPath = fs.existsSync(path.join(process.cwd(), 'dist', 'index.html'))
+    ? path.join(process.cwd(), 'dist')
+    : (typeof __dirname !== 'undefined' && fs.existsSync(path.join(__dirname, 'index.html')))
+    ? __dirname
+    : (typeof __dirname !== 'undefined' && fs.existsSync(path.join(__dirname, '..', 'dist', 'index.html')))
+    ? path.join(__dirname, '..', 'dist')
+    : path.join(process.cwd(), 'dist');
+
+  const hasBuiltDist = fs.existsSync(path.join(distPath, 'index.html'));
+  const isCompiledBundle = (typeof __filename !== 'undefined' && __filename.includes('server.cjs')) ||
     (typeof __dirname !== 'undefined' && __dirname.includes('dist'));
-  const isProduction = process.env.NODE_ENV === 'production' || isCompiledBundle;
+  const isProduction = process.env.NODE_ENV === 'production' || isCompiledBundle || hasBuiltDist;
 
-  if (!isProduction) {
-    try {
-      const { createServer: createViteServer } = await import('vite');
-      const vite = await createViteServer({
-        server: { middlewareMode: true },
-        appType: 'spa'
-      });
-      app.use(vite.middlewares);
-    } catch (viteErr) {
-      console.error('[Server] Error starting Vite middleware in dev mode:', viteErr);
-    }
-  } else {
-    const distPath = fs.existsSync(path.join(process.cwd(), 'dist', 'index.html'))
-      ? path.join(process.cwd(), 'dist')
-      : (typeof __dirname !== 'undefined' && fs.existsSync(path.join(__dirname, 'index.html')))
-      ? __dirname
-      : path.join(process.cwd(), 'dist');
-
+  if (isProduction) {
     app.use(express.static(distPath, {
       maxAge: '1y',
       immutable: true,
@@ -1167,16 +1161,33 @@ async function startServer() {
         res.status(404).send('Application build not found. Please run npm run build.');
       }
     });
+  } else {
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa'
+      });
+      app.use(vite.middlewares);
+    } catch (viteErr) {
+      console.error('[Server] Error starting Vite middleware in dev mode:', viteErr);
+    }
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Server] Background server running on http://0.0.0.0:${PORT} (mode: ${isProduction ? 'production' : 'development'})`);
     console.log(`[Server] Chile Time: ${getSantiagoTime().dateStr} ${getSantiagoTime().timeFormatted}`);
+    startBackgroundScheduler();
   });
 
-  // Start background timer
-  startBackgroundScheduler();
+  server.on('error', (err: any) => {
+    console.error(`[Server] Listen error on port ${PORT}:`, err);
+  });
 }
+
+process.on('unhandledRejection', (reason) => {
+  console.warn('[Server] Unhandled Rejection:', reason);
+});
 
 startServer().catch((err) => {
   console.error('[Server] Fatal startup error:', err);
