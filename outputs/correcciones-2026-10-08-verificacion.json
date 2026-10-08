@@ -1,0 +1,157 @@
+{
+  "baseCommit": "181f7eb27789a44cd071fb18815dd56123cb6902",
+  "branch": "main",
+  "environment": {
+    "projectId": "demo-espacios",
+    "firestore": "127.0.0.1:8087",
+    "auth": "127.0.0.1:9099",
+    "timezone": "America/Santiago",
+    "node": "v26.10.0"
+  },
+  "checks": {
+    "lint": "passed",
+    "build": "passed",
+    "unit": {
+      "total": 451,
+      "passed": 416,
+      "failed": 0,
+      "skipped": 35
+    },
+    "integration": {
+      "total": 35,
+      "passed": 35,
+      "failed": 0
+    },
+    "indexedDbChecks": 5,
+    "browserSteps": 8,
+    "browserChecks": [
+      {
+        "scenario": "Recovered operation audit",
+        "status": "passed",
+        "observed": "Snapshots captured atomically in each confirmed chunk, including recovery"
+      },
+      {
+        "scenario": "Restore after later edit",
+        "status": "passed",
+        "blocked": {
+          "success": false,
+          "message": "Error al restaurar: Hay modificaciones posteriores a este cambio. Revierte primero los cambios más recientes.",
+          "restoredCount": 0
+        },
+        "allowed": {
+          "success": true,
+          "restoredCount": 2,
+          "message": "Se revirtió el cambio en 2 reserva(s)."
+        }
+      },
+      {
+        "scenario": "Backup reservations round trip",
+        "status": "passed",
+        "success": true,
+        "count": 504,
+        "domainFieldsEqual": true,
+        "backupCollections": [
+          "version",
+          "exportadoEn",
+          "reservas",
+          "espacios",
+          "tiposPrestamo",
+          "tiposActividad",
+          "equipamiento",
+          "usuarios",
+          "calificaciones",
+          "bloqueos"
+        ],
+        "backupId": "BACKUP_20261008_171919_MANUAL_a0801cf5"
+      },
+      {
+        "scenario": "Reader UI blocks creation after click",
+        "status": "passed",
+        "dialogs": 0
+      },
+      {
+        "scenario": "Cross-account recovery authorization",
+        "status": "passed",
+        "rawSharedJournal": [],
+        "blockedResume": true
+      }
+    ],
+    "productionDependencyAdvisories": 0
+  },
+  "sourceSha256NormalizedLf": {
+    "bun.lock": "aa9f75e49962ece641ce280979162416d31d4a25ec7899cce24b589cb9f4ec7f",
+    "firestore.rules": "b24d75819b475232d91d5c55a96da687d3c4e2e4dc05f33b419fe3d6bddc75ab",
+    "package.json": "b2e5bf761b0dca6e76afb926ab0f62c7ffea89dccfbb798bb73ee4cd722fed11",
+    "scripts/audit/api-checks.cjs": "c073a8d71df0501d4e41484cde2d94fd0bd6fbdfcaa93fcb1783e8378eb2d186",
+    "scripts/audit/browser-checks.cjs": "905ef834b196f5019385718dc3ab2b1a52355020bf07ab0cab140bcabb2dbb50",
+    "scripts/audit/browser-entry.tsx": "abc439b0252aa535420ee2dd6071a9c61abc9d652ff83ca19b4574387369e27c",
+    "scripts/audit/browser-run.cjs": "1acbb624a712181b6cf013b7f5a6dd476ebf04f11306d650503df9a50532f3da",
+    "scripts/audit/dates.test.ts": "3d5337c69e8f9549dd4d827d03d4e054194e97f472c09cce716f5a90573ed6ce",
+    "scripts/audit/integration.test.ts": "3b65107a98e13a187ece226e0b1218224c77d6a851c4a8314b616711ed75eb9e",
+    "scripts/audit/measure-browser.cjs": "67e9abc666d1dcd535dad622aa7e45d6b3ac0c85c07f4b1fea803a280b742224",
+    "scripts/audit/pdf.ts": "d235a52668460e4b0e027d00286cbc7ed0c08fc424b67ba06676c9faaedd69f7",
+    "scripts/audit/read-performance.cjs": "c9217c8c2d497e93c6c81cea785964f4a10a858e2768ab7710f94ab312a6841f",
+    "scripts/audit/recovery.test.tsx": "8a7c26908b393c35cd72610ca35e3b49e2f29385d5ad5cad7c146f49bf9b3d18",
+    "scripts/audit/redact-evidence.cjs": "60c5b92639aa0d43a1783e7a921a6063a7210b3ec98a621a153dcd722a643585",
+    "scripts/audit/scheduler-run.cjs": "bb00587be17e352f13cb75c497dd34d67c1bbf2a940e39b792042c20c0f59cd5",
+    "scripts/audit/server-preload.cjs": "e9bbe211dbb4d5e0326c9611b5cc5f1fc01d3cd1f01f4457ceb4334ae3a5c90c",
+    "scripts/audit/session.test.ts": "83a35bbe2fa14816b2d1467caedf9ddce7dac4572e84e7b85976048775e2575e",
+    "scripts/audit/vite.config.ts": "7bd35d8cb257992156ad7c11d4e17580aabfc4cf74e78fb9ed57ff9c3e53efa2",
+    "scripts/corrections/browser-entry.tsx": "55e3f6321f6e29ed7b3b22f17141a35167735bdb6d85f53e68507ad68435d3e1",
+    "scripts/corrections/browser-run.cjs": "c3ad1c33721ea3229cab6c4f0100b0d38d35cff6c593da569caf5e00ed1d0b27",
+    "scripts/group-independent-reservations.ts": "97fefa3356f5781f661325604dfd35cd5c00636cec78ca2ff3501b54fb811fc0",
+    "scripts/manage-account.ts": "9f679be4b9fc91eeac8e5270b41a91bffad960e9277a980f4208ee45267268f0",
+    "scripts/rebuild-schedule-slots.ts": "c21a0a8207cd1508327de4f2896f9d5f75f8e14031c83803833dfb8da5a86974",
+    "scripts/run-emulator-tests.cjs": "a6403e9384181dc99dc96aa2bee3cbe642e39d68807097e89f54abded68d4499",
+    "scripts/test-reservation-journal.cjs": "876771b1840039b9025637084cf9647b8a7672c9911097def870cc5a44a4f5d4",
+    "server.ts": "7099e84900a64c9486fbeb424c6ea74045c7a43e88bb63c981604173e9353929",
+    "server/__tests__/appSession.test.ts": "b1306a95a99d653c99136feb3c89261da30f2412fe442f5a82a894bb5f6d954b",
+    "server/__tests__/trustedData.integration.test.ts": "721b93b62eb51d7dc6fe890734d4cf323863565591b69bf7921ece7f73833ccb",
+    "server/appSession.ts": "f9a4cbce5462ac0b1370b4230bd9299c9a14ea0c002b8a930afe52267189765c",
+    "server/backupApi.ts": "0411f59092208df9f7efa0eec69e4db3ff52ab1b4d917dbe1fee670711232b45",
+    "server/dataApi.ts": "1e71975e823b738635a4998553a34e4fe4ce0a232ad200e9b504fc21206cc214",
+    "server/database.ts": "c2fbe1c00a1fd1906ead2c07fb827157d8cbcbf2d9891fa4da036a6e2c47607f",
+    "server/deliveryLease.ts": "a2f7649021bd3c81e725b052e0498368398a8a4ee199eb23baa912d9a0ece396",
+    "server/firestoreQueries.ts": "c62a767c05bde35a4b03e844c860d1b838c55fcfc950f7376dda0809a2cb278d",
+    "server/passwords.ts": "9548e8793f77429b04d9959bdd83f51de716b7b3dd57a047021731c924d30d72",
+    "server/reservationApi.ts": "75b02d9c2865ca264fbdce28129d4c3413d5f90984c1f3edfff8b5b5e0adeaac",
+    "server/sharedDocument.ts": "5d0ce1416ef14f5fc4a29bc4fadd0d71234d7f0460a115b949fcea1cd803c755",
+    "src/components/AdminView.tsx": "45e6b4b292fe0b180a539be5871c6f994d2e9dd8b0311e75394a42836ac2650d",
+    "src/components/AnalyticsView.tsx": "e750ab552f45762f602163747d9461a86bbdc2591dbca58de1664a6bc6310bb8",
+    "src/components/ChangePasswordModal.tsx": "64612187ab997a6048577782c0c7c4f6d0fc0c124c46f6af7b353afad06b3e0b",
+    "src/components/IndependentReservationGrouping.tsx": "ab95ade9eef6737ab1721ac45d749e11d4154a403f4c99a180d9c08c9c4de730",
+    "src/components/LoginScreen.tsx": "ef36c15e1b699045aabc6ef990dce3601e1c4756fa1e9c4a2997821dfc6aa9b3",
+    "src/components/PasswordPromptModal.tsx": "89603199d5dbb33356d49c505c0fb07b3ff14abcc55b505c71685ac8c0e929cc",
+    "src/components/__tests__/adminOperations.test.tsx": "2615f0af8f6af66c6018ed0872dbf358b7a4e0804b3b518464dcbbf84241837c",
+    "src/firebase/config.ts": "c1a1e2d68e15bfd5c283180bec9907d4d4768f29b5b2ab02d5a8e712020214b0",
+    "src/firebase/gateway.ts": "1d8379994d83464a940dbb0f4d4cfccf6c547efc3e9ac1c9f4e8693864146c2e",
+    "src/firebase/sharedSnapshot.ts": "252f9de9b8878151ce7e06e94a49e17dffcc4d86efc74b3aaa2f872815151ec6",
+    "src/hooks/useReservationCrud.ts": "02b1b4989aedc00f2178cee7c66661180a0374bf836ecfc9e84af544bf700676",
+    "src/services/__tests__/confirmedAdminWrites.test.ts": "e0c142e99d3373c2968a0984d308e2117bc4be2cbce302f88209e3fc14f3e4d7",
+    "src/services/__tests__/firestoreQuotaOptimization.test.ts": "d8da81e2a57d465f4921db7ed1af84876961817663da694e08efd9ab172e0b44",
+    "src/services/__tests__/gmailConnectionRecovery.test.ts": "95bcfc60c54bd8ade5537037d4d80c26a6cec1e936f5dbd750c4c181c599d3ab",
+    "src/services/__tests__/reservationPersistence.test.ts": "9ce62ef17c27032dfbe7c7f7d3cf19b2c5d797ddc51149fd3957d842769d88ea",
+    "src/services/__tests__/userReservationPermissions.test.ts": "4a9e73fc83edfd2cd544344074c49c88ba8b7f5069636f01f99b00ef02a7b04f",
+    "src/services/adminConfigService.ts": "da77ee9bb2d1ff9bf979a8615390c46c9dfbe09fb4c0869326a017ab7407632f",
+    "src/services/auditLogService.ts": "a267e62616cd4a342f6eddc896847e8c16b540ec22bbfb32a277aa66aa54d66a",
+    "src/services/auditSnapshotService.ts": "326ac70fb141d1e24d082a3db77c2dfef81a9fe7f24ef3a6323f1bcf72913d71",
+    "src/services/authService.ts": "9cfb5f21c9a0247de7ea5309ed4b8e03c5267f2cbffae5fc294680cd33329db8",
+    "src/services/backupScheduleCoordinator.ts": "f447e35fb31bd2f5ed17170b4e45640279019daf7047c727e13350d5cac74c2f",
+    "src/services/backupService.ts": "e616b2452b6f0243c37aaceca82ff4a13fa9d523b8f0a2454e7b0e04a883796a",
+    "src/services/equipmentService.ts": "4f5cb0ab96483986b2af25deeb984083853b013dfa6b7188194f8d3fd5ade7a6",
+    "src/services/fcmService.ts": "118e5ffa0a290c90fd9f3b3bf25e313d26d9185b2337c836163c80fe7b60caeb",
+    "src/services/gmailDispatchService.ts": "05243e0582b82a6e15f53be3e0003608635f099d0c0f5c7d5d179354afd6945c",
+    "src/services/migrations/cleanMinuteConflictsMigration.ts": "44b643cb65af432a0b024017587ff76d768bc0aa148d2d11670b5958bb3e0e31",
+    "src/services/migrations/groupIndependentReservations.ts": "25c5f28ff97b48391235814bdb8a0d6a42158dca2a343b405e9537ce8c3e3d8a",
+    "src/services/migrations/rebuildScheduleSlots.ts": "c2bf460d74e0febd4d3eaa4e58c40e876261f29c458d6bad1d267efe87a6e951",
+    "src/services/ratingService.ts": "0b95d7ebd5600b2e92753062792f794e42d57a946e00bf3ac1f7401e341fd0e4",
+    "src/services/reservationOperationJournal.ts": "d51b979207599d6fb9c2fbc7b68fe2eb4147b47883c68f6e6e822a8b9045f5a3",
+    "src/services/reservationService.ts": "5c2ef0a4f69e6d473adfabd12ec668105183a325d05aa5cb90685628c5ea4da5",
+    "src/services/reservationWriter.ts": "3117733faaba822109908c147cac65f96c740a8c4d3b309e0e423a60ad799d6a",
+    "src/services/spaceBlockService.ts": "87f0d44c50f0f8a4d6ea040b74f31aaba21c6db6646377eeab998e39c4f1cea6",
+    "src/test/setup.ts": "823a6e5753dbf7a3ab771f56e82799093522598b8722090d4a84e262c21b0505",
+    "src/utils/__tests__/reservationReadScope.test.ts": "8c1153cfca933124a5995a0d468ce1286a2a1766cbc8ea5d76f6901b9d81169e",
+    "src/utils/backupIntegrity.ts": "af98147f6f58a0039b068ab9f74c97602770e18b1a745cc0c4df4d3bdb528bb6",
+    "vitest.config.ts": "52099dfc534f5d564a5f672c77322a29d1971e2b1fda96d16e53f10cbc269065"
+  }
+}

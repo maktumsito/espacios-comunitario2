@@ -9,3 +9,6 @@
   <a href="https://aistudio.google.com/apps">Start building</a>
 
 </div>
+
+
+La guía de [correcciones y operación gratuita](docs/correcciones-gratuitas-2026-10-08.md) describe el acceso autenticado, la preparación de cuentas individuales, recuperación y validación local.

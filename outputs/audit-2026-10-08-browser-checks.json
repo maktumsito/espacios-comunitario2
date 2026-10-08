@@ -1,0 +1,53 @@
+{
+  "checks": [
+    {
+      "scenario": "Reader UI blocks creation after click",
+      "status": "passed",
+      "dialogs": 0
+    },
+    {
+      "scenario": "Desktop modal initial focus and Escape",
+      "status": "passed",
+      "focusInside": true,
+      "dialogsAfterEscape": 0
+    },
+    {
+      "scenario": "Authorized holiday cache",
+      "status": "failed",
+      "persisted": true,
+      "cacheVisible": false
+    },
+    {
+      "scenario": "CSV loaded scope",
+      "status": "observed",
+      "currentIncluded": true,
+      "historyIncluded": false,
+      "holidayIncluded": true,
+      "scopeLabel": "registros actualmente disponibles"
+    },
+    {
+      "scenario": "Statistics dataset scope",
+      "status": "observed",
+      "totalCard": "2\nTotal de Reservas",
+      "firestoreRows": 3
+    },
+    {
+      "scenario": "Cross-account journal resume",
+      "status": "passed",
+      "visible": [
+        {
+          "id": "isolation-a",
+          "actor": "audit-a"
+        }
+      ],
+      "blocked": true
+    },
+    {
+      "scenario": "Second tab sees durable journal",
+      "status": "passed",
+      "operationIds": [
+        "isolation-a"
+      ]
+    }
+  ]
+}

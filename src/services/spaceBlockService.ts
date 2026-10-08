@@ -7,7 +7,7 @@ import {
   query,
   where,
   Unsubscribe
-} from 'firebase/firestore';
+} from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 import { SpaceBlock } from '../types';
 import { normalizeSpaceName } from '../data/spacesData';

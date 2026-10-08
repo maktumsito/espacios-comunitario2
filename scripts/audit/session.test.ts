@@ -1,0 +1,25 @@
+import express from 'express';
+import crypto from 'node:crypto';
+import { afterEach, expect, it } from 'vitest';
+import { AppSessions, requireReservationWriter } from '../../server/appSession';
+const servers: any[] = [];
+afterEach(async () => { await Promise.all(servers.splice(0).map(s => new Promise<void>(r => { s.closeAllConnections(); s.close(() => r()); }))); });
+it('SEC-04 invalidates a signed session after a password change', async () => {
+  const hash = (p: string) => 'scrypt$'+'01'.repeat(16)+'$'+crypto.scryptSync(p,'01'.repeat(16),64).toString('hex');
+  let account: any = { username: 'synthetic', name: 'Synthetic', role: 'Administrador', passwordHash: hash('Synthetic-Only-A'), canEditReservations: true };
+  const sessions = new AppSessions(async () => account, 'synthetic-secret-with-more-than-32-characters');
+  const app = express(); app.use(express.json()); sessions.register(app);
+  app.get('/protected', sessions.requireAuth, requireReservationWriter, (_req, res) => res.json({ success: true }));
+  const server: any = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); }); servers.push(server);
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const login = await fetch(origin + '/api/auth/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'synthetic', password: 'Synthetic-Only-A' }) });
+  const { token } = await login.json(); expect(token).toBeTruthy();
+  const headers = { authorization: `Bearer ${token}` };
+  expect((await fetch(origin + '/protected', { headers })).status).toBe(200);
+  account = { ...account, canEditReservations: false, canCreateReservations: false, canDeleteReservations: false };
+  expect((await fetch(origin + '/protected', { headers })).status).toBe(403);
+  account = { ...account, canEditReservations: true, passwordHash: hash('Synthetic-Only-B') };
+  const status = (await fetch(origin + '/protected', { headers })).status;
+  console.log('SEC-04', JSON.stringify({ oldSessionStatusAfterPasswordChange: status }));
+  expect(status).toBe(401);
+});

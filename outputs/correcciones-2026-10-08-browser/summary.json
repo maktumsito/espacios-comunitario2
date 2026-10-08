@@ -1,0 +1,130 @@
+{
+  "harness": "Real React CRUD hook, application services, IndexedDB, SDK and unchanged app UI; operations driven through diagnostic bridge",
+  "steps": [
+    {
+      "step": "01-series",
+      "reservas": 4,
+      "slots": 4,
+      "logs": 1,
+      "pending": 0,
+      "cacheMatchesActive": true,
+      "interfaceCount": 4
+    },
+    {
+      "step": "02-replacement",
+      "reservas": 5,
+      "slots": 4,
+      "logs": 2,
+      "pending": 0,
+      "cacheMatchesActive": true,
+      "interfaceCount": 5
+    },
+    {
+      "step": "03-move",
+      "reservas": 6,
+      "slots": 4,
+      "logs": 4,
+      "pending": 0,
+      "cacheMatchesActive": true,
+      "interfaceCount": 6
+    },
+    {
+      "step": "04-other-editor",
+      "reservas": 6,
+      "slots": 4,
+      "logs": 5,
+      "pending": 0,
+      "cacheMatchesActive": true,
+      "interfaceCount": 6
+    },
+    {
+      "step": "05-interrupted",
+      "reservas": 423,
+      "slots": 421,
+      "logs": 6,
+      "pending": 1,
+      "cacheMatchesActive": false,
+      "interfaceCount": 214
+    },
+    {
+      "step": "06-recovered",
+      "reservas": 505,
+      "slots": 503,
+      "logs": 7,
+      "pending": 0,
+      "cacheMatchesActive": true,
+      "interfaceCount": 505
+    },
+    {
+      "step": "07-audit-restore",
+      "reservas": 504,
+      "slots": 503,
+      "logs": 9,
+      "pending": 0,
+      "cacheMatchesActive": true,
+      "interfaceCount": 504
+    },
+    {
+      "step": "08-backup-restore",
+      "reservas": 504,
+      "slots": 503,
+      "logs": 13,
+      "pending": 0,
+      "cacheMatchesActive": true,
+      "interfaceCount": 504
+    }
+  ],
+  "checks": [
+    {
+      "scenario": "Recovered operation audit",
+      "status": "passed",
+      "observed": "Snapshots captured atomically in each confirmed chunk, including recovery"
+    },
+    {
+      "scenario": "Restore after later edit",
+      "status": "passed",
+      "blocked": {
+        "success": false,
+        "message": "Error al restaurar: Hay modificaciones posteriores a este cambio. Revierte primero los cambios más recientes.",
+        "restoredCount": 0
+      },
+      "allowed": {
+        "success": true,
+        "restoredCount": 2,
+        "message": "Se revirtió el cambio en 2 reserva(s)."
+      }
+    },
+    {
+      "scenario": "Backup reservations round trip",
+      "status": "passed",
+      "success": true,
+      "count": 504,
+      "domainFieldsEqual": true,
+      "backupCollections": [
+        "version",
+        "exportadoEn",
+        "reservas",
+        "espacios",
+        "tiposPrestamo",
+        "tiposActividad",
+        "equipamiento",
+        "usuarios",
+        "calificaciones",
+        "bloqueos"
+      ],
+      "backupId": "BACKUP_20261008_171919_MANUAL_a0801cf5"
+    },
+    {
+      "scenario": "Reader UI blocks creation after click",
+      "status": "passed",
+      "dialogs": 0
+    },
+    {
+      "scenario": "Cross-account recovery authorization",
+      "status": "passed",
+      "rawSharedJournal": [],
+      "blockedResume": true
+    }
+  ],
+  "blockedExternalRequests": 4
+}

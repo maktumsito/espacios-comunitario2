@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, writeBatch, type Firestore } from 'firebase/firestore';
+import { collection, doc, getDocs, writeBatch, type Firestore } from '../../firebase/gateway';
 import type { Reservation } from '../../types';
 import { reservationSlots, type ScheduleSlot } from '../reservationWriter';
 

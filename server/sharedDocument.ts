@@ -1,4 +1,4 @@
-import { onSnapshot, type DocumentData, type DocumentReference, type Unsubscribe } from 'firebase/firestore';
+import { onSnapshot, type DocumentData, type DocumentReference, type Unsubscribe } from '../src/firebase/gateway';
 
 /** One live configuration document replaces a server read on every timer tick. */
 export class SharedServerDocument {

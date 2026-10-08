@@ -1,5 +1,5 @@
 import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
-import { collection, doc, deleteDoc, Unsubscribe, query, limit } from 'firebase/firestore';
+import { collection, doc, deleteDoc, Unsubscribe, query, limit } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 import { SpaceRating, Reservation } from '../types';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';

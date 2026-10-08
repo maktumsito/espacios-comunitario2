@@ -178,7 +178,7 @@ it('preserves arrow-based ordering and retries after a rejected reorder', async 
 it('keeps individual permission changes pending, reports rejection and allows retry', async () => {
   const pending = deferred();
   const save = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue(undefined);
-  const currentUser = { ...props().currentUser!, username: 'cristian shute', name: 'Titular de prueba' };
+  const currentUser = { ...props().currentUser!, username: 'cristian shute', isMasterAdmin:true, name: 'Titular de prueba' };
   render(<AdminView {...props({ initialTab: 'users', currentUser, onSaveUser: save })} />);
   const toggle = screen.getAllByTitle('Haz clic para activar o desactivar este permiso')[0];
   fireEvent.click(toggle);
@@ -196,8 +196,8 @@ it('keeps individual permission changes pending, reports rejection and allows re
 it('preserves bulk permission changes, excludes protected accounts and prevents duplicate requests', async () => {
   const pending = deferred();
   const save = vi.fn().mockReturnValue(pending.promise);
-  const currentUser = { ...props().currentUser!, username: 'cristian shute', name: 'Titular de prueba' };
-  const users = [operator, { ...operator, username: 'administrator', role: 'Administrador' }, { ...operator, username: 'cristian shute' }];
+  const currentUser = { ...props().currentUser!, username: 'cristian shute', isMasterAdmin:true, name: 'Titular de prueba' };
+  const users = [operator, { ...operator, username: 'administrator', role: 'Administrador', isMasterAdmin:true }, { ...operator, username: 'cristian shute', isMasterAdmin:true }];
   render(<AdminView {...props({ initialTab: 'users', currentUser, users, onSaveUser: save })} />);
   const button = screen.getByTitle('Bloquea creación, edición y eliminación para operadores');
   fireEvent.click(button);

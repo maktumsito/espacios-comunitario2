@@ -1,3 +1,4 @@
+import {webcrypto} from 'node:crypto';
 import { vi } from 'vitest';
 
 // Unit tests must never initialize the configured production Firebase project.
@@ -9,3 +10,5 @@ vi.mock('../firebase/config', () => ({
   auth: undefined,
   testFirestoreConnection: async () => false,
 }));
+
+if(!globalThis.crypto.subtle)Object.defineProperty(globalThis.crypto,'subtle',{value:webcrypto.subtle,configurable:true});

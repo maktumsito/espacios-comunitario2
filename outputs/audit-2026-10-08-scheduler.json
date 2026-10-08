@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-08",
+  "delivery": "local simulator only",
+  "twoInstances": {
+    "successfulSimulatedDispatches": 2,
+    "results": [
+      {
+        "success": true,
+        "message": "Despacho ejecutado exitosamente vía logged. Se enviaron 1 planillas PDF a synthetic@example.test.",
+        "attachments": [
+          "Planilla_Actividades_Jueves_08-10-2026.pdf"
+        ]
+      },
+      {
+        "success": true,
+        "message": "Despacho ejecutado exitosamente vía logged. Se enviaron 1 planillas PDF a synthetic@example.test.",
+        "attachments": [
+          "Planilla_Actividades_Jueves_08-10-2026.pdf"
+        ]
+      }
+    ]
+  },
+  "failedMarker": {
+    "first": true,
+    "sameProcess": false,
+    "afterRestart": true
+  }
+}

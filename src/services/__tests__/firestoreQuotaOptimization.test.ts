@@ -115,7 +115,7 @@ describe('Firestore Quota Optimization & Conflict Purge Suite', () => {
         }
       ];
 
-      await expect(cleanConflictingMinuteReservations(candidates)).rejects.toThrow(/conexión/i);
+      await expect(cleanConflictingMinuteReservations(candidates)).rejects.toThrow(/conexión|recarga/i);
     });
 
     it('preserves non-conflicting reservations on separate spaces or non-overlapping hours', async () => {

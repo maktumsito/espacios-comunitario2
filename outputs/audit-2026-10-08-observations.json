@@ -1,0 +1,37 @@
+[
+  {
+    "id": "SEC-01",
+    "anonymousWritesAccepted": 4,
+    "accountReadable": true
+  },
+  {
+    "id": "SEC-02",
+    "status": 200
+  },
+  {
+    "id": "SEC-03",
+    "authenticated": true,
+    "writeAccepted": true
+  },
+  {
+    "id": "CON-02",
+    "deletionAccepted": true,
+    "editedRowExists": false
+  },
+  {
+    "id": "BAK-01",
+    "reportedSuccess": true,
+    "catalogRestored": false,
+    "ratingRestored": false
+  },
+  {
+    "id": "BAK-02",
+    "tamperedBackupAccepted": true,
+    "changedDescription": "Tampered payload"
+  },
+  {
+    "id": "HOL-01",
+    "persisted": true,
+    "visibleInConfirmedCache": false
+  }
+]

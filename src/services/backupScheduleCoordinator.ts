@@ -1,4 +1,4 @@
-import { doc, runTransaction, type Firestore } from 'firebase/firestore';
+import { doc, runTransaction, dataRequest, usesDataApi, type Firestore } from '../firebase/gateway';
 import type { BackupScheduleConfig, DatabaseBackupRecord } from './backupService';
 
 export interface ScheduledBackupClaim { config: BackupScheduleConfig; owner?: string; busy: boolean }
@@ -6,6 +6,7 @@ const LEASE_MS = 30 * 60_000;
 
 /** Only one device downloads the full dataset for the same scheduled cycle. */
 export async function claimScheduledBackup(db: Firestore, fallback: BackupScheduleConfig): Promise<ScheduledBackupClaim> {
+  if(usesDataApi())return (await dataRequest('/api/backups/claim',{config:fallback})).claim;
   const ref = doc(db, 'configuracion_sistema', 'backup_schedule_config');
   const now = Date.now();
   const owner = crypto.randomUUID();
@@ -28,6 +29,7 @@ export async function claimScheduledBackup(db: Firestore, fallback: BackupSchedu
 
 /** Clear only our own claim, preserving configuration edits made by other devices. */
 export async function finishScheduledBackup(db: Firestore, claim: ScheduledBackupClaim, backup?: DatabaseBackupRecord) {
+  if(usesDataApi()){await dataRequest('/api/backups/finish',{claim,backup:backup?{id:backup.id,fecha:backup.fecha,timestamp:backup.timestamp}:undefined});return;}
   if (!claim.owner) return;
   const ref = doc(db, 'configuracion_sistema', 'backup_schedule_config');
   await runTransaction(db, async tx => {

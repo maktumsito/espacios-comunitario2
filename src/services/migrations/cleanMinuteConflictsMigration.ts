@@ -1,4 +1,5 @@
-import { doc, writeBatch } from 'firebase/firestore';
+import {usesDataApi} from '../../firebase/gateway';
+import { doc, writeBatch } from '../../firebase/gateway';
 import { getDb } from '../../firebase/config';
 import { Reservation } from '../../types';
 import {
@@ -73,6 +74,11 @@ export interface MinuteConflictMigrationResult {
 export async function executeMinuteConflictCleanupMigration(
   options?: { force?: boolean }
 ): Promise<MinuteConflictMigrationResult> {
+  if(usesDataApi()){
+    if(!options?.force)return {success:true,alreadyRun:true,deletedFromFirestore:0,deletedFromLocal:0,timestamp:Date.now()};
+    const {cleanConflictingMinuteReservations}=await import('../reservationService');const result=await cleanConflictingMinuteReservations();
+    return {success:true,alreadyRun:false,deletedFromFirestore:result.deletedCount,deletedFromLocal:result.deletedCount,timestamp:Date.now()};
+  }
   const force = Boolean(options?.force);
 
   if (!force && hasMinuteConflictMigrationRun()) {

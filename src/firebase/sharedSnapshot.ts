@@ -2,7 +2,7 @@ import {
   onSnapshot, queryEqual, refEqual,
   type Query, type DocumentReference, type DocumentData,
   type QuerySnapshot, type DocumentSnapshot, type FirestoreError, type Unsubscribe,
-} from 'firebase/firestore';
+} from './gateway';
 import { recordFirestoreRead } from '../utils/firestoreTracker';
 
 type Reference = Query<DocumentData> | DocumentReference<DocumentData>;

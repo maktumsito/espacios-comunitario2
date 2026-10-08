@@ -200,14 +200,8 @@ function getInitialsFromName(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function generateRandomPassword(name?: string): string {
-  const cleanName = (name || 'clave')
-    .trim()
-    .split(/\s+/)[0]
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
-  const randomNum = Math.floor(100 + Math.random() * 900);
-  return `${cleanName || 'acceso'}${randomNum}`;
+function generateRandomPassword(_name?: string): string {
+ const bytes=crypto.getRandomValues(new Uint8Array(18));return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({
@@ -691,6 +685,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       setEditingUsername(user.username);
       setUserForm({
         ...user,
+        passwordHash: '',
         canCreateReservations: userCanCreateReservations(user),
         canEditReservations: userCanEditReservations(user),
         canDeleteReservations: userCanDeleteReservations(user)
@@ -761,8 +756,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
         return;
       }
 
-      if (!cleanPassword) {
-        setUserFormError('Por favor asigna una clave de acceso al usuario.');
+      if ((!editingUsername && !cleanPassword) || (cleanPassword && cleanPassword.length < 8)) {
+        setUserFormError('Asigna al menos ocho caracteres. Al editar, deja la clave vacía para conservarla.');
         return;
       }
 
@@ -772,15 +767,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
       );
       if (existingUser) {
         setUserFormError(`El identificador de usuario "${cleanUsername}" ya está en uso.`);
-        return;
-      }
-
-      // Check duplicate password with another user (since password identifies user)
-      const existingPass = effectiveUsers.find(
-        (u) => u.passwordHash === cleanPassword && u.username.toLowerCase() !== (editingUsername || '').toLowerCase()
-      );
-      if (existingPass) {
-        setUserFormError(`La clave "${cleanPassword}" ya está asignada a ${existingPass.name}. Elige una clave única.`);
         return;
       }
 
@@ -1106,12 +1092,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 setConfirmDialog({
                   isOpen: true,
                   title: '¿Restaurar Valores por Defecto?',
-                  message: '¿Deseas restaurar los espacios, préstamos, actividades y usuarios a sus valores predeterminados?',
+                  message: '¿Deseas restaurar los espacios, préstamos y actividades a sus valores predeterminados?',
                   variant: 'warning',
                   confirmLabel: 'Restaurar Valores',
                   onConfirm: async () => {
                     await onResetDefaults();
-                    if (onResetUsers) await onResetUsers();
+
                     setConfirmDialog(null);
                   }
                 });
@@ -2442,7 +2428,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <input
                     type={showFormPassword ? 'text' : 'password'}
                     required
-                    placeholder="Ingresa clave única..."
+                    placeholder="Nueva clave de al menos ocho caracteres..."
                     value={userForm.passwordHash}
                     onChange={(e) => setUserForm({ ...userForm, passwordHash: e.target.value })}
                     className="w-full pl-3.5 pr-10 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"

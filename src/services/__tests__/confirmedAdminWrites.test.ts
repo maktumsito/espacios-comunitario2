@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it, vi } from 'vitest';
 const sdk=vi.hoisted(()=>({write:vi.fn(),commit:vi.fn()}));
+vi.mock('../../firebase/gateway',async original=>({...await original<typeof import('../../firebase/gateway')>(),dataRequest:vi.fn(async()=>{throw new Error('write denied');})}));
 vi.mock('../../firebase/config',()=>({getDb:()=>({})}));
 vi.mock('firebase/firestore',()=>({doc:(_db:any,collection:string,id:string)=>({collection,id}),setDoc:sdk.write,deleteDoc:sdk.write,writeBatch:()=>({set:vi.fn(),delete:vi.fn(),commit:sdk.commit}),collection:vi.fn(),getDocs:vi.fn(),onSnapshot:vi.fn()}));
 import { saveSpaceItem, getStoredSpaces } from '../adminConfigService';

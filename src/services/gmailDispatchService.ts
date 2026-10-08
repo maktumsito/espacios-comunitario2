@@ -3,7 +3,7 @@ import { gmailServerRequest, waitForGmailPopup, type GmailServerStatus } from '.
 import { filterDatesToDispatchWeek, isDispatchLoan } from '../utils/activityDispatchSelection';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { getFirebaseAuth, getDb } from '../firebase/config';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from '../firebase/gateway';
 import { format, parseISO, addDays, isAfter, getDay, addMonths, nextSaturday, nextSunday, isSaturday, isSunday } from 'date-fns';
 import { es } from 'date-fns/locale';
 

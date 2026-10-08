@@ -1,7 +1,7 @@
 import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import { SpaceInfo, LoanType, ActivityTypeItem } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
-import { collection, doc, setDoc, writeBatch, query, where, documentId } from 'firebase/firestore';
+import { collection, doc, setDoc, writeBatch, query, where, documentId } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 
 const SPACES_STORAGE_KEY = 'espacios_comunitarios_spaces_v2';

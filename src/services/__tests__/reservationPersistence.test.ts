@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 import { beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { connectFirestoreEmulator, getFirestore, getDoc, getDocs, doc, collection, setDoc, terminate } from 'firebase/firestore';
+import { initializeApp, deleteApp } from 'firebase-admin/app';
+import {getFirestore} from 'firebase-admin/firestore';
+import {getDoc,getDocs,doc,collection,setDoc} from '../../firebase/gateway';
 import type { Reservation } from '../../types';
 import { buildReplacementBatch } from '../../utils/reservationReplacement';
 
 const context = vi.hoisted(() => ({ db: null as any }));
 vi.mock('../../firebase/config', () => ({ getDb: () => context.db }));
-const app = initializeApp({ projectId: 'demo-espacios', apiKey: 'local-only' }, 'persistence-tests');
+
+const app = initializeApp({ projectId: 'demo-espacios' }, 'persistence-tests');
 context.db = getFirestore(app);
-connectFirestoreEmulator(context.db, '127.0.0.1', 8087);
+
 let service: typeof import('../reservationService');
 const make = (id: string, extra: Partial<Reservation> = {}): Reservation => ({
   id, fecha: '2026-10-06', horaInicio: '10:00', horaFin: '11:00',
@@ -23,7 +25,7 @@ beforeEach(async () => {
   vi.resetModules();
   service = await import('../reservationService');
 },30000);
-afterAll(async () => { await terminate(context.db); await deleteApp(app); });
+afterAll(async () => { await context.db.terminate(); await deleteApp(app); });
 describe.skipIf(process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8087')('isolated Firestore reservation persistence', () => {
   it('replaces one recurring occurrence atomically and preserves the next occurrence after reload', async () => {
     const source = (await service.saveReservation(make('replace-source', {actividadRecurrente:'Sí',serieRecurrente:'replace-series'}))).reservations[0];
@@ -94,7 +96,7 @@ describe.skipIf(process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8087')('isola
   it('does not resurrect a reservation removed by another editor', async () => {
     await service.saveReservation(make('deleted-editor'));
     const original=(await getDoc(doc(context.db,'reservas','deleted-editor'))).data() as Reservation;
-    await service.deleteReservationById(original.id);
+    await service.deleteReservationById(original.id,original.version||0);
     await expect(service.saveReservation(original)).rejects.toThrow(/eliminada por otro usuario/);
     expect((await getDoc(doc(context.db,'reservas',original.id))).exists()).toBe(false);
   });
@@ -170,17 +172,17 @@ describe.skipIf(process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8087')('isola
     expect(slot.data()?.bookings.some((b: any) => b.id === 'move')).toBe(false);
   });
   it('allows only one of two concurrent clients to reserve the same room', async () => {
-    const app2 = initializeApp({ projectId: 'demo-espacios', apiKey: 'local-only' }, 'second-client');
-    const db2 = getFirestore(app2); connectFirestoreEmulator(db2,'127.0.0.1',8087);
+    const app2 = initializeApp({ projectId: 'demo-espacios',  }, 'second-client');
+    const db2 = getFirestore(app2);
     const { writeReservations } = await import('../reservationWriter');
     try {
       const outcomes = await Promise.allSettled([
         service.saveReservation(make('client-one')),
-        writeReservations(db2,[make('client-two')],service.cleanReservationForFirestore),
+        writeReservations(db2 as any,[make('client-two')],service.cleanReservationForFirestore),
       ]);
       expect(outcomes.filter(o=>o.status==='fulfilled')).toHaveLength(1);
       expect((await getDocs(collection(context.db,'reservas'))).size).toBe(1);
-    } finally { await terminate(db2); await deleteApp(app2); }
+    } finally { await db2.terminate(); await deleteApp(app2); }
   }, 30000);
   it('accepts adjacent intervals and excludes historical conflicts consistently', async () => {
     await service.saveReservationsBatch([make('adjacent-a'), make('adjacent-b',{horaInicio:'11:00',horaFin:'12:00'})]);
@@ -193,7 +195,7 @@ describe.skipIf(process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8087')('isola
     await service.saveReservationsBatch([{...original,estado:'cancelada'}]);
     await service.saveReservation(make('replacement'));
     await service.saveReservation(make('delete-night',{fecha:'2026-10-08',espacio:'SALA 2 / SALA 3',horaInicio:'23:00',horaFin:'01:00',terminaDiaSiguiente:true}));
-    await service.deleteReservationById('delete-night');
+    await service.deleteReservationById('delete-night',1);
     const slots=await getDocs(collection(context.db,'schedule_slots'));
     expect(slots.docs.flatMap(d=>d.data().bookings).some(b=>b.id==='delete-night')).toBe(false);
   });

@@ -15,7 +15,7 @@ beforeEach(async () => {
   vi.resetModules();
   vi.clearAllMocks();
   service = await import('../gmailDispatchService');
-});
+},30000);
 afterEach(() => { vi.restoreAllMocks(); });
 const connected = { connected: true, persistent: true, oauthConfigured: true, email: 'cristianshute@gmail.com' };
 

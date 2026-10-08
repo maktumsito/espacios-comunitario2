@@ -1,7 +1,7 @@
 import {
   collection, documentId, getDocsFromServer, limit, orderBy, query, startAfter, where,
   type Firestore, type QueryDocumentSnapshot,
-} from 'firebase/firestore';
+} from '../src/firebase/gateway';
 import type { Reservation } from '../src/types';
 
 /** Date selection happens before downloading documents, including preview totals. */

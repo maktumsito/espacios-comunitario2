@@ -1,5 +1,6 @@
+import {doc,getDocFromServer} from './gateway';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeFirestore, getFirestore, Firestore, doc, getDocFromServer, setLogLevel, connectFirestoreEmulator, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, Firestore, setLogLevel, connectFirestoreEmulator, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { firestoreReadPolicy } from './readPolicy';
 import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';

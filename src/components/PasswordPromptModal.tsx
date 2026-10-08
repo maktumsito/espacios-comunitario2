@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AuthUser, UserAccount, getAllAuthorizedUsers, authenticateByPassword, authenticateByPasswordAsync, subscribeToUsers } from '../services/authService';
+import { AuthUser, UserAccount, getAllAuthorizedUsers, authenticateUser, subscribeToUsers } from '../services/authService';
 import { BaseModal } from './common/BaseModal';
 import {
   Lock,
@@ -27,6 +27,7 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
   onSuccess,
   actionDescription = 'editar o crear reservas'
 }) => {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -49,7 +50,7 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
   const handlePasswordChange = (val: string) => {
     setPassword(val);
     setErrorMessage('');
-    const user = authenticateByPassword(val, usersList);
+    const user = null;
     setRecognizedUser(user);
   };
 
@@ -72,7 +73,7 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
     }
 
     try {
-      const user = await authenticateByPasswordAsync(cleanPass, usersList);
+      const user = (await authenticateUser(selectedAccount?.username || username,cleanPass)).user;
       if (user) {
         onSuccess(user);
         setPassword('');
@@ -135,7 +136,7 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4"><label className="block text-sm">Usuario<input aria-label="Usuario" autoComplete="username" value={selectedAccount?.username || username} onChange={e=>{setUsername(e.target.value);setSelectedAccount(null);}} className="w-full border rounded-lg p-2" required/></label>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">

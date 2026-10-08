@@ -20,7 +20,7 @@ it('uses actual write permissions, including create-only and delete-only account
   for (const flag of ['canCreateReservations', 'canEditReservations', 'canDeleteReservations']) {
     expect(getReservationReadScope({ ...reader, [flag]: true }, 'calendar', date, INITIAL_FILTERS)).toBeUndefined();
   }
-  expect(getReservationReadScope({ ...reader, isMasterAdmin: true }, 'daily', date, INITIAL_FILTERS)).toBeUndefined();
+  expect(getReservationReadScope({ ...reader, isMasterAdmin: true }, 'daily', date, INITIAL_FILTERS)).toEqual({startDate:'2026-10-06',endDate:'2026-10-07'});
 });
 
 it('loads only the selected day plus the overnight preceding day for daily and timeline readers', () => {

@@ -31,6 +31,7 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -93,7 +94,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     e.preventDefault();
     setErrorMessage('');
 
-    if (!selectedAccount) {
+    if (!selectedAccount && !username.trim()) {
       setErrorMessage('Por favor seleccione su usuario de la lista a continuación para iniciar sesión.');
       return;
     }
@@ -111,7 +112,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
     setIsLoading(true);
     try {
-      const res = await authenticateUser(selectedAccount.username, cleanPass, usersList);
+      const res = await authenticateUser(selectedAccount?.username || username, cleanPass, usersList);
       if (res.success && res.user) {
         onLoginSuccess(res.user);
       } else {
@@ -135,7 +136,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       const result = await signInWithPopup(auth, provider);
       const email = result.user?.email || '';
 
-      const matchedUser = result.user.emailVerified ? findAuthorizedGoogleAccount(email, usersList) : null;
+      const matchedUser = result.user.emailVerified ? findAuthorizedGoogleAccount(email, usersList) || {username:username.trim() || email} : null;
       if (!matchedUser) {
         await signOut(auth);
         setErrorMessage('Esta cuenta de Google no tiene acceso asignado. Ingrese con su usuario y contraseña.');
@@ -250,7 +251,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4"><label className="block text-sm font-semibold">Usuario<input aria-label="Usuario" autoComplete="username" value={username} onChange={e=>{setUsername(e.target.value);setSelectedAccount(null);}} className="w-full border rounded-lg p-3 text-slate-900" required={!selectedAccount}/></label>
             {/* Clave */}
             <div className="space-y-1.5">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
@@ -300,7 +301,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             <button
               id="btn-login-submit"
               type="submit"
-              disabled={isLoading || !password.trim() || !selectedAccount || lockoutSeconds > 0}
+              disabled={isLoading || !password.trim() || (!selectedAccount && !username.trim()) || lockoutSeconds > 0}
               className="w-full mt-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold text-sm rounded-xl shadow-md shadow-blue-500/20 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (

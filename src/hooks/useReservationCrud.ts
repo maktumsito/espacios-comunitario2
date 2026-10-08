@@ -85,7 +85,7 @@ export interface UseReservationCrudReturn {
     batchUpdateInfo?: BatchUpdateInfo,
     allowConflictOverride?: boolean
   ) => Promise<boolean>;
-  handleDelete: (id: string, isSeries?: boolean, seriesId?: string) => Promise<void>;
+  handleDelete: (id: string, isSeries?: boolean, seriesId?: string, selection?:Reservation[]) => Promise<void>;
   handleConfirmDeleteSingle: (id: string) => Promise<void>;
   handleConfirmDeleteSeries: (seriesId: string) => Promise<void>;
   handleRequestDelete: (reserva: Reservation) => void;
@@ -132,6 +132,7 @@ export function useReservationCrud({
 }: UseReservationCrudProps): UseReservationCrudReturn {
 
   const saveInFlight = useRef(false);
+  const deleteSelection=useRef<Reservation[]>([]);
   const safeAudit: typeof recordAuditEntry = async (...args) => {
     try { return await recordAuditEntry(...args); }
     catch (error) {
@@ -151,11 +152,14 @@ export function useReservationCrud({
   };
 
   const handleRequestDelete = useCallback((reserva: Reservation) => {
+    const series=reserva.serieRecurrente||reserva.recurrenteId;
+    const targets=series?reservations.filter(r=>r.serieRecurrente===series||r.recurrenteId===series):[];
+    deleteSelection.current=structuredClone([...targets.filter(r=>r.id!==reserva.id),reserva]);
     setDeleteTargetReservation(reserva);
     setIsDeleteModalOpen(true);
-  }, [setDeleteTargetReservation, setIsDeleteModalOpen]);
+  }, [reservations,setDeleteTargetReservation, setIsDeleteModalOpen]);
 
-  const handleDelete = useCallback(async (id: string, isSeries?: boolean, seriesId?: string) => {
+  const handleDelete = useCallback(async (id: string, isSeries?: boolean, seriesId?: string,selection?:Reservation[]) => {
     if (!userCanDeleteReservations(currentUser)) {
       const target = reservations.find((r) => r.id === id || (seriesId && (r.serieRecurrente === seriesId || r.recurrenteId === seriesId)));
       if (target) {
@@ -166,11 +170,12 @@ export function useReservationCrud({
       return;
     }
 
+    const selected=selection||reservations.map(r=>selectedReservation?.id===r.id?selectedReservation:r);
     const targets = isSeries && seriesId
-      ? reservations.filter(r=>r.serieRecurrente===seriesId || r.recurrenteId===seriesId)
-      : reservations.filter(r=>r.id===id);
+      ? selected.filter(r=>r.serieRecurrente===seriesId || r.recurrenteId===seriesId)
+      : selected.filter(r=>r.id===id);
     try {
-      applyConfirmed(await commitReservationChanges([], { deletedIds: targets.length ? targets.map(r=>r.id) : [id] }));
+      applyConfirmed(await commitReservationChanges([], { deletedIds: targets.length ? targets.map(r=>r.id) : [id], expectedVersions:Object.fromEntries(targets.map(r=>[r.id,r.version||0])) }));
       if (selectedReservation && targets.some(r=>r.id===selectedReservation.id)) { setIsDetailModalOpen(false); setSelectedReservation(null); }
       triggerSyncToast('Eliminación confirmada.', 'success');
       void safeAudit({ action: isSeries ? 'DELETE_SERIES' : 'DELETE', description: `Eliminadas ${targets.length} reservas`, reservaId: seriesId || id, user: currentUser, previousState: isSeries ? targets : targets[0] });
@@ -178,11 +183,11 @@ export function useReservationCrud({
   }, [currentUser, reservations, selectedReservation, setReservations, setIsDetailModalOpen, setSelectedReservation, triggerSyncToast, handleRequestDelete]);
 
   const handleConfirmDeleteSingle = useCallback(async (id: string) => {
-    await handleDelete(id, false);
+    await handleDelete(id, false,undefined,deleteSelection.current);
   }, [handleDelete]);
 
   const handleConfirmDeleteSeries = useCallback(async (seriesId: string) => {
-    await handleDelete('', true, seriesId);
+    await handleDelete('', true, seriesId,deleteSelection.current);
   }, [handleDelete]);
 
   const handleSubmitDeleteRequest = useCallback(async (
@@ -273,7 +278,7 @@ export function useReservationCrud({
           (r) => r.serieRecurrente === seriesId || r.recurrenteId === seriesId
         );
 
-        await deleteSeriesByRecurrenteId(seriesId, toDelete.map(r=>r.id));
+        await deleteSeriesByRecurrenteId(seriesId,toDelete.map(r=>r.id),Object.fromEntries(toDelete.map(r=>[r.id,r.id===reservation.id?reservation.version||0:r.version||0])));
         void safeAudit({
           action: 'AUTHORIZE_DELETE',
           description: `Autorizada eliminación de serie recurrente (${toDelete.length} reservas) solicitada por ${reservation.solicitudEliminacion?.solicitadoPorNombre || 'Personal'}`,
@@ -292,7 +297,7 @@ export function useReservationCrud({
         );
 
       } else {
-        await deleteReservationById(reservation.id);
+        await deleteReservationById(reservation.id,reservation.version||0);
         void safeAudit({
           action: 'AUTHORIZE_DELETE',
           description: `Autorizada y confirmada eliminación definitiva de reserva '${reservation.tipoActividad}' (${reservation.fecha}, ${reservation.espacio}) solicitada por ${reservation.solicitudEliminacion?.solicitadoPorNombre || 'Personal'}`,
@@ -645,7 +650,8 @@ export function useReservationCrud({
         };
         const firstRes = activeUpdated[0];
         const recurringEdit=Boolean(seriesIdForExceptions && !batchUpdateInfo.replacementOriginal);
-        const writeOptions = {deletedIds: batchUpdateInfo.deletedIds,allowConflictOverride,
+        const deletionGuards=Object.fromEntries((batchUpdateInfo.deletedIds||[]).map(id=>{const row=reservations.find(r=>r.id===id);if(!row)throw new Error('Recarga la reserva que quieres eliminar.');return [id,row.version||0];}));
+        const writeOptions = {...(Object.keys(deletionGuards).length?{expectedVersions:{...deletionGuards,...(batchUpdateInfo.expectedVersions||{})}}:{}),deletedIds: batchUpdateInfo.deletedIds,allowConflictOverride,
           ...(recurringEdit ? {requireAtomic:true,...(batchUpdateInfo.expectedVersions?{expectedVersions:batchUpdateInfo.expectedVersions}:{}),
             ...(!(batchUpdateInfo.addedIds||[]).length && activeUpdated.every(r=>existingIds.has(r.id)) ? {intent:'update' as const} : {})} : {})};
         const confirmedWrite = await commitReservationChanges(activeUpdated,writeOptions);
@@ -1366,7 +1372,7 @@ export function useReservationCrud({
     }
 
     try {
-      const confirmedWrite = await commitReservationChanges([mergedReserva], { deletedIds: [source.id], requireAtomic: true });
+      const confirmedWrite = await commitReservationChanges([mergedReserva], { deletedIds: [source.id], requireAtomic: true, expectedVersions:{[source.id]:source.version||0} });
       applyConfirmed(confirmedWrite);
       triggerSyncToast('Reservas unificadas y confirmadas.', 'success');
         void safeAudit({

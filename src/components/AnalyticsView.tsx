@@ -75,6 +75,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ reservations }) =>
 
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6">
+      <p className="text-sm text-slate-600">Estadísticas del conjunto cargado ({reservations.length} reservas). {reservations.length ? `Fechas: ${reservations.map(r=>r.fecha).sort()[0]} a ${reservations.map(r=>r.fecha).sort().at(-1)}.` : 'Sin datos cargados.'} El historial que aún no se ha consultado no está incluido.</p>
       {/* Key Metric Highlights */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center space-x-3.5">
@@ -83,7 +84,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ reservations }) =>
           </div>
           <div>
             <div className="text-2xl font-black text-slate-900">{total}</div>
-            <div className="text-xs text-slate-500 font-medium">Total de Reservas</div>
+            <div className="text-xs text-slate-500 font-medium">Reservas cargadas</div>
           </div>
         </div>
 

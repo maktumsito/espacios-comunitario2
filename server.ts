@@ -1,3 +1,8 @@
+import { registerBackupApi } from './server/backupApi';
+import { claimDelivery,startDelivery,finishDelivery } from './server/deliveryLease';
+import { registerReservationApi } from './server/reservationApi';
+import { getServerDatabase, serverAuth } from './server/database';
+import { registerDataApi } from './server/dataApi';
 import { isPurgeableScheduleSlot, guardedSlotCleanup } from './server/scheduleSlotCleanup';
 import { fetchDispatchReservations, fetchOldSlotPage } from './server/firestoreQueries';
 import { buildConfirmedRating, reservationEndDate } from './server/ratingValidation';
@@ -22,7 +27,7 @@ import {
   runTransaction,
   connectFirestoreEmulator,
   Firestore
-} from 'firebase/firestore';
+} from './src/firebase/gateway';
 
 import type { Reservation } from './src/types';
 import type { UserAccount } from './src/services/authService';
@@ -54,39 +59,10 @@ try {
   console.warn('[Server] Could not read firebase-applet-config.json:', e);
 }
 
-// Lazy Firestore instance
-let dbInstance: Firestore | null = null;
+// Privileged database access stays exclusively on the server.
 function getServerDb(): Firestore | null {
-  if (!firebaseConfig && !localTestMode) return null;
-  if (!dbInstance) {
-    try {
-      const app = localTestMode
-        ? getApps().find(app=>app.name==='local-server-demo') || initializeApp({projectId:'demo-espacios',apiKey:'local-only'},'local-server-demo')
-        : !getApps().length ? initializeApp(firebaseConfig) : getApp();
-      const databaseId = localTestMode ? '(default)' : firebaseConfig.firestoreDatabaseId;
-      const settings = {
-        ignoreUndefinedProperties: true
-      };
-
-      if (databaseId && databaseId !== '(default)') {
-        try {
-          dbInstance = initializeFirestore(app, settings, databaseId);
-        } catch {
-          dbInstance = getFirestore(app, databaseId);
-        }
-      } else {
-        try {
-          dbInstance = initializeFirestore(app, settings);
-        } catch {
-          dbInstance = getFirestore(app);
-        }
-      }
-      if (localTestMode) connectFirestoreEmulator(dbInstance!, '127.0.0.1', 8087);
-    } catch (e) {
-      console.warn('[Server] Error initializing server Firestore:', e);
-    }
-  }
-  return dbInstance;
+  try { return getServerDatabase() as unknown as Firestore; }
+  catch { return null; }
 }
 
 const gmailConnection = new GmailConnection({
@@ -120,14 +96,11 @@ const appSessions = new AppSessions(async username => {
   ? crypto.createHash('sha256').update(`app-session:${process.env.GMAIL_TOKEN_ENCRYPTION_KEY || process.env.GMAIL_OAUTH_CLIENT_SECRET}`).digest('hex')
   : undefined),
 async token => {
-  if (!firebaseConfig?.apiKey) return null;
-  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(firebaseConfig.apiKey)}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: token }),
-  });
-  if (!response.ok) return null;
-  const identity = (await response.json()).users?.[0];
-  return identity?.emailVerified === true && typeof identity.email === 'string' ? identity.email : null;
-});
+  try { const identity = await serverAuth().verifyIdToken(token);
+    return identity.email_verified === true && identity.firebase.sign_in_provider === 'google.com' ? identity.email || null : null;
+  } catch { return null; }
+}
+);
 
 // Helper to get time in America/Santiago
 function getSantiagoTime(): {
@@ -243,7 +216,7 @@ async function sendEmailServer(options: EmailSendOptions): Promise<EmailSendResu
   const smtpPort = parseInt(process.env.SMTP_PORT || (isGmail ? '465' : '587'), 10);
   const smtpFrom = process.env.SMTP_FROM || `Gestión de Espacios Diaguitas <${smtpUser}>`;
 
-  if (smtpPass && smtpUser) {
+  if (smtpPass && smtpUser && isGmail) {
     try {
       // For Gmail, Nodemailer's native 'gmail' service automatically configures SSL/TLS, port 465 and Google mail servers
       const transporter = isGmail
@@ -319,67 +292,7 @@ async function sendEmailServer(options: EmailSendOptions): Promise<EmailSendResu
     }
   }
 
-  // 2. Check for Resend API Key (free tier: 3000 emails/month)
-  const resendApiKey = process.env.RESEND_API_KEY;
-  if (resendApiKey) {
-    try {
-      const bodyPayload: any = {
-        from: process.env.SMTP_FROM || 'Centro Comunitario Diaguitas <onboarding@resend.dev>',
-        to: Array.isArray(to) ? to : [to],
-        subject,
-        text: bodyText,
-        html: html || bodyText.replace(/\n/g, '<br>')
-      };
-
-      if (attachments.length > 0) {
-        bodyPayload.attachments = attachments.map(att => ({
-          filename: att.filename,
-          content: att.content
-        }));
-      }
-
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(bodyPayload)
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Resend API error');
-
-      console.log(`[Email Server] Mail sent successfully via Resend to ${recipients} (ID: ${data.id}, Attachments: ${attachments.length})`);
-      await logDispatchToFirestore({
-        purpose,
-        recipients,
-        subject,
-        mode: 'resend',
-        success: true,
-        messageId: data.id,
-        attachmentsCount: attachments.length,
-        timestamp: nowIso
-      });
-
-      return {
-        success: true,
-        mode: 'resend',
-        messageId: data.id,
-        attachmentsCount: attachments.length,
-        timestamp: nowIso
-      };
-    } catch (err: any) {
-      console.error('[Email Server] Resend API error:', err);
-      return {
-        success: false,
-        mode: 'resend',
-        error: err?.message || String(err),
-        timestamp: nowIso
-      };
-    }
-  }
-
+  // Free-only mode: no commercial mail-provider fallback.
   // 3. Unconfigured Mode (No SMTP or Resend credentials available)
   // Transparently informs the client that dispatch could not occur because no mail service is configured.
   console.warn(`[Email Server - Unconfigured] Cannot dispatch email: no SMTP or Resend credentials found.`);
@@ -391,14 +304,14 @@ async function sendEmailServer(options: EmailSendOptions): Promise<EmailSendResu
     subject,
     mode: 'unconfigured',
     success: false,
-    error: 'No hay proveedor de correo configurado (falta configurar variables SMTP o RESEND_API_KEY en el servidor)',
+    error: 'Configura Gmail OAuth o SMTP de Gmail para el envío gratuito.',
     timestamp: nowIso
   });
 
   return {
     success: false,
     mode: 'unconfigured',
-    error: 'El correo no se pudo enviar porque el servidor no tiene credenciales de correo (SMTP o RESEND_API_KEY) configuradas.',
+    error: 'El correo requiere Gmail OAuth o SMTP de Gmail configurado.',
     timestamp: nowIso
   };
 }
@@ -611,7 +524,10 @@ async function executeScheduledDispatchInternal(force = false): Promise<{
 
     const textBody = `Centro Comunitario Diaguitas\nDespacho Oficial de Planillas de Actividades\n\nFechas: ${formattedDatesList}\nTotal actividades: ${totalActivities}\n\nAdjuntos para impresión (${attachments.length}):\n${attachments.map(a => `- ${a.filename}`).join('\n')}\n\nGenerado automáticamente por el Sistema de Gestión.`;
 
-    // 9. Send email via server dispatcher (SMTP / Resend)
+    const delivery=await claimDelivery(getServerDatabase(),santiago.dateStr);
+    if(!delivery)return {success:false,skipped:true,message:'El ciclo ya se envió, está en curso o requiere revisión de su resultado. No se repetirá automáticamente.'};
+    await startDelivery(getServerDatabase(),delivery);
+    // 9. Send through the free Gmail transport.
     const result = await sendEmailServer({
       to: recipients,
       subject,
@@ -621,6 +537,7 @@ async function executeScheduledDispatchInternal(force = false): Promise<{
       attachments
     });
 
+    try{await finishDelivery(getServerDatabase(),delivery,result.success,result.messageId);}catch{console.warn('[Scheduler] Despacho pendiente de reconciliación; no se repetirá automáticamente.');}
     if (result.success) {
       // A failed Firestore timestamp write must not resend an already delivered email.
       confirmedDispatchDate = santiago.dateStr;
@@ -797,13 +714,13 @@ async function startServer() {
     });
   });
 
-  app.get('/api/email/status', async (req, res) => {
+  app.get('/api/email/status',appSessions.requireAuth, async (req, res) => {
     if (localTestMode) { res.json({active:true,provider:'local_simulated',gmailConnected:false,smtpConfigured:false,resendConfigured:false}); return; }
     const santiago = getSantiagoTime();
     const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'cristianshute@gmail.com';
     const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASSWORD;
-    const hasSmtp = Boolean(smtpPass && smtpUser);
-    const hasResend = Boolean(process.env.RESEND_API_KEY);
+    const hasSmtp = Boolean(smtpPass && smtpUser && (process.env.SMTP_HOST==='smtp.gmail.com'||!process.env.SMTP_HOST&&smtpUser.endsWith('@gmail.com')));
+    const hasResend = false;
     const gmail = await gmailConnection.status(req).catch(() => ({ connected: false, persistent: false }));
 
     res.json({
@@ -862,6 +779,9 @@ async function startServer() {
 
   // Only server-issued, signed sessions can authorize API requests.
   appSessions.register(app);
+  registerDataApi(app, getServerDatabase(), appSessions);
+  registerReservationApi(app,getServerDatabase(),appSessions);
+  registerBackupApi(app,getServerDatabase(),appSessions);
   const requireAuth = appSessions.requireAuth;
   if (!localTestMode) gmailConnection.register(app, (req, res, next) => {
     void requireAuth(req, res, () => requireReservationWriter(req, res, next));

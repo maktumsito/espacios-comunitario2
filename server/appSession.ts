@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import type { Express, RequestHandler } from 'express';
 import type { AuthUser, UserAccount } from '../src/services/authService';
+import { publicProfile,verifyPassword } from './passwords';
 
-const SALT = 'espacios_community_salt_2026';
 const SESSION_MS = 60 * 60_000;
 
 export const requireReservationWriter: RequestHandler = (req, res, next) => {
@@ -54,23 +54,31 @@ export class AppSessions {
     finally { this.pendingAccounts.delete(name); }
   }
 
-  private issue(user: AuthUser, startedAt = Date.now()): string {
-    const body = Buffer.from(JSON.stringify({ u: user.username, startedAt,
+  private binding(account: UserAccount): string {
+    return crypto.createHmac('sha256',this.key).update(`${account.username}:${account.passwordHash}:${(account as any).sessionVersion||0}`).digest('base64url');
+  }
+  private issue(user: AuthUser, startedAt = Date.now(), version: string): string {
+    const body = Buffer.from(JSON.stringify({ u: user.username, startedAt, v: version,
       exp: Math.min(Date.now() + SESSION_MS, startedAt + 12 * SESSION_MS) })).toString('base64url');
     const signature = crypto.createHmac('sha256', this.key).update(body).digest('base64url');
     return `${body}.${signature}`;
   }
 
-  private verify(token: string): { username: string; startedAt: number } | null {
+  private verify(token: string): { username: string; startedAt: number; version: string } | null {
     const [body, signature, extra] = token.split('.');
     if (!body || !signature || extra || token.length > 2048) return null;
     if (!equal(signature, crypto.createHmac('sha256', this.key).update(body).digest('base64url'))) return null;
     try {
       const claims = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-      return typeof claims.u === 'string' && typeof claims.exp === 'number' && claims.exp > Date.now() &&
+      return typeof claims.u === 'string' && typeof claims.v === 'string' && typeof claims.exp === 'number' && claims.exp > Date.now() &&
         typeof claims.startedAt === 'number' && claims.startedAt <= Date.now() && Date.now() < claims.startedAt + 12 * SESSION_MS
-        ? { username: claims.u, startedAt: claims.startedAt } : null;
+        ? { username: claims.u, startedAt: claims.startedAt, version: claims.v } : null;
     } catch { return null; }
+  }
+  invalidateAccount(username: string) { this.accounts.delete(username.trim().toLowerCase()); }
+  acceptsAccount(token: string, account: UserAccount | null): boolean {
+    const claims=this.verify(token.replace(/^Bearer\s+/i,'').trim());
+    return !!claims && !!account && account.username===claims.username && equal(claims.version,this.binding(account));
   }
 
   readonly requireAuth: RequestHandler = async (req, res, next) => {
@@ -79,10 +87,11 @@ export class AppSessions {
     if (!claims) { res.status(401).json({ success: false, error: 'Sesión no válida o vencida. Inicia sesión nuevamente.' }); return; }
     try {
       const account = await this.account(claims.username);
-      if (!account) { res.status(401).json({ success: false, error: 'La cuenta ya no tiene acceso.' }); return; }
-      const { passwordHash: _password, ...user } = account;
+      if (!account || !equal(claims.version,this.binding(account))) { res.status(401).json({ success: false, error: 'La cuenta o sus credenciales cambiaron. Inicia sesión nuevamente.' }); return; }
+      const {passwordHash:_password,...user}=publicProfile(account);
       (req as any).user = { ...user, u: user.username, r: user.role };
       (req as any).sessionStartedAt = claims.startedAt;
+      (req as any).sessionBinding = claims.version;
       next();
     } catch { res.status(503).json({ success: false, error: 'No se pudo verificar el acceso. Intenta nuevamente.' }); }
   };
@@ -92,7 +101,7 @@ export class AppSessions {
       res.set('Cache-Control', 'no-store');
       const { u: _username, r: _role, ...user } = (req as any).user;
       const startedAt = (req as any).sessionStartedAt;
-      res.json({ success: true, user, token: this.issue(user, startedAt),
+      res.json({ success: true, user, token: this.issue(user, startedAt, (req as any).sessionBinding),
         expiresAt: Math.min(Date.now() + SESSION_MS, startedAt + 12 * SESSION_MS) });
     });
     app.post('/api/auth/google-session', async (req, res) => {
@@ -110,8 +119,8 @@ export class AppSessions {
         if (!account || (account.email || account.username).trim().toLowerCase() !== email.trim().toLowerCase()) {
           res.status(403).json({ success: false, error: 'La cuenta de Google no tiene acceso asignado.' }); return;
         }
-        const { passwordHash: _password, ...user } = account;
-        res.json({ success: true, user, token: this.issue(user) });
+        const { passwordHash: _password, ...user } = publicProfile(account);
+        res.json({ success: true, user, token: this.issue(user, Date.now(),this.binding(account)) });
       } catch { res.status(503).json({ success: false, error: 'No se pudo verificar la cuenta de Google.' }); }
     });
     app.post('/api/auth/session', async (req, res) => {
@@ -131,16 +140,15 @@ export class AppSessions {
       }
       try {
         const account = await this.account(username);
-        const hash = crypto.createHash('sha256').update(`${SALT}:${password}`).digest('hex');
         const stored = account?.passwordHash || '';
-        const valid = account && (equal(hash, stored) || (!/^[a-f\d]{64}$/i.test(stored) && equal(password, stored)));
+        const valid = account && await verifyPassword(password,stored);
         if (!valid) {
           this.attempts.set(key, { count: (attempt?.count || 0) + 1, expiresAt: attempt?.expiresAt || now + 60_000 });
           res.status(401).json({ success: false, error: 'Usuario o contraseña incorrectos.' }); return;
         }
         this.attempts.delete(key);
-        const { passwordHash: _password, ...user } = account;
-        res.json({ success: true, user, token: this.issue(user) });
+        const { passwordHash: _password, ...user } = publicProfile(account);
+        res.json({ success: true, user, token: this.issue(user, Date.now(),this.binding(account!)) });
       } catch { res.status(503).json({ success: false, error: 'No se pudo verificar la cuenta. Intenta nuevamente.' }); }
     });
   }

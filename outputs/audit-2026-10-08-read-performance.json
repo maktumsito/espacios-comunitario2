@@ -1,0 +1,98 @@
+{
+  "project": "demo-espacios",
+  "billing": "not measured",
+  "scope": "SDK query timings; REST fixtures do not construct availability slots",
+  "runsPerScope": 1,
+  "results": [
+    {
+      "count": 500,
+      "scope": "complete",
+      "observedReturnedDocuments": 500,
+      "serverMs": 228.70010000000002,
+      "cacheMs": 14.719299999999976,
+      "serverFromCache": false,
+      "cacheReturnedDocuments": 500,
+      "cacheFromCache": true
+    },
+    {
+      "count": 500,
+      "scope": "editor-active",
+      "observedReturnedDocuments": 250,
+      "serverMs": 60.34850000000006,
+      "cacheMs": 17.451699999999846,
+      "serverFromCache": false,
+      "cacheReturnedDocuments": 250,
+      "cacheFromCache": true
+    },
+    {
+      "count": 500,
+      "scope": "reader-day",
+      "observedReturnedDocuments": 125,
+      "serverMs": 24.22699999999986,
+      "cacheMs": 7.0090000000000146,
+      "serverFromCache": false,
+      "cacheReturnedDocuments": 125,
+      "cacheFromCache": true
+    },
+    {
+      "count": 2500,
+      "scope": "complete",
+      "observedReturnedDocuments": 2500,
+      "serverMs": 423.5532000000003,
+      "cacheMs": 58.98399999999856,
+      "serverFromCache": false,
+      "cacheReturnedDocuments": 2500,
+      "cacheFromCache": true
+    },
+    {
+      "count": 2500,
+      "scope": "editor-active",
+      "observedReturnedDocuments": 1250,
+      "serverMs": 192.96720000000096,
+      "cacheMs": 66.15699999999924,
+      "serverFromCache": false,
+      "cacheReturnedDocuments": 1250,
+      "cacheFromCache": true
+    },
+    {
+      "count": 2500,
+      "scope": "reader-day",
+      "observedReturnedDocuments": 625,
+      "serverMs": 106.64580000000024,
+      "cacheMs": 23.295099999999366,
+      "serverFromCache": false,
+      "cacheReturnedDocuments": 625,
+      "cacheFromCache": true
+    },
+    {
+      "count": 10000,
+      "scope": "complete",
+      "observedReturnedDocuments": 10000,
+      "serverMs": 2244.7814999999973,
+      "cacheMs": 302.9829999999929,
+      "serverFromCache": false,
+      "cacheReturnedDocuments": 10000,
+      "cacheFromCache": true
+    },
+    {
+      "count": 10000,
+      "scope": "editor-active",
+      "observedReturnedDocuments": 5000,
+      "serverMs": 994.1098000000056,
+      "cacheMs": 343.71630000000005,
+      "serverFromCache": false,
+      "cacheReturnedDocuments": 5000,
+      "cacheFromCache": true
+    },
+    {
+      "count": 10000,
+      "scope": "reader-day",
+      "observedReturnedDocuments": 2500,
+      "serverMs": 522.8787000000011,
+      "cacheMs": 115.84780000000319,
+      "serverFromCache": false,
+      "cacheReturnedDocuments": 2500,
+      "cacheFromCache": true
+    }
+  ]
+}

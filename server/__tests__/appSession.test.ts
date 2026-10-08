@@ -6,7 +6,7 @@ import { AppSessions, requireReservationWriter } from '../appSession';
 import type { UserAccount } from '../../src/services/authService';
 
 const account = { username: 'reader', role: 'Auxiliar', email: 'reader@example.com',
-  passwordHash: crypto.createHash('sha256').update('espacios_community_salt_2026:password').digest('hex'),
+  passwordHash: 'scrypt$'+'01'.repeat(16)+'$'+crypto.scryptSync('password','01'.repeat(16),64).toString('hex'),
   canCreateReservations: false, canEditReservations: false, canDeleteReservations: false } as UserAccount;
 afterEach(() => vi.useRealTimers());
 async function withSession(run: (base: string, read: ReturnType<typeof vi.fn>) => Promise<void>, google?: (token: string) => Promise<string | null>) {

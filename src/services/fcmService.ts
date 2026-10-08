@@ -14,7 +14,7 @@ import {
   orderBy,
   limit,
   serverTimestamp
-} from 'firebase/firestore';
+} from '../firebase/gateway';
 import { getFirebaseApp, getDb } from '../firebase/config';
 import { getCurrentUser } from './authService';
 
@@ -380,7 +380,7 @@ export async function broadcastFcmNotification(
     const docRef = doc(db, FCM_NOTIFICATIONS_COLLECTION, notifId);
     await setDoc(docRef, {
       ...fullPayload,
-      serverTimestamp: serverTimestamp()
+      serverTimestamp: new Date().toISOString()
     });
     console.log('[FCM] Push Notification broadcasted to Firestore for registered devices:', notifId);
   } catch (err) {

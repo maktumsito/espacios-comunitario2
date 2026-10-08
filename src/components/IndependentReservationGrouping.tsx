@@ -1,6 +1,6 @@
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { useRef, useState } from 'react';
-import { collection, getDocsFromServer } from 'firebase/firestore';
+import { collection, getDocsFromServer } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 import { getStoredAuthUser, userCanEditReservations } from '../services/authService';
 import type { Reservation } from '../types';

@@ -21,6 +21,7 @@ const assert = require('node:assert/strict');
     async function fixture() {
       const context = await browser.newContext();
       await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      await context.addInitScript(()=>localStorage.setItem('espacios_auth_user',JSON.stringify({username:'test'})));
       const page = await context.newPage();
       await page.goto(origin); await page.waitForFunction(() => window.journal);
       return { context, page };
@@ -96,7 +97,7 @@ const assert = require('node:assert/strict');
 
     const failure = await fixture();
     const failedMigration = await failure.page.evaluate(async () => {
-      const operation = { id: 'not-migrated', reservations: [], deletedIds: [], confirmedIds: [], allowConflictOverride: false };
+      const operation = { id: 'not-migrated', actor:'test', reservations: [], deletedIds: [], confirmedIds: [], allowConflictOverride: false };
       localStorage.setItem('reservation_pending_operations_v1', JSON.stringify([operation]));
       const originalPut = IDBObjectStore.prototype.put;
       IDBObjectStore.prototype.put = function(value, key) {

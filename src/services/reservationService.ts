@@ -12,7 +12,7 @@ import {
   orderBy,
   runTransaction,
   Unsubscribe
-} from 'firebase/firestore';
+} from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 import { Reservation } from '../types';
 import { getStoredAuthUser, isCoordinatorOrAdmin, userCanCreateReservations, userCanEditReservations, userCanDeleteReservations } from './authService';
@@ -475,7 +475,7 @@ export function getLocalCache(): Reservation[] {
   // Fast path: In-memory cache is valid
   if (inMemoryReservationsCache !== null) {
     return inMemoryReservationsCache.filter(
-      r => !isReservationExplicitlyDeleted(r, deletedSet) && !isChileanHoliday(r.fecha)
+      r => !isReservationExplicitlyDeleted(r, deletedSet)
     );
   }
 
@@ -488,7 +488,7 @@ export function getLocalCache(): Reservation[] {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
         const filtered = parsed.filter(
-          r => !isReservationExplicitlyDeleted(r, deletedSet) && !isChileanHoliday(r.fecha)
+          r => !isReservationExplicitlyDeleted(r, deletedSet)
         );
         inMemoryReservationsCache = filtered;
         inMemoryDataHash = calculateReservationsHash(filtered);
@@ -507,7 +507,7 @@ export function getLocalCache(): Reservation[] {
         const parsed = JSON.parse(legacyCached);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const migrated = parsed.filter(
-            r => !isReservationExplicitlyDeleted(r, deletedSet) && !isChileanHoliday(r.fecha)
+            r => !isReservationExplicitlyDeleted(r, deletedSet)
           );
           if (migrated.length > 0) {
             // Write to current version format and cleanup old keys
@@ -522,13 +522,7 @@ export function getLocalCache(): Reservation[] {
     }
   }
 
-  // Fallback to static initial dataset
-  const fallback = INITIAL_RESERVATIONS.filter(
-    r => !isReservationExplicitlyDeleted(r, deletedSet) && !isChileanHoliday(r.fecha)
-  );
-  inMemoryReservationsCache = fallback;
-  inMemoryDataHash = calculateReservationsHash(fallback);
-  return fallback;
+  return [];
 }
 
 /**
@@ -542,7 +536,7 @@ export function setLocalCache(
   try {
     const deletedSet = getDeletedIds();
     const cleanData = data.filter(
-      r => !isReservationExplicitlyDeleted(r, deletedSet) && !isChileanHoliday(r.fecha)
+      r => !isReservationExplicitlyDeleted(r, deletedSet)
     );
 
     const newDataHash = calculateReservationsHash(cleanData);
@@ -642,7 +636,7 @@ export function subscribeToReservations(
       if (idbData && idbData.length > 0) {
         const deletedSet = getDeletedIds();
         const filtered = idbData.filter(
-          r => !deletedSet.has(r.id) && !isChileanHoliday(r.fecha)
+          r => !deletedSet.has(r.id)
         );
         inMemoryReservationsCache = filtered;
         inMemoryDataHash = calculateReservationsHash(filtered);
@@ -995,19 +989,21 @@ export async function resumeReservationOperation(id: string): Promise<WriteResul
   });
 }
 
-export async function deleteReservationById(id: string): Promise<WriteResult> {
-  return commitReservationChanges([], { deletedIds: [id] });
+export async function deleteReservationById(id: string,expectedVersion?:number): Promise<WriteResult> {
+  if(!Number.isInteger(expectedVersion))throw new Error('Recarga y selecciona la versión de la reserva antes de eliminarla.');
+  return commitReservationChanges([], {deletedIds:[id],expectedVersions:{[id]:expectedVersion!}});
 }
 
-export async function deleteReservationsBatch(ids: string[]): Promise<number> {
-  const result = await commitReservationChanges([], { deletedIds: ids });
+export async function deleteReservationsBatch(ids: string[],expectedVersions?:Record<string,number>): Promise<number> {
+  if(ids.some(id=>!Number.isInteger(expectedVersions?.[id])))throw new Error('Recarga las versiones seleccionadas antes de eliminarlas.');
+  const result=await commitReservationChanges([], {deletedIds:ids,expectedVersions});
   return result.deletedIds.length;
 }
 
-export async function deleteSeriesByRecurrenteId(recurrenteId: string, knownIds?: string[]): Promise<number> {
+export async function deleteSeriesByRecurrenteId(recurrenteId: string, knownIds?: string[],expectedVersions?:Record<string,number>): Promise<number> {
   const ids = new Set(knownIds || []);
   getLocalCache().forEach(r => { if (r.recurrenteId === recurrenteId || r.serieRecurrente === recurrenteId) ids.add(r.id); });
-  return deleteReservationsBatch([...ids]);
+  return deleteReservationsBatch([...ids],expectedVersions);
 }
 
 export async function seedAllToFirestore(
@@ -1030,7 +1026,7 @@ export async function seedAllToFirestore(
     const targets = reservations.map(r=>({ ...r, version: previous.get(r.id)?.version || 0 }));
     const targetIds = new Set(targets.map(r=>r.id));
     const deletedIds = force ? remote.docs.filter(d=>!targetIds.has(d.id)).map(d=>d.id) : [];
-    const result = await commitReservationChanges(targets, { deletedIds, allowConflictOverride: force });
+    const result = await commitReservationChanges(targets, { deletedIds, expectedVersions:Object.fromEntries(remote.docs.map(d=>[d.id,d.data().version||0])), allowConflictOverride: force });
     const confirmed = force ? result.reservations : getLocalCache();
     setLocalCache(confirmed, { lastFirestoreHash: calculateReservationsHash(confirmed), lastSyncTime: Date.now() });
 
@@ -1179,7 +1175,7 @@ export async function deleteAllHolidayReservations(): Promise<{
   const remaining = current.filter((r) => !toDelete.some(del => del.id === r.id));
 
   if (toDelete.length > 0) {
-    await deleteReservationsBatch(toDelete.map(r => r.id));
+    await deleteReservationsBatch(toDelete.map(r => r.id),Object.fromEntries(toDelete.map(r=>[r.id,r.version||0])));
   }
 
   return {
@@ -1271,7 +1267,7 @@ export async function cleanConflictingMinuteReservations(currentReservations?: R
   const remaining = current.filter((r) => !idsToDelete.has(r.id));
 
   if (toDelete.length > 0) {
-    await deleteReservationsBatch(toDelete.map(r => r.id));
+    await deleteReservationsBatch(toDelete.map(r => r.id),Object.fromEntries(toDelete.map(r=>[r.id,r.version||0])));
   }
 
   return {

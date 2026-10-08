@@ -53,10 +53,10 @@ describe('Cristian Shute User Reservation Permissions Suite', () => {
   };
 
   describe('isCristianShute identification', () => {
-    it('correctly identifies Cristian Shute by username, name, email or shutito alias', () => {
+    it('correctly identifies Cristian Shute by its registered master flag and username', () => {
       expect(isCristianShute(cristianShuteUser)).toBe(true);
       expect(isCristianShute({ ...cristianShuteUser, username: 'CRISTIAN SHUTE' })).toBe(true);
-      expect(isCristianShute({ ...cristianShuteUser, username: 'shutito' })).toBe(true);
+      expect(isCristianShute({ ...cristianShuteUser, username: 'legacy-alias' })).toBe(false);
       expect(isCristianShute({ ...cristianShuteUser, email: 'cristianshute@gmail.com' })).toBe(true);
     });
 
@@ -70,9 +70,9 @@ describe('Cristian Shute User Reservation Permissions Suite', () => {
   });
 
   describe('userCanCreateReservations', () => {
-    it('always grants permission to Cristian Shute', () => {
+    it('honors explicit revocation even for a master administrator', () => {
       expect(userCanCreateReservations(cristianShuteUser)).toBe(true);
-      expect(userCanCreateReservations({ ...cristianShuteUser, canCreateReservations: false })).toBe(true);
+      expect(userCanCreateReservations({ ...cristianShuteUser, canCreateReservations: false })).toBe(false);
     });
 
     it('defaults to true for standard roles and false for auxiliar', () => {
@@ -104,9 +104,9 @@ describe('Cristian Shute User Reservation Permissions Suite', () => {
   });
 
   describe('userCanEditReservations', () => {
-    it('always grants permission to Cristian Shute', () => {
+    it('honors explicit revocation even for a master administrator', () => {
       expect(userCanEditReservations(cristianShuteUser)).toBe(true);
-      expect(userCanEditReservations({ ...cristianShuteUser, canEditReservations: false })).toBe(true);
+      expect(userCanEditReservations({ ...cristianShuteUser, canEditReservations: false })).toBe(false);
     });
 
     it('defaults to true for Coordinador/Admin and false for Recepcion/Gestion/Auxiliar', () => {
@@ -133,9 +133,9 @@ describe('Cristian Shute User Reservation Permissions Suite', () => {
   });
 
   describe('userCanDeleteReservations', () => {
-    it('always grants permission to Cristian Shute', () => {
+    it('honors explicit revocation even for a master administrator', () => {
       expect(userCanDeleteReservations(cristianShuteUser)).toBe(true);
-      expect(userCanDeleteReservations({ ...cristianShuteUser, canDeleteReservations: false })).toBe(true);
+      expect(userCanDeleteReservations({ ...cristianShuteUser, canDeleteReservations: false })).toBe(false);
     });
 
     it('defaults to true for Coordinador/Admin and false for Recepcion/Gestion/Auxiliar', () => {

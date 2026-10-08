@@ -1,4 +1,4 @@
-import { doc, getDocFromServer, setDoc, writeBatch } from 'firebase/firestore';
+import { doc, getDocFromServer, setDoc, writeBatch } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 import type { AuditChangeLogEntry } from '../types';
 import { splitBackupPayload } from '../utils/backupChunks';
@@ -34,6 +34,11 @@ export async function fetchFullAuditEntry(id: string): Promise<AuditChangeLogEnt
   const snapshot = await getDocFromServer(doc(db, 'audit_logs', id));
   if (!snapshot.exists()) throw new AuditNotSyncedError('El registro aún no está respaldado en el servidor. Espera la sincronización y vuelve a intentar.');
   const entry = { ...snapshot.data(), id } as AuditChangeLogEntry;
+  const groups=(entry as any).operationParts;
+  if(groups){let previousState:any[]=[],newState:any[]=[];
+    for(const group of groups){let payload='';for(const key of group.keys||[group]){const part=await getDocFromServer(doc(db,'audit_logs',id,'partes',key));if(!part.exists()||typeof part.data().payload!=='string')throw new Error('El respaldo está incompleto.');payload+=part.data().payload;}const state=JSON.parse(payload);previousState.push(...state.previousState);newState.push(...state.newState);}
+    return {...entry,previousState,newState};
+  }
   if (!entry.snapshotParts || entry.isReverted) return entry;
   if (!Number.isInteger(entry.snapshotParts) || entry.snapshotParts < 1 || entry.snapshotParts > 1000) {
     throw new Error('El respaldo contiene un manifiesto inválido.');

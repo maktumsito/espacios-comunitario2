@@ -1,0 +1,39 @@
+[
+  {
+    "name": "Anonymous API rejection",
+    "status": 401,
+    "success": false
+  },
+  {
+    "name": "Forged session rejection",
+    "status": 401,
+    "success": false
+  },
+  {
+    "name": "Read-only API rejection",
+    "status": 403,
+    "success": false
+  },
+  {
+    "name": "Verified writer local manual mail",
+    "status": 200,
+    "success": true,
+    "mode": "logged"
+  },
+  {
+    "name": "Revoked permission applied to active session",
+    "status": 403,
+    "success": false
+  },
+  {
+    "name": "Old session survives password rotation",
+    "status": 200,
+    "success": true,
+    "mode": "logged"
+  },
+  {
+    "name": "Deleted account revoked",
+    "status": 401,
+    "success": false
+  }
+]

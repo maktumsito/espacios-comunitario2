@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-13",
+  "filename": "Planilla_Actividades_Martes_13-10-2026.pdf",
+  "pages": 1,
+  "checks": {
+    "correct_weekday_filename": true,
+    "civil_date_in_header": true,
+    "current_activity_included": true,
+    "overnight_included": true,
+    "cancelled_excluded": true,
+    "other_day_excluded": true,
+    "compound_room_preserved": true,
+    "folio_landscape": true
+  },
+  "visualReview": "Rendered with Poppler; one page inspected, no clipping or overlap in this synthetic fixture."
+}

@@ -1,0 +1,6 @@
+{
+  "hardcodedAccounts": 5,
+  "commentsRevealPasswords": 5,
+  "literalCredentialsVerify": 5,
+  "hashesFoundInBrowserAssets": 5
+}

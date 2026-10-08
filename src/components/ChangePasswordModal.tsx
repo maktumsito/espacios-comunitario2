@@ -79,8 +79,8 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       return;
     }
 
-    if (newPassword.trim().length < 3) {
-      setErrorMsg('La nueva clave de acceso debe tener al menos 3 caracteres.');
+    if (newPassword.trim().length < 8) {
+      setErrorMsg('La nueva clave de acceso debe tener al menos 8 caracteres.');
       return;
     }
 
@@ -246,7 +246,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
           <div className="space-y-1.5">
             <label className="font-semibold text-slate-700 flex items-center justify-between">
               <span>Nueva Clave de Acceso *</span>
-              <span className="text-[10px] text-slate-400 font-normal">Mínimo 3 caracteres</span>
+              <span className="text-[10px] text-slate-400 font-normal">Mínimo 8 caracteres</span>
             </label>
             <div className="relative">
               <input

@@ -1,7 +1,8 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { initializeApp } from 'firebase/app';
-import { collection, getDocsFromServer, getFirestore, terminate } from 'firebase/firestore';
+import { initializeApp } from 'firebase-admin/app';
+import {getFirestore} from 'firebase-admin/firestore';
+import {collection,getDocsFromServer} from '../src/firebase/gateway';
 import type { Reservation } from '../src/types';
 import { getChileLocalDateString } from '../src/utils/dateUtils';
 import { planIndependentReservationGroups, applyIndependentReservationGroup, groupingPatch, groupingRevision } from '../src/services/migrations/groupIndependentReservations';
@@ -10,8 +11,9 @@ const apply = process.argv.includes('--apply');
 const actorIndex = process.argv.indexOf('--actor');
 const actor = actorIndex >= 0 ? process.argv[actorIndex + 1] : '';
 if (apply && !actor) throw new Error('Para aplicar, indica --actor con el nombre del solicitante.');
-const config = JSON.parse(readFileSync(resolve('firebase-applet-config.json'), 'utf8'));
-const db = getFirestore(initializeApp(config, 'independent-grouping'), config.firestoreDatabaseId || '(default)');
+const config = {projectId:'demo-espacios',firestoreDatabaseId:'(default)'};
+if(process.env.FIRESTORE_EMULATOR_HOST!=='127.0.0.1:8087')throw new Error('Esta herramienta de diagnóstico requiere el emulador local demo-espacios.');
+const db = getFirestore(initializeApp({projectId:'demo-espacios'}, 'independent-grouping')) as any;
 const today = getChileLocalDateString();
 try {
   const snapshot = await getDocsFromServer(collection(db, 'reservas'));
@@ -51,4 +53,4 @@ try {
     }
     console.log(JSON.stringify({ appliedGroups: applied, verifiedSessions: groups.reduce((total, group) => total + group.reservations.length, 0) }));
   }
-} finally { await terminate(db); }
+} finally { await db.terminate(); }

@@ -1,4 +1,4 @@
-import { doc, runTransaction, type Firestore } from 'firebase/firestore';
+import { dataRequest,usesDataApi,doc, runTransaction, type Firestore } from '../../firebase/gateway';
 import type { Reservation } from '../../types';
 import { isReservationActiveForAvailability } from '../../utils/conflictDetector';
 import { getChileLocalDateString, WEEKDAYS } from '../../utils/dateUtils';
@@ -98,10 +98,12 @@ export function groupingRevision(value: unknown): string {
 }
 
 /** Metadata-only transaction: existing occupancy and Google Calendar IDs stay intact. */
-export async function applyIndependentReservationGroup(db: Firestore, group: IndependentReservationGroup, actor: string): Promise<boolean> {
+export async function applyIndependentReservationGroup(db: Firestore, group: IndependentReservationGroup, actor: string,guard?:(transaction:any)=>Promise<void>): Promise<boolean> {
+  if(usesDataApi())return (await dataRequest('/api/reservations/group',{group})).changed;
   if (!actor.trim()) throw new Error('Indica quién solicitó la agrupación.');
   if (group.reservations.length < 2 || group.reservations.length > 400) throw new Error('El grupo debe contener entre 2 y 400 reservas para guardarse íntegramente.');
   return runTransaction(db, async transaction => {
+    await guard?.(transaction);
     const snapshots = await Promise.all(group.reservations.map(row => transaction.get(doc(db, 'reservas', row.id))));
     const current = snapshots.map(snapshot => snapshot.exists() ? { ...snapshot.data(), id: snapshot.id } as Reservation : null);
     if (current.every(row => row?.serieRecurrente === group.seriesId && row.recurrenteId === group.seriesId)) return false;
@@ -125,6 +127,7 @@ export async function applyIndependentReservationGroup(db: Firestore, group: Ind
       description: `Agrupadas ${group.reservations.length} reservas independientes de '${group.reservations[0].descripcion}' con el mismo día semanal y horario. Se conservaron sus fechas, identificadores y ocupación.`,
       reservaId: group.reservations[0].id, serieRecurrente: group.seriesId,
       groupedReservationIds: group.reservations.map(row => row.id),
+      snapshotVersion:2,affectedCount:group.reservations.length,isReverted:false,previousState:current,newState:current.map(row=>({...row,...groupingPatch(group,row!),version:(row!.version||0)+1,updatedAt:timestamp,editadoPor:actor,fechaEdicion:timestamp})),
     });
     return true;
   });

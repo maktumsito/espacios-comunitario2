@@ -1,0 +1,4590 @@
+{
+  "phase": "audit-2026-10-08",
+  "engine": "Edge headless",
+  "cpuRate": 4,
+  "runs": 30,
+  "warmups": 3,
+  "cloud": "blocked",
+  "output": [
+    {
+      "name": "initial-resources",
+      "count": 500,
+      "width": 390,
+      "navigation": 1060,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        }
+      ]
+    },
+    {
+      "name": "open-form",
+      "count": 500,
+      "width": 390,
+      "medianMs": 307.1000000014901,
+      "p95Ms": 408.8999999985099,
+      "domMutationMedian": 3,
+      "samples": [
+        {
+          "duration": 312.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 275.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 408.8999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 305.5,
+          "mutations": 3
+        },
+        {
+          "duration": 233.40000000223517,
+          "mutations": 3
+        },
+        {
+          "duration": 255.40000000223517,
+          "mutations": 3
+        },
+        {
+          "duration": 251.5,
+          "mutations": 3
+        },
+        {
+          "duration": 290.4000000022352,
+          "mutations": 3
+        },
+        {
+          "duration": 210.10000000149012,
+          "mutations": 3
+        },
+        {
+          "duration": 278.80000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 346.8999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 353.80000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 249.39999999850988,
+          "mutations": 3
+        },
+        {
+          "duration": 273.0999999977648,
+          "mutations": 3
+        },
+        {
+          "duration": 365.1000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 272.1000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 283.19999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 337.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 355.4000000022352,
+          "mutations": 3
+        },
+        {
+          "duration": 328.5999999977648,
+          "mutations": 3
+        },
+        {
+          "duration": 340,
+          "mutations": 3
+        },
+        {
+          "duration": 405.9000000022352,
+          "mutations": 3
+        },
+        {
+          "duration": 307.1000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 481,
+          "mutations": 3
+        },
+        {
+          "duration": 400.0999999977648,
+          "mutations": 3
+        },
+        {
+          "duration": 255.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 313.3999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 288.4000000022352,
+          "mutations": 3
+        },
+        {
+          "duration": 260.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 363.9000000022352,
+          "mutations": 3
+        }
+      ]
+    },
+    {
+      "name": "typing",
+      "count": 500,
+      "width": 390,
+      "medianMs": 64.5,
+      "p95Ms": 85.19999999925494,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 95.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 64.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 80.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 61.599999997764826,
+          "mutations": 1
+        },
+        {
+          "duration": 59.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 66.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 59.600000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 64.5,
+          "mutations": 1
+        },
+        {
+          "duration": 63.099999997764826,
+          "mutations": 1
+        },
+        {
+          "duration": 67,
+          "mutations": 1
+        },
+        {
+          "duration": 62.70000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 78.10000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 64.5,
+          "mutations": 1
+        },
+        {
+          "duration": 58,
+          "mutations": 1
+        },
+        {
+          "duration": 65.5,
+          "mutations": 1
+        },
+        {
+          "duration": 64.39999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 64.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 60.899999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 61.600000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 63.099999997764826,
+          "mutations": 1
+        },
+        {
+          "duration": 65.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 64,
+          "mutations": 1
+        },
+        {
+          "duration": 64.5,
+          "mutations": 1
+        },
+        {
+          "duration": 64.90000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 64.70000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 65.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 61.5,
+          "mutations": 1
+        },
+        {
+          "duration": 64.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 64.59999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 85.19999999925494,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "resources",
+      "count": 500,
+      "width": 390,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-reservation-modal-D0p0wSbZ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/CommitmentLetterCard-DbtVV5jH.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/loadPdfLibraries-GiyLcSoQ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/BaseModal-3uw7ujGm.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConfirmationModal-ChmaRdlI.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/useReservationSaveHandler-RZNEphHl.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConflictRecommendationPanel-Dylon4sK.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-detail-modal-BOyUz4ni.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/MergeReservationsModal-KFY_cnXk.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/phoneUtils-Y6Np2J75.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-command-palette-ExjuM0Pv.js",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=80416&CVER=22&X-HTTP-Session-Id=gsessionid&zx=tc5kktesn0k6&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=4346&CVER=22&X-HTTP-Session-Id=gsessionid&zx=k9k178ixrvir&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=76txgewny418",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=dasltgdukome",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=12644&CVER=22&X-HTTP-Session-Id=gsessionid&zx=lxshueb4ulrr&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=63314&CVER=22&X-HTTP-Session-Id=gsessionid&zx=hfjnof4d1k30&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=17x0nxt8h7px",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=kxdhvcabw9c7",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=3365&CVER=22&X-HTTP-Session-Id=gsessionid&zx=aeiijkvojvs1&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=xk142t86qzf5",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=74792&CVER=22&X-HTTP-Session-Id=gsessionid&zx=2majjdhl6tcp&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=6lrglzwwbcmx",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=66776&CVER=22&X-HTTP-Session-Id=gsessionid&zx=j4z89y32gfi0&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=unh44p9zuhol",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=13881&CVER=22&X-HTTP-Session-Id=gsessionid&zx=frmwd56dylry&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=dce8ts2w2841",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=94398&CVER=22&X-HTTP-Session-Id=gsessionid&zx=4tyviomljaem&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=elcgl9ktot0",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=65862&CVER=22&X-HTTP-Session-Id=gsessionid&zx=fo6cqscufz28&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=v4hbo7dc5w4u",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=96754&CVER=22&X-HTTP-Session-Id=gsessionid&zx=bh4ca1j66xcc&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=ylqv0l2nibj2",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=4646&CVER=22&X-HTTP-Session-Id=gsessionid&zx=cyjx6lwlgfns&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=b4j7niw2powk",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=99328&CVER=22&X-HTTP-Session-Id=gsessionid&zx=mhp50wxs79lj&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=u2tux3jqvnfv",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=77663&CVER=22&X-HTTP-Session-Id=gsessionid&zx=y30ooi84s8ea&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=50j99au7zuv",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=40664&CVER=22&X-HTTP-Session-Id=gsessionid&zx=1cwi1sis6rh2&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=tk9ex8n469et",
+          "bytes": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "initial-resources",
+      "count": 2500,
+      "width": 390,
+      "navigation": 1060,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        }
+      ]
+    },
+    {
+      "name": "open-form",
+      "count": 2500,
+      "width": 390,
+      "medianMs": 214.10000000149012,
+      "p95Ms": 266.80000000074506,
+      "domMutationMedian": 3,
+      "samples": [
+        {
+          "duration": 209.89999999850988,
+          "mutations": 3
+        },
+        {
+          "duration": 233.59999999776483,
+          "mutations": 3
+        },
+        {
+          "duration": 216.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 266.5,
+          "mutations": 3
+        },
+        {
+          "duration": 221.90000000223517,
+          "mutations": 3
+        },
+        {
+          "duration": 255.59999999776483,
+          "mutations": 3
+        },
+        {
+          "duration": 214.10000000149012,
+          "mutations": 3
+        },
+        {
+          "duration": 266.80000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 213.19999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 236.40000000223517,
+          "mutations": 3
+        },
+        {
+          "duration": 176,
+          "mutations": 3
+        },
+        {
+          "duration": 234.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 265.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 183.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 200.80000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 275,
+          "mutations": 3
+        },
+        {
+          "duration": 205,
+          "mutations": 3
+        },
+        {
+          "duration": 250.30000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 197.5,
+          "mutations": 3
+        },
+        {
+          "duration": 222.19999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 186.10000000149012,
+          "mutations": 3
+        },
+        {
+          "duration": 191.80000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 232,
+          "mutations": 3
+        },
+        {
+          "duration": 188,
+          "mutations": 3
+        },
+        {
+          "duration": 229.5,
+          "mutations": 3
+        },
+        {
+          "duration": 210.30000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 185.90000000223517,
+          "mutations": 3
+        },
+        {
+          "duration": 205,
+          "mutations": 3
+        },
+        {
+          "duration": 202,
+          "mutations": 3
+        },
+        {
+          "duration": 205,
+          "mutations": 3
+        }
+      ]
+    },
+    {
+      "name": "typing",
+      "count": 2500,
+      "width": 390,
+      "medianMs": 63.899999998509884,
+      "p95Ms": 80.5,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 65.09999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 60,
+          "mutations": 1
+        },
+        {
+          "duration": 61.600000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 62.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 63.79999999701977,
+          "mutations": 1
+        },
+        {
+          "duration": 64.89999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 61.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 81.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 60.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 63.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 79.5,
+          "mutations": 1
+        },
+        {
+          "duration": 80.5,
+          "mutations": 1
+        },
+        {
+          "duration": 63.5,
+          "mutations": 1
+        },
+        {
+          "duration": 64.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 62.5,
+          "mutations": 1
+        },
+        {
+          "duration": 64.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 63.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 65.20000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 63.20000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 64.59999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 63.899999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 63.900000002235174,
+          "mutations": 1
+        },
+        {
+          "duration": 64.09999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 63.20000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 63.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 64.59999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 63.600000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 77.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 63.099999997764826,
+          "mutations": 1
+        },
+        {
+          "duration": 63.899999998509884,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "resources",
+      "count": 2500,
+      "width": 390,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-reservation-modal-D0p0wSbZ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/CommitmentLetterCard-DbtVV5jH.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/loadPdfLibraries-GiyLcSoQ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/BaseModal-3uw7ujGm.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConfirmationModal-ChmaRdlI.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/useReservationSaveHandler-RZNEphHl.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConflictRecommendationPanel-Dylon4sK.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-detail-modal-BOyUz4ni.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/MergeReservationsModal-KFY_cnXk.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/phoneUtils-Y6Np2J75.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-command-palette-ExjuM0Pv.js",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=48739&CVER=22&X-HTTP-Session-Id=gsessionid&zx=ti44gang2e8k&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=31744&CVER=22&X-HTTP-Session-Id=gsessionid&zx=3u7rr49nhe0i&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=4ktnmabhjy0o",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=5tu6awhqagc7",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=42044&CVER=22&X-HTTP-Session-Id=gsessionid&zx=j8yt0e1hl1vb&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=3920&CVER=22&X-HTTP-Session-Id=gsessionid&zx=6iaj4sswqr3b&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=24c94zhaenrz",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=cws3ttt3tw4d",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=59850&CVER=22&X-HTTP-Session-Id=gsessionid&zx=3zyi34d7apbf&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=yo0s5pwezqf9",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=64919&CVER=22&X-HTTP-Session-Id=gsessionid&zx=xivor7tuc77t&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=1566jsk2720x",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=57177&CVER=22&X-HTTP-Session-Id=gsessionid&zx=exn4xc47dgxx&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=f1mb1sdxtku",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=5299&CVER=22&X-HTTP-Session-Id=gsessionid&zx=8tb5o7k01teo&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=vhgyt9vt8a9",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=31998&CVER=22&X-HTTP-Session-Id=gsessionid&zx=b9syoq98ptr&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=py2qdz1h838w",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=23029&CVER=22&X-HTTP-Session-Id=gsessionid&zx=w72ylgghn57&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=7ewsmumj06xg",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=50017&CVER=22&X-HTTP-Session-Id=gsessionid&zx=omgbhdmdrsz1&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=2x15xl330jdz",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=34584&CVER=22&X-HTTP-Session-Id=gsessionid&zx=a8au06sa3jn8&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=77up8n1gcsbz",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=32689&CVER=22&X-HTTP-Session-Id=gsessionid&zx=5vm14ilxt9qy&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=n55b44i3pmfs",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=6539&CVER=22&X-HTTP-Session-Id=gsessionid&zx=g5663trbcesb&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=4q0whvgukhne",
+          "bytes": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "initial-resources",
+      "count": 10000,
+      "width": 390,
+      "navigation": 1060,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-reservation-modal-D0p0wSbZ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/CommitmentLetterCard-DbtVV5jH.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/loadPdfLibraries-GiyLcSoQ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/BaseModal-3uw7ujGm.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConfirmationModal-ChmaRdlI.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/useReservationSaveHandler-RZNEphHl.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConflictRecommendationPanel-Dylon4sK.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-detail-modal-BOyUz4ni.js",
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "name": "open-form",
+      "count": 10000,
+      "width": 390,
+      "medianMs": 329.30000000074506,
+      "p95Ms": 469.80000000074506,
+      "domMutationMedian": 3,
+      "samples": [
+        {
+          "duration": 333.30000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 329.30000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 439.30000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 469.80000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 285.30000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 468.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 421.80000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 298.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 386,
+          "mutations": 3
+        },
+        {
+          "duration": 342.8999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 365.20000000298023,
+          "mutations": 3
+        },
+        {
+          "duration": 378.30000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 305.6000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 262.5999999977648,
+          "mutations": 3
+        },
+        {
+          "duration": 265.30000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 339.9000000022352,
+          "mutations": 3
+        },
+        {
+          "duration": 307.30000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 279.5999999977648,
+          "mutations": 3
+        },
+        {
+          "duration": 489.29999999701977,
+          "mutations": 3
+        },
+        {
+          "duration": 266.80000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 274.80000000074506,
+          "mutations": 3
+        },
+        {
+          "duration": 291,
+          "mutations": 3
+        },
+        {
+          "duration": 330.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 333.6000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 326.5,
+          "mutations": 3
+        },
+        {
+          "duration": 289.8999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 330.1000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 269,
+          "mutations": 3
+        },
+        {
+          "duration": 291.3999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 268.5,
+          "mutations": 3
+        }
+      ]
+    },
+    {
+      "name": "typing",
+      "count": 10000,
+      "width": 390,
+      "medianMs": 64.39999999850988,
+      "p95Ms": 80.40000000223517,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 62.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 60.399999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 64.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 64.59999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 64.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 66.20000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 64.09999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 59.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 60.899999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 76.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 65.39999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 46.100000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 47.70000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 47.900000002235174,
+          "mutations": 1
+        },
+        {
+          "duration": 64.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 67.5,
+          "mutations": 1
+        },
+        {
+          "duration": 61.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 62.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 60.20000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 80.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 64.20000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 65.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 61.5,
+          "mutations": 1
+        },
+        {
+          "duration": 64.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 64.39999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 65.09999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 64,
+          "mutations": 1
+        },
+        {
+          "duration": 72.10000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 84.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 64.69999999925494,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "resources",
+      "count": 10000,
+      "width": 390,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-reservation-modal-D0p0wSbZ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/CommitmentLetterCard-DbtVV5jH.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/loadPdfLibraries-GiyLcSoQ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/BaseModal-3uw7ujGm.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConfirmationModal-ChmaRdlI.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/useReservationSaveHandler-RZNEphHl.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConflictRecommendationPanel-Dylon4sK.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-detail-modal-BOyUz4ni.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/MergeReservationsModal-KFY_cnXk.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/phoneUtils-Y6Np2J75.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-command-palette-ExjuM0Pv.js",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=10696&CVER=22&X-HTTP-Session-Id=gsessionid&zx=eocheytmfv3p&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=68107&CVER=22&X-HTTP-Session-Id=gsessionid&zx=rbrd5ex0druv&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=vwlyq15s4fvl",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=vcbjxwz9l561",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=58001&CVER=22&X-HTTP-Session-Id=gsessionid&zx=6nnt5t5tycxy&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=51178&CVER=22&X-HTTP-Session-Id=gsessionid&zx=pjp1qhxmwutn&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=1wk3bkw3i697",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=rzwiliacfjhw",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=49370&CVER=22&X-HTTP-Session-Id=gsessionid&zx=kxagibd56rms&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=o2khg8yiguy",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=70004&CVER=22&X-HTTP-Session-Id=gsessionid&zx=f4xd6sseaqun&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=jfxz2nt3wsta",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=83738&CVER=22&X-HTTP-Session-Id=gsessionid&zx=pu0nlwr3qlqf&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=74507&CVER=22&X-HTTP-Session-Id=gsessionid&zx=dnx6rje2tn0e&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=h1sed8aguz27",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=8ktrp9dvqzea",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=386&CVER=22&X-HTTP-Session-Id=gsessionid&zx=yakd2mhpbuhm&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=lxyofmaglz7s",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=89674&CVER=22&X-HTTP-Session-Id=gsessionid&zx=ts1e3n8lsm87&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=scw7yq7235fy",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=72190&CVER=22&X-HTTP-Session-Id=gsessionid&zx=sjy4f3jzzbu&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=21x5catsjvm3",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=25090&CVER=22&X-HTTP-Session-Id=gsessionid&zx=msnmcnstyw99&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=j4epw0g5oeos",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=80253&CVER=22&X-HTTP-Session-Id=gsessionid&zx=a9b1q2j6rpz2&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=w86vwkqmtxzi",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=32619&CVER=22&X-HTTP-Session-Id=gsessionid&zx=d9r7xknivs4o&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=5r778y8pka5x",
+          "bytes": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "initial-resources",
+      "count": 500,
+      "width": 1200,
+      "navigation": 1060,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-reservation-modal-D0p0wSbZ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/CommitmentLetterCard-DbtVV5jH.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/loadPdfLibraries-GiyLcSoQ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/BaseModal-3uw7ujGm.js",
+          "bytes": 0
+        }
+      ]
+    },
+    {
+      "name": "open-form",
+      "count": 500,
+      "width": 1200,
+      "medianMs": 509.5,
+      "p95Ms": 922,
+      "domMutationMedian": 3,
+      "samples": [
+        {
+          "duration": 384,
+          "mutations": 3
+        },
+        {
+          "duration": 512.1999999992549,
+          "mutations": 3
+        },
+        {
+          "duration": 402.19999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 472.3999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 487.69999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 454,
+          "mutations": 3
+        },
+        {
+          "duration": 492.4000000022352,
+          "mutations": 3
+        },
+        {
+          "duration": 598.6999999992549,
+          "mutations": 3
+        },
+        {
+          "duration": 481.5,
+          "mutations": 3
+        },
+        {
+          "duration": 555.8999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 486.5,
+          "mutations": 3
+        },
+        {
+          "duration": 438.19999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 492.9000000022352,
+          "mutations": 3
+        },
+        {
+          "duration": 661.6999999992549,
+          "mutations": 3
+        },
+        {
+          "duration": 450.5,
+          "mutations": 3
+        },
+        {
+          "duration": 489.3999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 546.6000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 603.6000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 750.3000000007451,
+          "mutations": 3
+        },
+        {
+          "duration": 938.3000000007451,
+          "mutations": 3
+        },
+        {
+          "duration": 652.5,
+          "mutations": 3
+        },
+        {
+          "duration": 772.5999999977648,
+          "mutations": 3
+        },
+        {
+          "duration": 655.3000000007451,
+          "mutations": 3
+        },
+        {
+          "duration": 494.19999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 507.5,
+          "mutations": 3
+        },
+        {
+          "duration": 509.5,
+          "mutations": 3
+        },
+        {
+          "duration": 922,
+          "mutations": 3
+        },
+        {
+          "duration": 620.1999999992549,
+          "mutations": 3
+        },
+        {
+          "duration": 614.3999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 495.19999999925494,
+          "mutations": 3
+        }
+      ]
+    },
+    {
+      "name": "typing",
+      "count": 500,
+      "width": 1200,
+      "medianMs": 79.30000000074506,
+      "p95Ms": 95.40000000223517,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 78.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 79.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 77.59999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 62.599999997764826,
+          "mutations": 1
+        },
+        {
+          "duration": 78.5,
+          "mutations": 1
+        },
+        {
+          "duration": 80.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 76.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 77.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 95.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 79.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 78.09999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 80.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 94,
+          "mutations": 1
+        },
+        {
+          "duration": 80.5,
+          "mutations": 1
+        },
+        {
+          "duration": 77.89999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 79.10000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 79.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 78.89999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 69.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 90.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 78.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 94,
+          "mutations": 1
+        },
+        {
+          "duration": 94.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 79.09999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 95.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 94.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 95.10000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 94.89999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 94,
+          "mutations": 1
+        },
+        {
+          "duration": 56,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "search-ui",
+      "count": 500,
+      "width": 1200,
+      "medianMs": 48.69999999925494,
+      "p95Ms": 61.5,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 58.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 53.399999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 45.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 55.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 41.899999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 46.100000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 45.899999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 44.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 44.600000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 58.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 50.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 47.599999997764826,
+          "mutations": 1
+        },
+        {
+          "duration": 47.099999997764826,
+          "mutations": 1
+        },
+        {
+          "duration": 46.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 58.5,
+          "mutations": 1
+        },
+        {
+          "duration": 43.600000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 54.600000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 45.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 57.5,
+          "mutations": 1
+        },
+        {
+          "duration": 57.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 48.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 43.399999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 48.100000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 55.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 61.5,
+          "mutations": 1
+        },
+        {
+          "duration": 65.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 56.099999997764826,
+          "mutations": 1
+        },
+        {
+          "duration": 59,
+          "mutations": 1
+        },
+        {
+          "duration": 46.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 46.599999997764826,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "change-view",
+      "count": 500,
+      "width": 1200,
+      "medianMs": 308.69999999925494,
+      "p95Ms": 487.79999999701977,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 356.8999999985099,
+          "mutations": 1
+        },
+        {
+          "duration": 291.9000000022352,
+          "mutations": 1
+        },
+        {
+          "duration": 412.8999999985099,
+          "mutations": 1
+        },
+        {
+          "duration": 409.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 285.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 359.8999999985099,
+          "mutations": 1
+        },
+        {
+          "duration": 306.4000000022352,
+          "mutations": 1
+        },
+        {
+          "duration": 365.6000000014901,
+          "mutations": 1
+        },
+        {
+          "duration": 452.4000000022352,
+          "mutations": 1
+        },
+        {
+          "duration": 322.30000000074506,
+          "mutations": 2
+        },
+        {
+          "duration": 202,
+          "mutations": 1
+        },
+        {
+          "duration": 234.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 272.5,
+          "mutations": 1
+        },
+        {
+          "duration": 252.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 308.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 192.90000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 300.8999999985099,
+          "mutations": 1
+        },
+        {
+          "duration": 209.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 243.20000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 282.1000000014901,
+          "mutations": 1
+        },
+        {
+          "duration": 417.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 496.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 487.79999999701977,
+          "mutations": 1
+        },
+        {
+          "duration": 359.3999999985099,
+          "mutations": 1
+        },
+        {
+          "duration": 274.9000000022352,
+          "mutations": 1
+        },
+        {
+          "duration": 370.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 305,
+          "mutations": 1
+        },
+        {
+          "duration": 326.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 342.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 279.3999999985099,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "resources",
+      "count": 500,
+      "width": 1200,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-reservation-modal-D0p0wSbZ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/CommitmentLetterCard-DbtVV5jH.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/loadPdfLibraries-GiyLcSoQ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/BaseModal-3uw7ujGm.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConfirmationModal-ChmaRdlI.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/useReservationSaveHandler-RZNEphHl.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConflictRecommendationPanel-Dylon4sK.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-detail-modal-BOyUz4ni.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/MergeReservationsModal-KFY_cnXk.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/phoneUtils-Y6Np2J75.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-command-palette-ExjuM0Pv.js",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=17378&CVER=22&X-HTTP-Session-Id=gsessionid&zx=jjjgtzsl6n3g&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=50562&CVER=22&X-HTTP-Session-Id=gsessionid&zx=ry1bifadm73o&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=bdeedp9vj7fn",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=t9f58tof5ryr",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=39063&CVER=22&X-HTTP-Session-Id=gsessionid&zx=glomzu712lr5&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=6900&CVER=22&X-HTTP-Session-Id=gsessionid&zx=mdf0ex77qhai&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=knntrvowt9ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=ckvoa0u9kvov",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=97100&CVER=22&X-HTTP-Session-Id=gsessionid&zx=jcaeye5m8kzw&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=hxmrfyhg3zso",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=86311&CVER=22&X-HTTP-Session-Id=gsessionid&zx=597j6f5j3d4k&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=4hhjmsagr10d",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=80857&CVER=22&X-HTTP-Session-Id=gsessionid&zx=cr56t4bymwqr&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=q55gk7cx2ptt",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=27412&CVER=22&X-HTTP-Session-Id=gsessionid&zx=csrwcdusjbiu&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=2pf5xbb2z3r6",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=76716&CVER=22&X-HTTP-Session-Id=gsessionid&zx=deyl32up2mst&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=rcycy3evj3we",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=69715&CVER=22&X-HTTP-Session-Id=gsessionid&zx=y36af8hqgx0n&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=ik6q3ul4h43y",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=18205&CVER=22&X-HTTP-Session-Id=gsessionid&zx=a3yoiejwkv83&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=52617&CVER=22&X-HTTP-Session-Id=gsessionid&zx=rtqc10ny8v4g&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=f3qfe4pkyaw7",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=a5bbseo84nhm",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=54059&CVER=22&X-HTTP-Session-Id=gsessionid&zx=a3z3zml0cc79&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=bmgrmwk308pf",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=50203&CVER=22&X-HTTP-Session-Id=gsessionid&zx=xzglpcnxnvv5&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=iecfedtpa4fk",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=17949&CVER=22&X-HTTP-Session-Id=gsessionid&zx=xzbrbm53qt4l&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=2g3boqlmtm55",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=33036&CVER=22&X-HTTP-Session-Id=gsessionid&zx=ssile9t6i195&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=x2daucrzpt8e",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=89148&CVER=22&X-HTTP-Session-Id=gsessionid&zx=c47aqw5gzn7u&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=3mafvjao76kj",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=34527&CVER=22&X-HTTP-Session-Id=gsessionid&zx=jmybphy7vgzz&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=z4m0falpu6ax",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=65292&CVER=22&X-HTTP-Session-Id=gsessionid&zx=c9slukrhuoyf&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=1huz1hmcid61",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=61417&CVER=22&X-HTTP-Session-Id=gsessionid&zx=h7nnp4vlrmt1&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=vuum4ej8nyf6",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "initial-resources",
+      "count": 2500,
+      "width": 1200,
+      "navigation": 1060,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        }
+      ]
+    },
+    {
+      "name": "open-form",
+      "count": 2500,
+      "width": 1200,
+      "medianMs": 772.1999999992549,
+      "p95Ms": 1349.5999999977648,
+      "domMutationMedian": 3,
+      "samples": [
+        {
+          "duration": 910.4000000022352,
+          "mutations": 3
+        },
+        {
+          "duration": 889.1000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 1207.1000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 1048.8999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 889.7999999970198,
+          "mutations": 3
+        },
+        {
+          "duration": 817,
+          "mutations": 3
+        },
+        {
+          "duration": 898.8000000007451,
+          "mutations": 3
+        },
+        {
+          "duration": 685.3999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 1591.300000000745,
+          "mutations": 3
+        },
+        {
+          "duration": 1349.5999999977648,
+          "mutations": 3
+        },
+        {
+          "duration": 1256.800000000745,
+          "mutations": 3
+        },
+        {
+          "duration": 1024.300000000745,
+          "mutations": 3
+        },
+        {
+          "duration": 635.1000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 772.1999999992549,
+          "mutations": 3
+        },
+        {
+          "duration": 786.3000000007451,
+          "mutations": 3
+        },
+        {
+          "duration": 627.6999999992549,
+          "mutations": 3
+        },
+        {
+          "duration": 736.7000000029802,
+          "mutations": 3
+        },
+        {
+          "duration": 592.3999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 535.8999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 622.8999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 645.8000000007451,
+          "mutations": 3
+        },
+        {
+          "duration": 490.5,
+          "mutations": 3
+        },
+        {
+          "duration": 812.5,
+          "mutations": 3
+        },
+        {
+          "duration": 653.1000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 525.1000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 532.0999999977648,
+          "mutations": 3
+        },
+        {
+          "duration": 810.5999999977648,
+          "mutations": 3
+        },
+        {
+          "duration": 527.2000000029802,
+          "mutations": 3
+        },
+        {
+          "duration": 473.19999999925494,
+          "mutations": 3
+        },
+        {
+          "duration": 506.1000000014901,
+          "mutations": 3
+        }
+      ]
+    },
+    {
+      "name": "typing",
+      "count": 2500,
+      "width": 1200,
+      "medianMs": 76.89999999850988,
+      "p95Ms": 91.60000000149012,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 77.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 79.89999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 77.39999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 75.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 74,
+          "mutations": 1
+        },
+        {
+          "duration": 74.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 75,
+          "mutations": 1
+        },
+        {
+          "duration": 78.39999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 78.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 75.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 76.90000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 75.5,
+          "mutations": 1
+        },
+        {
+          "duration": 72.89999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 78.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 73.70000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 75.90000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 75.5,
+          "mutations": 1
+        },
+        {
+          "duration": 61.900000002235174,
+          "mutations": 1
+        },
+        {
+          "duration": 72.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 92.90000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 75.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 79.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 91.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 76.89999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 75.20000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 78,
+          "mutations": 1
+        },
+        {
+          "duration": 78.59999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 73.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 77.89999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 79.5,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "search-ui",
+      "count": 2500,
+      "width": 1200,
+      "medianMs": 55.30000000074506,
+      "p95Ms": 69.5,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 70.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 55,
+          "mutations": 1
+        },
+        {
+          "duration": 53.79999999701977,
+          "mutations": 1
+        },
+        {
+          "duration": 48.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 60.399999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 51.899999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 58.600000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 52.100000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 56.5,
+          "mutations": 1
+        },
+        {
+          "duration": 53.20000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 58.100000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 53.899999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 52.399999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 52.5,
+          "mutations": 1
+        },
+        {
+          "duration": 59.29999999701977,
+          "mutations": 1
+        },
+        {
+          "duration": 56,
+          "mutations": 1
+        },
+        {
+          "duration": 53.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 69.5,
+          "mutations": 1
+        },
+        {
+          "duration": 55.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 57.899999998509884,
+          "mutations": 1
+        },
+        {
+          "duration": 55.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 54.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 54.100000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 49.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 65.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 56.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 55.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 56.100000001490116,
+          "mutations": 1
+        },
+        {
+          "duration": 58,
+          "mutations": 1
+        },
+        {
+          "duration": 53.19999999925494,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "change-view",
+      "count": 2500,
+      "width": 1200,
+      "medianMs": 242.80000000074506,
+      "p95Ms": 354.6000000014901,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 221.10000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 206.79999999701977,
+          "mutations": 1
+        },
+        {
+          "duration": 210.5,
+          "mutations": 1
+        },
+        {
+          "duration": 242.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 268.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 237.90000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 247.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 219.79999999701977,
+          "mutations": 1
+        },
+        {
+          "duration": 261.70000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 222.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 223.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 196.5,
+          "mutations": 1
+        },
+        {
+          "duration": 196.39999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 219.10000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 197.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 218.89999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 301.70000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 227.70000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 237.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 252.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 433.5999999977648,
+          "mutations": 1
+        },
+        {
+          "duration": 348.4000000022352,
+          "mutations": 1
+        },
+        {
+          "duration": 266.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 301.5,
+          "mutations": 1
+        },
+        {
+          "duration": 301.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 267.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 231.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 354.6000000014901,
+          "mutations": 1
+        },
+        {
+          "duration": 256.1000000014901,
+          "mutations": 1
+        },
+        {
+          "duration": 351.5,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "resources",
+      "count": 2500,
+      "width": 1200,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-reservation-modal-D0p0wSbZ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/CommitmentLetterCard-DbtVV5jH.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/loadPdfLibraries-GiyLcSoQ.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/BaseModal-3uw7ujGm.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConfirmationModal-ChmaRdlI.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/useReservationSaveHandler-RZNEphHl.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConflictRecommendationPanel-Dylon4sK.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-detail-modal-BOyUz4ni.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/MergeReservationsModal-KFY_cnXk.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/phoneUtils-Y6Np2J75.js",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-command-palette-ExjuM0Pv.js",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=21296&CVER=22&X-HTTP-Session-Id=gsessionid&zx=8svs9i18q8i4&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=73465&CVER=22&X-HTTP-Session-Id=gsessionid&zx=xknq3h6kne4m&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=y8pl87xmm8pt",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=3pyzo1xmmqtf",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=45963&CVER=22&X-HTTP-Session-Id=gsessionid&zx=tyffj3pmymvv&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=3802&CVER=22&X-HTTP-Session-Id=gsessionid&zx=qy8z8ss7j3ug&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=mq5oey7n9b38",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=5bumiqrvta7",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=30211&CVER=22&X-HTTP-Session-Id=gsessionid&zx=oev1ou8kt8jm&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=3968&CVER=22&X-HTTP-Session-Id=gsessionid&zx=7iqyj8d555z1&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=f5fd4j49rwmz",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=y4tvhj5zas4c",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=38499&CVER=22&X-HTTP-Session-Id=gsessionid&zx=ai0h2upztzkd&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=q2agoe883lk2",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=93306&CVER=22&X-HTTP-Session-Id=gsessionid&zx=qt2tfhtdp7zh&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=mt1bg48m6oj0",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=39289&CVER=22&X-HTTP-Session-Id=gsessionid&zx=t3u479oiitj4&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=hjn12l85ygn3",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=55056&CVER=22&X-HTTP-Session-Id=gsessionid&zx=68cpg6wow79r&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=h5zr533hbmi1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=56036&CVER=22&X-HTTP-Session-Id=gsessionid&zx=66hups460ssb&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=jv1pzasforzf",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=69459&CVER=22&X-HTTP-Session-Id=gsessionid&zx=h20du71atlcv&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=9nbogscim17t",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=97006&CVER=22&X-HTTP-Session-Id=gsessionid&zx=bb55w9b2xglu&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=3v85c925isi6",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=40669&CVER=22&X-HTTP-Session-Id=gsessionid&zx=fd7hobsi2090&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=bdrb1vor2fw2",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=84362&CVER=22&X-HTTP-Session-Id=gsessionid&zx=s2ep2tvpoxf7&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=jk9libnhaw7l",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=71600&CVER=22&X-HTTP-Session-Id=gsessionid&zx=uyi8x9r82hcu&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=s4a9b0ilr5fy",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=97188&CVER=22&X-HTTP-Session-Id=gsessionid&zx=5qip4t3mjitr&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=tuksfnvxdg8h",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=82979&CVER=22&X-HTTP-Session-Id=gsessionid&zx=1olouevuaujp&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=ytg618wzwfz5",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=53873&CVER=22&X-HTTP-Session-Id=gsessionid&zx=xuv8hjszs53i&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=5v29s2q190a0",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=7546&CVER=22&X-HTTP-Session-Id=gsessionid&zx=401fzkb696vo&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=ct07lymntqy8",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=24809&CVER=22&X-HTTP-Session-Id=gsessionid&zx=8noh9a2njwy5&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=j3u1plta7wl8",
+          "bytes": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "initial-resources",
+      "count": 10000,
+      "width": 1200,
+      "navigation": 1060,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-reservation-modal-D0p0wSbZ.js",
+          "bytes": 25380
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/CommitmentLetterCard-DbtVV5jH.js",
+          "bytes": 17148
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/loadPdfLibraries-GiyLcSoQ.js",
+          "bytes": 796
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/BaseModal-3uw7ujGm.js",
+          "bytes": 1488
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConfirmationModal-ChmaRdlI.js",
+          "bytes": 1474
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/useReservationSaveHandler-RZNEphHl.js",
+          "bytes": 36309
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConflictRecommendationPanel-Dylon4sK.js",
+          "bytes": 4359
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-detail-modal-BOyUz4ni.js",
+          "bytes": 7141
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/MergeReservationsModal-KFY_cnXk.js",
+          "bytes": 3892
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/phoneUtils-Y6Np2J75.js",
+          "bytes": 533
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-command-palette-ExjuM0Pv.js",
+          "bytes": 5574
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        }
+      ]
+    },
+    {
+      "name": "open-form",
+      "count": 10000,
+      "width": 1200,
+      "medianMs": 2267.5,
+      "p95Ms": 3093.400000002235,
+      "domMutationMedian": 3,
+      "samples": [
+        {
+          "duration": 2069.5,
+          "mutations": 3
+        },
+        {
+          "duration": 2129.10000000149,
+          "mutations": 3
+        },
+        {
+          "duration": 3037.199999999255,
+          "mutations": 3
+        },
+        {
+          "duration": 2729.199999999255,
+          "mutations": 3
+        },
+        {
+          "duration": 2752.89999999851,
+          "mutations": 3
+        },
+        {
+          "duration": 2513.599999997765,
+          "mutations": 3
+        },
+        {
+          "duration": 3992.300000000745,
+          "mutations": 3
+        },
+        {
+          "duration": 2530,
+          "mutations": 3
+        },
+        {
+          "duration": 2521.10000000149,
+          "mutations": 3
+        },
+        {
+          "duration": 3076.199999999255,
+          "mutations": 3
+        },
+        {
+          "duration": 3093.400000002235,
+          "mutations": 3
+        },
+        {
+          "duration": 2071.10000000149,
+          "mutations": 3
+        },
+        {
+          "duration": 2696.300000000745,
+          "mutations": 3
+        },
+        {
+          "duration": 1979.0999999977648,
+          "mutations": 3
+        },
+        {
+          "duration": 3053.39999999851,
+          "mutations": 3
+        },
+        {
+          "duration": 2210,
+          "mutations": 3
+        },
+        {
+          "duration": 3019.39999999851,
+          "mutations": 3
+        },
+        {
+          "duration": 2702.2999999970198,
+          "mutations": 3
+        },
+        {
+          "duration": 2616,
+          "mutations": 3
+        },
+        {
+          "duration": 1951.5,
+          "mutations": 3
+        },
+        {
+          "duration": 1431.3999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 1527.800000000745,
+          "mutations": 3
+        },
+        {
+          "duration": 1707.199999999255,
+          "mutations": 3
+        },
+        {
+          "duration": 1473.800000000745,
+          "mutations": 3
+        },
+        {
+          "duration": 1680.8999999985099,
+          "mutations": 3
+        },
+        {
+          "duration": 2109.89999999851,
+          "mutations": 3
+        },
+        {
+          "duration": 1878.1000000014901,
+          "mutations": 3
+        },
+        {
+          "duration": 1710.5,
+          "mutations": 3
+        },
+        {
+          "duration": 2267.5,
+          "mutations": 3
+        },
+        {
+          "duration": 1622.199999999255,
+          "mutations": 3
+        }
+      ]
+    },
+    {
+      "name": "typing",
+      "count": 10000,
+      "width": 1200,
+      "medianMs": 122.90000000223517,
+      "p95Ms": 146.39999999850988,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 130.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 124.39999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 97.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 112.5,
+          "mutations": 1
+        },
+        {
+          "duration": 114.59999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 126.70000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 95.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 146.39999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 129.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 94.5,
+          "mutations": 1
+        },
+        {
+          "duration": 130.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 98.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 141.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 110,
+          "mutations": 1
+        },
+        {
+          "duration": 96.29999999701977,
+          "mutations": 1
+        },
+        {
+          "duration": 130.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 111.39999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 129.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 86.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 122.90000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 94.09999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 93.59999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 152.40000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 142.89999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 127.10000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 122.09999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 119.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 135.5,
+          "mutations": 1
+        },
+        {
+          "duration": 143.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 113.90000000223517,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "search-ui",
+      "count": 10000,
+      "width": 1200,
+      "medianMs": 84.19999999925494,
+      "p95Ms": 118.80000000074506,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 83.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 87.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 82.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 75.60000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 77.59999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 88.09999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 83.5,
+          "mutations": 1
+        },
+        {
+          "duration": 73.39999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 84.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 130.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 92.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 118.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 90.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 84.09999999776483,
+          "mutations": 1
+        },
+        {
+          "duration": 77,
+          "mutations": 1
+        },
+        {
+          "duration": 80.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 89.10000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 96.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 83.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 76.5,
+          "mutations": 1
+        },
+        {
+          "duration": 90,
+          "mutations": 1
+        },
+        {
+          "duration": 114.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 118.20000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 84.10000000149012,
+          "mutations": 1
+        },
+        {
+          "duration": 87.89999999850988,
+          "mutations": 1
+        },
+        {
+          "duration": 90.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 81.90000000223517,
+          "mutations": 1
+        },
+        {
+          "duration": 73.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 98.70000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 69.19999999925494,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "change-view",
+      "count": 10000,
+      "width": 1200,
+      "medianMs": 407.5,
+      "p95Ms": 649.1999999992549,
+      "domMutationMedian": 1,
+      "samples": [
+        {
+          "duration": 260.3999999985099,
+          "mutations": 1
+        },
+        {
+          "duration": 323.3999999985099,
+          "mutations": 1
+        },
+        {
+          "duration": 432.0999999977648,
+          "mutations": 1
+        },
+        {
+          "duration": 276.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 429.1000000014901,
+          "mutations": 1
+        },
+        {
+          "duration": 407.70000000298023,
+          "mutations": 1
+        },
+        {
+          "duration": 683.7999999970198,
+          "mutations": 1
+        },
+        {
+          "duration": 479.3999999985099,
+          "mutations": 1
+        },
+        {
+          "duration": 451,
+          "mutations": 1
+        },
+        {
+          "duration": 649.1999999992549,
+          "mutations": 1
+        },
+        {
+          "duration": 401.8999999985099,
+          "mutations": 1
+        },
+        {
+          "duration": 401.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 474.3999999985099,
+          "mutations": 1
+        },
+        {
+          "duration": 426.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 434.0999999977648,
+          "mutations": 1
+        },
+        {
+          "duration": 418.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 421.6000000014901,
+          "mutations": 1
+        },
+        {
+          "duration": 593.8000000007451,
+          "mutations": 1
+        },
+        {
+          "duration": 379.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 384.1000000014901,
+          "mutations": 1
+        },
+        {
+          "duration": 405.19999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 304.30000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 407.5,
+          "mutations": 1
+        },
+        {
+          "duration": 345.8999999985099,
+          "mutations": 1
+        },
+        {
+          "duration": 434.80000000074506,
+          "mutations": 1
+        },
+        {
+          "duration": 336.6000000014901,
+          "mutations": 1
+        },
+        {
+          "duration": 310.5999999977648,
+          "mutations": 1
+        },
+        {
+          "duration": 352.0999999977648,
+          "mutations": 1
+        },
+        {
+          "duration": 369.69999999925494,
+          "mutations": 1
+        },
+        {
+          "duration": 343.19999999925494,
+          "mutations": 1
+        }
+      ]
+    },
+    {
+      "name": "resources",
+      "count": 10000,
+      "width": 1200,
+      "resources": [
+        {
+          "url": "http://127.0.0.1:8787/assets/index-B4WNI3xw.js",
+          "bytes": 139132
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/_commonjsHelpers-Cpj98o6Y.js",
+          "bytes": 480
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-react-C2oQY_te.js",
+          "bytes": 69551
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-Bn1DMRyg.js",
+          "bytes": 1570
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-core-DmwG24Na.js",
+          "bytes": 59232
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-C89UaZPX.js",
+          "bytes": 43697
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-firebase-firestore-CO968b_4.js",
+          "bytes": 99613
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DCU46cMG.js",
+          "bytes": 7466
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-helpers-DMYb_KFI.js",
+          "bytes": 35973
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-date-fns-BEtHUkB7.js",
+          "bytes": 9734
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-feedback-C_QmgFo-.js",
+          "bytes": 10093
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/vendor-lucide-CCaTBy7I.js",
+          "bytes": 10880
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/index-DA-tcK5s.css",
+          "bytes": 21319
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/admin/purge-expired-slots",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-reservation-modal-D0p0wSbZ.js",
+          "bytes": 25380
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/CommitmentLetterCard-DbtVV5jH.js",
+          "bytes": 17148
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/loadPdfLibraries-GiyLcSoQ.js",
+          "bytes": 796
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/BaseModal-3uw7ujGm.js",
+          "bytes": 1488
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConfirmationModal-ChmaRdlI.js",
+          "bytes": 1474
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/useReservationSaveHandler-RZNEphHl.js",
+          "bytes": 36309
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/ConflictRecommendationPanel-Dylon4sK.js",
+          "bytes": 4359
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-detail-modal-BOyUz4ni.js",
+          "bytes": 7141
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/MergeReservationsModal-KFY_cnXk.js",
+          "bytes": 3892
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/phoneUtils-Y6Np2J75.js",
+          "bytes": 533
+        },
+        {
+          "url": "http://127.0.0.1:8787/assets/chunk-command-palette-ExjuM0Pv.js",
+          "bytes": 5574
+        },
+        {
+          "url": "http://127.0.0.1:8787/icon-192.png",
+          "bytes": 1575
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=52053&CVER=22&X-HTTP-Session-Id=gsessionid&zx=rint80nl5qai&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=z8y8jqo2jpej",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=86641&CVER=22&X-HTTP-Session-Id=gsessionid&zx=2ptzlsm3x885&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=6qkd2irx141i",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=85877&CVER=22&X-HTTP-Session-Id=gsessionid&zx=md9ny887ck2a&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=vdtcrpi3gfng",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=77129&CVER=22&X-HTTP-Session-Id=gsessionid&zx=9o3wpfjv2onz&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=qz4a0n8nwrdb",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=72546&CVER=22&X-HTTP-Session-Id=gsessionid&zx=axhcuji42uh4&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=60090&CVER=22&X-HTTP-Session-Id=gsessionid&zx=1fbtvbopfknx&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=empevrplhts8",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=rgfnca9gpts7",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=65006&CVER=22&X-HTTP-Session-Id=gsessionid&zx=uy12zmti2ban&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=31542&CVER=22&X-HTTP-Session-Id=gsessionid&zx=s3ar9zhplt72&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=bqp4y8ct00tw",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=ve6g0j3p95aa",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=22071&CVER=22&X-HTTP-Session-Id=gsessionid&zx=lxbw1lobipbm&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=30818&CVER=22&X-HTTP-Session-Id=gsessionid&zx=ewig3qwodjpx&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=f5kis2xwegj4",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=xlaxesv7apfm",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/v1/projects/gen-lang-client-0391852968/databases/ai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae/documents:batchGet?key=AIzaSyBJ8WzeQ_uqtGTE82Yt-5OKn8Fnv1yD9Ks",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=36609&CVER=22&X-HTTP-Session-Id=gsessionid&zx=t65muu54kqsf&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=2stlju7gi9tz",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=34725&CVER=22&X-HTTP-Session-Id=gsessionid&zx=c7q2zdb2mkxj&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=guzndwt17x6g",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=35536&CVER=22&X-HTTP-Session-Id=gsessionid&zx=tesswdi8vm6u&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=3hr0jzy3mumg",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=75663&CVER=22&X-HTTP-Session-Id=gsessionid&zx=q28h8voezi6q&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=1xqg5wyq4d6f",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=27499&CVER=22&X-HTTP-Session-Id=gsessionid&zx=dcm0crnizqzc&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=vq36suky13i1",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=63013&CVER=22&X-HTTP-Session-Id=gsessionid&zx=no93hm6ag4v7&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=az9iif4r0tat",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=52316&CVER=22&X-HTTP-Session-Id=gsessionid&zx=5l1i73bt69pp&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=vnx1kdw2wnmx",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=99192&CVER=22&X-HTTP-Session-Id=gsessionid&zx=telimb5vokt6&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=ri6q5nirjw3b",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=78776&CVER=22&X-HTTP-Session-Id=gsessionid&zx=n70t2ki686f&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=vtk1dm6iqfds",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=16991&CVER=22&X-HTTP-Session-Id=gsessionid&zx=7n0n7lyrm928&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=2sx8kovy2wn7",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=31017&CVER=22&X-HTTP-Session-Id=gsessionid&zx=e1wtj024tmzo&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=brdgp114p4cs",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=39058&CVER=22&X-HTTP-Session-Id=gsessionid&zx=wgt4elkaq1ly&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=f87p7zesuf6v",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=9217&CVER=22&X-HTTP-Session-Id=gsessionid&zx=hzs87cl0kh73&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=muqu763qydi3",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=55324&CVER=22&X-HTTP-Session-Id=gsessionid&zx=zgibuok2ylrh&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=656yl16wwdwq",
+          "bytes": 0
+        },
+        {
+          "url": "http://127.0.0.1:8787/api/email/gmail/status",
+          "bytes": 372
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=78982&CVER=22&X-HTTP-Session-Id=gsessionid&zx=qsd0w1i8yuws&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=88qkcp5bfwgf",
+          "bytes": 0
+        },
+        {
+          "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fgen-lang-client-0391852968%2Fdatabases%2Fai-studio-gestindeespacios-d2d6e668-cb02-4647-98d1-e8df0cf681ae&RID=5637&CVER=22&X-HTTP-Session-Id=gsessionid&zx=jb6b3ejympux&t=1",
+          "bytes": 0
+        },
+        {
+          "url": "https://www.google.com/images/cleardot.gif?zx=jn3rwqc1j811",
+          "bytes": 0
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

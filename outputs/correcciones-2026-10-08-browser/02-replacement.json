@@ -1,0 +1,370 @@
+{
+  "reservas": [
+    {
+      "id": "RSV_integrated-series_2",
+      "fecha": "2026-10-20",
+      "horaInicio": "10:00",
+      "horaFin": "11:00",
+      "espacio": "SALA 2",
+      "responsable": "Synthetic",
+      "descripcion": "Integrated series",
+      "tipoActividad": "Taller",
+      "actividadRecurrente": "Sí",
+      "estado": "activa",
+      "version": 1,
+      "realizada": "No",
+      "serieRecurrente": "SER_integrated-series",
+      "recurrenteId": "SER_integrated-series",
+      "indiceEnSerie": 2,
+      "totalEnSerie": 4,
+      "equipamientoSolicitado": [],
+      "createdBy": "audit-a",
+      "createdAt": "2026-10-08T20:19:10.569Z",
+      "updatedAt": "2026-10-08T20:19:10.659Z",
+      "terminaDiaSiguiente": false,
+      "editadoPor": "audit-a",
+      "lastOperationId": "e40d3fef-0843-4a6d-bf3f-599d46de4066"
+    },
+    {
+      "id": "RSV_integrated-series_3",
+      "fecha": "2026-10-27",
+      "horaInicio": "10:00",
+      "horaFin": "11:00",
+      "espacio": "SALA 2",
+      "responsable": "Synthetic",
+      "descripcion": "Integrated series",
+      "tipoActividad": "Taller",
+      "actividadRecurrente": "Sí",
+      "estado": "activa",
+      "version": 1,
+      "realizada": "No",
+      "serieRecurrente": "SER_integrated-series",
+      "recurrenteId": "SER_integrated-series",
+      "indiceEnSerie": 3,
+      "totalEnSerie": 4,
+      "equipamientoSolicitado": [],
+      "createdBy": "audit-a",
+      "createdAt": "2026-10-08T20:19:10.569Z",
+      "updatedAt": "2026-10-08T20:19:10.659Z",
+      "terminaDiaSiguiente": false,
+      "editadoPor": "audit-a",
+      "lastOperationId": "e40d3fef-0843-4a6d-bf3f-599d46de4066"
+    },
+    {
+      "id": "RSV_integrated-series_4",
+      "fecha": "2026-11-03",
+      "horaInicio": "10:00",
+      "horaFin": "11:00",
+      "espacio": "SALA 2",
+      "responsable": "Synthetic",
+      "descripcion": "Integrated series",
+      "tipoActividad": "Taller",
+      "actividadRecurrente": "Sí",
+      "estado": "activa",
+      "version": 1,
+      "realizada": "No",
+      "serieRecurrente": "SER_integrated-series",
+      "recurrenteId": "SER_integrated-series",
+      "indiceEnSerie": 4,
+      "totalEnSerie": 4,
+      "equipamientoSolicitado": [],
+      "createdBy": "audit-a",
+      "createdAt": "2026-10-08T20:19:10.569Z",
+      "updatedAt": "2026-10-08T20:19:10.659Z",
+      "terminaDiaSiguiente": false,
+      "editadoPor": "audit-a",
+      "lastOperationId": "e40d3fef-0843-4a6d-bf3f-599d46de4066"
+    },
+    {
+      "id": "integrated-replacement",
+      "fecha": "2026-10-13",
+      "horaInicio": "10:00",
+      "horaFin": "11:00",
+      "espacio": "SALA 2",
+      "responsable": "Synthetic",
+      "descripcion": "Integrated exception",
+      "tipoActividad": "Taller",
+      "actividadRecurrente": "No",
+      "estado": "activa",
+      "version": 1,
+      "realizada": "No",
+      "equipamientoSolicitado": [],
+      "createdBy": "audit-a",
+      "createdAt": "2026-10-08T20:19:10.569Z",
+      "updatedAt": "2026-10-08T20:19:11.330Z",
+      "terminaDiaSiguiente": false,
+      "editadoPor": "audit-a",
+      "lastOperationId": "58c850d3-7de3-43ab-9c7e-1f8da1b6e88a",
+      "reemplazaReservaId": "integrated-series",
+      "motivoReemplazo": "Synthetic replacement"
+    },
+    {
+      "id": "integrated-series",
+      "fecha": "2026-10-13",
+      "horaInicio": "10:00",
+      "horaFin": "11:00",
+      "espacio": "SALA 2",
+      "responsable": "Synthetic",
+      "descripcion": "Integrated series",
+      "tipoActividad": "Taller",
+      "actividadRecurrente": "Sí",
+      "estado": "cancelada",
+      "version": 2,
+      "realizada": "No",
+      "serieRecurrente": "SER_integrated-series",
+      "recurrenteId": "SER_integrated-series",
+      "indiceEnSerie": 1,
+      "totalEnSerie": 4,
+      "equipamientoSolicitado": [],
+      "createdBy": "audit-a",
+      "createdAt": "2026-10-08T20:19:10.569Z",
+      "updatedAt": "2026-10-08T20:19:11.330Z",
+      "terminaDiaSiguiente": false,
+      "editadoPor": "audit-a",
+      "lastOperationId": "58c850d3-7de3-43ab-9c7e-1f8da1b6e88a",
+      "reemplazadaPorReservaId": "integrated-replacement",
+      "motivoReemplazo": "Synthetic replacement"
+    }
+  ],
+  "slots": [
+    {
+      "fecha": "2026-10-13",
+      "espacio": "SALA 2",
+      "bookings": [
+        {
+          "id": "integrated-replacement",
+          "startMin": 600,
+          "endMin": 660,
+          "horaInicio": "10:00",
+          "horaFin": "11:00",
+          "responsable": "Synthetic",
+          "estado": "activa",
+          "exempt": false
+        }
+      ],
+      "updatedAt": "2026-10-08T20:19:11.345Z",
+      "id": "2026-10-13_SALA%202"
+    },
+    {
+      "fecha": "2026-10-20",
+      "espacio": "SALA 2",
+      "bookings": [
+        {
+          "id": "RSV_integrated-series_2",
+          "startMin": 600,
+          "endMin": 660,
+          "horaInicio": "10:00",
+          "horaFin": "11:00",
+          "responsable": "Synthetic",
+          "estado": "activa",
+          "exempt": false
+        }
+      ],
+      "updatedAt": "2026-10-08T20:19:10.684Z",
+      "id": "2026-10-20_SALA%202"
+    },
+    {
+      "fecha": "2026-10-27",
+      "espacio": "SALA 2",
+      "bookings": [
+        {
+          "id": "RSV_integrated-series_3",
+          "startMin": 600,
+          "endMin": 660,
+          "horaInicio": "10:00",
+          "horaFin": "11:00",
+          "responsable": "Synthetic",
+          "estado": "activa",
+          "exempt": false
+        }
+      ],
+      "updatedAt": "2026-10-08T20:19:10.684Z",
+      "id": "2026-10-27_SALA%202"
+    },
+    {
+      "fecha": "2026-11-03",
+      "espacio": "SALA 2",
+      "bookings": [
+        {
+          "id": "RSV_integrated-series_4",
+          "startMin": 600,
+          "endMin": 660,
+          "horaInicio": "10:00",
+          "horaFin": "11:00",
+          "responsable": "Synthetic",
+          "estado": "activa",
+          "exempt": false
+        }
+      ],
+      "updatedAt": "2026-10-08T20:19:10.684Z",
+      "id": "2026-11-03_SALA%202"
+    }
+  ],
+  "logs": [
+    {
+      "id": "AUDIT_OP_58c850d3-7de3-43ab-9c7e-1f8da1b6e88a",
+      "timestamp": "2026-10-08T20:19:11.345Z",
+      "user": "audit-a",
+      "userRole": "Administrador",
+      "action": "UPDATE",
+      "description": "Reemplazada solo una sesión con una actividad excepcional",
+      "reservaId": "integrated-series",
+      "affectedCount": 2,
+      "isReverted": false,
+      "snapshotVersion": 2,
+      "operationActor": "audit-a",
+      "fingerprint": "e115ee369f2521c7e7d5bb3e411a7bba5cc1b91418c1eaeb3e74a93a25499251",
+      "confirmedIds": [
+        "integrated-series",
+        "integrated-replacement"
+      ],
+      "operationParts": [
+        {
+          "keys": [
+            "3ba5d5fca4b2ca41617d435f_0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "AUDIT_OP_e40d3fef-0843-4a6d-bf3f-599d46de4066",
+      "timestamp": "2026-10-08T20:19:10.684Z",
+      "user": "audit-a",
+      "userRole": "Administrador",
+      "action": "BULK_IMPORT",
+      "description": "Creación confirmada",
+      "reservaId": "integrated-series",
+      "affectedCount": 4,
+      "isReverted": false,
+      "snapshotVersion": 2,
+      "operationActor": "audit-a",
+      "fingerprint": "8f5139b2c1b4199f46ffdf28941a581a4c1b75152814abbe28898b747e04dd78",
+      "confirmedIds": [
+        "integrated-series",
+        "RSV_integrated-series_2",
+        "RSV_integrated-series_3",
+        "RSV_integrated-series_4"
+      ],
+      "operationParts": [
+        {
+          "keys": [
+            "2eea4a8792a51d5bb99c7f50_0"
+          ]
+        }
+      ]
+    }
+  ],
+  "cache": [
+    {
+      "id": "integrated-replacement",
+      "fecha": "2026-10-13",
+      "horaInicio": "10:00",
+      "horaFin": "11:00",
+      "espacio": "SALA 2",
+      "responsable": "Synthetic",
+      "descripcion": "Integrated exception",
+      "tipoActividad": "Taller",
+      "actividadRecurrente": "No",
+      "estado": "activa",
+      "version": 1,
+      "realizada": "No",
+      "equipamientoSolicitado": [],
+      "createdBy": "audit-a",
+      "createdAt": "2026-10-08T20:19:10.569Z",
+      "updatedAt": "2026-10-08T20:19:11.330Z",
+      "terminaDiaSiguiente": false,
+      "editadoPor": "audit-a",
+      "lastOperationId": "58c850d3-7de3-43ab-9c7e-1f8da1b6e88a",
+      "reemplazaReservaId": "integrated-series",
+      "motivoReemplazo": "Synthetic replacement"
+    },
+    {
+      "id": "RSV_integrated-series_2",
+      "fecha": "2026-10-20",
+      "horaInicio": "10:00",
+      "horaFin": "11:00",
+      "espacio": "SALA 2",
+      "responsable": "Synthetic",
+      "descripcion": "Integrated series",
+      "tipoActividad": "Taller",
+      "actividadRecurrente": "Sí",
+      "estado": "activa",
+      "version": 1,
+      "realizada": "No",
+      "serieRecurrente": "SER_integrated-series",
+      "recurrenteId": "SER_integrated-series",
+      "indiceEnSerie": 2,
+      "totalEnSerie": 4,
+      "equipamientoSolicitado": [],
+      "createdBy": "audit-a",
+      "createdAt": "2026-10-08T20:19:10.569Z",
+      "updatedAt": "2026-10-08T20:19:10.659Z",
+      "terminaDiaSiguiente": false,
+      "editadoPor": "audit-a",
+      "lastOperationId": "e40d3fef-0843-4a6d-bf3f-599d46de4066"
+    },
+    {
+      "id": "RSV_integrated-series_3",
+      "fecha": "2026-10-27",
+      "horaInicio": "10:00",
+      "horaFin": "11:00",
+      "espacio": "SALA 2",
+      "responsable": "Synthetic",
+      "descripcion": "Integrated series",
+      "tipoActividad": "Taller",
+      "actividadRecurrente": "Sí",
+      "estado": "activa",
+      "version": 1,
+      "realizada": "No",
+      "serieRecurrente": "SER_integrated-series",
+      "recurrenteId": "SER_integrated-series",
+      "indiceEnSerie": 3,
+      "totalEnSerie": 4,
+      "equipamientoSolicitado": [],
+      "createdBy": "audit-a",
+      "createdAt": "2026-10-08T20:19:10.569Z",
+      "updatedAt": "2026-10-08T20:19:10.659Z",
+      "terminaDiaSiguiente": false,
+      "editadoPor": "audit-a",
+      "lastOperationId": "e40d3fef-0843-4a6d-bf3f-599d46de4066"
+    },
+    {
+      "id": "RSV_integrated-series_4",
+      "fecha": "2026-11-03",
+      "horaInicio": "10:00",
+      "horaFin": "11:00",
+      "espacio": "SALA 2",
+      "responsable": "Synthetic",
+      "descripcion": "Integrated series",
+      "tipoActividad": "Taller",
+      "actividadRecurrente": "Sí",
+      "estado": "activa",
+      "version": 1,
+      "realizada": "No",
+      "serieRecurrente": "SER_integrated-series",
+      "recurrenteId": "SER_integrated-series",
+      "indiceEnSerie": 4,
+      "totalEnSerie": 4,
+      "equipamientoSolicitado": [],
+      "createdBy": "audit-a",
+      "createdAt": "2026-10-08T20:19:10.569Z",
+      "updatedAt": "2026-10-08T20:19:10.659Z",
+      "terminaDiaSiguiente": false,
+      "editadoPor": "audit-a",
+      "lastOperationId": "e40d3fef-0843-4a6d-bf3f-599d46de4066"
+    }
+  ],
+  "pending": [],
+  "events": [
+    {
+      "message": "✓ Serie de 4 reservas creada y confirmada",
+      "type": "success"
+    },
+    {
+      "message": "✓ Reemplazo confirmado. Las demás fechas continúan normalmente.",
+      "type": "success"
+    }
+  ],
+  "interfaceCount": 5,
+  "formOpen": false
+}

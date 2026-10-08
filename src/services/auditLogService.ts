@@ -1,3 +1,5 @@
+import { dataRequest, usesDataApi } from '../firebase/gateway';
+import { getLastReservationAuditEntry } from './reservationWriter';
 import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import {
   collection,
@@ -6,7 +8,7 @@ import {
   orderBy,
   limit,
   Unsubscribe
-} from 'firebase/firestore';
+} from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 import {
   Reservation,
@@ -26,7 +28,7 @@ import {
 import { sanitizeAuditEntriesForLocalStorage } from './storageService';
 import { AuditNotSyncedError, fetchFullAuditEntry, persistAuditEntry } from './auditSnapshotService';
 import { auditStateRows, buildAuditRestorePlan, isDeletionAction } from '../utils/auditRestore';
-import { getDocFromServer } from 'firebase/firestore';
+import { getDocFromServer } from '../firebase/gateway';
 
 const AUDIT_COLLECTION_NAME = 'audit_logs';
 const AUDIT_STORAGE_KEY = 'cc_audit_changelog_v1';
@@ -216,6 +218,11 @@ export async function recordAuditEntry(params: {
   diffs?: AuditFieldDiff[];
   newStateIsConfirmed?: boolean;
 }): Promise<AuditChangeLogEntry> {
+  if(usesDataApi()){
+    const receipt=params.previousState||params.newState?getLastReservationAuditEntry():(await dataRequest('/api/audit/record',{action:params.action,description:params.description,reservaId:params.reservaId})).entry;
+    if(!receipt)throw new Error('La evidencia se crea al confirmar la operación de reservas.');
+    saveAuditHistory(mergeAuditHistory(getAuditHistory(),[receipt]));return receipt;
+  }
   await hydrateAuditHistory();
   const authorName =
     typeof params.user === 'string'
