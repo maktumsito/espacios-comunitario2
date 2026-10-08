@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from './reservationVisuals';
 import { isDispatchableReservation } from './activityDispatchSelection';
 import type { Table, UserOptions } from 'jspdf-autotable';
 import type { jsPDF } from 'jspdf';
@@ -302,9 +303,9 @@ export async function generateDailySchedulePdf(options: DailySchedulePdfOptions)
       return [
         formatDateDDMMYYYY(imp.fecha),
         `${imp.horaInicio || ''}-${imp.horaFin || ''}`,
-        (imp.espacio || '').toUpperCase(),
-        `${(imp.tipoActividad || 'ACTIVIDAD').toUpperCase()}${imp.descripcion ? '\n' + imp.descripcion.toUpperCase() : ''}${eqText}`,
-        (imp.responsable || '-').toLowerCase()
+        formatDisplayTitle(imp.espacio),
+        `${formatDisplayTitle(imp.tipoActividad || 'ACTIVIDAD')}${imp.descripcion ? '\n' + formatDisplayTitle(imp.descripcion) : ''}${eqText}`,
+        formatDisplayTitle(imp.responsable || '-')
       ];
     });
 
@@ -360,17 +361,17 @@ export async function generateDailySchedulePdf(options: DailySchedulePdfOptions)
       bookings.length > 0 ? bookings.map(booking => ({ spaceName, booking })) : [{ spaceName, booking: null }]
     );
     const rows = entries.map(({ spaceName, booking: b }) => {
-      if (!b) return [spaceName, '-', 'Sin reservas programadas', '-'];
+      if (!b) return [formatDisplayTitle(spaceName), '-', 'Sin reservas programadas', '-'];
       const equipment = b.equipamientoSolicitado?.length
         ? '\nEquipamiento: ' + b.equipamientoSolicitado.map(e => e.equipmentName + ' (x' + e.quantity + ')').join(', ')
         : '';
       return [
-        spaceName,
+        formatDisplayTitle(spaceName),
         (b.horaInicio || '') + ' - ' + (b.horaFin || ''),
-        (b.tipoActividad || 'ACTIVIDAD').toUpperCase() + (b.importante === 'Sí' ? ' [IMPORTANTE]' : '')
-          + (b.descripcion ? '\n' + b.descripcion : '') + equipment
+        formatDisplayTitle(b.tipoActividad || 'ACTIVIDAD') + (b.importante === 'Sí' ? ' [IMPORTANTE]' : '')
+          + (b.descripcion ? '\n' + formatDisplayTitle(b.descripcion) : '') + equipment
           + (b.comentarios ? '\nNota: ' + b.comentarios : ''),
-        b.responsable || '-'
+        formatDisplayTitle(b.responsable || '-')
       ];
     });
     const tableWidth = pageWidth - margin * 2;

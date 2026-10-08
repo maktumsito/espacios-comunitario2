@@ -204,7 +204,7 @@ const CalendarEventTag = memo<CalendarEventTagProps>(({
       onClick={handleClick}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
-      aria-label={`Actividad: ${displayTitle} a las ${reservation.horaInicio} en ${reservation.espacio}`}
+      aria-label={`Actividad: ${displayTitle} a las ${reservation.horaInicio} en ${formatDisplayTitle(reservation.espacio)}`}
       className={`w-full text-left relative text-[10px] px-1.5 py-0.5 rounded truncate font-medium text-white flex items-center space-x-1 shadow-xs transition hover:opacity-90 hover:scale-[1.02] cursor-pointer border-0 ${
         isCancelled ? 'opacity-50 line-through grayscale-[50%]' : ''
       }`}
@@ -241,17 +241,17 @@ const CalendarEventTag = memo<CalendarEventTagProps>(({
           </div>
           <div className="text-[11px] text-slate-300 flex items-center gap-1">
             <MapPin className="w-3 h-3 text-slate-400" />
-            <span>{reservation.espacio}</span>
+            <span>{formatDisplayTitle(reservation.espacio)}</span>
           </div>
           {reservation.responsable && (
             <div className="text-[11px] text-slate-300 flex items-center gap-1">
               <User className="w-3 h-3 text-slate-400" />
-              <span>{reservation.responsable}</span>
+              <span>{formatDisplayTitle(reservation.responsable)}</span>
             </div>
           )}
           {reservation.tipoActividad && (
             <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800">
-              Tipo: <span className="text-slate-200 font-semibold">{reservation.tipoActividad}</span>
+              Tipo: <span className="text-slate-200 font-semibold">{formatDisplayTitle(reservation.tipoActividad)}</span>
             </div>
           )}
         </div>
@@ -429,8 +429,8 @@ const AgendaReservationCard = memo<AgendaReservationCardProps>(({
     <button
       type="button"
       onClick={handleClick}
-      aria-label={`Ver detalles de reserva: ${displayTitle}, ${reservation.horaInicio} a ${reservation.horaFin} en ${reservation.espacio}, solicitante ${reservation.responsable}`}
-      title={`${displayTitle}\nTipo de actividad: ${reservation.tipoActividad || typeVisual.label}\nResponsable: ${reservation.responsable || 'No especificado'}\nHorario: ${reservation.horaInicio} – ${reservation.horaFin}\nEspacio: ${reservation.espacio}${reservation.telefonoContacto ? `\nTeléfono: ${reservation.telefonoContacto}` : ''}\n\n(Haz clic para abrir detalles completos)`}
+      aria-label={`Ver detalles de reserva: ${displayTitle}, ${reservation.horaInicio} a ${reservation.horaFin} en ${formatDisplayTitle(reservation.espacio)}, solicitante ${formatDisplayTitle(reservation.responsable)}`}
+      title={`${displayTitle}\nTipo de actividad: ${formatDisplayTitle(reservation.tipoActividad || typeVisual.label)}\nResponsable: ${formatDisplayTitle(reservation.responsable || 'No especificado')}\nHorario: ${reservation.horaInicio} – ${reservation.horaFin}\nEspacio: ${formatDisplayTitle(reservation.espacio)}${reservation.telefonoContacto ? `\nTeléfono: ${reservation.telefonoContacto}` : ''}\n\n(Haz clic para abrir detalles completos)`}
       className={`w-full text-left bg-slate-50 hover:bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-2.5 sm:p-3 space-y-1.5 transition-all shadow-xs cursor-pointer relative overflow-hidden group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:z-10 ${
         isCancelled ? 'opacity-60 bg-slate-100/80' : ''
       }`}
@@ -491,7 +491,7 @@ const AgendaReservationCard = memo<AgendaReservationCardProps>(({
       <div className="pl-1 pt-1.5 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-600 gap-2 min-w-0">
         <div className="flex items-center space-x-1 min-w-0 flex-1 font-medium text-slate-800">
           <MapPin className="w-3 h-3 shrink-0" style={{ color: spaceColor }} />
-          <span className="truncate">{reservation.espacio}</span>
+          <span className="truncate">{formatDisplayTitle(reservation.espacio)}</span>
         </div>
       </div>
     </button>

@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useRef, useState } from 'react';
 import type { Reservation } from '../types';
 import type { RecurringMoveScope } from '../utils/recurringEdits';
@@ -31,8 +32,8 @@ export function RecurringMoveScopeModal({ original, target, onCancel, onConfirm 
       <button type="button" disabled={busy} onClick={() => void confirm()} className="px-4 py-2 rounded-xl bg-indigo-600 text-white disabled:opacity-50">{busy ? 'Guardando…' : 'Confirmar movimiento'}</button>
     </div>}>
     <div className="space-y-4 text-sm">
-      <p><strong>{original.descripcion || original.tipoActividad}</strong> · {formatDateDDMMYYYY(original.fecha)}</p>
-      <p>{original.espacio} ({original.horaInicio}–{original.horaFin}) → <strong>{target.espacio} ({target.horaInicio}–{target.horaFin})</strong></p>
+      <p><strong>{formatDisplayTitle(original.descripcion || original.tipoActividad)}</strong> · {formatDateDDMMYYYY(original.fecha)}</p>
+      <p>{formatDisplayTitle(original.espacio)} ({original.horaInicio}–{original.horaFin}) → <strong>{formatDisplayTitle(target.espacio)} ({target.horaInicio}–{target.horaFin})</strong></p>
       <fieldset disabled={busy} className="space-y-2">
         <legend className="font-semibold mb-2">¿A qué reservas aplicar el movimiento?</legend>
         {([

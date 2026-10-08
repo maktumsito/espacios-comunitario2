@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
 import { showPrintBlob } from '../utils/printWindow';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -290,7 +291,7 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
     .space-title {
       font-size: 12px;
       font-weight: 700;
-      text-transform: uppercase;
+      text-transform: none;
       letter-spacing: 0.05em;
       color: #475569;
       margin-bottom: 6px;
@@ -320,12 +321,12 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
     }
     .act-title {
       font-weight: 700;
-      text-transform: uppercase;
+      text-transform: none;
       color: #0f172a;
       font-size: 11px;
     }
     .act-desc {
-      text-transform: uppercase;
+      text-transform: none;
       font-size: 11px;
       color: #334155;
       margin-top: 2px;
@@ -477,9 +478,9 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
         return [
           formatDateDDMMYYYY(imp.fecha),
           `${imp.horaInicio || ''}-${imp.horaFin || ''}`,
-          (imp.espacio || '').toUpperCase(),
-          `${(imp.tipoActividad || 'ACTIVIDAD').toUpperCase()}${imp.descripcion ? '\n' + imp.descripcion.toUpperCase() : ''}${eqText}`,
-          (imp.responsable || '-').toLowerCase()
+          formatDisplayTitle(imp.espacio),
+          `${formatDisplayTitle(imp.tipoActividad || 'ACTIVIDAD')}${imp.descripcion ? '\n' + formatDisplayTitle(imp.descripcion) : ''}${eqText}`,
+          formatDisplayTitle(imp.responsable || '-')
         ];
       });
 
@@ -535,7 +536,7 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9.5);
         doc.setTextColor(71, 85, 105); // #475569
-        doc.text(spaceName.toUpperCase(), margin, currentY);
+        doc.text(formatDisplayTitle(spaceName), margin, currentY);
         currentY += 2;
 
         const rows = bookings.length === 0
@@ -545,11 +546,11 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
               const eqText = b.equipamientoSolicitado && b.equipamientoSolicitado.length > 0
                 ? `\n[Equipamiento y Recursos (${b.equipamientoSolicitado.reduce((acc, curr) => acc + curr.quantity, 0)}): ${b.equipamientoSolicitado.map((e) => `${e.equipmentName} (x${e.quantity})`).join(', ')}]`
                 : '';
-              const actText = `${(b.tipoActividad || 'ACTIVIDAD').toUpperCase()}${isImp ? ' [★ IMPORTANTE]' : ''}${b.descripcion ? '\n' + b.descripcion.toUpperCase() : ''}${eqText}${b.comentarios ? '\nNota: ' + b.comentarios : ''}`;
+              const actText = `${formatDisplayTitle(b.tipoActividad || 'ACTIVIDAD')}${isImp ? ' [★ IMPORTANTE]' : ''}${b.descripcion ? '\n' + formatDisplayTitle(b.descripcion) : ''}${eqText}${b.comentarios ? '\nNota: ' + b.comentarios : ''}`;
               return [
                 `${b.horaInicio || ''}-${b.horaFin || ''}`,
                 actText,
-                (b.responsable || '-').toLowerCase(),
+                formatDisplayTitle(b.responsable || '-'),
                 formatDateDDMMYYYY(b.fecha || selectedDateStr)
               ];
             });
@@ -912,15 +913,15 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
                         <td className="border border-amber-200 px-2.5 py-1.5 font-mono text-[11px]">
                           {imp.horaInicio}-{imp.horaFin}
                         </td>
-                        <td className="border border-amber-200 px-2.5 py-1.5 font-bold uppercase text-[11px]">
-                          {imp.espacio}
+                        <td className="border border-amber-200 px-2.5 py-1.5 font-bold normal-case text-[11px]">
+                          {formatDisplayTitle(imp.espacio)}
                         </td>
                         <td className="border border-amber-200 px-2.5 py-1.5">
-                          <div className="font-bold text-amber-950 uppercase text-[11px]">
-                            {imp.tipoActividad || 'ACTIVIDAD'}
+                          <div className="font-bold text-amber-950 normal-case text-[11px]">
+                            {formatDisplayTitle(imp.tipoActividad || 'ACTIVIDAD')}
                           </div>
-                          <div className="text-[11px] text-slate-800 uppercase leading-snug">
-                            {imp.descripcion || '-'}
+                          <div className="text-[11px] text-slate-800 normal-case leading-snug">
+                            {formatDisplayTitle(imp.descripcion || '-')}
                           </div>
                           {imp.equipamientoSolicitado && imp.equipamientoSolicitado.length > 0 && (
                             <div className="mt-1 p-1 bg-amber-100/70 rounded border border-amber-200 text-[10px] text-amber-950 flex flex-wrap items-center gap-1">
@@ -934,8 +935,8 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
                             </div>
                           )}
                         </td>
-                        <td className="border border-amber-200 px-2.5 py-1.5 text-slate-800 lowercase">
-                          {imp.responsable}
+                        <td className="border border-amber-200 px-2.5 py-1.5 text-slate-800 normal-case">
+                          {formatDisplayTitle(imp.responsable)}
                         </td>
                       </tr>
                     ))}
@@ -953,8 +954,8 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
               visibleSpaces.map(({ spaceName, bookings }) => (
                 <div key={spaceName} className="mb-6 page-break-avoid">
                   {/* Space Title Header */}
-                  <div className="text-slate-500 font-bold uppercase text-xs sm:text-sm tracking-wider mb-1.5">
-                    {spaceName}
+                  <div className="text-slate-500 font-bold normal-case text-xs sm:text-sm tracking-wider mb-1.5">
+                    {formatDisplayTitle(spaceName)}
                   </div>
 
                   {/* Reservations Table */}
@@ -993,8 +994,8 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
                               {/* Actividad */}
                               <td className="border border-slate-300 px-3 py-2 align-top text-slate-900">
                                 <div className="flex items-center space-x-1.5">
-                                  <span className="font-bold uppercase text-slate-900 text-[11px]">
-                                    {b.tipoActividad || 'ACTIVIDAD'}
+                                  <span className="font-bold normal-case text-slate-900 text-[11px]">
+                                    {formatDisplayTitle(b.tipoActividad || 'ACTIVIDAD')}
                                   </span>
                                   {isImportant && (
                                     <span className="inline-flex items-center text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-200 text-amber-900 border border-amber-300">
@@ -1002,8 +1003,8 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
                                     </span>
                                   )}
                                 </div>
-                                <div className="text-slate-800 uppercase text-[11px] font-normal leading-snug mt-0.5">
-                                  {b.descripcion || '-'}
+                                <div className="text-slate-800 normal-case text-[11px] font-normal leading-snug mt-0.5">
+                                  {formatDisplayTitle(b.descripcion || '-')}
                                 </div>
                                 {b.equipamientoSolicitado && b.equipamientoSolicitado.length > 0 && (
                                   <div className="mt-1 p-1 bg-slate-100 rounded border border-slate-200 text-[10px] text-slate-800 flex flex-wrap items-center gap-1">
@@ -1024,8 +1025,8 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
                               </td>
 
                               {/* Responsable */}
-                              <td className="border border-slate-300 px-3 py-2 align-top text-slate-800 lowercase text-[11px]">
-                                {b.responsable || '-'}
+                              <td className="border border-slate-300 px-3 py-2 align-top text-slate-800 normal-case text-[11px]">
+                                {formatDisplayTitle(b.responsable || '-')}
                               </td>
 
                               {/* Fecha */}

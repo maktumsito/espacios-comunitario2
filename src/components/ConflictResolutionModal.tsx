@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useMemo } from 'react';
 import { Reservation, SpaceInfo, CustomScheduleSlot, ConflictSavePayload } from '../types';
@@ -1190,10 +1191,10 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
                                         className="bg-white px-2.5 py-1.5 rounded-lg border border-rose-200 flex items-center justify-between text-[11px]"
                                       >
                                         <span className="font-bold text-slate-800 truncate pr-2">
-                                          {c.tipoActividad}: {c.descripcion}
+                                          {formatDisplayTitle(c.tipoActividad)}: {formatDisplayTitle(c.descripcion)}
                                         </span>
                                         <span className="font-mono text-slate-500 shrink-0">
-                                          {c.horaInicio} - {c.horaFin} ({c.responsable})
+                                          {c.horaInicio} - {c.horaFin} ({formatDisplayTitle(c.responsable)})
                                         </span>
                                       </div>
                                     ))}

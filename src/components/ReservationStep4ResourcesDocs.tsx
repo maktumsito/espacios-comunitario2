@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useState } from 'react';
 import {
   Package,
@@ -154,7 +155,7 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
         {showAiAssistant && (
           <div className="pt-2 border-t border-indigo-200/70 space-y-2.5 text-xs text-indigo-950">
             <p className="text-[11px] text-slate-600">
-              Selecciona el tipo de requerimiento o describe la actividad para autocompletar el equipamiento sugerido según la capacidad del espacio ({formData.espacio || 'seleccionado'}).
+              Selecciona el tipo de requerimiento o describe la actividad para autocompletar el equipamiento sugerido según la capacidad del espacio ({formatDisplayTitle(formData.espacio || 'seleccionado')}).
             </p>
             <div className="flex flex-wrap gap-1.5">
               {[

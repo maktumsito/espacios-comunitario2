@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import {
   Flame,
@@ -76,7 +77,7 @@ export const ReservationConflictBanner: React.FC<ReservationConflictBannerProps>
           <p className="text-xs text-rose-800">
             {candidateConflictDates.length > 1
               ? `Se detectaron coincidencias de horario en ${candidateConflictDates.length} de las fechas programadas para esta reserva. Puedes aplicar soluciones masivas o individuales.`
-              : `El espacio ${formData.espacio} ya está ocupado en la fecha ${formatDateDDMMYYYY(formData.fecha || '')} durante el bloque seleccionado (${formData.horaInicio} - ${formData.horaFin}).`}
+              : `El espacio ${formatDisplayTitle(formData.espacio)} ya está ocupado en la fecha ${formatDateDDMMYYYY(formData.fecha || '')} durante el bloque seleccionado (${formData.horaInicio} - ${formData.horaFin}).`}
           </p>
 
           {/* Detalle de reservas existentes con botón de mover inmediatamente después */}
@@ -88,13 +89,13 @@ export const ReservationConflictBanner: React.FC<ReservationConflictBannerProps>
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center space-x-1.5 font-bold text-slate-800">
-                    <span className="truncate">{c.tipoActividad}: {c.descripcion}</span>
+                    <span className="truncate">{formatDisplayTitle(c.tipoActividad)}: {formatDisplayTitle(c.descripcion)}</span>
                   </div>
                   <div className="text-[11px] text-slate-500 font-mono flex items-center space-x-2 mt-0.5">
                     <Clock className="w-3 h-3 text-slate-400" />
                     <span>{c.horaInicio} - {c.horaFin}</span>
                     <span>•</span>
-                    <span className="truncate">Resp: {c.responsable}</span>
+                    <span className="truncate">Resp: {formatDisplayTitle(c.responsable)}</span>
                   </div>
                 </div>
 

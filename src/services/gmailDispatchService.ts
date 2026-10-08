@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { gmailServerRequest, waitForGmailPopup, type GmailServerStatus } from './gmailConnectionClient';
 import { filterDatesToDispatchWeek, isDispatchLoan } from '../utils/activityDispatchSelection';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User, signOut } from 'firebase/auth';
@@ -806,9 +807,9 @@ export function generateActivitiesEmailContent({
       text += `  Sin actividades registradas para esta fecha.\n`;
     } else {
       list.forEach((act, idx) => {
-        text += `  ${idx + 1}. [${act.horaInicio} - ${act.horaFin}] ${act.espacio}\n`;
-        text += `     Actividad: ${act.tipoActividad}${act.descripcion ? ` - ${act.descripcion}` : ''}\n`;
-        text += `     Responsable: ${act.responsable}`;
+        text += `  ${idx + 1}. [${act.horaInicio} - ${act.horaFin}] ${formatDisplayTitle(act.espacio)}\n`;
+        text += `     Actividad: ${formatDisplayTitle(act.tipoActividad)}${act.descripcion ? ` - ${formatDisplayTitle(act.descripcion)}` : ''}\n`;
+        text += `     Responsable: ${formatDisplayTitle(act.responsable)}`;
         if (includeResponsibleContact && (act.telefonoContacto || act.emailContacto)) {
           text += ` (${[act.telefonoContacto, act.emailContacto].filter(Boolean).join(', ')})`;
         }
@@ -917,13 +918,13 @@ export function generateActivitiesEmailContent({
               ${act.cantidadParticipantes ? `<div style="font-size: 10px; color: #64748b; margin-top: 4px;">👥 ${act.cantidadParticipantes} pers.</div>` : ''}
             </td>
             <td>
-              <div class="space-name">${act.espacio}</div>
-              ${act.tipoPrestamo ? `<div style="font-size: 10px; color: #64748b;">${act.tipoPrestamo}</div>` : ''}
+              <div class="space-name">${formatDisplayTitle(act.espacio)}</div>
+              ${act.tipoPrestamo ? `<div style="font-size: 10px; color: #64748b;">${formatDisplayTitle(act.tipoPrestamo)}</div>` : ''}
             </td>
             <td>
-              <div class="activity-type">${act.tipoActividad}</div>
-              ${act.descripcion ? `<div class="desc-text">${act.descripcion}</div>` : ''}
-              <div class="resp-text" style="margin-top: 4px;"><strong>Resp:</strong> ${act.responsable}</div>
+              <div class="activity-type">${formatDisplayTitle(act.tipoActividad)}</div>
+              ${act.descripcion ? `<div class="desc-text">${formatDisplayTitle(act.descripcion)}</div>` : ''}
+              <div class="resp-text" style="margin-top: 4px;"><strong>Resp:</strong> ${formatDisplayTitle(act.responsable)}</div>
               ${includeResponsibleContact && contactInfo ? `<div class="contact-subtext">📞 ${contactInfo}</div>` : ''}
               ${includeObservations && act.comentarios ? `<div class="comment-box">💬 ${act.comentarios}</div>` : ''}
             </td>

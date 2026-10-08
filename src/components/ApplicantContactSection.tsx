@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import {
   User,
@@ -164,12 +165,12 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
             <p className="font-bold text-amber-900">Aviso de Capacidad y Aforo Sugerido (Informativo):</p>
             {primarySpaceCapacityWarning.hasWarning && (
               <p className="text-amber-800 text-[11px]">
-                • <strong>{formData.espacio || 'Espacio principal'}:</strong> Aforo sugerido de <strong>{primarySpaceCapacityWarning.recommendedCapacity} personas</strong> (has indicado {primarySpaceCapacityWarning.requestedCount} participantes).
+                • <strong>{formatDisplayTitle(formData.espacio || 'Espacio principal')}:</strong> Aforo sugerido de <strong>{primarySpaceCapacityWarning.recommendedCapacity} personas</strong> (has indicado {primarySpaceCapacityWarning.requestedCount} participantes).
               </p>
             )}
             {secondSpaceCapacityWarning && secondSpaceCapacityWarning.hasWarning && (
               <p className="text-amber-800 text-[11px]">
-                • <strong>2° Espacio ({singleSecondSpace}):</strong> Aforo sugerido de <strong>{secondSpaceCapacityWarning.recommendedCapacity} personas</strong> (has indicado {secondSpaceCapacityWarning.requestedCount} participantes).
+                • <strong>2° Espacio ({formatDisplayTitle(singleSecondSpace)}):</strong> Aforo sugerido de <strong>{secondSpaceCapacityWarning.recommendedCapacity} personas</strong> (has indicado {secondSpaceCapacityWarning.requestedCount} participantes).
               </p>
             )}
             <p className="text-[10px] text-amber-700/90 italic pt-0.5">
@@ -317,8 +318,8 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
                 </div>
                 <p className="text-[11px] text-slate-500">
                   {formData.requiereCartaCompromiso
-                    ? `Carta de compromiso activada para ${formData.tipoActividad || 'esta actividad'}. Se habilitan opciones de descarga y previsualización.`
-                    : `Esta actividad (${formData.tipoActividad || 'general'}) no la requiere por defecto. Haz clic para activarla.`}
+                    ? `Carta de compromiso activada para ${formatDisplayTitle(formData.tipoActividad || 'esta actividad')}. Se habilitan opciones de descarga y previsualización.`
+                    : `Esta actividad (${formatDisplayTitle(formData.tipoActividad || 'general')}) no la requiere por defecto. Haz clic para activarla.`}
                 </p>
               </label>
             </div>
@@ -435,7 +436,7 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
               <ul className="list-disc list-inside space-y-0.5 text-rose-800">
                 {responsibleHistoryAlert.incidents.map((inc, i) => (
                   <li key={i}>
-                    <strong>{formatDateDDMMYYYY(inc.fecha)} ({inc.espacio}):</strong> {inc.huboDanos ? `Daños: ${inc.detalleDanos || 'Sí'}` : ''} {inc.dejoBasura ? '• Dejó basura acumulada' : ''} {inc.observaciones ? `• "${inc.observaciones}"` : ''} (Evaluador: {inc.auxiliarName})
+                    <strong>{formatDateDDMMYYYY(inc.fecha)} ({formatDisplayTitle(inc.espacio)}):</strong> {inc.huboDanos ? `Daños: ${inc.detalleDanos || 'Sí'}` : ''} {inc.dejoBasura ? '• Dejó basura acumulada' : ''} {inc.observaciones ? `• "${inc.observaciones}"` : ''} (Evaluador: {inc.auxiliarName})
                   </li>
                 ))}
               </ul>

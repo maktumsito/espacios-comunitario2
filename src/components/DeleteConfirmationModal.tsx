@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useState, useEffect } from 'react';
 import { Reservation, isSingleDayMultiSpaceReservation } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
@@ -149,8 +150,8 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
                 className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: spaceColor }}
               />
-              <span className="font-bold text-slate-800 uppercase tracking-wide">
-                {reservation.espacio}
+              <span className="font-bold text-slate-800 normal-case tracking-wide">
+                {formatDisplayTitle(reservation.espacio)}
               </span>
             </div>
             {isMultiSpace ? (
@@ -166,10 +167,10 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
           </div>
 
           <div className="font-semibold text-slate-900 text-sm">
-            {reservation.tipoActividad}
+            {formatDisplayTitle(reservation.tipoActividad)}
             {reservation.descripcion && (
               <span className="font-normal text-slate-600 ml-1">
-                — {reservation.descripcion}
+                — {formatDisplayTitle(reservation.descripcion)}
               </span>
             )}
           </div>
@@ -226,7 +227,7 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold text-slate-900 group-hover:text-amber-950">
                       {isMultiSpace
-                        ? `Solicitar eliminar solo este espacio (${reservation.espacio})`
+                        ? `Solicitar eliminar solo este espacio (${formatDisplayTitle(reservation.espacio)})`
                         : `Solicitar eliminar solo esta fecha (${formatDateDDMMYYYY(reservation.fecha)})`}
                     </div>
                     <p className="text-[11px] text-slate-500 mt-0.5">
@@ -314,7 +315,7 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
               <div className="space-y-3">
                 <p className="text-xs text-slate-700 font-medium leading-relaxed">
                   {isMultiSpace ? (
-                    <>¿Deseas eliminar <strong>únicamente este espacio ({reservation.espacio})</strong> o <strong>ambos espacios reservados</strong> para esta fecha?</>
+                    <>¿Deseas eliminar <strong>únicamente este espacio ({formatDisplayTitle(reservation.espacio)})</strong> o <strong>ambos espacios reservados</strong> para esta fecha?</>
                   ) : (
                     <>¿Deseas eliminar <strong>únicamente la reserva actual</strong> de esta fecha o <strong>todas las reservas recurrentes</strong> de la serie?</>
                   )}
@@ -336,7 +337,7 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-bold text-slate-900 group-hover:text-rose-900">
                         {isMultiSpace
-                          ? `Eliminar solo este espacio (${reservation.espacio})`
+                          ? `Eliminar solo este espacio (${formatDisplayTitle(reservation.espacio)})`
                           : `Eliminar solo la reserva actual (${formatDateDDMMYYYY(reservation.fecha)})`}
                       </div>
                       <p className="text-[11px] text-slate-500 mt-0.5">

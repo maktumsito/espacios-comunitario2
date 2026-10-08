@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useState, useMemo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Reservation, SpaceRating, ApplicantSummary } from '../types';
@@ -394,7 +395,7 @@ export const ApplicantDirectoryView: React.FC<ApplicantDirectoryViewProps> = ({
                     Ficha de Solicitante
                   </span>
                   <h2 className="text-lg font-black text-slate-900 leading-tight">
-                    {selectedApplicant.responsable}
+                    {formatDisplayTitle(selectedApplicant.responsable)}
                   </h2>
                   {selectedApplicant.rut && (
                     <p className="text-xs text-slate-500 font-mono mt-0.5">
@@ -423,7 +424,7 @@ export const ApplicantDirectoryView: React.FC<ApplicantDirectoryViewProps> = ({
                         <a
                           href={phoneAction.telHref}
                           className="font-semibold text-slate-800 hover:text-blue-700 hover:underline transition truncate"
-                          title={`Llamar a ${selectedApplicant.responsable} (${selectedApplicant.telefonoContacto})`}
+                          title={`Llamar a ${formatDisplayTitle(selectedApplicant.responsable)} (${selectedApplicant.telefonoContacto})`}
                         >
                           {selectedApplicant.telefonoContacto}
                         </a>
@@ -504,7 +505,7 @@ export const ApplicantDirectoryView: React.FC<ApplicantDirectoryViewProps> = ({
                         key={res.id}
                         role="button"
                         tabIndex={0}
-                        aria-label={`Ver detalles de la reserva del ${formatDateDDMMYYYY(res.fecha)}: ${res.espacio}`}
+                        aria-label={`Ver detalles de la reserva del ${formatDateDDMMYYYY(res.fecha)}: ${formatDisplayTitle(res.espacio)}`}
                         onClick={() => onSelectReservation && onSelectReservation(res)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
@@ -527,7 +528,7 @@ export const ApplicantDirectoryView: React.FC<ApplicantDirectoryViewProps> = ({
                             )}
                           </div>
                           <span className="text-[11px] text-slate-600 block truncate mt-0.5">
-                            {res.espacio} • {res.tipoActividad} {res.descripcion ? `(${res.descripcion})` : ''}
+                            {formatDisplayTitle(res.espacio)} • {formatDisplayTitle(res.tipoActividad)} {res.descripcion ? `(${formatDisplayTitle(res.descripcion)})` : ''}
                           </span>
                         </div>
 
@@ -560,7 +561,7 @@ export const ApplicantDirectoryView: React.FC<ApplicantDirectoryViewProps> = ({
                         }`}
                       >
                         <div className="flex items-center justify-between font-bold">
-                          <span>{formatDateDDMMYYYY(rat.fecha)} - {rat.espacio}</span>
+                          <span>{formatDateDDMMYYYY(rat.fecha)} - {formatDisplayTitle(rat.espacio)}</span>
                           <span className="flex items-center gap-0.5 text-amber-600">
                             ★ {rat.puntajeGeneral}/5
                           </span>

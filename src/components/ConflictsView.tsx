@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useState, useMemo } from 'react';
 import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from './common/PaginationControls';
@@ -145,8 +146,8 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 text-xs">{res.tipoActividad || res.descripcion || 'Reserva'}</span>
-                      <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold">{mc.espacio}</span>
+                      <span className="font-bold text-slate-900 text-xs">{formatDisplayTitle(res.tipoActividad || res.descripcion || 'Reserva')}</span>
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold">{formatDisplayTitle(mc.espacio)}</span>
                       <span className="text-xs px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-semibold">{mc.block.motivo}</span>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-slate-500">
@@ -160,7 +161,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                       </span>
                       <span className="flex items-center gap-1">
                         <User className="w-3.5 h-3.5 text-slate-400" />
-                        {res.responsable || 'Sin responsable'}
+                        {formatDisplayTitle(res.responsable || 'Sin responsable')}
                       </span>
                     </div>
                   </div>
@@ -224,7 +225,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                     <div>
                       <div className="flex items-center space-x-2">
                         <span className="font-extrabold text-sm text-slate-900">
-                          {conflict.espacio}
+                          {formatDisplayTitle(conflict.espacio)}
                         </span>
                         <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
                           {formatDateDDMMYYYY(conflict.fecha)}
@@ -259,15 +260,15 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
 
                       <div>
                         <h4 className="font-bold text-sm text-slate-900">
-                          {conflict.reservaA.descripcion || conflict.reservaA.tipoActividad}
+                          {formatDisplayTitle(conflict.reservaA.descripcion || conflict.reservaA.tipoActividad)}
                         </h4>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Tipo: <span className="font-medium text-slate-700">{conflict.reservaA.tipoActividad}</span>
+                          Tipo: <span className="font-medium text-slate-700">{formatDisplayTitle(conflict.reservaA.tipoActividad)}</span>
                         </p>
                       </div>
 
                       <div className="text-xs text-slate-600 flex items-center justify-between pt-2 border-t border-slate-200">
-                        <span>Responsable: <strong className="text-slate-800">{conflict.reservaA.responsable}</strong></span>
+                        <span>Responsable: <strong className="text-slate-800">{formatDisplayTitle(conflict.reservaA.responsable)}</strong></span>
                         {conflict.reservaA.telefonoContacto && (
                           <span className="text-[11px] text-slate-500 font-mono">{conflict.reservaA.telefonoContacto}</span>
                         )}
@@ -307,15 +308,15 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
 
                       <div>
                         <h4 className="font-bold text-sm text-slate-900">
-                          {conflict.reservaB.descripcion || conflict.reservaB.tipoActividad}
+                          {formatDisplayTitle(conflict.reservaB.descripcion || conflict.reservaB.tipoActividad)}
                         </h4>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Tipo: <span className="font-medium text-slate-700">{conflict.reservaB.tipoActividad}</span>
+                          Tipo: <span className="font-medium text-slate-700">{formatDisplayTitle(conflict.reservaB.tipoActividad)}</span>
                         </p>
                       </div>
 
                       <div className="text-xs text-slate-600 flex items-center justify-between pt-2 border-t border-rose-200">
-                        <span>Responsable: <strong className="text-slate-800">{conflict.reservaB.responsable}</strong></span>
+                        <span>Responsable: <strong className="text-slate-800">{formatDisplayTitle(conflict.reservaB.responsable)}</strong></span>
                         {conflict.reservaB.telefonoContacto && (
                           <span className="text-[11px] text-slate-500 font-mono">{conflict.reservaB.telefonoContacto}</span>
                         )}

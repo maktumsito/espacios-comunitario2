@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useMemo } from 'react';
 import { Clock, CheckCircle2, AlertTriangle, Sparkles, Hammer } from 'lucide-react';
 import { Reservation, SpaceBlock } from '../types';
@@ -234,8 +235,8 @@ export const SpaceAvailabilityTimeline: React.FC<SpaceAvailabilityTimelineProps>
             {activeConflict.isBlock ? <Hammer className="w-3.5 h-3.5 text-amber-700" /> : <AlertTriangle className="w-3.5 h-3.5" />}
             <span>
               {activeConflict.isBlock
-                ? `Espacio en Mantención (${activeConflict.horaInicio} - ${activeConflict.horaFin}): ${activeConflict.descripcion}`
-                : `Topamiento con "${activeConflict.tipoActividad}" (${activeConflict.horaInicio} - ${activeConflict.horaFin})`}
+                ? `Espacio en Mantención (${activeConflict.horaInicio} - ${activeConflict.horaFin}): ${formatDisplayTitle(activeConflict.descripcion)}`
+                : `Topamiento con "${formatDisplayTitle(activeConflict.tipoActividad)}" (${activeConflict.horaInicio} - ${activeConflict.horaFin})`}
             </span>
           </div>
         ) : (
@@ -273,7 +274,7 @@ export const SpaceAvailabilityTimeline: React.FC<SpaceAvailabilityTimelineProps>
               <div
                 key={occ.id}
                 style={style}
-                title={`${occ.horaInicio} - ${occ.horaFin} | ${occ.tipoActividad}: ${occ.descripcion} (Resp: ${occ.responsable})`}
+                title={`${occ.horaInicio} - ${occ.horaFin} | ${formatDisplayTitle(occ.tipoActividad)}: ${formatDisplayTitle(occ.descripcion)} (Resp: ${formatDisplayTitle(occ.responsable)})`}
                 className={`absolute top-0 bottom-0 text-white flex items-center justify-center overflow-hidden px-1 transition cursor-pointer border-r group ${
                   occ.isBlock
                     ? 'bg-amber-500/90 hover:bg-amber-600 border-amber-600'

@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useState } from 'react';
 import { Reservation } from '../types';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
@@ -128,10 +129,10 @@ export const PendingDeletionsModal: React.FC<PendingDeletionsModalProps> = ({
                     <div className="space-y-1 min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
-                          className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white uppercase tracking-wider"
+                          className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white normal-case tracking-wider"
                           style={{ backgroundColor: spaceColor }}
                         >
-                          {res.espacio}
+                          {formatDisplayTitle(res.espacio)}
                         </span>
                         {req?.esSerie && (
                           <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
@@ -145,10 +146,10 @@ export const PendingDeletionsModal: React.FC<PendingDeletionsModalProps> = ({
                       </div>
 
                       <h4 className="text-sm font-bold text-slate-900 pt-0.5">
-                        {res.tipoActividad}
+                        {formatDisplayTitle(res.tipoActividad)}
                         {res.descripcion && (
                           <span className="font-normal text-slate-600 ml-1 text-xs">
-                            — {res.descripcion}
+                            — {formatDisplayTitle(res.descripcion)}
                           </span>
                         )}
                       </h4>
@@ -164,7 +165,7 @@ export const PendingDeletionsModal: React.FC<PendingDeletionsModalProps> = ({
                         </div>
                         <div className="flex items-center gap-1">
                           <User className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{res.responsable}</span>
+                          <span>{formatDisplayTitle(res.responsable)}</span>
                         </div>
                       </div>
                     </div>

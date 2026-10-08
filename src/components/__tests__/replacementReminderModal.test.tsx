@@ -13,8 +13,8 @@ it('shows both activities, their schedule and reason, and lets the user acknowle
   const acknowledge = vi.fn(); const view = vi.fn();
   render(<ReplacementReminderModal replacement={replacement} original={original} pendingCount={2} onAcknowledge={acknowledge} onViewActivity={view} />);
   expect(screen.getByRole('dialog')).toBeTruthy();
-  expect(screen.getByText('Taller semanal')).toBeTruthy();
-  expect(screen.getByText('Reunión excepcional')).toBeTruthy();
+  expect(screen.getByText('Taller Semanal')).toBeTruthy();
+  expect(screen.getByText('Reunión Excepcional')).toBeTruthy();
   expect(screen.getByText('Reunión de vecinos', { exact: false })).toBeTruthy();
   expect(screen.getByText(/10:00–11:00/)).toBeTruthy();
   fireEvent.click(screen.getByText('Ver actividad')); expect(view).toHaveBeenCalledOnce();
@@ -23,6 +23,6 @@ it('shows both activities, their schedule and reason, and lets the user acknowle
 it('loads the original when it is not present in the current agenda', async () => {
   mocks.fetch.mockResolvedValue(original);
   render(<ReplacementReminderModal replacement={replacement} pendingCount={1} onAcknowledge={vi.fn()} onViewActivity={vi.fn()} />);
-  await waitFor(() => expect(screen.getByText('Taller semanal')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Taller Semanal')).toBeTruthy());
   expect(mocks.fetch).toHaveBeenCalledWith('original');
 });

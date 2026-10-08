@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Reservation, SpaceInfo, LoanType, ActivityTypeItem, SpaceRating, EquipmentItem, isSingleDayMultiSpaceReservation, SpaceBlock } from '../types';
@@ -1534,7 +1535,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
           {replacementSource ? ((!isWizardMode || wizardStep === 2) && (
             <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-2">
               <h3 className="font-bold">Reemplazar solo este día</h3>
-              <p>{formatDateDDMMYYYY(replacementSource.fecha)} · {replacementSource.horaInicio}–{replacementSource.horaFin}{replacementSource.terminaDiaSiguiente ? ' (hasta el día siguiente)' : ''} · {replacementSource.espacio}</p>
+              <p>{formatDateDDMMYYYY(replacementSource.fecha)} · {replacementSource.horaInicio}–{replacementSource.horaFin}{replacementSource.terminaDiaSiguiente ? ' (hasta el día siguiente)' : ''} · {formatDisplayTitle(replacementSource.espacio)}</p>
               <p>La fecha, el espacio y el horario se conservan. Las demás fechas de la serie continúan normalmente.</p>
               {loanScheduleCheck.requiresAuthorization && <label className="block">Clave de autorización de horario extendido
                 <input type="password" value={extendedAuthKey} onChange={e => setExtendedAuthKey(e.target.value)} className="block rounded-lg border bg-white p-2" />
@@ -1680,10 +1681,10 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
           {replacementSource && (!isWizardMode || wizardStep === 1 || wizardStep === 5) && (
             <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-3">
               <h3 className="font-bold">{wizardStep === 5 ? 'Confirmar reemplazo' : 'Motivo del reemplazo'}</h3>
-              <p><strong>Actividad original:</strong> {replacementSource.descripcion} ({replacementSource.tipoActividad})</p>
+              <p><strong>Actividad original:</strong> {formatDisplayTitle(replacementSource.descripcion)} ({formatDisplayTitle(replacementSource.tipoActividad)})</p>
               {wizardStep === 5 && <>
-                <p><strong>Actividad nueva:</strong> {formData.descripcion} ({formData.tipoActividad})</p>
-                <p>{formatDateDDMMYYYY(replacementSource.fecha)} · {replacementSource.horaInicio}–{replacementSource.horaFin} · {replacementSource.espacio}</p>
+                <p><strong>Actividad nueva:</strong> {formatDisplayTitle(formData.descripcion)} ({formatDisplayTitle(formData.tipoActividad)})</p>
+                <p>{formatDateDDMMYYYY(replacementSource.fecha)} · {replacementSource.horaInicio}–{replacementSource.horaFin} · {formatDisplayTitle(replacementSource.espacio)}</p>
                 <p>Las demás fechas de la serie continúan normalmente.</p>
               </>}
               <label className="block font-semibold" htmlFor="replacement-reason">Motivo obligatorio</label>

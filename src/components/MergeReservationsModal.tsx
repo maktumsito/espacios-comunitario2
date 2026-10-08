@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useMemo } from 'react';
 import { Reservation } from '../types';
@@ -225,16 +226,16 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">
-                  {targetReservation.tipoActividad || 'Actividad'}
+                  {formatDisplayTitle(targetReservation.tipoActividad || 'Actividad')}
                   {targetReservation.descripcion && targetReservation.descripcion !== targetReservation.tipoActividad && (
                     <span className="text-xs font-normal text-slate-600 ml-1.5">
-                      ({targetReservation.descripcion})
+                      ({formatDisplayTitle(targetReservation.descripcion)})
                     </span>
                   )}
                 </h3>
                 <p className="text-[11px] text-slate-600 flex items-center gap-1 mt-0.5">
                   <User className="w-3 h-3 text-slate-400" />
-                  <span>{targetReservation.responsable}</span>
+                  <span>{formatDisplayTitle(targetReservation.responsable)}</span>
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -244,7 +245,7 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
                 </span>
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-800 font-bold rounded-lg border border-indigo-200 text-xs">
                   <MapPin className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>{targetReservation.espacio}</span>
+                  <span>{formatDisplayTitle(targetReservation.espacio)}</span>
                 </span>
               </div>
             </div>
@@ -306,7 +307,7 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className={`font-bold text-xs ${isSelected ? 'text-white' : 'text-slate-900'}`}>
-                            {c.tipoActividad || 'Actividad'}
+                            {formatDisplayTitle(c.tipoActividad || 'Actividad')}
                           </span>
                           {index === 0 && (isConsecutive || isSameApplicant || isSameSpace) && (
                             <span
@@ -337,8 +338,8 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
                           )}
                         </div>
                         <div className={`text-[11px] truncate mt-0.5 ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
-                          Solicitante: <span className="font-medium">{c.responsable}</span>
-                          {c.descripcion && ` • "${c.descripcion}"`}
+                          Solicitante: <span className="font-medium">{formatDisplayTitle(c.responsable)}</span>
+                          {c.descripcion && ` • "${formatDisplayTitle(c.descripcion)}"`}
                         </div>
                       </div>
 
@@ -348,7 +349,7 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
                             {c.horaInicio} – {c.horaFin}
                           </div>
                           <div className={`text-[10px] ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
-                            {c.espacio}
+                            {formatDisplayTitle(c.espacio)}
                           </div>
                         </div>
                         <div
@@ -388,13 +389,13 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
                 <div className="p-2 bg-white/90 rounded-lg border border-emerald-200">
                   <span className="text-[10px] font-bold text-slate-500 uppercase block">📍 Espacio Unificado:</span>
                   <span className="font-bold text-slate-900 text-sm truncate block">
-                    {mergedPreview.espacio}
+                    {formatDisplayTitle(mergedPreview.espacio)}
                   </span>
                 </div>
                 <div className="p-2 bg-white/90 rounded-lg border border-emerald-200">
                   <span className="text-[10px] font-bold text-slate-500 uppercase block">👤 Responsable & Contacto:</span>
                   <span className="font-semibold text-slate-900 text-xs truncate block">
-                    {mergedPreview.responsable}
+                    {formatDisplayTitle(mergedPreview.responsable)}
                   </span>
                 </div>
                 <div className="p-2 bg-white/90 rounded-lg border border-emerald-200">

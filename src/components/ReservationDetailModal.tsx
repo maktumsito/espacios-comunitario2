@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import { Reservation, SpaceRating, CommitmentLetterAttachment, isSingleDayMultiSpaceReservation } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
@@ -204,8 +205,8 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                   className="w-3 h-3 rounded-full shadow-xs"
                   style={{ backgroundColor: spaceColor }}
                 />
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {reservation.espacio}
+                <span className="text-xs font-bold text-slate-500 normal-case tracking-wider">
+                  {formatDisplayTitle(reservation.espacio)}
                 </span>
                 {reservation.importante === 'Sí' && (
                   <span className="flex items-center space-x-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
@@ -231,7 +232,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                 )}
               </div>
               <h3 className="text-base font-bold text-slate-900">
-                {reservation.descripcion || reservation.tipoActividad}
+                {formatDisplayTitle(reservation.descripcion || reservation.tipoActividad)}
               </h3>
               {(reservation.reemplazaReservaId || reservation.reemplazadaPorReservaId) && (
                 <div className="mt-2 text-xs text-indigo-800 space-y-1">
@@ -397,7 +398,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               <span>Horario</span>
             </div>
             <div className="font-bold text-slate-900 font-mono">{reservation.horaInicio} - {reservation.horaFin}</div>
-            <div className="text-[10px] text-slate-500 font-medium">{reservation.tipoActividad}</div>
+            <div className="text-[10px] text-slate-500 font-medium">{formatDisplayTitle(reservation.tipoActividad)}</div>
             {(reservation.horarioExtendidoAutorizado ||
               checkLoanScheduleLimit(reservation.horaInicio, reservation.horaFin, Boolean(reservation.terminaDiaSiguiente)).isOutsideRegularHours) && (
               <div className="mt-1.5 p-1.5 rounded-lg bg-amber-50 border border-amber-200 text-[10.5px] text-amber-900 space-y-0.5">
@@ -424,7 +425,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               <User className="w-3 h-3 text-blue-600" />
               <span>Responsable</span>
             </div>
-            <div className="font-bold text-slate-900 truncate">{reservation.responsable}</div>
+            <div className="font-bold text-slate-900 truncate">{formatDisplayTitle(reservation.responsable)}</div>
             {reservation.telefonoContacto && (() => {
               const phoneAction = getPhoneContactActions(reservation.telefonoContacto);
               if (!phoneAction) {
@@ -618,7 +619,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         {reservation.tipoPrestamo && (
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-0.5">
             <div className="text-[10px] font-bold text-slate-500 uppercase">Modalidad de Préstamo:</div>
-            <p className="text-slate-800 font-semibold">{reservation.tipoPrestamo}</p>
+            <p className="text-slate-800 font-semibold">{formatDisplayTitle(reservation.tipoPrestamo)}</p>
           </div>
         )}
 

@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useState, useEffect, useRef } from 'react';
 import { SpaceRating, Reservation } from '../types';
 import { isWeekend, isBirthdayReservation, isRatingAllowedForReservation } from '../services/ratingService';
@@ -305,7 +306,7 @@ export const SpaceRatingModal: React.FC<SpaceRatingModalProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
                 <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                <span>{reservation.espacio}</span>
+                <span>{formatDisplayTitle(reservation.espacio)}</span>
               </span>
               <span className="text-xs font-mono font-semibold text-slate-600 flex items-center space-x-1">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -316,13 +317,13 @@ export const SpaceRatingModal: React.FC<SpaceRatingModalProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1 border-t border-slate-100">
               <div className="flex items-center space-x-1.5">
                 <User className="w-3.5 h-3.5 text-slate-500" />
-                <span className="font-semibold text-slate-800">{reservation.responsable}</span>
+                <span className="font-semibold text-slate-800">{formatDisplayTitle(reservation.responsable)}</span>
                 {reservation.telefonoContacto && (
                   <span className="text-[11px] text-slate-500">({reservation.telefonoContacto})</span>
                 )}
               </div>
               <span className="text-[11px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
-                {reservation.tipoActividad}
+                {formatDisplayTitle(reservation.tipoActividad)}
               </span>
             </div>
           </div>
@@ -515,7 +516,7 @@ export const SpaceRatingModal: React.FC<SpaceRatingModalProps> = ({
           <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex items-start space-x-2 text-[11px] text-blue-900">
             <ShieldAlert className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
             <p>
-              Esta evaluación quedará <strong>registrada permanentemente</strong> en la ficha del solicitante ({reservation.responsable}). El sistema avisará de estos antecedentes al personal cuando se intente solicitar un nuevo préstamo en el futuro.
+              Esta evaluación quedará <strong>registrada permanentemente</strong> en la ficha del solicitante ({formatDisplayTitle(reservation.responsable)}). El sistema avisará de estos antecedentes al personal cuando se intente solicitar un nuevo préstamo en el futuro.
             </p>
           </div>
 

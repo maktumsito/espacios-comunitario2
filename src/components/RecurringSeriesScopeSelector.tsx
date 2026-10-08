@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import {
   RefreshCw,
@@ -282,7 +283,7 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
                     />
                     <span>
                       <strong>{formatDateDDMMYYYY(res.fecha)}</strong>
-                      <span className="text-slate-500 ml-1.5">({res.horaInicio} - {res.horaFin} en {res.espacio})</span>
+                      <span className="text-slate-500 ml-1.5">({res.horaInicio} - {res.horaFin} en {formatDisplayTitle(res.espacio)})</span>
                     </span>
                   </div>
                   {isCurrent && (

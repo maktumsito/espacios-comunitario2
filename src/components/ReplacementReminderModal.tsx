@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useEffect, useState } from 'react';
 import { BellRing } from 'lucide-react';
 import type { Reservation } from '../types';
@@ -36,12 +37,12 @@ export function ReplacementReminderModal({ replacement, original, pendingCount, 
       <p>Recuerda que hay un reemplazo programado para el <strong>{formatDateDDMMYYYY(replacement.fecha)}</strong>.</p>
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
         <p className="font-semibold text-amber-900">Suspendida solo ese día</p>
-        <p>{source?.descripcion || source?.tipoActividad || 'La sesión de la actividad recurrente'}</p>
+        <p>{formatDisplayTitle(source?.descripcion || source?.tipoActividad || 'La sesión de la actividad recurrente')}</p>
       </div>
       <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
         <p className="font-semibold text-indigo-900">Actividad que se realizará</p>
-        <p>{replacement.descripcion || replacement.tipoActividad}</p>
-        <p>{replacement.horaInicio}–{replacement.horaFin}{replacement.terminaDiaSiguiente ? ' (hasta el día siguiente)' : ''} · {replacement.espacio}</p>
+        <p>{formatDisplayTitle(replacement.descripcion || replacement.tipoActividad)}</p>
+        <p>{replacement.horaInicio}–{replacement.horaFin}{replacement.terminaDiaSiguiente ? ' (hasta el día siguiente)' : ''} · {formatDisplayTitle(replacement.espacio)}</p>
       </div>
       <p><strong>Motivo:</strong> {replacement.motivoReemplazo || 'Sin motivo registrado'}</p>
       <p>Las demás fechas de la serie continúan normalmente.</p>

@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import {
   MapPin,
@@ -437,7 +438,7 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
               <div className="space-y-1 flex-1 min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-1.5">
                   <p className="font-bold text-rose-950 text-xs sm:text-sm">
-                    ⚠️ Conflicto de horario: {formData.espacio} ya está ocupado en este rango
+                    ⚠️ Conflicto de horario: {formatDisplayTitle(formData.espacio)} ya está ocupado en este rango
                   </p>
                   <span className="text-[11px] font-bold bg-rose-200 text-rose-900 px-2 py-0.5 rounded-md">
                     {conflicts.length} topamiento(s)
@@ -448,9 +449,9 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
                     <div key={idx} className="flex flex-wrap items-center gap-1.5 bg-white/70 p-2 rounded-lg border border-rose-200">
                       <span className="font-bold text-slate-800">{c.horaInicio} - {c.horaFin}</span>
                       <span className="text-slate-500">•</span>
-                      <span className="font-medium text-slate-900">{c.tipoActividad}</span>
+                      <span className="font-medium text-slate-900">{formatDisplayTitle(c.tipoActividad)}</span>
                       {c.responsable && (
-                        <span className="text-slate-600 text-[11px]">(Resp: {c.responsable})</span>
+                        <span className="text-slate-600 text-[11px]">(Resp: {formatDisplayTitle(c.responsable)})</span>
                       )}
                     </div>
                   ))}
@@ -523,7 +524,7 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow-2xs cursor-pointer"
                       >
                         <Building2 className="w-3.5 h-3.5" />
-                        <span>Cambiar a {quickAltSpaces[0].espacio}</span>
+                        <span>Cambiar a {formatDisplayTitle(quickAltSpaces[0].espacio)}</span>
                       </button>
                     )}
                     <button
@@ -775,7 +776,7 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
                   <div className="flex items-center space-x-2 font-bold text-rose-950">
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                     <span>
-                      Alerta de topamiento: Ya existe una reserva en {singleSecondSpace} entre {singleSecondStartTime} y {singleSecondEndTime}.
+                      Alerta de topamiento: Ya existe una reserva en {formatDisplayTitle(singleSecondSpace)} entre {singleSecondStartTime} y {singleSecondEndTime}.
                     </span>
                   </div>
 
@@ -787,7 +788,7 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
                       className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold transition flex items-center space-x-1 shadow-2xs cursor-pointer"
                     >
                       <Sparkles className="w-3 h-3" />
-                      <span>Buscar horario libre en {singleSecondSpace}</span>
+                      <span>Buscar horario libre en {formatDisplayTitle(singleSecondSpace)}</span>
                     </button>
 
                     <button

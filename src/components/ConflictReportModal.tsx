@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import { DetectedConflictDetail } from '../utils/conflictDetector';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
@@ -149,19 +150,19 @@ export const ConflictReportModal: React.FC<ConflictReportModalProps> = ({
                 <div className="p-2 bg-blue-50/60 border border-blue-100 rounded-lg">
                   <div className="text-[10px] font-bold text-blue-700 uppercase">Nueva Reserva Guardada</div>
                   <div className="font-semibold text-slate-900 text-xs truncate">
-                    {c.reserva.tipoActividad}: {c.reserva.descripcion}
+                    {formatDisplayTitle(c.reserva.tipoActividad)}: {formatDisplayTitle(c.reserva.descripcion)}
                   </div>
-                  <div className="text-[11px] text-slate-600">Resp: {c.reserva.responsable}</div>
+                  <div className="text-[11px] text-slate-600">Resp: {formatDisplayTitle(c.reserva.responsable)}</div>
                 </div>
 
                 {/* Reserva existente */}
                 <div className="p-2 bg-rose-50/60 border border-rose-100 rounded-lg">
                   <div className="text-[10px] font-bold text-rose-700 uppercase">Actividad ya existente</div>
                   <div className="font-semibold text-slate-900 text-xs truncate">
-                    {c.conflictingWith.tipoActividad}: {c.conflictingWith.descripcion}
+                    {formatDisplayTitle(c.conflictingWith.tipoActividad)}: {formatDisplayTitle(c.conflictingWith.descripcion)}
                   </div>
                   <div className="text-[11px] text-slate-600">
-                    {c.conflictingWith.horaInicio}-{c.conflictingWith.horaFin} (Resp: {c.conflictingWith.responsable})
+                    {c.conflictingWith.horaInicio}-{c.conflictingWith.horaFin} (Resp: {formatDisplayTitle(c.conflictingWith.responsable)})
                   </div>
                 </div>
               </div>

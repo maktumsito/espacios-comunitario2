@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -126,11 +127,11 @@ const RecurringSeriesCard = React.memo<RecurringSeriesCardProps>(({
         <div className="space-y-1.5 min-w-0 flex-1">
           <div className="flex items-center flex-wrap gap-2">
             <span className="text-sm sm:text-base font-black text-slate-900 truncate">
-              {series.tipoActividad}
+              {formatDisplayTitle(series.tipoActividad)}
             </span>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200 flex items-center space-x-1">
               <Building2 className="w-3 h-3 text-slate-500" />
-              <span>{series.espacio}</span>
+              <span>{formatDisplayTitle(series.espacio)}</span>
             </span>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-200 flex items-center space-x-1">
               <Clock className="w-3 h-3 text-blue-500" />
@@ -139,7 +140,7 @@ const RecurringSeriesCard = React.memo<RecurringSeriesCardProps>(({
           </div>
 
           <div className="text-xs text-slate-600 flex items-center flex-wrap gap-x-4 gap-y-1">
-            <span><strong>Responsable:</strong> {series.responsable}</span>
+            <span><strong>Responsable:</strong> {formatDisplayTitle(series.responsable)}</span>
             {series.telefonoContacto && <span><strong>Tel:</strong> {series.telefonoContacto}</span>}
             {series.emailContacto && <span><strong>Email:</strong> {series.emailContacto}</span>}
           </div>
@@ -268,7 +269,7 @@ const RecurringSeriesCard = React.memo<RecurringSeriesCardProps>(({
       <ConfirmationModal
         isOpen={confirmDelete}
         title="Eliminar serie recurrente"
-        message={`Se cancelarán las ${series.totalSesiones} sesiones de "${series.tipoActividad}".`}
+        message={`Se cancelarán las ${series.totalSesiones} sesiones de "${formatDisplayTitle(series.tipoActividad)}".`}
         confirmLabel="Eliminar serie"
         variant="danger"
         onCancel={() => setConfirmDelete(false)}
@@ -912,12 +913,12 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
             <div className="p-5 overflow-y-auto space-y-4">
               {/* Activity Info Summary */}
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1 text-xs">
-                <div className="font-bold text-slate-900 text-sm">{modifyingSeries.tipoActividad}</div>
+                <div className="font-bold text-slate-900 text-sm">{formatDisplayTitle(modifyingSeries.tipoActividad)}</div>
                 <div className="text-slate-600">
-                  {modifyingSeries.espacio} • {modifyingSeries.horaInicio} - {modifyingSeries.horaFin} hrs
+                  {formatDisplayTitle(modifyingSeries.espacio)} • {modifyingSeries.horaInicio} - {modifyingSeries.horaFin} hrs
                 </div>
                 <div className="text-slate-500">
-                  Responsable: <strong>{modifyingSeries.responsable}</strong>
+                  Responsable: <strong>{formatDisplayTitle(modifyingSeries.responsable)}</strong>
                 </div>
                 <div className="text-slate-500 pt-1">
                   Fecha inicio: <strong>{formatDateDDMMYYYY(modifyingSeries.fechaInicio)}</strong> • Fecha término actual: <strong className="text-emerald-700">{formatDateDDMMYYYY(modifyingSeries.fechaFin)}</strong>

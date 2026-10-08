@@ -380,11 +380,11 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                     <div className="flex items-center space-x-2 mb-1">
                       <span className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5 min-w-0">
                         <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: spaceColor }} />
-                        <span className="truncate">{res.espacio}</span>
+                        <span className="truncate">{formatDisplayTitle(res.espacio)}</span>
                       </span>
                     </div>
 
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug line-clamp-2 break-words" title={mainTitle}>
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug line-clamp-2 break-words" title={formatDisplayTitle(mainTitle)}>
                       {displayTitle || 'Sin descripción'}
                     </h4>
                   </div>

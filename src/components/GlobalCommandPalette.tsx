@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Reservation, SpaceInfo, ViewMode } from '../types';
@@ -364,8 +365,8 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
         return {
           id: `res-${r.id}`,
           type: 'reservation',
-          title: r.tipoActividad || r.descripcion || 'Reserva sin título',
-          subtitle: `${r.responsable}${r.rut ? ` (${r.rut})` : ''} • ${r.espacio}`,
+          title: formatDisplayTitle(r.tipoActividad || r.descripcion || 'Reserva sin título'),
+          subtitle: `${formatDisplayTitle(r.responsable)}${r.rut ? ` (${r.rut})` : ''} • ${formatDisplayTitle(r.espacio)}`,
           metadata: `${dateLabel} • ${r.horaInicio} - ${r.horaFin}`,
           badge: isRecurrente ? 'Recurrente' : undefined,
           badgeColor: isRecurrente ? 'purple' : undefined,
@@ -394,7 +395,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
       matchedApplicants = matchingApps.map((app) => ({
         id: `applicant-${app.responsable}`,
         type: 'applicant',
-        title: app.responsable,
+        title: formatDisplayTitle(app.responsable),
         subtitle: `${app.rut ? `RUT: ${app.rut} • ` : ''}${app.count === 1 ? '1 reserva registrada' : `${app.count} reservas registradas`}`,
         badge: 'Vecino',
         badgeColor: 'emerald',
@@ -416,7 +417,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
     ).map((s) => ({
       id: `space-${s.id}`,
       type: 'space',
-      title: s.name,
+      title: formatDisplayTitle(s.name),
       subtitle: s.capacity ? `Aforo: ${s.capacity} personas` : 'Espacio comunitario',
       badge: 'Espacio',
       badgeColor: 'blue',

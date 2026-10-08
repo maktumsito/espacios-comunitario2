@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import { ApplicantSummary } from '../types';
 import {
@@ -41,7 +42,7 @@ export const ApplicantSummaryCard: React.FC<ApplicantSummaryCardProps> = ({
     <div
       role="button"
       tabIndex={0}
-      aria-label={`Ver ficha de solicitante de ${applicant.responsable}`}
+      aria-label={`Ver ficha de solicitante de ${formatDisplayTitle(applicant.responsable)}`}
       aria-pressed={isSelected}
       onClick={() => onSelect(applicant)}
       onKeyDown={(e) => {
@@ -63,7 +64,7 @@ export const ApplicantSummaryCard: React.FC<ApplicantSummaryCardProps> = ({
         <div className="min-w-0">
           <div className="flex items-center space-x-2 flex-wrap gap-y-1">
             <h2 className="font-bold text-sm sm:text-base text-slate-900 truncate">
-              {applicant.responsable}
+              {formatDisplayTitle(applicant.responsable)}
             </h2>
             {applicant.rut && (
               <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">

@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useMemo } from 'react';
 import {
   CalendarDays,
@@ -443,7 +444,7 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
               <span>Total a programar: {specificDates.length} reserva(s) individual(es)</span>
             </div>
             <span className="text-[10px] text-indigo-600 font-medium">
-              {useCustomSchedulesPerDate ? 'Horarios diferenciados por fecha' : `Mismo horario (${formData.horaInicio} - ${formData.horaFin}) en ${formData.espacio}`}
+              {useCustomSchedulesPerDate ? 'Horarios diferenciados por fecha' : `Mismo horario (${formData.horaInicio} - ${formData.horaFin}) en ${formatDisplayTitle(formData.espacio)}`}
             </span>
           </div>
 
@@ -670,7 +671,7 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
                               <div className="flex items-center space-x-1.5 text-rose-900 font-bold">
                                 <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                                 <span>
-                                  Topamiento: {slot1Conflicts.length > 0 ? `1° espacio ocupado (${slot1Conflicts[0].tipoActividad})` : ''} {slot2Conflicts.length > 0 ? `• 2° espacio ocupado (${slot2Conflicts[0].tipoActividad})` : ''}
+                                  Topamiento: {slot1Conflicts.length > 0 ? `1° espacio ocupado (${formatDisplayTitle(slot1Conflicts[0].tipoActividad)})` : ''} {slot2Conflicts.length > 0 ? `• 2° espacio ocupado (${formatDisplayTitle(slot2Conflicts[0].tipoActividad)})` : ''}
                                 </span>
                               </div>
 
@@ -1171,7 +1172,7 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
                   <span className="text-[11px] text-slate-500">
                     {generatedDates.length > 0
                       ? enableSingleSecondSpace && !useCustomSchedulesPerDay
-                        ? `1°: ${formData.espacio || 'Espacio 1'} (${formData.horaInicio || '10:00'}-${formData.horaFin || '11:00'}) | 2°: ${singleSecondSpace || 'Espacio 2'} (${singleSecondStartTime || '11:00'}-${singleSecondEndTime || '12:00'})`
+                        ? `1°: ${formatDisplayTitle(formData.espacio || 'Espacio 1')} (${formData.horaInicio || '10:00'}-${formData.horaFin || '11:00'}) | 2°: ${singleSecondSpace || 'Espacio 2'} (${singleSecondStartTime || '11:00'}-${singleSecondEndTime || '12:00'})`
                         : `Desde ${formatDateDDMMYYYY(generatedDates[0])} hasta ${formatDateDDMMYYYY(generatedDates[generatedDates.length - 1])}`
                       : recurrenceEndDate < recurrenceStartDate
                       ? 'Fecha Término es anterior a Fecha Inicio'

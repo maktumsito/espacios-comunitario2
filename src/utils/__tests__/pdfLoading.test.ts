@@ -52,7 +52,7 @@ describe('PDF loading boundary', () => {
     expect(item.doc.getNumberOfPages()).toBeGreaterThan(1);
     const contents = Buffer.from(item.base64, 'base64').toString('latin1');
     expect(contents).toContain('%PDF-');
-    expect(contents).toContain('PDF_ACTIVITY_79');
+    expect(contents).toContain('Pdf_Activity_79');
     const letter = await generateCommitmentLetterPdfDoc(reservations[0]);
     expect(letter.output()).toContain('%PDF-');
     expect(letter.getNumberOfPages()).toBeGreaterThanOrEqual(1);

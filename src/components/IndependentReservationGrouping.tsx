@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { useRef, useState } from 'react';
 import { collection, getDocsFromServer } from 'firebase/firestore';
 import { getDb } from '../firebase/config';
@@ -47,8 +48,8 @@ export function IndependentReservationGrouping() {
       <p className="text-sm font-semibold">{groups!.length} grupos · {groups!.reduce((sum, group) => sum + group.reservations.length, 0)} reservas</p>
       <ul className="max-h-64 overflow-y-auto space-y-2 text-sm">
         {groups!.map(group => <li key={group.seriesId} className="rounded-lg bg-slate-50 p-3">
-          <strong>{group.reservations[0].descripcion}</strong> · {WEEKDAYS.find(day => day.dayNum === group.weekday)?.full} · {group.reservations[0].horaInicio}–{group.reservations[0].horaFin} · {group.reservations.length} reservas
-          <div className="text-slate-600">{[...new Set(group.reservations.map(row => row.descripcion))].join(' / ')}</div>
+          <strong>{formatDisplayTitle(group.reservations[0].descripcion)}</strong> · {WEEKDAYS.find(day => day.dayNum === group.weekday)?.full} · {group.reservations[0].horaInicio}–{group.reservations[0].horaFin} · {group.reservations.length} reservas
+          <div className="text-slate-600">{formatDisplayTitle([...new Set(group.reservations.map(row => row.descripcion))].join(' / '))}</div>
           <div className="text-slate-500">{group.reservations.map(row => `${formatDateDDMMYYYY(row.fecha)} (${row.espacio})`).join(', ')}</div>
         </li>)}
       </ul>

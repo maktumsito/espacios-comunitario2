@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -1791,15 +1792,15 @@ export const GmailDispatchModal: React.FC<GmailDispatchModalProps> = ({
                                         {act.horaInicio} - {act.horaFin}
                                       </span>
                                       <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[11px] font-bold">
-                                        {act.espacio}
+                                        {formatDisplayTitle(act.espacio)}
                                       </span>
                                       <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-semibold">
-                                        {act.tipoActividad}
+                                        {formatDisplayTitle(act.tipoActividad)}
                                       </span>
                                       {isLoanReservation(act) && (
                                         <span className="px-2 py-0.5 rounded-md bg-emerald-100 border border-emerald-200 text-emerald-800 text-[10px] font-bold flex items-center gap-1 shadow-2xs">
                                           <Building2 className="w-3 h-3 text-emerald-700" />
-                                          <span>Préstamo {act.tipoPrestamo ? `(${act.tipoPrestamo})` : ''}</span>
+                                          <span>Préstamo {act.tipoPrestamo ? `(${formatDisplayTitle(act.tipoPrestamo)})` : ''}</span>
                                         </span>
                                       )}
                                       {act.cantidadParticipantes && (
@@ -1810,11 +1811,11 @@ export const GmailDispatchModal: React.FC<GmailDispatchModalProps> = ({
                                     </div>
                                     <div className="text-xs text-slate-800 font-medium">
                                       {act.descripcion ? (
-                                        <span>{act.descripcion}</span>
+                                        <span>{formatDisplayTitle(act.descripcion)}</span>
                                       ) : (
                                         <span className="text-slate-500 italic">Sin descripción</span>
                                       )}
-                                      <span className="text-slate-500 font-normal"> — Resp: <strong className="text-slate-700">{act.responsable}</strong></span>
+                                      <span className="text-slate-500 font-normal"> — Resp: <strong className="text-slate-700">{formatDisplayTitle(act.responsable)}</strong></span>
                                     </div>
                                     {(act.telefonoContacto || act.emailContacto) && (
                                       <div className="text-[11px] text-slate-500">

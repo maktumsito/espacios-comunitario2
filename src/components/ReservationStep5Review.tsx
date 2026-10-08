@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import {
   CheckCircle2,
@@ -136,10 +137,10 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
             </button>
           </div>
           <div className="space-y-1">
-            <div className="font-bold text-slate-900 text-sm">{formData.descripcion || 'Sin nombre'}</div>
+            <div className="font-bold text-slate-900 text-sm">{formatDisplayTitle(formData.descripcion || 'Sin nombre')}</div>
             <div className="flex items-center space-x-2 text-[11px]">
               <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-200">
-                {formData.tipoActividad || 'General'}
+                {formatDisplayTitle(formData.tipoActividad || 'General')}
               </span>
               {formData.importante === 'Sí' && (
                 <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold border border-amber-300">
@@ -167,7 +168,7 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
             </button>
           </div>
           <div className="space-y-1 text-[11px]">
-            <div className="font-bold text-slate-900 text-sm">{formData.espacio || 'Espacio'}</div>
+            <div className="font-bold text-slate-900 text-sm">{formatDisplayTitle(formData.espacio || 'Espacio')}</div>
             <div className="text-slate-600 flex items-center space-x-1">
               <Clock className="w-3 h-3 text-slate-400" />
               <span>{formData.horaInicio} - {formData.horaFin}</span>
@@ -175,7 +176,7 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
             </div>
             {enableSingleSecondSpace && singleSecondSpace && (
               <div className="text-indigo-700 font-medium">
-                2° Espacio: {singleSecondSpace} ({singleSecondStartTime} - {singleSecondEndTime})
+                2° Espacio: {formatDisplayTitle(singleSecondSpace)} ({singleSecondStartTime} - {singleSecondEndTime})
               </div>
             )}
           </div>
@@ -198,7 +199,7 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
             </button>
           </div>
           <div className="space-y-0.5 text-[11px]">
-            <div className="font-bold text-slate-900 text-sm truncate">{formData.responsable || 'No indicado'}</div>
+            <div className="font-bold text-slate-900 text-sm truncate">{formatDisplayTitle(formData.responsable || 'No indicado')}</div>
             {formData.telefonoContacto && (
               <div className="text-slate-600">Tel: {formData.telefonoContacto}</div>
             )}

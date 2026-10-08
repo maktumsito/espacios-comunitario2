@@ -1612,7 +1612,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                             onBlur={() => setFocusedReservationId(current => current === res.id ? null : current)}
                             role="button"
                             tabIndex={0}
-                            aria-label={`Reserva de ${res.tipoActividad}, ${res.horaInicio} a ${res.horaFin}, responsable ${res.responsable}. Presiona Enter o Espacio para ver detalles.`}
+                            aria-label={`Reserva de ${formatDisplayTitle(res.tipoActividad)}, ${res.horaInicio} a ${res.horaFin}, responsable ${formatDisplayTitle(res.responsable)}. Presiona Enter o Espacio para ver detalles.`}
                             draggable
                             onDragStart={(e) => handleReservationDragStart(e, res)}
                             onDragEnd={handleReservationDragEnd}
@@ -1655,7 +1655,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                             className={`absolute rounded-md ${paddingClass} ${styling.bg} border ${styling.border} ${styling.shadow} cursor-grab active:cursor-grabbing hover:z-30 hover:ring-2 hover:ring-blue-400/80 transition-all flex flex-col justify-between overflow-hidden select-none z-10 group/card focus:ring-2 focus:ring-blue-500 focus:outline-none focus:z-40 ${
                               isBeingDragged ? 'opacity-30 scale-95 ring-2 ring-blue-500' : ''
                             } ${isOverlapping ? 'ring-1 ring-rose-400/50' : ''}`}
-                            title={`${isConflict || isOverlapping ? '⚠️ ¡TOPAMIENTO / RESERVAS PARALELAS!\n' : ''}${res.horaInicio} - ${res.horaFin}\nActividad: ${mainTitle}${hasDistinctSubcategory ? `\nTipo: ${res.tipoActividad}` : ''}\nResponsable: ${res.responsable}${res.telefonoContacto ? `\nTel: ${res.telefonoContacto}` : ''}\n\n👉 ¡Arrastra esta tarjeta a cualquier espacio u horario para moverla!\n(Haz clic para ver detalles)`}
+                            title={`${isConflict || isOverlapping ? '⚠️ ¡TOPAMIENTO / RESERVAS PARALELAS!\n' : ''}${res.horaInicio} - ${res.horaFin}\nActividad: ${formatDisplayTitle(mainTitle)}${hasDistinctSubcategory ? `\nTipo: ${formatDisplayTitle(res.tipoActividad)}` : ''}\nResponsable: ${formatDisplayTitle(res.responsable)}${res.telefonoContacto ? `\nTel: ${res.telefonoContacto}` : ''}\n\n👉 ¡Arrastra esta tarjeta a cualquier espacio u horario para moverla!\n(Haz clic para ver detalles)`}
                           >
                             {/* Main Content Area */}
                             <div className="flex-1 min-h-0 flex flex-col justify-start overflow-hidden">
@@ -1681,10 +1681,10 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                                   )}
                                   {normalizeSpaceName(res.espacio) !== normalizeSpaceName(space.name) && (
                                     <span
-                                      title={`Reserva compartida en múltiples espacios: ${res.espacio}`}
-                                      className="text-[7.5px] bg-indigo-600/90 text-white px-1 py-0.2 rounded font-bold uppercase tracking-tight shrink-0 truncate max-w-[80px]"
+                                      title={`Reserva compartida en múltiples espacios: ${formatDisplayTitle(res.espacio)}`}
+                                      className="text-[7.5px] bg-indigo-600/90 text-white px-1 py-0.2 rounded font-bold normal-case tracking-tight shrink-0 truncate max-w-[80px]"
                                     >
-                                      {res.espacio}
+                                      {formatDisplayTitle(res.espacio)}
                                     </span>
                                   )}
                                 </div>
@@ -1744,28 +1744,28 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                               {isVeryShort ? (
                                 /* Very short layout (height < 44px, e.g. 30 min) */
                                 <div className="flex flex-col justify-center min-w-0 overflow-hidden leading-tight">
-                                  <div className="text-[9px] font-bold text-slate-900 truncate leading-tight" title={mainTitle}>
+                                  <div className="text-[9px] font-bold text-slate-900 truncate leading-tight" title={formatDisplayTitle(mainTitle)}>
                                     {displayTitle}
                                   </div>
                                 </div>
                               ) : isShort ? (
                                 /* Short layout (44px - 68px, e.g. 45-60 min) */
                                 <div className="flex-1 min-h-0 flex flex-col justify-center overflow-hidden">
-                                  <div className="text-[9.5px] font-bold text-slate-900 leading-tight line-clamp-2 break-words" title={mainTitle}>
+                                  <div className="text-[9.5px] font-bold text-slate-900 leading-tight line-clamp-2 break-words" title={formatDisplayTitle(mainTitle)}>
                                     {displayTitle}
                                   </div>
                                 </div>
                               ) : isMedium ? (
                                 /* Medium layout (68px - 110px, e.g. 1.5 - 2 hrs) */
                                 <div className="flex-1 min-h-0 flex flex-col justify-start overflow-hidden">
-                                  <div className="text-[10px] sm:text-[10.5px] font-bold text-slate-900 leading-tight line-clamp-3 sm:line-clamp-4 break-words" title={mainTitle}>
+                                  <div className="text-[10px] sm:text-[10.5px] font-bold text-slate-900 leading-tight line-clamp-3 sm:line-clamp-4 break-words" title={formatDisplayTitle(mainTitle)}>
                                     {displayTitle}
                                   </div>
                                 </div>
                               ) : (
                                 /* Tall layout (height >= 110px, e.g. 2+ hrs) */
                                 <div className="flex-1 min-h-0 flex flex-col justify-start overflow-hidden">
-                                  <div className="text-[10.5px] sm:text-[11px] font-bold text-slate-900 leading-snug line-clamp-5 sm:line-clamp-6 break-words" title={mainTitle}>
+                                  <div className="text-[10.5px] sm:text-[11px] font-bold text-slate-900 leading-snug line-clamp-5 sm:line-clamp-6 break-words" title={formatDisplayTitle(mainTitle)}>
                                     {displayTitle}
                                   </div>
                                 </div>
@@ -1886,7 +1886,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
               <div className="flex items-center justify-between gap-1.5">
                 <span className="text-slate-500 font-medium">Tipo de reserva:</span>
                 <span className={`font-semibold px-2 py-0.5 rounded-full text-[10px] border ${hoverVisual.bgClass} ${hoverVisual.borderClass} ${hoverVisual.softTextClass}`}>
-                  {hoverRes.tipoActividad || hoverVisual.label}
+                  {formatDisplayTitle(hoverRes.tipoActividad || hoverVisual.label)}
                 </span>
               </div>
 
@@ -1896,8 +1896,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                   <User className="w-3 h-3 text-slate-400" />
                   <span>Responsable:</span>
                 </span>
-                <span className="font-bold text-slate-800 text-right truncate max-w-[150px]" title={hoverRes.responsable}>
-                  {hoverRes.responsable || 'No especificado'}
+                <span className="font-bold text-slate-800 text-right truncate max-w-[150px]" title={formatDisplayTitle(hoverRes.responsable)}>
+                  {formatDisplayTitle(hoverRes.responsable || 'No especificado')}
                 </span>
               </div>
 
@@ -1908,7 +1908,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                   <span>Espacio:</span>
                 </span>
                 <span className="font-semibold text-slate-700 text-right truncate max-w-[150px]">
-                  {hoverRes.espacio}
+                  {formatDisplayTitle(hoverRes.espacio)}
                 </span>
               </div>
 

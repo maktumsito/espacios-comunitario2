@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useState, useMemo } from 'react';
 import { subDays, format } from 'date-fns';
 import { SpaceRating, Reservation } from '../types';
@@ -285,12 +286,12 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                             <span>Cumpleaños</span>
                           </span>
                           <span className="text-xs font-bold text-slate-900 truncate block">
-                            {res.descripcion || res.tipoActividad}
+                            {formatDisplayTitle(res.descripcion || res.tipoActividad)}
                           </span>
                         </div>
                         <span className="text-[11px] text-blue-600 font-semibold flex items-center space-x-1">
                           <Building2 className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{res.espacio}</span>
+                          <span className="truncate">{formatDisplayTitle(res.espacio)}</span>
                         </span>
                       </div>
 
@@ -301,7 +302,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
 
                     <div className="text-[11px] text-slate-600 space-y-0.5 pt-1 border-t border-slate-100">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-slate-700">Solicitante: {res.responsable}</span>
+                        <span className="font-medium text-slate-700">Solicitante: {formatDisplayTitle(res.responsable)}</span>
                         <span className="font-mono text-slate-500">{res.horaInicio} - {res.horaFin}</span>
                       </div>
                       {res.telefonoContacto && (() => {
@@ -362,12 +363,12 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                             <span>Por Realizar</span>
                           </span>
                           <span className="text-xs font-bold text-slate-900 truncate block">
-                            {res.descripcion || res.tipoActividad}
+                            {formatDisplayTitle(res.descripcion || res.tipoActividad)}
                           </span>
                         </div>
                         <span className="text-[11px] text-blue-600 font-semibold flex items-center space-x-1">
                           <Building2 className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{res.espacio}</span>
+                          <span className="truncate">{formatDisplayTitle(res.espacio)}</span>
                         </span>
                       </div>
 
@@ -378,7 +379,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
 
                     <div className="text-[11px] text-slate-600 space-y-0.5 pt-1 border-t border-slate-100">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-slate-700">Solicitante: {res.responsable}</span>
+                        <span className="font-medium text-slate-700">Solicitante: {formatDisplayTitle(res.responsable)}</span>
                         <span className="font-mono text-slate-500">{res.horaInicio} - {res.horaFin}</span>
                       </div>
                     </div>
@@ -467,7 +468,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="space-y-1">
                         <div className="flex items-center space-x-2">
-                          <span className="font-bold text-slate-900 text-sm">{rating.responsable}</span>
+                          <span className="font-bold text-slate-900 text-sm">{formatDisplayTitle(rating.responsable)}</span>
                           {rating.telefonoContacto && (() => {
                             const phoneAction = getPhoneContactActions(rating.telefonoContacto);
                             if (!phoneAction) return <span className="text-[11px] font-mono text-slate-500">📞 {rating.telefonoContacto}</span>;
@@ -500,11 +501,11 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                          <span className="font-semibold text-blue-700">{rating.espacio}</span>
+                          <span className="font-semibold text-blue-700">{formatDisplayTitle(rating.espacio)}</span>
                           <span>•</span>
                           <span className="font-mono">{formatDateDDMMYYYY(rating.fecha)}</span>
                           <span>•</span>
-                          <span>Actividad: {rating.tipoActividad}</span>
+                          <span>Actividad: {formatDisplayTitle(rating.tipoActividad)}</span>
                         </div>
                       </div>
 

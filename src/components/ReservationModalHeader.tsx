@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import { Copy, Calendar, Sparkles, SlidersHorizontal, X } from 'lucide-react';
 import { Reservation } from '../types';
@@ -47,7 +48,7 @@ export const ReservationModalHeader: React.FC<ReservationModalHeaderProps> = Rea
             {isDuplicating
               ? 'Copia generada: Revisa o ajusta fecha, horario o sala y guarda para crear la nueva reserva'
               : editingReservation
-              ? `ID: ${editingReservation.id} • ${editingReservation.espacio}`
+              ? `ID: ${editingReservation.id} • ${formatDisplayTitle(editingReservation.espacio)}`
               : 'Ingresa los datos para registrar o programar una nueva reserva'}
           </p>
         </div>

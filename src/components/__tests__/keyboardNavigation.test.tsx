@@ -22,7 +22,7 @@ describe('search keyboard regressions', () => {
     const date=new Date(2026,9,6);
     render(<CalendarView reservations={[{id:'keyboard-calendar',fecha:'2026-10-06',horaInicio:'10:00',horaFin:'11:00',espacio:'SALA 2',responsable:'Vecino',descripcion:'Taller de teclado',tipoActividad:'Taller',actividadRecurrente:'No'}]}
       selectedDate={date} onSelectReservation={select} onNavigateToDay={navigate} onNewReservationForDate={vi.fn()}/>);
-    const booking=screen.getByRole('button',{name:/Actividad: Taller de teclado/});
+    const booking=screen.getByRole('button',{name:/Actividad: Taller De Teclado/});
     const keyboard= new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});
     act(()=>booking.dispatchEvent(keyboard));
     expect(keyboard.defaultPrevented).toBe(false);expect(navigate).not.toHaveBeenCalled();

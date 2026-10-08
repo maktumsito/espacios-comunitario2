@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import { Reservation, SpaceInfo } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
@@ -144,9 +145,9 @@ export const SpaceDashboard: React.FC<SpaceDashboardProps> = ({
                         >
                           <div className="truncate pr-2">
                             <span className="font-bold truncate text-slate-900 block text-xs">
-                              {res.descripcion || res.tipoActividad}
+                              {formatDisplayTitle(res.descripcion || res.tipoActividad)}
                             </span>
-                            <span className="text-[10px] text-slate-500">{res.responsable}</span>
+                            <span className="text-[10px] text-slate-500">{formatDisplayTitle(res.responsable)}</span>
                           </div>
                           <div className="text-[10px] font-mono text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 shrink-0 font-medium">
                             {res.horaInicio}-{res.horaFin}

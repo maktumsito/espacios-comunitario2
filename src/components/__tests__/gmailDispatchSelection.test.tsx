@@ -65,10 +65,10 @@ describe('Gmail explicit activity selection', () => {
     expect(dates).toEqual(['2026-10-01']);
     expect(selected.map(r => r.id)).toEqual(['SELECTED']);
     const email = vi.mocked(sendActivitiesViaGmail).mock.calls[0][0];
-    expect(email.textBody).toContain('SELECTED');
-    expect(email.textBody).not.toContain('UNCHECKED');
-    expect(email.textBody).not.toContain('NEW_UNSELECTED');
-    expect(email.textBody).not.toContain('NEXT_WEEK');
+    expect(email.textBody).toContain('Selected');
+    expect(email.textBody).not.toContain('Unchecked');
+    expect(email.textBody).not.toContain('New_Unselected');
+    expect(email.textBody).not.toContain('Next_Week');
     expect(email.attachments).toHaveLength(1);
     view.rerender(<GmailDispatchModal {...props} isOpen={false} />);
     view.rerender(<GmailDispatchModal {...props} />);

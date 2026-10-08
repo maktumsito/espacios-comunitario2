@@ -123,31 +123,8 @@ export function getReservationTypeVisual(
   return RESERVATION_TYPE_VISUALS.other;
 }
 
-/**
- * Normalizes activity titles that may be completely in UPPERCASE or messy,
- * converting them into clean, balanced Title Case so they adapt cleanly to card widths.
- */
+/** Formats visible reservation text without changing stored or editable values. */
 export function formatDisplayTitle(raw?: string): string {
-  if (!raw || !raw.trim()) return '';
-  const trimmed = raw.trim();
-
-  // If already mixed case (contains lower case characters), keep as is
-  const hasLower = /[a-záéíóúñ]/.test(trimmed);
-  const letters = trimmed.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ]/g, '');
-
-  // Only transform if entirely uppercase and has at least 3 letters
-  if (!hasLower && letters.length >= 3) {
-    const smallWords = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'en', 'y', 'a', 'para', 'por', 'con', 'o', 'al']);
-    return trimmed
-      .toLowerCase()
-      .split(' ')
-      .map((word, idx) => {
-        if (!word) return '';
-        if (idx > 0 && smallWords.has(word)) return word;
-        return word.charAt(0).toUpperCase() + word.slice(1);
-      })
-      .join(' ');
-  }
-
-  return trimmed;
+  return (raw || '').trim().normalize('NFC').toLocaleLowerCase('es-CL')
+    .replace(/(^|[^\p{L}\p{M}])(\p{L})/gu, (_match, separator: string, letter: string) => separator + letter.toLocaleUpperCase('es-CL'));
 }

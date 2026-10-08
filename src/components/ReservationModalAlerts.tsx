@@ -1,3 +1,4 @@
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import { History, RotateCcw, Lock, Clock, AlertTriangle, Copy } from 'lucide-react';
 import { Reservation } from '../types';
@@ -64,9 +65,9 @@ export const ReservationModalAlerts: React.FC<ReservationModalAlertsProps> = Rea
                 <p className="text-xs text-amber-900 leading-relaxed">
                   Se detectó progreso no guardado de una sesión previa
                   {draftData.formData?.responsable ? (
-                    <> para <strong>{draftData.formData.responsable}</strong> ({draftData.formData.tipoActividad || 'Actividad'})</>
+                    <> para <strong>{formatDisplayTitle(draftData.formData.responsable)}</strong> ({formatDisplayTitle(draftData.formData.tipoActividad || 'Actividad')})</>
                   ) : draftData.formData?.descripcion ? (
-                    <>: &quot;{draftData.formData.descripcion}&quot;</>
+                    <>: &quot;{formatDisplayTitle(draftData.formData.descripcion)}&quot;</>
                   ) : null}.
                   ¿Deseas restaurar este borrador o descartarlo para continuar con los valores actuales?
                 </p>
