@@ -113,7 +113,10 @@ export function sanitizeAuditEntriesForLocalStorage(
     reservaResponsable: entry.reservaResponsable,
     isReverted: entry.isReverted,
     revertedAt: entry.revertedAt,
-    revertedBy: entry.revertedBy,
+      revertedBy: entry.revertedBy,
+      snapshotVersion: entry.snapshotVersion,
+      snapshotParts: entry.snapshotParts,
+      affectedCount: entry.affectedCount,
     // Do NOT store heavy object graphs in localStorage:
     previousState: undefined,
     newState: undefined,

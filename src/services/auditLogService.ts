@@ -2,7 +2,6 @@ import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import {
   collection,
   doc,
-  setDoc,
   query,
   orderBy,
   limit,
@@ -15,14 +14,9 @@ import {
   AuditActionType,
   AuditFieldDiff
 } from '../types';
-import { AuthUser, getCurrentUser } from './authService';
+import { AuthUser, getCurrentUser, isCoordinatorOrAdmin } from './authService';
 import {
-  saveReservation,
-  saveReservationsBatch,
-  deleteReservationsBatch,
-  unrecordDeletedId,
-  unrecordDeletedIds,
-  getLocalCache,
+  commitReservationChanges,
   cleanForFirestore
 } from './reservationService';
 import {
@@ -30,6 +24,9 @@ import {
   setIndexedDbAuditLogs
 } from '../utils/indexedDbStorage';
 import { sanitizeAuditEntriesForLocalStorage } from './storageService';
+import { AuditNotSyncedError, fetchFullAuditEntry, persistAuditEntry } from './auditSnapshotService';
+import { auditStateRows, buildAuditRestorePlan, isDeletionAction } from '../utils/auditRestore';
+import { getDocFromServer } from 'firebase/firestore';
 
 const AUDIT_COLLECTION_NAME = 'audit_logs';
 const AUDIT_STORAGE_KEY = 'cc_audit_changelog_v1';
@@ -38,34 +35,29 @@ const MAX_LOCAL_AUDIT_ENTRIES = 15;
 const isBrowser = typeof window !== 'undefined' && typeof localStorage !== 'undefined';
 
 let inMemoryAuditLogs: AuditChangeLogEntry[] | null = null;
-let isHydratingFromIndexedDb = false;
+let hydration: Promise<void> | null = null;
+let restoreInFlight = false;
 
-/**
- * Sanitizes a reservation state for audit logging to prevent browser QuotaExceededError.
- * Strips huge base64 data URLs from attachments and limits array sizes.
- */
-function sanitizeStateForAudit(
-  state?: Reservation | Reservation[]
-): Reservation | Reservation[] | undefined {
-  if (!state) return undefined;
-
-  const sanitizeSingle = (r: Reservation): Reservation => {
-    if (!r) return r;
-    const copy = { ...r };
-    if (copy.cartaCompromisoAdjunta?.dataUrl) {
-      copy.cartaCompromisoAdjunta = {
-        ...copy.cartaCompromisoAdjunta,
-        dataUrl: `[ATTACHMENT_${copy.cartaCompromisoAdjunta.name || 'FILE'}]`
-      };
-    }
-    return copy;
-  };
-
-  if (Array.isArray(state)) {
-    return state.slice(0, 25).map(sanitizeSingle);
+/** Preserve full snapshots and monotonic revert status when merging caches. */
+function mergeAuditHistory(...sources: AuditChangeLogEntry[][]): AuditChangeLogEntry[] {
+  const byId = new Map<string, AuditChangeLogEntry>();
+  for (const source of sources) for (const entry of source) {
+    const old = byId.get(entry.id);
+    byId.set(entry.id, { ...old, ...entry,
+      previousState: entry.previousState ?? old?.previousState,
+      newState: entry.newState ?? old?.newState,
+      isReverted: Boolean(old?.isReverted || entry.isReverted),
+      revertedAt: entry.revertedAt || old?.revertedAt,
+      revertedBy: entry.revertedBy || old?.revertedBy });
   }
+  return [...byId.values()].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+}
 
-  return sanitizeSingle(state);
+function hydrateAuditHistory(): Promise<void> {
+  if (!hydration) hydration = getIndexedDbAuditLogs().then(entries => {
+    if (entries?.length) saveAuditHistory(mergeAuditHistory(entries, inMemoryAuditLogs || []));
+  }).catch(err => console.warn('Error hydrating audit logs from IndexedDB:', err));
+  return hydration;
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -146,20 +138,7 @@ export function getAuditHistory(): AuditChangeLogEntry[] {
     return inMemoryAuditLogs;
   }
 
-  // Hydrate asynchronously from IndexedDB if in-memory cache is empty
-  if (!isHydratingFromIndexedDb && typeof window !== 'undefined') {
-    isHydratingFromIndexedDb = true;
-    getIndexedDbAuditLogs().then((idbEntries) => {
-      if (idbEntries && idbEntries.length > 0) {
-        inMemoryAuditLogs = idbEntries;
-        window.dispatchEvent(
-          new CustomEvent('app_audit_changelog_changed', { detail: idbEntries })
-        );
-      }
-    }).catch((err) => {
-      console.warn('Error hydrating audit logs from IndexedDB:', err);
-    });
-  }
+  if (isBrowser) void hydrateAuditHistory();
 
   if (isBrowser) {
     try {
@@ -213,7 +192,7 @@ export function saveAuditHistory(entries: AuditChangeLogEntry[]): void {
     }
   }
 
-  window.dispatchEvent(
+  if (isBrowser) window.dispatchEvent(
     new CustomEvent('app_audit_changelog_changed', { detail: entries })
   );
 }
@@ -235,7 +214,9 @@ export async function recordAuditEntry(params: {
   previousState?: Reservation | Reservation[];
   newState?: Reservation | Reservation[];
   diffs?: AuditFieldDiff[];
+  newStateIsConfirmed?: boolean;
 }): Promise<AuditChangeLogEntry> {
+  await hydrateAuditHistory();
   const authorName =
     typeof params.user === 'string'
       ? params.user
@@ -260,25 +241,21 @@ export async function recordAuditEntry(params: {
     reservaHorario: params.reservaHorario,
     reservaResponsable: params.reservaResponsable,
     diffs: params.diffs,
-    previousState: sanitizeStateForAudit(params.previousState),
-    newState: sanitizeStateForAudit(params.newState),
+    previousState: params.previousState ? JSON.parse(JSON.stringify(params.previousState)) : undefined,
+    newState: params.newState ? JSON.parse(JSON.stringify(params.newState)) : undefined,
+    snapshotVersion: params.newStateIsConfirmed || !params.newState ? 2 : undefined,
+    affectedCount: new Set([...auditStateRows(params.previousState), ...auditStateRows(params.newState)].map(r => r.id)).size,
     isReverted: false
   };
 
   // 1. Optimistic Local Save
   const current = getAuditHistory();
-  const next = [entry, ...current.filter((e) => e.id !== entry.id)].slice(
-    0,
-    MAX_LOCAL_AUDIT_ENTRIES
-  );
+  const next = mergeAuditHistory(current, [entry]);
   saveAuditHistory(next);
 
   // 2. Firestore Sync (non-blocking)
   try {
-    const db = getDb();
-    const docRef = doc(db, AUDIT_COLLECTION_NAME, entry.id);
-    const cleaned = cleanForFirestore(entry);
-    await setDoc(docRef, cleaned, { merge: true });
+    await persistAuditEntry(entry);
   } catch (err: any) {
     console.warn('Audit log saved locally (Firestore notice):', err?.message || err);
   }
@@ -297,14 +274,8 @@ export function subscribeToAuditLogs(
   const initial = getAuditHistory();
   onData(initial);
 
-  // Hydrate from IndexedDB in background
-  getIndexedDbAuditLogs()
-    .then((idbEntries) => {
-      if (idbEntries && idbEntries.length > initial.length) {
-        onData(idbEntries);
-      }
-    })
-    .catch((e) => console.warn('IndexedDB audit hydration warning:', e));
+  let active = true;
+  void hydrateAuditHistory().then(() => { if (active) onData(getAuditHistory()); });
 
   try {
     const db = getDb();
@@ -323,8 +294,9 @@ export function subscribeToAuditLogs(
             });
           });
           list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-          saveAuditHistory(list);
-          onData(list);
+          const merged = mergeAuditHistory(getAuditHistory(), list);
+          saveAuditHistory(merged);
+          if (active) onData(merged);
         }
       },
       (error) => {
@@ -333,11 +305,11 @@ export function subscribeToAuditLogs(
       }
     );
 
-    return unsubscribe;
+    return () => { active = false; unsubscribe(); };
   } catch (err) {
     console.warn('Audit logs initialization error:', err);
     if (onError) onError(err);
-    return () => {};
+    return () => { active = false; };
   }
 }
 
@@ -347,218 +319,60 @@ export function subscribeToAuditLogs(
 export async function restoreAuditChange(
   logId: string,
   currentUser?: AuthUser | null
-): Promise<{
-  success: boolean;
-  message: string;
-  restoredCount: number;
-}> {
-  let history = inMemoryAuditLogs || getAuditHistory();
-  let entry = history.find((e) => e.id === logId);
-
-  // If entry not found or missing previousState, hydrate fully from native IndexedDB
-  if (!entry || !entry.previousState) {
-    try {
-      const idbEntries = await getIndexedDbAuditLogs();
-      if (idbEntries && idbEntries.length > 0) {
-        inMemoryAuditLogs = idbEntries;
-        entry = idbEntries.find((e) => e.id === logId) || entry;
-      }
-    } catch (err) {
-      console.warn('Could not read IndexedDB during audit restore:', err);
-    }
-  }
-
-  if (!entry) {
-    return { success: false, message: 'No se encontró el registro de cambio solicitado.', restoredCount: 0 };
-  }
-
-  if (entry.isReverted) {
-    return { success: false, message: 'Este cambio ya fue restaurado previamente.', restoredCount: 0 };
-  }
-
-  const authorName = currentUser?.name || currentUser?.username || 'Administrador';
-  const nowIso = new Date().toISOString();
-
+): Promise<{ success: boolean; message: string; restoredCount: number }> {
+  const failure = (message: string) => ({ success: false, message, restoredCount: 0 });
+  if (!isCoordinatorOrAdmin(currentUser)) return failure('Solo Administradores o Coordinadores pueden restaurar cambios.');
+  if (restoreInFlight) return failure('Hay una restauración en curso. Espera a que termine.');
+  restoreInFlight = true;
   try {
-    let restoredCount = 0;
-
-    switch (entry.action) {
-      case 'DELETE': {
-        if (!entry.previousState) {
-          return { success: false, message: 'No se encontró el respaldo de la reserva eliminada.', restoredCount: 0 };
-        }
-        const reservaToRestore = entry.previousState as Reservation;
-        unrecordDeletedId(reservaToRestore.id);
-        await new Promise((r) => setTimeout(r, 0));
-        await saveReservation({
-          ...reservaToRestore,
-          updatedAt: nowIso
-        });
-        restoredCount = 1;
-        break;
-      }
-
-      case 'DELETE_SERIES':
-      case 'DELETE_ALL_HOLIDAYS': {
-        if (!entry.previousState) {
-          return { success: false, message: 'No se encontró el respaldo de las reservas eliminadas.', restoredCount: 0 };
-        }
-        const listToRestore = Array.isArray(entry.previousState)
-          ? entry.previousState
-          : [entry.previousState as Reservation];
-
-        if (listToRestore.length === 0) {
-          return { success: false, message: 'No hay reservas para restaurar en este registro.', restoredCount: 0 };
-        }
-
-        unrecordDeletedIds(listToRestore.map((r) => r.id));
-        await new Promise((r) => setTimeout(r, 0));
-        await saveReservationsBatch(listToRestore);
-        restoredCount = listToRestore.length;
-        break;
-      }
-
-      case 'UPDATE':
-      case 'CLEAR_PARTICIPANTS':
-      case 'TOGGLE_REALIZADA': {
-        if (!entry.previousState) {
-          return { success: false, message: 'No se encontró la versión anterior de la reserva para revertir.', restoredCount: 0 };
-        }
-        const prevReserva = entry.previousState as Reservation;
-        await new Promise((r) => setTimeout(r, 0));
-        await saveReservation({
-          ...prevReserva,
-          updatedAt: nowIso
-        });
-        restoredCount = 1;
-        break;
-      }
-
-      case 'CREATE': {
-        // Undoing a creation means removing the created reservation or all reservations in the series
-        await new Promise((r) => setTimeout(r, 0));
-        let idsToDelete: string[] = [];
-
-        if (Array.isArray(entry.newState) && entry.newState.length > 0) {
-          idsToDelete = entry.newState.map((r: any) => r.id);
-        } else if (entry.newState && typeof entry.newState === 'object' && 'id' in entry.newState) {
-          const singleId = (entry.newState as Reservation).id;
-          // Check if it belongs to a series created simultaneously
-          const current = getLocalCache();
-          const target = current.find(r => r.id === singleId);
-          const seriesId = target?.serieRecurrente || target?.recurrenteId;
-          if (seriesId) {
-            const seriesItems = current.filter(r => r.serieRecurrente === seriesId || r.recurrenteId === seriesId);
-            if (seriesItems.length > 1) {
-              idsToDelete = seriesItems.map(r => r.id);
-            } else {
-              idsToDelete = [singleId];
-            }
-          } else {
-            idsToDelete = [singleId];
-          }
-        } else if (entry.reservaId) {
-          const current = getLocalCache();
-          const seriesMatches = current.filter(
-            (r) => r.serieRecurrente === entry.reservaId || r.recurrenteId === entry.reservaId
-          );
-          if (seriesMatches.length > 0) {
-            idsToDelete = seriesMatches.map((r) => r.id);
-          } else {
-            idsToDelete = [entry.reservaId];
-          }
-        }
-
-        if (idsToDelete.length > 0) {
-          await deleteReservationsBatch(idsToDelete);
-          restoredCount = idsToDelete.length;
-        } else {
-          return { success: false, message: 'No se pudo identificar la reserva creada para deshacer.', restoredCount: 0 };
-        }
-        break;
-      }
-
-      case 'BULK_IMPORT': {
-        // Undoing a bulk import means deleting the imported reservations
-        await new Promise((r) => setTimeout(r, 0));
-        let idsToDelete: string[] = [];
-        if (Array.isArray(entry.newState)) {
-          idsToDelete = entry.newState.map((r: any) => r.id);
-        } else if (entry.reservaId) {
-          idsToDelete = [entry.reservaId];
-        }
-        if (idsToDelete.length > 0) {
-          await deleteReservationsBatch(idsToDelete);
-          restoredCount = idsToDelete.length;
-        }
-        break;
-      }
-
-      default:
-        return { success: false, message: `Tipo de acción '${entry.action}' no admite reversión automática.`, restoredCount: 0 };
+    await hydrateAuditHistory();
+    // Restoration requires authoritative data; a local summary cannot overwrite a newer change.
+    let entry: AuditChangeLogEntry;
+    try { entry = await fetchFullAuditEntry(logId); }
+    catch (error) {
+      const local = getAuditHistory().find(item => item.id === logId);
+      if (!(error instanceof AuditNotSyncedError) || !local || (!local.previousState && !local.newState) || local.id.startsWith('AUDIT_BASELINE_')) throw error;
+      await persistAuditEntry(local);
+      entry = await fetchFullAuditEntry(logId);
     }
-
-    // Mark log as reverted
-    const updatedHistory = history.map((item) => {
-      if (item.id === logId) {
-        return {
-          ...item,
-          isReverted: true,
-          revertedAt: nowIso,
-          revertedBy: authorName
-        };
-      }
-      return item;
-    });
-    saveAuditHistory(updatedHistory);
-
-    // Sync revert status to Firestore
-    try {
-      const db = getDb();
-      const docRef = doc(db, AUDIT_COLLECTION_NAME, logId);
-      await setDoc(
-        docRef,
-        {
-          isReverted: true,
-          revertedAt: nowIso,
-          revertedBy: authorName
-        },
-        { merge: true }
-      );
-    } catch (err) {
-      console.warn('Could not update Firestore revert flag:', err);
+    saveAuditHistory(mergeAuditHistory(getAuditHistory(), [entry]));
+    if (entry.isReverted) return failure('Este cambio ya fue restaurado previamente.');
+    const rows = [...auditStateRows(entry.previousState), ...auditStateRows(entry.newState)];
+    const ids = [...new Set(rows.map(r => r.id))];
+    const db = getDb();
+    const current = new Map<string, Reservation>();
+    for (let start = 0; start < ids.length; start += 20) {
+      const snapshots = await Promise.all(ids.slice(start, start + 20).map(id => getDocFromServer(doc(db, 'reservas', id))));
+      snapshots.forEach(snapshot => {
+        if (snapshot.exists()) current.set(snapshot.id, { ...snapshot.data(), id: snapshot.id } as Reservation);
+      });
     }
-
-    // Record new RESTORE audit entry
-    await recordAuditEntry({
-      action: 'RESTORE',
+    const plan = buildAuditRestorePlan(entry, current);
+    const nowIso = new Date().toISOString();
+    const authorName = currentUser!.name || currentUser!.username;
+    const restoration: AuditChangeLogEntry = {
+      id: `AUDIT_RESTORE_${logId}`, timestamp: nowIso, user: authorName,
+      userRole: currentUser!.role, action: 'RESTORE',
       description: `Restaurado cambio de ${entry.action}: "${entry.description}" por ${authorName}`,
-      reservaId: entry.reservaId,
-      user: authorName,
-      userRole: currentUser?.role || 'Administrador',
-      reservaTitle: entry.reservaTitle,
-      reservaFecha: entry.reservaFecha,
-      reservaEspacio: entry.reservaEspacio,
-      reservaHorario: entry.reservaHorario,
-      reservaResponsable: entry.reservaResponsable
-    });
-
-    return {
-      success: true,
-      message:
-        entry.action.startsWith('DELETE')
-          ? `Se recuperó exitosamente ${restoredCount === 1 ? 'la reserva' : `${restoredCount} reservas`}.`
-          : `Se revirtió exitosamente el cambio a su estado anterior.`,
-      restoredCount
+      reservaId: entry.reservaId, affectedCount: plan.affectedCount, isReverted: false
     };
+    await commitReservationChanges(plan.reservations, {
+      requireAtomic: true, expectedVersions: plan.expectedVersions, deletedIds: plan.deletedIds,
+      operationId: `RESTORE_${logId}`,
+      auditRestore: { logId, timestamp: nowIso, actor: authorName, log: cleanForFirestore(restoration) as AuditChangeLogEntry }
+    });
+    // Merge with the latest cache, preserving audit entries received while restoring.
+    saveAuditHistory(mergeAuditHistory(getAuditHistory(), [
+      { ...entry, isReverted: true, revertedAt: nowIso, revertedBy: authorName }, restoration
+    ]));
+    return { success: true, restoredCount: plan.affectedCount,
+      message: isDeletionAction(entry.action)
+        ? `Se recuperaron ${plan.affectedCount} reserva(s).`
+        : `Se revirtió el cambio en ${plan.affectedCount} reserva(s).` };
   } catch (err: any) {
     console.error('Error restoring audit change:', err);
-    return {
-      success: false,
-      message: `Error al restaurar: ${err?.message || 'Fallo desconocido'}`,
-      restoredCount: 0
-    };
-  }
+    return failure(`Error al restaurar: ${err?.message || 'Fallo desconocido'}`);
+  } finally { restoreInFlight = false; }
 }
 
 /**

@@ -23,7 +23,8 @@ import {
 import { AuditChangeLogEntry, AuditActionType, Reservation } from '../types';
 import { restoreAuditChange, initializeAuditBaselineFromReservations } from '../services/auditLogService';
 import { AuthUser, isCoordinatorOrAdmin } from '../services/authService';
-import { formatDateDDMMYYYY } from '../utils/dateUtils';
+import { getChileLocalDateString } from '../utils/dateUtils';
+import { canRestoreAuditEntry, isDeletionAction, auditStateRows } from '../utils/auditRestore';
 import { BaseModal } from './common/BaseModal';
 import { ConfirmationModal } from './common/ConfirmationModal';
 import { AuditLogItemCard } from './AuditLogItemCard';
@@ -110,7 +111,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
 
     // Tab Filter
     if (activeTab === 'DELETED') {
-      result = result.filter((l) => l.action === 'DELETE' || l.action === 'DELETE_SERIES' || l.action === 'DELETE_ALL_HOLIDAYS');
+      result = result.filter((l) => isDeletionAction(l.action));
     } else if (activeTab === 'UPDATED') {
       result = result.filter((l) => l.action === 'UPDATE' || l.action === 'CLEAR_PARTICIPANTS' || l.action === 'TOGGLE_REALIZADA');
     } else if (activeTab === 'CREATED') {
@@ -121,8 +122,8 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
 
     // Date Filter
     if (dateFilter === 'TODAY') {
-      const todayStr = new Date().toISOString().slice(0, 10);
-      result = result.filter((l) => l.timestamp.startsWith(todayStr));
+      const todayStr = getChileLocalDateString();
+      result = result.filter((l) => getChileLocalDateString(new Date(l.timestamp)) === todayStr);
     } else if (dateFilter === 'WEEK') {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       result = result.filter((l) => l.timestamp >= sevenDaysAgo);
@@ -161,7 +162,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
   const counts = useMemo(() => {
     return {
       all: logs.length,
-      deleted: logs.filter((l) => l.action === 'DELETE' || l.action === 'DELETE_SERIES' || l.action === 'DELETE_ALL_HOLIDAYS').length,
+      deleted: logs.filter((l) => isDeletionAction(l.action)).length,
       updated: logs.filter((l) => l.action === 'UPDATE' || l.action === 'CLEAR_PARTICIPANTS' || l.action === 'TOGGLE_REALIZADA').length,
       created: logs.filter((l) => l.action === 'CREATE' || l.action === 'BULK_IMPORT').length,
       restored: logs.filter((l) => l.action === 'RESTORE' || l.isReverted).length
@@ -177,38 +178,33 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
       return;
     }
 
-    const actionText = entry.action.startsWith('DELETE')
-      ? '¿Estás seguro de que deseas recuperar esta reserva y volver a agregarla a la programación activa?'
-      : '¿Estás seguro de que deseas revertir este cambio y restablecer los valores anteriores de la reserva?';
-
+    if (isRestoringId || !canRestoreAuditEntry(entry)) return;
+    const count = entry.affectedCount || new Set([
+      ...auditStateRows(entry.previousState), ...auditStateRows(entry.newState)
+    ].map(r => r.id)).size;
+    const deletion = isDeletionAction(entry.action);
+    const removal = entry.action === 'CREATE' || entry.action === 'BULK_IMPORT';
+    const title = deletion ? 'Recuperar reservas' : removal ? 'Deshacer registro' : 'Revertir cambios';
+    const actionText = deletion
+      ? `Se recuperarán ${count || 'las'} reserva(s) eliminadas con sus datos y adjuntos.`
+      : removal
+      ? `Se deshará esta operación en ${count || 'las'} reserva(s). Se eliminarán las creadas por esta operación y se recuperarán las versiones anteriores de las actualizadas.`
+      : `Se restablecerán los valores anteriores en ${count || 'las'} reserva(s) de esta operación.`;
     setConfirmDialog({
-      isOpen: true,
-      title: entry.action.startsWith('DELETE') ? 'Recuperar Reserva' : 'Revertir Cambio',
-      message: actionText,
-      variant: 'warning',
-      confirmLabel: entry.action.startsWith('DELETE') ? 'Recuperar Reserva' : 'Revertir Cambio',
-      onConfirm: () => {
-        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+      isOpen: true, title,
+      message: `${entry.description}\n\n${actionText} Si existen cambios posteriores o conflictos de horario, la restauración se bloqueará.`,
+      variant: removal ? 'danger' : 'warning', confirmLabel: title,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         setIsRestoringId(entry.id);
         setFeedbackMessage(null);
-
-        setTimeout(async () => {
-          try {
-            const res = await restoreAuditChange(entry.id, currentUser);
-            if (res.success) {
-              setFeedbackMessage({ type: 'success', text: res.message });
-              if (onReservationsChanged) {
-                onReservationsChanged();
-              }
-            } else {
-              setFeedbackMessage({ type: 'error', text: res.message });
-            }
-          } catch (err: any) {
-            setFeedbackMessage({ type: 'error', text: `Error al restaurar: ${err?.message || 'Fallo desconocido'}` });
-          } finally {
-            setIsRestoringId(null);
-          }
-        }, 40);
+        try {
+          const res = await restoreAuditChange(entry.id, currentUser);
+          setFeedbackMessage({ type: res.success ? 'success' : 'error', text: res.message });
+          if (res.success) onReservationsChanged?.();
+        } catch (err: any) {
+          setFeedbackMessage({ type: 'error', text: `Error al restaurar: ${err?.message || 'Fallo desconocido'}` });
+        } finally { setIsRestoringId(null); }
       }
     });
   };
@@ -245,6 +241,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const formatTimestamp = (isoStr: string) => {
@@ -268,6 +265,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
       case 'DELETE':
       case 'DELETE_SERIES':
       case 'DELETE_ALL_HOLIDAYS':
+      case 'AUTHORIZE_DELETE':
         return {
           label: action === 'DELETE_SERIES' ? 'Serie Eliminada' : 'Eliminación',
           bg: 'bg-rose-50 text-rose-700 border-rose-200',
@@ -318,7 +316,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
             </h3>
             <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full flex items-center space-x-1 shadow-2xs">
               <ShieldCheck className="w-3 h-3 text-slate-950" />
-              <span>Solo Administradores</span>
+              <span>Administradores y Coordinadores</span>
             </span>
           </div>
           <p className="text-xs text-slate-300 mt-0.5">
@@ -577,10 +575,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
                     if (!entry) return null;
                     const badge = getActionBadge(entry.action);
                     const isExpanded = expandedLogId === entry.id;
-                    const canBeRestored =
-                      !entry.isReverted &&
-                      entry.action !== 'RESTORE' &&
-                      (entry.previousState !== undefined || entry.action === 'CREATE' || entry.action === 'BULK_IMPORT');
+                    const canBeRestored = canRestoreAuditEntry(entry);
 
                     return (
                       <div
@@ -603,6 +598,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
                           onToggleExpand={() => setExpandedLogId(isExpanded ? null : entry.id)}
                           canBeRestored={canBeRestored}
                           isRestoring={isRestoringId === entry.id}
+                          restoreDisabled={isRestoringId !== null}
                           onRestore={handleRestore}
                         />
                       </div>

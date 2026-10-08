@@ -13,7 +13,8 @@ vi.mock('firebase/firestore', async original => {
       memory.beforeCommit?.();
       const writes = new Map<string, any>();
       const deleted = new Set<string>();
-      const value = await callback({ get: async (path: string) => snapshot(path), set: (path: string, row: any) => writes.set(path, structuredClone(row)), delete: (path: string) => deleted.add(path) });
+      const value = await callback({ get: async (path: string) => snapshot(path), set: (path: string, row: any) => writes.set(path, structuredClone(row)),
+        update: (path: string, patch: any) => writes.set(path, { ...memory.rows.get(path), ...structuredClone(patch) }), delete: (path: string) => deleted.add(path) });
       if (memory.fail) throw new Error('Sin conexión');
       writes.forEach((row, path) => memory.rows.set(path, row));
       deleted.forEach(path => memory.rows.delete(path));
@@ -22,6 +23,91 @@ vi.mock('firebase/firestore', async original => {
       return value;
     },
   };
+});
+
+function restoreOptions(logId = 'audit') {
+  memory.rows.set(`audit_logs/${logId}`, { id: logId, isReverted: false });
+  return { requireAtomic: true, operationId: `RESTORE_${logId}`,
+    auditRestore: { logId, actor: 'Admin', timestamp: '2026-10-08T14:00:00Z',
+      log: { id: `RESTORE_LOG_${logId}`, timestamp: '2026-10-08T14:00:00Z', user: 'Admin', action: 'RESTORE' as const,
+        description: 'Restauración', reservaId: original.id } } };
+}
+describe('atomic audit restoration', () => {
+  it('recovers a deleted row and its availability together with audit status', async () => {
+    await writeReservations({} as any, [], clean, { deletedIds: [original.id] });
+    await writeReservations({} as any, [{ ...original, version: 0, restoredStateVersion: 1 }], clean,
+      { ...restoreOptions(), expectedVersions: { original: -1 } });
+    expect(memory.rows.get('reservas/original')).toMatchObject({ version: 1, restoredStateVersion: 1 });
+    expect(memory.rows.get('audit_logs/audit')).toMatchObject({ isReverted: true, restoreOperationId: 'RESTORE_audit' });
+    expect(memory.rows.get('audit_logs/RESTORE_LOG_audit').action).toBe('RESTORE');
+    expect(memory.rows.get('schedule_slots/2026-10-06_SALA%202').bookings.map((b: any) => b.id)).toEqual(['original']);
+  });
+  it('does not mark audit reverted or modify reservations when persistence fails', async () => {
+    const options = restoreOptions(); memory.fail = true;
+    await expect(writeReservations({} as any, [{ ...original, descripcion: 'Restaurado' }], clean, options)).rejects.toThrow('Sin conexión');
+    expect(memory.rows.get('audit_logs/audit').isReverted).toBe(false);
+    expect(getPendingOperations()).toHaveLength(1);
+    expect(memory.rows.has('audit_logs/RESTORE_LOG_audit')).toBe(false);
+    expect(memory.rows.get('reservas/original')).toEqual(original);
+  });
+  it('blocks a recovery when another session reclaimed a deleted ID, even with version zero', async () => {
+    memory.rows.delete('reservas/original');
+    const options = { ...restoreOptions(), expectedVersions: { original: -1 } };
+    memory.beforeCommit = () => memory.rows.set('reservas/original', { ...original, version: 0, descripcion: 'Ajena' });
+    await expect(writeReservations({} as any, [{ ...original, version: 0 }], clean, options)).rejects.toThrow(/otro usuario/);
+    expect(memory.rows.get('reservas/original').descripcion).toBe('Ajena');
+    expect(memory.rows.get('audit_logs/audit').isReverted).toBe(false);
+    expect(getPendingOperations()).toEqual([]);
+  });
+  it('undoes a replacement by deleting its exceptional booking and reactivating only the source', async () => {
+    await writeReservations({} as any, batch(), clean);
+    const source = memory.rows.get('reservas/original');
+    const replacement = memory.rows.get('reservas/replacement');
+    await writeReservations({} as any, [{ ...original, version: source.version }], clean,
+      { ...restoreOptions(), deletedIds: ['replacement'], expectedVersions: { original: source.version, replacement: replacement.version } });
+    expect(memory.rows.get('reservas/original')).toMatchObject({ estado: 'activa', version: 3 });
+    expect(memory.rows.get('reservas/original').reemplazadaPorReservaId).toBeUndefined();
+    expect(memory.rows.has('reservas/replacement')).toBe(false);
+    expect(memory.rows.get('schedule_slots/2026-10-06_SALA%202').bookings.map((b: any) => b.id)).toEqual(['original']);
+  });
+  it('recovers a deleted linked pair without breaking replacement integrity', async () => {
+    const created = (await writeReservations({} as any, batch(), clean)).reservations;
+    await writeReservations({} as any, [], clean, { deletedIds: created.map(r => r.id) });
+    await writeReservations({} as any, created.map(r => ({ ...r, version: 0 })), clean,
+      { ...restoreOptions(), expectedVersions: { original: -1, replacement: -1 } });
+    expect(memory.rows.get('reservas/original')).toMatchObject({ estado: 'cancelada', reemplazadaPorReservaId: 'replacement' });
+    expect(memory.rows.get('reservas/replacement')).toMatchObject({ reemplazaReservaId: 'original', estado: 'activa' });
+  });
+  it('retries a lost acknowledgement for a deletion-only restore without duplicating audit writes', async () => {
+    const options = { ...restoreOptions(), deletedIds: [original.id], expectedVersions: { original: 1 } };
+    memory.loseAck = true;
+    await expect(writeReservations({} as any, [], clean, options)).rejects.toThrow('Confirmación perdida');
+    await writeReservations({} as any, [], clean, options);
+    expect(memory.rows.has('reservas/original')).toBe(false);
+    expect(memory.rows.get('audit_logs/audit').isReverted).toBe(true);
+    expect(getPendingOperations()).toEqual([]);
+  });
+  it('rejects a competing restoration before modifying any reservation', async () => {
+    const options = restoreOptions();
+    memory.beforeCommit = () => memory.rows.set('audit_logs/audit', { isReverted: true, restoreOperationId: 'foreign' });
+    await expect(writeReservations({} as any, [{ ...original, descripcion: 'Restaurado' }], clean, options)).rejects.toThrow(/otra sesión/);
+    expect(memory.rows.get('reservas/original')).toEqual(original);
+    expect(getPendingOperations()).toEqual([]);
+  });
+  it('keeps a later recreated row in the returned cache state when acknowledging a completed restore', async () => {
+    const options = { ...restoreOptions(), deletedIds: [original.id], expectedVersions: { original: 1 } };
+    memory.loseAck = true;
+    await expect(writeReservations({} as any, [], clean, options)).rejects.toThrow('Confirmación perdida');
+    seed({ ...original, descripcion: 'Reserva posterior' });
+    const result = await writeReservations({} as any, [], clean, options);
+    expect(result.reservations[0].descripcion).toBe('Reserva posterior');
+    expect(memory.rows.get('reservas/original').descripcion).toBe('Reserva posterior');
+  });
+  it('clears restored lineage after an ordinary edit so older undo cannot overwrite it', async () => {
+    memory.rows.set('reservas/original', { ...original, restoredStateVersion: 0 });
+    await writeReservations({} as any, [{ ...original, restoredStateVersion: 0, descripcion: 'Edición posterior' }], clean);
+    expect(memory.rows.get('reservas/original').restoredStateVersion).toBeUndefined();
+  });
 });
 import { getPendingOperations, reservationSlots, writeReservations } from '../reservationWriter';
 

@@ -64,7 +64,9 @@ service cloud.firestore {
     function isValidAuditUpdate(data, prev) {
       return data.id == prev.id &&
              data.timestamp == prev.timestamp &&
-             (data.isReverted is bool || data.isReverted == prev.isReverted);
+             data.diff(prev).affectedKeys().hasOnly(['isReverted', 'revertedAt', 'revertedBy', 'restoreOperationId']) &&
+             data.isReverted == true &&
+             (!('isReverted' in prev) || prev.isReverted != true || data == prev);
     }
 
     // FCM Device Token validation
@@ -155,6 +157,12 @@ service cloud.firestore {
       allow create: if isValidId(logId) && isValidAuditLog(incoming());
       allow update: if isValidId(logId) && isValidAuditUpdate(incoming(), existing());
       allow delete: if false; // Inmutable: nunca se eliminan registros de auditoría
+      match /partes/{partId} {
+        allow read: if true;
+        allow create: if isValidId(logId) && request.resource.data.index is number && request.resource.data.payload is string;
+        allow update: if request.resource.data == resource.data;
+        allow delete: if false;
+      }
     }
 
     // 6. Tokens FCM

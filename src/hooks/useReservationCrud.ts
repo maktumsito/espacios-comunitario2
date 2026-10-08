@@ -398,7 +398,8 @@ export function useReservationCrud({
     };
 
     try {
-      applyConfirmed(await saveReservation(updated));
+      const confirmedWrite = await saveReservation(updated);
+      applyConfirmed(confirmedWrite);
       triggerSyncToast('Aforo restablecido a 0', 'success');
         void safeAudit({
           action: 'CLEAR_PARTICIPANTS',
@@ -411,7 +412,8 @@ export function useReservationCrud({
           reservaHorario: `${reserva.horaInicio} - ${reserva.horaFin}`,
           reservaResponsable: reserva.responsable,
           previousState: reserva,
-          newState: updated
+          newState: confirmedWrite.reservations,
+          newStateIsConfirmed: true
         });
     } catch (err: any) { triggerSyncToast(err?.message || 'No se pudo guardar el cambio.', 'error'); }
   }, [currentUser, setReservations, triggerSyncToast]);
@@ -428,7 +430,8 @@ export function useReservationCrud({
     };
 
     try {
-      applyConfirmed(await saveReservation(updated));
+      const confirmedWrite = await saveReservation(updated);
+      applyConfirmed(confirmedWrite);
       triggerSyncToast(`Marcada como ${nextVal === 'Sí' ? 'Realizada' : 'Pendiente'}`, 'success');
         void safeAudit({
           action: 'TOGGLE_REALIZADA',
@@ -441,7 +444,8 @@ export function useReservationCrud({
           reservaHorario: `${reserva.horaInicio} - ${reserva.horaFin}`,
           reservaResponsable: reserva.responsable,
           previousState: reserva,
-          newState: updated
+          newState: confirmedWrite.reservations,
+          newStateIsConfirmed: true
         });
     } catch (err: any) { triggerSyncToast(err?.message || 'No se pudo guardar el cambio.', 'error'); }
   }, [currentUser, setReservations, triggerSyncToast]);
@@ -465,18 +469,20 @@ export function useReservationCrud({
     if (imported.some(r=>!existing.has(r.id)) && !userCanCreateReservations(currentUser)) throw new Error('No tienes permiso para crear las reservas importadas.');
     const conflicts = detectBatchConflicts(imported, reservations, new Set(imported.map(r=>r.id)));
     if (conflicts.length) throw new Error(formatConflictMessage(conflicts[0]));
-    applyConfirmed(await saveReservationsBatch(imported));
+    const confirmedWrite = await saveReservationsBatch(imported);
+    applyConfirmed(confirmedWrite);
     void safeAudit({
       action: 'BULK_IMPORT',
       description: `Importadas / Sincronizadas ${importedList.length} reservas`,
       reservaId: 'BULK_IMPORT',
       user: currentUser,
-      newState: importedList
+      previousState: imported.filter(r => existing.has(r.id)).map(r => existing.get(r.id)!),
+      newState: confirmedWrite.reservations,
+      newStateIsConfirmed: true
     });
   }, [reservations, currentUser, setReservations]);
 
   const handleDeleteAllHolidays = useCallback(async () => {
-    const holidaysBefore = reservations.filter(r => isChileanHoliday(r.fecha));
     const res = await deleteAllHolidayReservations();
     if (res.deletedCount > 0) {
       void safeAudit({
@@ -484,7 +490,7 @@ export function useReservationCrud({
         description: `Eliminadas automáticamente ${res.deletedCount} reservas en días feriados de Chile`,
         reservaId: 'HOLIDAYS_PURGE',
         user: currentUser,
-        previousState: holidaysBefore
+        previousState: res.deletedReservations
       });
     }
     setReservations(res.remainingReservations);
@@ -653,8 +659,10 @@ export function useReservationCrud({
               reservaEspacio: firstRes.espacio,
               reservaHorario: `${firstRes.horaInicio} - ${firstRes.horaFin}`,
               reservaResponsable: firstRes.responsable,
-              newState: activeUpdated,
-              previousState: batchUpdateInfo.replacementOriginal
+              newState: confirmedWrite.reservations,
+              newStateIsConfirmed: true,
+              previousState: [...new Map([...reservations, ...exceptionHistory, ...(batchUpdateInfo.replacementOriginal ? [batchUpdateInfo.replacementOriginal] : [])].map(r => [r.id, r])).values()]
+                .filter(r => activeUpdated.some(next => next.id === r.id) || batchUpdateInfo!.deletedIds?.includes(r.id))
             });
         applyConfirmed(confirmedWrite);
 
@@ -877,7 +885,9 @@ export function useReservationCrud({
                 reservaEspacio: reserva.espacio,
                 reservaHorario: `${reserva.horaInicio} - ${reserva.horaFin}`,
                 reservaResponsable: reserva.responsable,
-                newState: updatedSeriesList
+                previousState: seriesMatches.filter(r => updatedSeriesList.some(next => next.id === r.id) || idsToDelete.includes(r.id)),
+                newState: confirmedWrite.reservations,
+                newStateIsConfirmed: true
               });
         applyConfirmed(confirmedWrite);
 
@@ -1008,7 +1018,8 @@ export function useReservationCrud({
               reservaEspacio: reserva.espacio,
               reservaHorario: `${reserva.horaInicio} - ${reserva.horaFin}`,
               reservaResponsable: reserva.responsable,
-              newState: seriesList
+              newState: confirmedWrite.reservations,
+              newStateIsConfirmed: true
             });
         applyConfirmed(confirmedWrite);
 
@@ -1102,7 +1113,8 @@ export function useReservationCrud({
                 reservaHorario: `${cleanReserva.horaInicio} - ${cleanReserva.horaFin}`,
                 reservaResponsable: cleanReserva.responsable,
                 previousState: existingRes,
-                newState: cleanReserva,
+                newState: confirmedWrite.reservations,
+                newStateIsConfirmed: true,
                 diffs
               });
             } else {
@@ -1116,7 +1128,8 @@ export function useReservationCrud({
                 reservaEspacio: cleanReserva.espacio,
                 reservaHorario: `${cleanReserva.horaInicio} - ${cleanReserva.horaFin}`,
                 reservaResponsable: cleanReserva.responsable,
-                newState: cleanReserva
+                newState: confirmedWrite.reservations,
+                newStateIsConfirmed: true
               });
             }
         applyConfirmed(confirmedWrite);
@@ -1216,7 +1229,7 @@ export function useReservationCrud({
       applyConfirmed(result);
       void safeAudit({ action: 'UPDATE', description: batch.description!, reservaId: original.id, user: currentUser,
         reservaTitle: original.tipoActividad, reservaFecha: original.fecha, reservaEspacio: target.espacio,
-        previousState: history.filter(r => batch.affectedIds.includes(r.id)), newState: result.reservations });
+        previousState: history.filter(r => batch.affectedIds.includes(r.id)), newState: result.reservations, newStateIsConfirmed: true });
       triggerSyncToast(`✓ Movimiento confirmado (${result.reservations.length} reservas).${skippedCount ? ` Sesiones omitidas por falta de disponibilidad: ${skippedCount}. Se conservaron sin cambios.` : ''}`, skippedCount ? 'warning' : 'success');
       return true;
     } catch (err: any) {
@@ -1353,7 +1366,8 @@ export function useReservationCrud({
     }
 
     try {
-      applyConfirmed(await commitReservationChanges([mergedReserva], { deletedIds: [source.id] }));
+      const confirmedWrite = await commitReservationChanges([mergedReserva], { deletedIds: [source.id], requireAtomic: true });
+      applyConfirmed(confirmedWrite);
       triggerSyncToast('Reservas unificadas y confirmadas.', 'success');
         void safeAudit({
           action: 'UPDATE',
@@ -1365,7 +1379,9 @@ export function useReservationCrud({
           reservaEspacio: mergedReserva.espacio,
           reservaHorario: `${mergedReserva.horaInicio} - ${mergedReserva.horaFin}`,
           reservaResponsable: mergedReserva.responsable,
-          newState: mergedReserva
+          previousState: [target, source],
+          newState: confirmedWrite.reservations,
+          newStateIsConfirmed: true
         });
     } catch (err: any) { triggerSyncToast(err?.message || 'No se pudieron unificar las reservas.', 'error'); return false; }
 

@@ -62,6 +62,7 @@ export interface Reservation {
   updatedAt?: string;
   createdBy?: string;
   version?: number;
+  restoredStateVersion?: number;
 }
 
 export type UpdateScope = 'single' | 'future' | 'series' | 'dateRange' | 'selected';
@@ -164,6 +165,9 @@ export interface AuditChangeLogEntry {
   // Snapshot states for exact restoration
   previousState?: Reservation | Reservation[];
   newState?: Reservation | Reservation[];
+  snapshotVersion?: 2;
+  snapshotParts?: number;
+  affectedCount?: number;
   isReverted?: boolean;
   revertedAt?: string;
   revertedBy?: string;

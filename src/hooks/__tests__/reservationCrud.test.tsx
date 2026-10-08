@@ -45,7 +45,7 @@ it('confirms replacement as one pair, audits both records and excludes only the 
   const { result } = renderHook(() => useReservationCrud(p));
   await act(async () => expect(await result.current.handleCreateOrUpdate(batch.updatedReservations[1], false, undefined, false, batch, true)).toBe(true));
   expect(mocks.save).toHaveBeenCalledWith(batch.updatedReservations, { deletedIds: undefined, allowConflictOverride: false });
-  expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ previousState: source, newState: batch.updatedReservations, description: expect.stringContaining('Motivo') }));
+  expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ previousState: [source], newState: batch.updatedReservations, newStateIsConfirmed: true, description: expect.stringContaining('Motivo') }));
 });
 
 it('denies replacement if creation permission is absent', async () => {

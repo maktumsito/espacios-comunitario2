@@ -1,4 +1,11 @@
-import type { Reservation } from '../types';
+import type { AuditChangeLogEntry, Reservation } from '../types';
+
+export interface AuditRestoreContext {
+  logId: string;
+  timestamp: string;
+  actor: string;
+  log: AuditChangeLogEntry;
+}
 
 export interface PendingOperation {
   id: string;
@@ -10,6 +17,7 @@ export interface PendingOperation {
   intent?: 'create' | 'update';
   requireAtomic?: boolean;
   expectedVersions?: Record<string, number>;
+  auditRestore?: AuditRestoreContext;
 }
 
 const LEGACY_KEY = 'reservation_pending_operations_v1';

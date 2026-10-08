@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { AuditChangeLogEntry } from '../types';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
+import { isDeletionAction } from '../utils/auditRestore';
 
 interface AuditLogItemCardProps {
   entry: AuditChangeLogEntry;
@@ -23,6 +24,7 @@ interface AuditLogItemCardProps {
   onToggleExpand: () => void;
   canBeRestored: boolean;
   isRestoring: boolean;
+  restoreDisabled?: boolean;
   onRestore: (entry: AuditChangeLogEntry) => void;
 }
 
@@ -42,6 +44,7 @@ export const AuditLogItemCard: React.FC<AuditLogItemCardProps> = ({
   onToggleExpand,
   canBeRestored,
   isRestoring,
+  restoreDisabled,
   onRestore
 }) => {
   return (
@@ -49,7 +52,7 @@ export const AuditLogItemCard: React.FC<AuditLogItemCardProps> = ({
       className={`p-4 rounded-2xl border transition shadow-2xs ${
         entry.isReverted
           ? 'bg-slate-50/70 border-slate-200 opacity-80'
-          : entry.action.startsWith('DELETE')
+          : isDeletionAction(entry.action)
           ? 'bg-gradient-to-r from-rose-50/40 via-white to-white border-rose-200 hover:border-rose-300'
           : entry.action === 'UPDATE'
           ? 'bg-gradient-to-r from-amber-50/40 via-white to-white border-amber-200 hover:border-amber-300'
@@ -177,9 +180,9 @@ export const AuditLogItemCard: React.FC<AuditLogItemCardProps> = ({
             <button
               type="button"
               onClick={() => onRestore(entry)}
-              disabled={isRestoring}
+              disabled={isRestoring || restoreDisabled}
               className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center space-x-1.5 shadow-xs cursor-pointer ${
-                entry.action.startsWith('DELETE')
+                isDeletionAction(entry.action)
                   ? 'bg-rose-600 hover:bg-rose-700 text-white'
                   : entry.action === 'UPDATE'
                   ? 'bg-amber-600 hover:bg-amber-700 text-white'
@@ -191,10 +194,12 @@ export const AuditLogItemCard: React.FC<AuditLogItemCardProps> = ({
               <span>
                 {isRestoring
                   ? 'Restaurando...'
-                  : entry.action.startsWith('DELETE')
+                  : isDeletionAction(entry.action)
                   ? 'Recuperar Reserva'
                   : entry.action === 'CREATE'
                   ? 'Deshacer Creación'
+                  : entry.action === 'BULK_IMPORT'
+                  ? 'Deshacer Importación'
                   : 'Revertir Edición'}
               </span>
             </button>

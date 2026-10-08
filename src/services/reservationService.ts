@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { getDb } from '../firebase/config';
 import { Reservation } from '../types';
-import { getStoredAuthUser, userCanCreateReservations, userCanEditReservations, userCanDeleteReservations } from './authService';
+import { getStoredAuthUser, isCoordinatorOrAdmin, userCanCreateReservations, userCanEditReservations, userCanDeleteReservations } from './authService';
 import { writeReservations, readPendingOperations, type WriteOptions, type WriteResult } from './reservationWriter';
 export { getPendingOperations, readPendingOperations, ReservationWriteError, ReservationVersionError } from './reservationWriter';
 import { INITIAL_RESERVATIONS } from '../data/initialData';
@@ -986,11 +986,12 @@ export async function resumeReservationOperation(id: string): Promise<WriteResul
   const operation = (await readPendingOperations()).find(o => o.id === id);
   if (!operation) throw new Error('La operación ya fue completada o no está disponible.');
   const user = getStoredAuthUser();
+  if (operation.auditRestore && !isCoordinatorOrAdmin(user)) throw new Error('Solo Administradores o Coordinadores pueden reanudar una restauración.');
   if (operation.reservations.some(r => r.reemplazaReservaId) && (!userCanCreateReservations(user) || !userCanEditReservations(user))) throw new Error('No tienes permisos para reanudar un reemplazo.');
   if (!user || (operation.actor && operation.actor !== user.username) || operation.reservations.some(r=>operation.intent === 'update' || r.version ? !userCanEditReservations(user) : !userCanCreateReservations(user)) || (operation.deletedIds.length && !userCanDeleteReservations(user))) throw new Error('No tienes permisos para reanudar esta operación.');
   return commitReservationChanges(operation.reservations.filter(r=>!operation.confirmedIds.includes(r.id)), {
     operationId: operation.id, deletedIds: operation.deletedIds.filter(id => !operation.confirmedIds.includes(id)),
-    allowConflictOverride: operation.allowConflictOverride, intent: operation.intent, requireAtomic: operation.requireAtomic, expectedVersions: operation.expectedVersions
+    allowConflictOverride: operation.allowConflictOverride, intent: operation.intent, requireAtomic: operation.requireAtomic, expectedVersions: operation.expectedVersions, auditRestore: operation.auditRestore
   });
 }
 

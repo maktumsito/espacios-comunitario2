@@ -4,7 +4,7 @@ import { getConstituentSpaces, getTimeIntervalsForReservation, isReservationActi
 import { isChileanHoliday, verifyHolidayOverrideKey } from '../utils/holidayUtils';
 import { validateReservationWithZod } from '../schemas/reservationSchema';
 import { canReplaceOccurrence, sameReplacementSlot } from '../utils/reservationReplacement';
-import { readPendingOperations, updateOperationJournal, type PendingOperation } from './reservationOperationJournal';
+import { readPendingOperations, updateOperationJournal, type PendingOperation, type AuditRestoreContext } from './reservationOperationJournal';
 export { getPendingOperations, readPendingOperations } from './reservationOperationJournal';
 export type { PendingOperation } from './reservationOperationJournal';
 
@@ -24,6 +24,7 @@ export interface WriteOptions {
   deletedIds?: string[];
   allowConflictOverride?: boolean;
   onProgress?: (result: WriteResult) => void;
+  auditRestore?: AuditRestoreContext;
 }
 export class ReservationWriteError extends Error {
   constructor(message: string, public result: WriteResult, public cause?: unknown) { super(message); }
@@ -111,6 +112,7 @@ export function planWriteChunks(items: Reservation[], previous: Map<string, Rese
 }
 
 export async function writeReservations(db: Firestore, input: readonly Reservation[], clean: (r: Reservation) => object, options: WriteOptions = {}): Promise<WriteResult> {
+  if (options.auditRestore && !options.requireAtomic) throw new Error('La restauración requiere una transacción atómica.');
   const items = input.map(r=> {
     try { return prepareReservation(r); }
     catch(error: any) { throw new Error(`Reserva ${r.id} (${r.fecha}): ${error?.message || 'Datos inválidos'}`); }
@@ -140,12 +142,23 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
   const chunks = planWriteChunks(items, previous, deletedIds);
   if (options.requireAtomic && chunks.length > 1) throw new Error('La serie excede el límite de un movimiento atómico. Usa un alcance más pequeño. No se modificó ninguna reserva.');
   const tracked = pendingOperations.find(o=>o.id===operationId);
-  const operation: PendingOperation = { id: operationId, actor: options.actor, reservations: tracked?.reservations || items, deletedIds: tracked?.deletedIds || deletedIds, confirmedIds: tracked?.confirmedIds || [], allowConflictOverride: Boolean(options.allowConflictOverride), intent: options.intent, ...(options.requireAtomic ? {requireAtomic: true} : {}), ...(options.expectedVersions ? {expectedVersions: options.expectedVersions} : {}) };
+  const operation: PendingOperation = { id: operationId, actor: options.actor, reservations: tracked?.reservations || items, deletedIds: tracked?.deletedIds || deletedIds, confirmedIds: tracked?.confirmedIds || [], allowConflictOverride: Boolean(options.allowConflictOverride), intent: options.intent, ...(options.requireAtomic ? {requireAtomic: true} : {}), ...(options.expectedVersions ? {expectedVersions: options.expectedVersions} : {}), ...(options.auditRestore ? {auditRestore: options.auditRestore} : {}) };
   await updateOperationJournal(operation);
   const byId = new Map(items.map(r=>[r.id,r]));
   try {
     for (const chunk of chunks) {
       const committed = await runTransaction(db, async tx => {
+        const restoration = options.auditRestore;
+        const auditRef = restoration ? doc(db, 'audit_logs', restoration.logId) : undefined;
+        if (auditRef) {
+          const audit = await tx.get(auditRef);
+          if (!audit.exists()) throw new Error('No se encontró el respaldo del cambio en el servidor.');
+          if (audit.data().isReverted) {
+            if (audit.data().restoreOperationId !== operationId) throw new Error('Este cambio ya fue restaurado en otra sesión.');
+            const acknowledged = await Promise.all(chunk.map(id => tx.get(doc(db, 'reservas', id))));
+            return acknowledged.filter(s => s.exists()).map(s => ({ ...s.data(), id: s.id } as Reservation));
+          }
+        }
         const incomingKeys = new Set(chunk.flatMap(id=>allSlotKeys(byId.get(id))));
         const [snapshots, incomingSlotSnapshots] = await Promise.all([
           Promise.all(chunk.map(id=>tx.get(doc(db,'reservas',id)))),
@@ -154,7 +167,7 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
         const current = new Map<string,Reservation>();
         snapshots.forEach(s=> { if(s.exists()) current.set(s.id,s.data() as Reservation); });
         const guards=Object.entries(options.expectedVersions||{}).filter(([id])=>!operation.confirmedIds.includes(id));
-        const guardSnapshots=await Promise.all(guards.filter(([id])=>!current.has(id)).map(([id])=>tx.get(doc(db,'reservas',id))));
+        const guardSnapshots=await Promise.all(guards.filter(([id])=>!chunk.includes(id)).map(([id])=>tx.get(doc(db,'reservas',id))));
         const guarded=new Map(current);
         guardSnapshots.forEach(s=>{if(s.exists())guarded.set(s.id,{...s.data(),id:s.id} as Reservation);});
         const survivingIds = chunk.filter(id => byId.has(id));
@@ -163,11 +176,13 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
         for(const [id,version] of guards){
           const row=guarded.get(id);
           if((row as any)?.lastOperationId===operationId)continue;
+          if(!row && version === -1)continue;
           if(!row && chunk.includes(id) && deletedIds.includes(id) && acknowledgedChunk)continue;
           if(!row)throw new Error('La reserva fue eliminada por otro usuario. No se volverá a crear.');
           if((row.version||0)!==version)throw new ReservationVersionError(row);
         }
-        const linkedIds = [...new Set([...current.values()].map(r => r.reemplazadaPorReservaId).filter((id): id is string => Boolean(id && !current.has(id))))];
+        const linkedIds = [...new Set([...current.values(), ...byId.values()].flatMap(r =>
+          [r.reemplazadaPorReservaId, ...(restoration ? [r.reemplazaReservaId] : [])]).filter((id): id is string => Boolean(id && !chunk.includes(id))))];
         const linkedSnapshots = await Promise.all(linkedIds.map(id => tx.get(doc(db, 'reservas', id))));
         const linkedCurrent = new Map<string, Reservation>();
         linkedSnapshots.forEach(s => { if (s.exists()) linkedCurrent.set(s.id, s.data() as Reservation); });
@@ -176,11 +191,22 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
           const next = byId.get(id);
           const existing = current.get(id);
           if (!next || (existing as any)?.lastOperationId === operationId) continue;
-          if (existing?.reemplazadaPorReservaId && next.reemplazadaPorReservaId !== existing.reemplazadaPorReservaId ||
-              existing?.reemplazaReservaId && next.reemplazaReservaId !== existing.reemplazaReservaId) {
+          const undoReplacement = Boolean(restoration && existing?.reemplazadaPorReservaId &&
+            deletedIds.includes(existing.reemplazadaPorReservaId) && !next.reemplazadaPorReservaId &&
+            current.get(existing.reemplazadaPorReservaId)?.reemplazaReservaId === id);
+          const linkedSource = next.reemplazaReservaId ? byId.get(next.reemplazaReservaId) || current.get(next.reemplazaReservaId) || linkedCurrent.get(next.reemplazaReservaId) : undefined;
+          const linkedReplacement = next.reemplazadaPorReservaId ? byId.get(next.reemplazadaPorReservaId) || current.get(next.reemplazadaPorReservaId) || linkedCurrent.get(next.reemplazadaPorReservaId) : undefined;
+          const recoverReplacement = Boolean(restoration && !existing && linkedSource?.estado === 'cancelada' &&
+            linkedSource.reemplazadaPorReservaId === id && sameReplacementSlot(linkedSource, next) &&
+            next.motivoReemplazo?.trim() && linkedSource.motivoReemplazo === next.motivoReemplazo);
+          const recoverSource = Boolean(restoration && !existing && next.estado === 'cancelada' &&
+            linkedReplacement?.reemplazaReservaId === id && sameReplacementSlot(next, linkedReplacement) &&
+            next.motivoReemplazo?.trim() && linkedReplacement.motivoReemplazo === next.motivoReemplazo);
+          if (!undoReplacement && (existing?.reemplazadaPorReservaId && next.reemplazadaPorReservaId !== existing.reemplazadaPorReservaId ||
+              existing?.reemplazaReservaId && next.reemplazaReservaId !== existing.reemplazaReservaId)) {
             throw new ReplacementValidationError('No se puede quitar el vínculo de un reemplazo existente.');
           }
-          if (next.reemplazaReservaId && !existing) {
+          if (next.reemplazaReservaId && !existing && !recoverReplacement) {
             const original = current.get(next.reemplazaReservaId);
             const suspended = byId.get(next.reemplazaReservaId);
             if (!original || !canReplaceOccurrence(original) || !suspended || suspended.estado !== 'cancelada' ||
@@ -191,13 +217,13 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
               throw new ReplacementValidationError('El reemplazo requiere una sesión activa y el guardado conjunto sin solapamientos.');
             }
           }
-          if (next.reemplazadaPorReservaId && !existing?.reemplazadaPorReservaId) {
+          if (next.reemplazadaPorReservaId && !existing?.reemplazadaPorReservaId && !recoverSource) {
             const replacement = byId.get(next.reemplazadaPorReservaId);
             if (!existing || !replacement || current.has(replacement.id) || replacement.reemplazaReservaId !== next.id) {
               throw new ReplacementValidationError('La suspensión debe guardarse junto con una actividad excepcional nueva.');
             }
           }
-          if (existing?.reemplazadaPorReservaId && isReservationActiveForAvailability(next, new Set())) {
+          if (!undoReplacement && existing?.reemplazadaPorReservaId && isReservationActiveForAvailability(next, new Set())) {
             const linkedId = existing.reemplazadaPorReservaId;
             const replacement = byId.get(linkedId) || current.get(linkedId) || linkedCurrent.get(linkedId);
             if (replacement && findReservationConflicts([next], [replacement]).length) {
@@ -231,6 +257,7 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
           if (!existing && (next.version || 0) > 0) throw new Error('La reserva fue eliminada por otro usuario. No se volverá a crear.');
           if ((existing?.version || 0) !== (next.version || 0)) throw new ReservationVersionError(existing!);
           const confirmed = { ...next, version: (existing?.version||0)+1,
+            restoredStateVersion: options.auditRestore ? next.restoredStateVersion : undefined,
             createdAt: existing?.createdAt || next.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
           for (const [key, candidate] of reservationSlots(confirmed)) {
             const slot = slots.get(key)!;
@@ -256,6 +283,11 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
           if (r && (r as any).lastOperationId !== operationId) tx.set(doc(db,'reservas',id), { ...clean(r), lastOperationId: operationId });
           else if (!r) tx.delete(doc(db,'reservas',id));
         }
+        if (auditRef && restoration) {
+          tx.update(auditRef, { isReverted: true, revertedAt: restoration.timestamp,
+            revertedBy: restoration.actor, restoreOperationId: operationId });
+          tx.set(doc(db, 'audit_logs', restoration.log.id), restoration.log);
+        }
         return saved;
       });
       result.reservations.push(...committed);
@@ -274,7 +306,7 @@ export async function writeReservations(db: Firestore, input: readonly Reservati
     return result;
   } catch (cause: any) {
     if (!result.confirmedIds.length && (cause instanceof ReplacementValidationError ||
-      !options.operationId && !pending && (cause instanceof ReservationVersionError || /conflicto|límite/i.test(cause?.message || '')))) {
+      (!options.operationId && !pending || options.auditRestore) && (cause instanceof ReservationVersionError || /conflicto|límite|ya fue restaurado/i.test(cause?.message || '')))) {
       try { await updateOperationJournal(operation, true); }
       catch (error) { console.warn('Se conservó el registro pendiente tras rechazar el guardado.', error); }
     }
