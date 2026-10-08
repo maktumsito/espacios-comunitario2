@@ -1,16 +1,8 @@
 import { NotificationPortal } from './components/common/NotificationPortal';
-import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
-import { Reservation, ViewMode, FilterState, isSingleDayMultiSpaceReservation, BatchUpdateInfo, SpaceRating } from './types';
-import { normalizeSpaceName } from './data/spacesData';
-import { isChileanHoliday } from './utils/holidayUtils';
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
+import { Reservation, ViewMode, FilterState, SpaceRating } from './types';
 import {
   saveReservation,
-  saveReservationsBatch,
-  deleteReservationById,
-  deleteReservationsBatch,
-  deleteSeriesByRecurrenteId,
-  seedAllToFirestore,
-  deleteAllHolidayReservations,
   purgeExpiredScheduleSlots,
   getLocalCache
 } from './services/reservationService';
@@ -27,12 +19,6 @@ import { CalendarView } from './components/CalendarView';
 import { DailyUsageView } from './components/DailyUsageView';
 import { MobileAgendaView } from './components/MobileAgendaView';
 import { getInitialViewMode, isMobileDevice, persistViewPreference } from './utils/deviceUtils';
-import {
-  recordAuditEntry,
-  computeReservationDiff
-} from './services/auditLogService';
-import { notifyImportantActivity } from './services/notificationService';
-import { getFuzzyMatchIds } from './utils/fuzzySearch';
 import { RevalidationBanner, CalendarSkeleton, TimelineSkeleton } from './components/common/LoadingSkeleton';
 
 // Custom Hooks for Modular Architecture
@@ -88,14 +74,6 @@ const AnalyticsView = lazyWithRetry(
   () => import('./components/AnalyticsView').then((m) => ({ default: m.AnalyticsView })),
   'AnalyticsView'
 );
-const MaintenanceDashboardView = lazyWithRetry(
-  () => import('./components/MaintenanceDashboardView').then((m) => ({ default: m.MaintenanceDashboardView })),
-  'MaintenanceDashboardView'
-);
-const ApplicantDirectoryView = lazyWithRetry(
-  () => import('./components/ApplicantDirectoryView').then((m) => ({ default: m.ApplicantDirectoryView })),
-  'ApplicantDirectoryView'
-);
 import { AppModalsContainer } from './components/AppModalsContainer';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFilteredReservations, INITIAL_FILTERS } from './hooks/useFilteredReservations';
@@ -103,19 +81,12 @@ import { canWriteReservations, getReservationReadScope } from './utils/reservati
 import { useReservationCrud } from './hooks/useReservationCrud';
 import { initGmailAuthListener } from './services/gmailDispatchService';
 import {
-  notifyTopamiento,
   checkTodayImportantActivities,
   getNotificationHistory,
   initNotificationListeners,
   AppNotificationItem
 } from './services/notificationService';
-import {
-  detectAllConflicts,
-  getConflictReservationIds,
-  detectBatchConflicts,
-  formatConflictMessage
-} from './utils/conflictDetector';
-import { addWeeks, format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import {
   AuthUser,
   getStoredAuthUser,
@@ -217,7 +188,6 @@ export default function App() {
     setPrefillPhone,
     prefillEmail,
     setPrefillEmail,
-    closeReservationModal,
     openCreateModal,
     isGmailDispatchModalOpen,
     setIsGmailDispatchModalOpen,
@@ -238,7 +208,7 @@ export default function App() {
     reservations, setReservations, isFirebaseConnected, setIsFirebaseConnected,
     isFirebaseSyncing, setIsFirebaseSyncing, lastSyncTime, setLastSyncTime,
     isInitialLoading, isHistoricalLoading, syncStatusToast, setSyncStatusToast,
-    triggerSyncToast, loadHistoricalMonth, loadHistoricalRange,
+    triggerSyncToast, loadHistoricalMonth,
     isReadScopeReady, readError, retryRead,
   } = useReservationsState({
     enabled: Boolean(currentUser), dateRange: reservationReadScope, allowMaintenance: canWrite,
@@ -248,13 +218,9 @@ export default function App() {
   // 4. Admin Configuration Hook
   const {
     spaces,
-    setSpaces,
     loanTypes,
-    setLoanTypes,
     activityTypes,
-    setActivityTypes,
     equipment,
-    setEquipment,
     userAccounts,
     setUserAccounts,
     handleSaveSpace,
@@ -279,7 +245,6 @@ export default function App() {
   // 5. Ratings State Hook
   const {
     ratings,
-    setRatings,
     handleSaveRating: saveRating,
     handleDeleteRating: deleteRating,
     checkRatingAllowed
@@ -304,7 +269,6 @@ export default function App() {
   // 7. Space Maintenance Blocks State & Synchronization Hook
   const {
     spaceBlocks,
-    setSpaceBlocks,
     handleSaveBlock,
     handleDeleteBlock
   } = useSpaceBlocks({ triggerSyncToast, enabled: Boolean(currentUser), startDate: reservationReadScope?.startDate });
@@ -360,11 +324,9 @@ export default function App() {
     isFilterBarOpen,
     setIsFilterBarOpen,
     hasActiveFilters,
-    resetFilters,
     conflictsCount,
     conflictReservationIds,
-    filteredReservations,
-    activeReservations
+    filteredReservations
   } = useFilteredReservations(reservations, { filters: reservationFilters, setFilters: setReservationFilters });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
 

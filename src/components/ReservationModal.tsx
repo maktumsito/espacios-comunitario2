@@ -1,104 +1,35 @@
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Reservation, SpaceInfo, LoanType, ActivityTypeItem, SpaceRating, EquipmentItem, isSingleDayMultiSpaceReservation, SpaceBlock } from '../types';
-import { SPACES_LIST, ACTIVITY_TYPES, normalizeSpaceName } from '../data/spacesData';
+import { SPACES_LIST, ACTIVITY_TYPES } from '../data/spacesData';
 import { DEFAULT_LOAN_TYPES } from '../services/adminConfigService';
 import { getStoredEquipment } from '../services/equipmentService';
-import { EquipmentSelector } from './EquipmentSelector';
 import { checkSingleConflict, timeToMinutes, formatMinutesToTime, findMaintenanceBlockConflicts, formatBlockConflictMessage } from '../utils/conflictDetector';
 import { AuthUser, isCoordinatorOrAdmin } from '../services/authService';
-import {
-  validateRut,
-  validateEmail,
-  validatePhone,
-  validateTimeRange,
-  timeStringToMinutes,
-  checkLoanScheduleLimit,
-  EXTENSION_AUTH_KEY,
-  validateActivityDescription,
-  checkSpaceCapacityWarning,
-  MAX_ACTIVITY_DESCRIPTION_LENGTH
-} from '../utils/validationUtils';
-import { validateReservationWithZod } from '../schemas/reservationSchema';
-import { checkSpaceBlocked } from '../services/spaceBlockService';
-import { getResponsibleHistoryAlert } from '../services/ratingService';
-import {
-  getChileanHolidayInfo,
-  filterOutChileanHolidays,
-  verifyHolidayOverrideKey
-} from '../utils/holidayUtils';
-import {
-  X,
-  Calendar,
-  Clock,
-  MapPin,
-  AlertTriangle,
-  Flame,
-  CheckCircle2,
-  Sparkles,
-  ShieldCheck,
-  KeyRound,
-  Trash2,
-  Repeat,
-  ChevronRight,
-  ChevronLeft,
-  Check,
-  RefreshCw,
-  Star,
-  Smartphone,
-  FileSignature,
-  Copy,
-  Layers,
-  Lock,
-  CalendarRange,
-  ArrowRightCircle,
-  CheckSquare,
-  ListFilter,
-  Info,
-  Building2,
-  RotateCcw,
-  History,
-  User,
-  ArrowRight,
-  ArrowLeft,
-  SlidersHorizontal
-} from 'lucide-react';
+import { verifyHolidayOverrideKey } from '../utils/holidayUtils';
+import { AlertTriangle } from 'lucide-react';
 import { useReservationAutosave, AutosavedReservationDraft } from '../hooks/useReservationAutosave';
-import { CommitmentLetterModal } from './CommitmentLetterModal';
-import { SpaceAvailabilityTimeline } from './SpaceAvailabilityTimeline';
-import { ApplicantContactSection } from './ApplicantContactSection';
-import { RecurrenceScheduleSection, WEEKDAYS, type CustomScheduleSlot } from './RecurrenceScheduleSection';
+import { WEEKDAYS, type CustomScheduleSlot } from './RecurrenceScheduleSection';
 export type { CustomScheduleSlot };
-import { downloadCommitmentLetterPdf, isCommitmentLetterEligible, CommitmentScheduleSlot } from '../utils/commitmentLetterPdf';
+import { isCommitmentLetterEligible, CommitmentScheduleSlot } from '../utils/commitmentLetterPdf';
 import { UpdateScope, BatchUpdateInfo } from '../types';
-import { ConflictRecommendationPanel } from './ConflictRecommendationPanel';
-import { ConflictResolutionModal, type ConflictSavePayload } from './ConflictResolutionModal';
-import { ConfirmationModal } from './common/ConfirmationModal';
+import { type ConflictSavePayload } from './ConflictResolutionModal';
 import { WizardStepsBar } from './WizardStepsBar';
 import { ReservationStep1Activity } from './ReservationStep1Activity';
 import { ReservationStep2DateTime } from './ReservationStep2DateTime';
 import { ReservationStep3Applicant } from './ReservationStep3Applicant';
 import { ReservationStep4ResourcesDocs } from './ReservationStep4ResourcesDocs';
 import { ReservationStep5Review } from './ReservationStep5Review';
-import { ReservationStep3Details } from './ReservationStep3Details';
-import { ReservationConflictBanner } from './ReservationConflictBanner';
 import { RecurringSeriesScopeSelector } from './RecurringSeriesScopeSelector';
-import { ReservationStep1DateTime } from './ReservationStep1DateTime';
-import { ReservationStep2Applicant } from './ReservationStep2Applicant';
 import { ReservationModalFooter } from './ReservationModalFooter';
 import { ReservationModalHeader } from './ReservationModalHeader';
 import { ReservationModalAlerts } from './ReservationModalAlerts';
-import { ReservationModalDialogs, type DeleteConfirmModalState } from './ReservationModalDialogs';
+import { ReservationModalDialogs } from './ReservationModalDialogs';
 import { useReservationCustomSchedules } from '../hooks/useReservationCustomSchedules';
 import { useReservationSeriesState } from '../hooks/useReservationSeriesState';
 import { useReservationConflictResolution } from '../hooks/useReservationConflictResolution';
 import { useReservationModalValidation } from '../hooks/useReservationModalValidation';
 import { useReservationSaveHandler } from '../hooks/useReservationSaveHandler';
-import {
-  ConflictRecommendation,
-  findAvailableTimeSlotsInSpace,
-  findAlternativeFreeSpaces
-} from '../utils/conflictRecommender';
 import {
   addDays,
   addMonths,
@@ -106,7 +37,7 @@ import {
   format,
   parseISO
 } from 'date-fns';
-import { formatDateDDMMYYYY, getDayOfWeekFromDateString, generateRecurrenceDates } from '../utils/dateUtils';
+import { formatDateDDMMYYYY, getDayOfWeekFromDateString } from '../utils/dateUtils';
 import { buildReplacementBatch } from '../utils/reservationReplacement';
 import { getSeriesEditStartDate, isRecurringSeriesReservation } from '../utils/recurringEdits';
 import { getChileLocalDateString } from '../utils/dateUtils';
@@ -263,8 +194,6 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   const [rangeStartDate, setRangeStartDate] = useState<string>('');
   const [rangeEndDate, setRangeEndDate] = useState<string>('');
   const [selectedOccurrenceIds, setSelectedOccurrenceIds] = useState<Set<string>>(new Set());
-  const updateWholeSeries = updateScope === 'series';
-  const setUpdateWholeSeries = (val: boolean) => setUpdateScope(val ? 'series' : 'single');
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 3]); // Lunes y Miércoles by default
   const [recurrenceStartDate, setRecurrenceStartDate] = useState(initialDate || format(new Date(), 'yyyy-MM-dd'));
   const [recurrenceEndDate, setRecurrenceEndDate] = useState(format(addMonths(new Date(), 3), 'yyyy-MM-dd'));
@@ -360,9 +289,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     }
   };
 
-  // Hallazgo 1: Conflict dialog & async check state (prevents UI freeze and deadlock)
+  // Conflict dialog and submission state
   const [showConflictDialog, setShowConflictDialog] = useState<boolean>(false);
-  const [isCheckingConflictAsync, setIsCheckingConflictAsync] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const isSubmittingRef = useRef<boolean>(false);
 
@@ -1051,13 +979,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     descriptionValidation,
     primarySpaceCapacityWarning,
     secondSpaceCapacityWarning,
-    patternDatesValidation,
-    specificDatesValidation,
     isFormSubmitDisabled,
     hasStep1Conflict,
-    isStep1Completed,
-    isStep2Completed,
-    isStep3Completed,
     validateStep1,
     validateStep2,
     isStep1ActivityCompleted,
@@ -1563,48 +1486,15 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                 descripcion={formData.descripcion}
                 equipamientoCount={formData.equipamientoSolicitado?.length || 0}
                 onSelectStep={(targetStep) => {
-                  if (targetStep === 1) {
-                    setWizardStep(1);
-                    scrollToModalTop();
-                  } else if (targetStep === 2) {
-                    if (validateStep1Activity(false)) {
-                      setWizardStep(2);
-                      scrollToModalTop();
-                    } else {
-                      validateStep1Activity(true);
-                    }
-                  } else if (targetStep === 3) {
-                    if (validateStep1Activity(false) && validateStep2DateTime(false)) {
-                      setWizardStep(3);
-                      scrollToModalTop();
-                    } else if (!validateStep1Activity(false)) {
-                      validateStep1Activity(true);
-                    } else {
-                      validateStep2DateTime(true);
-                    }
-                  } else if (targetStep === 4) {
-                    if (validateStep1Activity(false) && validateStep2DateTime(false) && validateStep3Applicant(false)) {
-                      setWizardStep(4);
-                      scrollToModalTop();
-                    } else if (!validateStep1Activity(false)) {
-                      validateStep1Activity(true);
-                    } else if (!validateStep2DateTime(false)) {
-                      validateStep2DateTime(true);
-                    } else {
-                      validateStep3Applicant(true);
-                    }
-                  } else if (targetStep === 5) {
-                    if (validateStep1Activity(false) && validateStep2DateTime(false) && validateStep3Applicant(false)) {
-                      setWizardStep(5);
-                      scrollToModalTop();
-                    } else if (!validateStep1Activity(false)) {
-                      validateStep1Activity(true);
-                    } else if (!validateStep2DateTime(false)) {
-                      validateStep2DateTime(true);
-                    } else {
-                      validateStep3Applicant(true);
+                  const prerequisites = [validateStep1Activity, validateStep2DateTime, validateStep3Applicant];
+                  for (const validate of prerequisites.slice(0, targetStep - 1)) {
+                    if (!validate(false)) {
+                      validate(true);
+                      return;
                     }
                   }
+                  setWizardStep(targetStep);
+                  scrollToModalTop();
                 }}
               />
 

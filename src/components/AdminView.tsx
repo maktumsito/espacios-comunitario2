@@ -49,22 +49,6 @@ import {
   RotateCcw,
   Users,
   ShieldCheck,
-  Activity,
-  ChefHat,
-  Dumbbell,
-  Trophy,
-  Presentation,
-  Layers,
-  BookOpen,
-  Grid,
-  GraduationCap,
-  Library,
-  Stethoscope,
-  Sun,
-  Music,
-  Video,
-  Smile,
-  Laptop,
   Move,
   ArrowUp,
   ArrowDown,
@@ -87,8 +71,7 @@ import {
   Mail,
   Repeat,
   ShieldAlert,
-  CalendarPlus,
-  FilePenLine
+  CalendarPlus
 } from 'lucide-react';
 
 export type AdminTab = 'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring';
@@ -171,26 +154,44 @@ export const AVATAR_COLOR_OPTIONS = [
   { id: 'bg-slate-600', label: 'Pizarra', hex: '#475569' },
 ];
 
-const AVAILABLE_ICONS = [
-  { id: 'Activity', label: 'Actividad', icon: Activity },
-  { id: 'Sparkles', label: 'Danza/Artes', icon: Sparkles },
-  { id: 'ChefHat', label: 'Cocina', icon: ChefHat },
-  { id: 'Dumbbell', label: 'Gimnasio', icon: Dumbbell },
-  { id: 'Trophy', label: 'Deportes', icon: Trophy },
-  { id: 'Presentation', label: 'Auditorio', icon: Presentation },
-  { id: 'Layers', label: 'Salas', icon: Layers },
-  { id: 'BookOpen', label: 'Lectura', icon: BookOpen },
-  { id: 'Grid', label: 'Manualidades', icon: Grid },
-  { id: 'GraduationCap', label: 'Educación', icon: GraduationCap },
-  { id: 'Library', label: 'Biblioteca', icon: Library },
-  { id: 'Stethoscope', label: 'Salud/Box', icon: Stethoscope },
-  { id: 'Sun', label: 'Exterior', icon: Sun },
-  { id: 'Music', label: 'Música', icon: Music },
-  { id: 'Video', label: 'Audiovisual', icon: Video },
-  { id: 'Laptop', label: 'Tecnología', icon: Laptop },
-  { id: 'Users', label: 'Comunidad', icon: Users },
-  { id: 'Smile', label: 'Infantil/Social', icon: Smile },
-];
+function AdminFormError({ message }: { message: string }) {
+  return message ? (
+    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
+      <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+      <span>{message}</span>
+    </div>
+  ) : null;
+}
+
+function AdminFormActions({ onCancel, submitLabel }: { onCancel: () => void; submitLabel: string }) {
+  return (
+    <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+      <button type="button" onClick={onCancel} className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs cursor-pointer">
+        Cancelar
+      </button>
+      <button type="submit" className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition cursor-pointer">
+        {submitLabel}
+      </button>
+    </div>
+  );
+}
+
+function AdminColorPicker({ label, color, onChange }: { label: string; color?: string; onChange: (color: string) => void }) {
+  return (
+    <div>
+      <label className="block text-xs font-bold text-slate-700 mb-1.5">{label}</label>
+      <div className="flex flex-wrap items-center gap-2">
+        {PRESET_COLORS.map(c => (
+          <button key={c} type="button" onClick={() => onChange(c)}
+            className={`w-6 h-6 rounded-full border transition-all flex items-center justify-center cursor-pointer ${color === c ? 'ring-2 ring-blue-600 ring-offset-2 scale-110' : 'border-slate-300'}`}
+            style={{ backgroundColor: c }}>
+            {color === c && <Check className="w-3 h-3 text-white" />}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function getInitialsFromName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -225,7 +226,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onSaveSpace,
   onDeleteSpace,
   onSaveLoanType,
-  onDeleteLoanType,
   onSaveActivityType,
   onDeleteActivityType,
   onSaveEquipment,
@@ -236,7 +236,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onResetUsers,
   onResetDefaults,
   onReorderSpaces,
-  onDeleteAllHolidays,
   onOpenChangePassword,
   onOpenImportExport,
   onSaveBlock,
@@ -251,6 +250,21 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const adminSavingRef = useRef(false);
   const [adminSaving, setAdminSaving] = useState(false);
   const [adminError, setAdminError] = useState('');
+
+  const beginAdminOperation = () => {
+    if (adminSavingRef.current) return false;
+    adminSavingRef.current = true;
+    setAdminSaving(true);
+    setAdminError('');
+    return true;
+  };
+  const finishAdminOperation = () => {
+    adminSavingRef.current = false;
+    setAdminSaving(false);
+  };
+  const reportAdminError = (err: any) => {
+    setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.');
+  };
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
 
   useEffect(() => {
@@ -266,8 +280,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const [isDeletingHolidays, setIsDeletingHolidays] = useState(false);
-
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -281,7 +293,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   const [equipmentFormError, setEquipmentFormError] = useState('');
   const [spaceFormError, setSpaceFormError] = useState('');
-  const [loanFormError, setLoanFormError] = useState('');
+
   const [activityFormError, setActivityFormError] = useState('');
 
   // ----------------------------------------------------
@@ -347,74 +359,62 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleSaveEquipmentSubmit = async (e: React.FormEvent) => {
-    if (adminSavingRef.current) { e.preventDefault(); return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
+    if (!beginAdminOperation()) { e.preventDefault(); return; }
     try {
+      e.preventDefault();
+      setEquipmentFormError('');
+      if (!equipmentForm.name.trim()) {
+        setEquipmentFormError('Por favor, ingresa el nombre del equipamiento.');
+        return;
+      }
+      const cleanName = equipmentForm.name.trim();
+      const finalItem: EquipmentItem = {
+        ...equipmentForm,
+        id: equipmentForm.id || `EQ_${cleanName.toUpperCase().replace(/\s+/g, '_')}`,
+        name: cleanName,
+        totalQuantity: Math.max(1, Number(equipmentForm.totalQuantity) || 1),
+        isCustom: true
+      };
 
-    e.preventDefault();
-    setEquipmentFormError('');
-    if (!equipmentForm.name.trim()) {
-      setEquipmentFormError('Por favor, ingresa el nombre del equipamiento.');
-      return;
-    }
-    const cleanName = equipmentForm.name.trim();
-    const finalItem: EquipmentItem = {
-      ...equipmentForm,
-      id: equipmentForm.id || `EQ_${cleanName.toUpperCase().replace(/\s+/g, '_')}`,
-      name: cleanName,
-      totalQuantity: Math.max(1, Number(equipmentForm.totalQuantity) || 1),
-      isCustom: true
-    };
-
-    if (onSaveEquipment) {
-      await onSaveEquipment(finalItem);
-    } else {
-      const updated = await saveEquipmentItem(finalItem);
-      setLocalEquipment(updated);
-    }
-    setIsEquipmentFormOpen(false);
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
+      if (onSaveEquipment) {
+        await onSaveEquipment(finalItem);
+      } else {
+        const updated = await saveEquipmentItem(finalItem);
+        setLocalEquipment(updated);
+      }
+      setIsEquipmentFormOpen(false);
+    } catch (err: any) { reportAdminError(err); }
+    finally { finishAdminOperation(); }
   };
 
   const handleDeleteEquipmentConfirm = async () => {
-    if (adminSavingRef.current) { return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
+    if (!beginAdminOperation()) { return; }
     try {
-
-    if (!equipmentToDelete) return;
-    if (onDeleteEquipment) {
-      await onDeleteEquipment(equipmentToDelete.id);
-    } else {
-      const updated = await deleteEquipmentItem(equipmentToDelete.id);
-      setLocalEquipment(updated);
-    }
-    setEquipmentToDelete(null);
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
+      if (!equipmentToDelete) return;
+      if (onDeleteEquipment) {
+        await onDeleteEquipment(equipmentToDelete.id);
+      } else {
+        const updated = await deleteEquipmentItem(equipmentToDelete.id);
+        setLocalEquipment(updated);
+      }
+      setEquipmentToDelete(null);
+    } catch (err: any) { reportAdminError(err); }
+    finally { finishAdminOperation(); }
   };
 
   const handleQuickStockChange = async (item: EquipmentItem, delta: number) => {
-    if (adminSavingRef.current) { return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
+    if (!beginAdminOperation()) { return; }
     try {
-
-    const newQty = Math.max(0, item.totalQuantity + delta);
-    const updated: EquipmentItem = { ...item, totalQuantity: newQty };
-    if (onSaveEquipment) {
-      await onSaveEquipment(updated);
-    } else {
-      const res = await saveEquipmentItem(updated);
-      setLocalEquipment(res);
-    }
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
+      const newQty = Math.max(0, item.totalQuantity + delta);
+      const updated: EquipmentItem = { ...item, totalQuantity: newQty };
+      if (onSaveEquipment) {
+        await onSaveEquipment(updated);
+      } else {
+        const res = await saveEquipmentItem(updated);
+        setLocalEquipment(res);
+      }
+    } catch (err: any) { reportAdminError(err); }
+    finally { finishAdminOperation(); }
   };
 
   const filteredEquipment = useMemo(() => {
@@ -479,18 +479,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
     description: ''
   });
 
-  // Loan Type Form State
-  const [isLoanFormOpen, setIsLoanFormOpen] = useState(false);
-  const [editingLoanId, setEditingLoanId] = useState<string | null>(null);
-  const [loanForm, setLoanForm] = useState<LoanType>({
-    id: '',
-    name: '',
-    category: 'Comunitario',
-    description: '',
-    color: '#2563eb',
-    defaultDurationMinutes: 120
-  });
-
   // Activity Type Form State
   const [isActivityFormOpen, setIsActivityFormOpen] = useState(false);
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
@@ -512,8 +500,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [editingUsername, setEditingUsername] = useState<string | null>(null);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('');
-  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
-  const [copiedUsername, setCopiedUsername] = useState<string | null>(null);
+
   const [userToDelete, setUserToDelete] = useState<UserAccount | null>(null);
   const [userFormError, setUserFormError] = useState('');
   const [showFormPassword, setShowFormPassword] = useState(false);
@@ -553,47 +540,39 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleSpaceDrop = async (e: React.DragEvent, targetIndex: number) => {
-    if (adminSavingRef.current) { e.preventDefault(); return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
+    if (!beginAdminOperation()) { e.preventDefault(); return; }
     try {
+      e.preventDefault();
+      if (!allowSpaceReorder || draggedSpaceIndex === null || draggedSpaceIndex === targetIndex || !onReorderSpaces) {
+        setDraggedSpaceIndex(null);
+        setDragOverSpaceIndex(null);
+        return;
+      }
 
-    e.preventDefault();
-    if (!allowSpaceReorder || draggedSpaceIndex === null || draggedSpaceIndex === targetIndex || !onReorderSpaces) {
+      const reordered = [...spaces];
+      const [moved] = reordered.splice(draggedSpaceIndex, 1);
+      reordered.splice(targetIndex, 0, moved);
+
+      await onReorderSpaces(reordered);
       setDraggedSpaceIndex(null);
       setDragOverSpaceIndex(null);
-      return;
-    }
-
-    const reordered = [...spaces];
-    const [moved] = reordered.splice(draggedSpaceIndex, 1);
-    reordered.splice(targetIndex, 0, moved);
-
-    await onReorderSpaces(reordered);
-    setDraggedSpaceIndex(null);
-    setDragOverSpaceIndex(null);
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
+    } catch (err: any) { reportAdminError(err); }
+    finally { finishAdminOperation(); }
   };
 
   const handleMoveSpace = async (index: number, direction: 'up' | 'down') => {
-    if (adminSavingRef.current) { return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
+    if (!beginAdminOperation()) { return; }
     try {
+      if (!allowSpaceReorder || !onReorderSpaces) return;
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= spaces.length) return;
 
-    if (!allowSpaceReorder || !onReorderSpaces) return;
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= spaces.length) return;
-
-    const reordered = [...spaces];
-    const [moved] = reordered.splice(index, 1);
-    reordered.splice(targetIndex, 0, moved);
-    await onReorderSpaces(reordered);
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
+      const reordered = [...spaces];
+      const [moved] = reordered.splice(index, 1);
+      reordered.splice(targetIndex, 0, moved);
+      await onReorderSpaces(reordered);
+    } catch (err: any) { reportAdminError(err); }
+    finally { finishAdminOperation(); }
   };
 
   // Open Space Form
@@ -617,76 +596,26 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleSaveSpaceSubmit = async (e: React.FormEvent) => {
-    if (adminSavingRef.current) { e.preventDefault(); return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
+    if (!beginAdminOperation()) { e.preventDefault(); return; }
     try {
-
-    e.preventDefault();
-    setSpaceFormError('');
-    if (!spaceForm.name.trim()) {
-      setSpaceFormError('Por favor, ingresa el nombre del espacio.');
-      return;
-    }
-    const cleanName = spaceForm.name.trim().toUpperCase();
-    const finalSpace: SpaceInfo = {
-      ...spaceForm,
-      id: spaceForm.id || cleanName,
-      name: cleanName,
-      description: spaceForm.description || `Espacio asignado para actividades de ${spaceForm.category.toLowerCase()}.`,
-      isCustom: true
-    };
-    await onSaveSpace(finalSpace);
-    setIsSpaceFormOpen(false);
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
-  };
-
-  // Open Loan Type Form
-  const handleOpenLoanForm = (loan?: LoanType) => {
-    setLoanFormError('');
-    if (loan) {
-      setEditingLoanId(loan.id);
-      setLoanForm(loan);
-    } else {
-      setEditingLoanId(null);
-      setLoanForm({
-        id: `LOAN_${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        name: '',
-        category: 'Comunitario',
-        description: '',
-        color: PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)],
-        defaultDurationMinutes: 120
-      });
-    }
-    setIsLoanFormOpen(true);
-  };
-
-  const handleSaveLoanSubmit = async (e: React.FormEvent) => {
-    if (adminSavingRef.current) { e.preventDefault(); return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
-    try {
-
-    e.preventDefault();
-    setLoanFormError('');
-    if (!loanForm.name.trim()) {
-      setLoanFormError('Por favor, ingresa el nombre del tipo de préstamo.');
-      return;
-    }
-    const finalLoan: LoanType = {
-      ...loanForm,
-      id: loanForm.id || `LOAN_${loanForm.name.trim().toUpperCase().replace(/\s+/g, '_')}`,
-      name: loanForm.name.trim(),
-      defaultDurationMinutes: Number(loanForm.defaultDurationMinutes) || 120,
-      isCustom: true
-    };
-    await onSaveLoanType(finalLoan);
-    setIsLoanFormOpen(false);
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
+      e.preventDefault();
+      setSpaceFormError('');
+      if (!spaceForm.name.trim()) {
+        setSpaceFormError('Por favor, ingresa el nombre del espacio.');
+        return;
+      }
+      const cleanName = spaceForm.name.trim().toUpperCase();
+      const finalSpace: SpaceInfo = {
+        ...spaceForm,
+        id: spaceForm.id || cleanName,
+        name: cleanName,
+        description: spaceForm.description || `Espacio asignado para actividades de ${spaceForm.category.toLowerCase()}.`,
+        isCustom: true
+      };
+      await onSaveSpace(finalSpace);
+      setIsSpaceFormOpen(false);
+    } catch (err: any) { reportAdminError(err); }
+    finally { finishAdminOperation(); }
   };
 
   // Open Activity Type Form
@@ -709,39 +638,35 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleSaveActivitySubmit = async (e: React.FormEvent) => {
-    if (adminSavingRef.current) { e.preventDefault(); return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
+    if (!beginAdminOperation()) { e.preventDefault(); return; }
     try {
-
-    e.preventDefault();
-    setActivityFormError('');
-    if (!activityForm.name.trim()) {
-      setActivityFormError('Por favor, ingresa el nombre de la actividad o préstamo.');
-      return;
-    }
-    const finalActivity: ActivityTypeItem = {
-      ...activityForm,
-      id: activityForm.id || `ACT_${activityForm.name.trim().toUpperCase().replace(/\s+/g, '_')}`,
-      name: activityForm.name.trim().toUpperCase(),
-      isCustom: true
-    };
-    await onSaveActivityType(finalActivity);
-    if (onSaveLoanType) {
-      await onSaveLoanType({
-        id: finalActivity.id,
-        name: finalActivity.name,
-        category: finalActivity.category,
-        color: finalActivity.color,
-        description: finalActivity.description,
-        defaultDurationMinutes: 120,
+      e.preventDefault();
+      setActivityFormError('');
+      if (!activityForm.name.trim()) {
+        setActivityFormError('Por favor, ingresa el nombre de la actividad o préstamo.');
+        return;
+      }
+      const finalActivity: ActivityTypeItem = {
+        ...activityForm,
+        id: activityForm.id || `ACT_${activityForm.name.trim().toUpperCase().replace(/\s+/g, '_')}`,
+        name: activityForm.name.trim().toUpperCase(),
         isCustom: true
-      });
-    }
-    setIsActivityFormOpen(false);
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
+      };
+      await onSaveActivityType(finalActivity);
+      if (onSaveLoanType) {
+        await onSaveLoanType({
+          id: finalActivity.id,
+          name: finalActivity.name,
+          category: finalActivity.category,
+          color: finalActivity.color,
+          description: finalActivity.description,
+          defaultDurationMinutes: 120,
+          isCustom: true
+        });
+      }
+      setIsActivityFormOpen(false);
+    } catch (err: any) { reportAdminError(err); }
+    finally { finishAdminOperation(); }
   };
 
   // ----------------------------------------------------
@@ -813,86 +738,82 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleSaveUserSubmit = async (e: React.FormEvent) => {
-    if (adminSavingRef.current) { e.preventDefault(); return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
+    if (!beginAdminOperation()) { e.preventDefault(); return; }
     try {
+      e.preventDefault();
+      if (!isCoordinatorOrAdmin(currentUser)) {
+        setUserFormError('Permiso denegado: Solo usuarios Administradores o Coordinadores pueden crear o modificar usuarios.');
+        return;
+      }
+      setUserFormError('');
 
-    e.preventDefault();
-    if (!isCoordinatorOrAdmin(currentUser)) {
-      setUserFormError('Permiso denegado: Solo usuarios Administradores o Coordinadores pueden crear o modificar usuarios.');
-      return;
-    }
-    setUserFormError('');
+      const cleanName = userForm.name.trim();
+      const cleanUsername = (userForm.username || cleanName).trim().toLowerCase();
+      const cleanPassword = userForm.passwordHash.trim();
 
-    const cleanName = userForm.name.trim();
-    const cleanUsername = (userForm.username || cleanName).trim().toLowerCase();
-    const cleanPassword = userForm.passwordHash.trim();
+      if (!cleanName) {
+        setUserFormError('Por favor ingresa el nombre completo del usuario.');
+        return;
+      }
 
-    if (!cleanName) {
-      setUserFormError('Por favor ingresa el nombre completo del usuario.');
-      return;
-    }
+      if (!cleanUsername) {
+        setUserFormError('Por favor ingresa un identificador de usuario.');
+        return;
+      }
 
-    if (!cleanUsername) {
-      setUserFormError('Por favor ingresa un identificador de usuario.');
-      return;
-    }
+      if (!cleanPassword) {
+        setUserFormError('Por favor asigna una clave de acceso al usuario.');
+        return;
+      }
 
-    if (!cleanPassword) {
-      setUserFormError('Por favor asigna una clave de acceso al usuario.');
-      return;
-    }
+      // Check duplicate username (except when editing self)
+      const existingUser = effectiveUsers.find(
+        (u) => u.username.toLowerCase() === cleanUsername && u.username.toLowerCase() !== (editingUsername || '').toLowerCase()
+      );
+      if (existingUser) {
+        setUserFormError(`El identificador de usuario "${cleanUsername}" ya está en uso.`);
+        return;
+      }
 
-    // Check duplicate username (except when editing self)
-    const existingUser = effectiveUsers.find(
-      (u) => u.username.toLowerCase() === cleanUsername && u.username.toLowerCase() !== (editingUsername || '').toLowerCase()
-    );
-    if (existingUser) {
-      setUserFormError(`El identificador de usuario "${cleanUsername}" ya está en uso.`);
-      return;
-    }
+      // Check duplicate password with another user (since password identifies user)
+      const existingPass = effectiveUsers.find(
+        (u) => u.passwordHash === cleanPassword && u.username.toLowerCase() !== (editingUsername || '').toLowerCase()
+      );
+      if (existingPass) {
+        setUserFormError(`La clave "${cleanPassword}" ya está asignada a ${existingPass.name}. Elige una clave única.`);
+        return;
+      }
 
-    // Check duplicate password with another user (since password identifies user)
-    const existingPass = effectiveUsers.find(
-      (u) => u.passwordHash === cleanPassword && u.username.toLowerCase() !== (editingUsername || '').toLowerCase()
-    );
-    if (existingPass) {
-      setUserFormError(`La clave "${cleanPassword}" ya está asignada a ${existingPass.name}. Elige una clave única.`);
-      return;
-    }
+      const finalUser: UserAccount = {
+        ...userForm,
+        name: cleanName,
+        username: cleanUsername,
+        passwordHash: cleanPassword,
+        initials: (userForm.initials || getInitialsFromName(cleanName)).toUpperCase().substring(0, 3),
+        isCustom: true,
+        canCreateReservations: Boolean(userForm.canCreateReservations),
+        canEditReservations: Boolean(userForm.canEditReservations),
+        canDeleteReservations: Boolean(userForm.canDeleteReservations)
+      };
 
-    const finalUser: UserAccount = {
-      ...userForm,
-      name: cleanName,
-      username: cleanUsername,
-      passwordHash: cleanPassword,
-      initials: (userForm.initials || getInitialsFromName(cleanName)).toUpperCase().substring(0, 3),
-      isCustom: true,
-      canCreateReservations: Boolean(userForm.canCreateReservations),
-      canEditReservations: Boolean(userForm.canEditReservations),
-      canDeleteReservations: Boolean(userForm.canDeleteReservations)
-    };
+      if (onSaveUser) {
+        await onSaveUser(finalUser, editingUsername || undefined);
+      } else {
+        // Local fallback
+        setLocalUsers((prev) => {
+          const idx = prev.findIndex((u) => u.username.toLowerCase() === (editingUsername || cleanUsername).toLowerCase());
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = finalUser;
+            return updated;
+          }
+          return [...prev, finalUser];
+        });
+      }
 
-    if (onSaveUser) {
-      await onSaveUser(finalUser, editingUsername || undefined);
-    } else {
-      // Local fallback
-      setLocalUsers((prev) => {
-        const idx = prev.findIndex((u) => u.username.toLowerCase() === (editingUsername || cleanUsername).toLowerCase());
-        if (idx >= 0) {
-          const updated = [...prev];
-          updated[idx] = finalUser;
-          return updated;
-        }
-        return [...prev, finalUser];
-      });
-    }
-
-    setIsUserFormOpen(false);
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
+      setIsUserFormOpen(false);
+    } catch (err: any) { reportAdminError(err); }
+    finally { finishAdminOperation(); }
   };
 
   // ----------------------------------------------------
@@ -903,177 +824,150 @@ export const AdminView: React.FC<AdminViewProps> = ({
     permKey: 'canCreateReservations' | 'canEditReservations' | 'canDeleteReservations',
     newValue: boolean
   ) => {
-    if (adminSavingRef.current) { return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
+    if (!beginAdminOperation()) { return; }
     try {
-
-    if (!isCristianShute(currentUser)) {
-      setConfirmDialog({
-        isOpen: true,
-        title: 'Acceso Exclusivo',
-        message: 'Solo Cristian Shute posee autorización para modificar los permisos de reservas en los usuarios.',
-        variant: 'warning',
-        confirmLabel: 'Entendido',
-        hideCancel: true,
-        onConfirm: () => setConfirmDialog(null)
-      });
-      return;
-    }
-
-    if (isCristianShute(targetUser)) {
-      setConfirmDialog({
-        isOpen: true,
-        title: 'Usuario Maestro Protegido',
-        message: 'La cuenta de Cristian Shute mantiene acceso maestro permanente y no puede ser restringida.',
-        variant: 'info',
-        confirmLabel: 'Aceptar',
-        hideCancel: true,
-        onConfirm: () => setConfirmDialog(null)
-      });
-      return;
-    }
-
-    const updatedUser: UserAccount = {
-      ...targetUser,
-      canCreateReservations: permKey === 'canCreateReservations' ? newValue : userCanCreateReservations(targetUser),
-      canEditReservations: permKey === 'canEditReservations' ? newValue : userCanEditReservations(targetUser),
-      canDeleteReservations: permKey === 'canDeleteReservations' ? newValue : userCanDeleteReservations(targetUser)
-    };
-
-    if (onSaveUser) {
-      await onSaveUser(updatedUser, targetUser.username);
-    } else {
-      setLocalUsers((prev) => {
-        const idx = prev.findIndex((u) => u.username.toLowerCase() === targetUser.username.toLowerCase());
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = updatedUser;
-          return next;
-        }
-        return [...prev, updatedUser];
-      });
-    }
-
-    const permLabel =
-      permKey === 'canCreateReservations'
-        ? 'Registro de nuevas reservas'
-        : permKey === 'canEditReservations'
-        ? 'Edición y modificación de reservas'
-        : 'Eliminación de reservas';
-    setPermissionSuccessToast(`✓ ${permLabel} ${newValue ? 'HABILITADO' : 'DESACTIVADO'} para ${targetUser.name} en Firestore.`);
-    setTimeout(() => {
-      setPermissionSuccessToast(null);
-    }, 4000);
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
-  };
-
-  const handleBulkSetPermissions = async (mode: 'all_enabled' | 'create_only' | 'view_only') => {
-    if (adminSavingRef.current) { return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
-    try {
-
-    if (!isCristianShute(currentUser)) return;
-
-    let targetCount = 0;
-    for (const usr of effectiveUsers) {
-      if (isMasterAdmin(usr) || isCristianShute(usr)) continue;
-
-      const newPerms = {
-        canCreateReservations: mode === 'all_enabled' || mode === 'create_only',
-        canEditReservations: mode === 'all_enabled',
-        canDeleteReservations: mode === 'all_enabled'
-      };
-
-      const updated: UserAccount = {
-        ...usr,
-        ...newPerms
-      };
-
-      targetCount++;
-      if (onSaveUser) {
-        await onSaveUser(updated, usr.username);
-      }
-    }
-
-    const modeLabels = {
-      all_enabled: 'Total (Crear, Editar y Eliminar habilitados para todos)',
-      create_only: 'Registro Único (Solo creación permitida; edición y eliminación bloqueadas)',
-      view_only: 'Solo Lectura (Bloqueada creación, edición y eliminación)'
-    };
-
-    setPermissionSuccessToast(`✓ Modo "${modeLabels[mode]}" aplicado exitosamente a ${targetCount} usuarios en Firestore.`);
-    setTimeout(() => {
-      setPermissionSuccessToast(null);
-    }, 4500);
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
-  };
-
-  const handleDeleteUserConfirm = async () => {
-    if (adminSavingRef.current) { return; }
-    adminSavingRef.current = true;
-    setAdminSaving(true);
-    setAdminError('');
-    try {
-
-    if (!userToDelete) return;
-    if (!isCoordinatorOrAdmin(currentUser)) {
-      setUserToDelete(null);
-      setConfirmDialog({
-        isOpen: true,
-        title: 'Permiso Denegado',
-        message: 'Permiso denegado: Solo los usuarios Administradores o Coordinadores están autorizados para eliminar usuarios.',
-        variant: 'warning',
-        confirmLabel: 'Entendido',
-        hideCancel: true,
-        onConfirm: () => setConfirmDialog(null)
-      });
-      return;
-    }
-
-    if (onDeleteUser) {
-      const res = await onDeleteUser(userToDelete.username);
-      if (!res.success) {
-        setUserToDelete(null);
+      if (!isCristianShute(currentUser)) {
         setConfirmDialog({
           isOpen: true,
-          title: 'No se pudo eliminar el usuario',
-          message: res.message || 'No se pudo eliminar el usuario.',
-          variant: 'danger',
+          title: 'Acceso Exclusivo',
+          message: 'Solo Cristian Shute posee autorización para modificar los permisos de reservas en los usuarios.',
+          variant: 'warning',
           confirmLabel: 'Entendido',
           hideCancel: true,
           onConfirm: () => setConfirmDialog(null)
         });
         return;
       }
-    } else {
-      // Local fallback
-      setLocalUsers((prev) => prev.filter((u) => u.username !== userToDelete.username));
-    }
 
-    setUserToDelete(null);
-    } catch (err: any) { setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.'); }
-    finally { adminSavingRef.current = false; setAdminSaving(false); }
+      if (isCristianShute(targetUser)) {
+        setConfirmDialog({
+          isOpen: true,
+          title: 'Usuario Maestro Protegido',
+          message: 'La cuenta de Cristian Shute mantiene acceso maestro permanente y no puede ser restringida.',
+          variant: 'info',
+          confirmLabel: 'Aceptar',
+          hideCancel: true,
+          onConfirm: () => setConfirmDialog(null)
+        });
+        return;
+      }
+
+      const updatedUser: UserAccount = {
+        ...targetUser,
+        canCreateReservations: permKey === 'canCreateReservations' ? newValue : userCanCreateReservations(targetUser),
+        canEditReservations: permKey === 'canEditReservations' ? newValue : userCanEditReservations(targetUser),
+        canDeleteReservations: permKey === 'canDeleteReservations' ? newValue : userCanDeleteReservations(targetUser)
+      };
+
+      if (onSaveUser) {
+        await onSaveUser(updatedUser, targetUser.username);
+      } else {
+        setLocalUsers((prev) => {
+          const idx = prev.findIndex((u) => u.username.toLowerCase() === targetUser.username.toLowerCase());
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = updatedUser;
+            return next;
+          }
+          return [...prev, updatedUser];
+        });
+      }
+
+      const permLabel =
+        permKey === 'canCreateReservations'
+          ? 'Registro de nuevas reservas'
+          : permKey === 'canEditReservations'
+          ? 'Edición y modificación de reservas'
+          : 'Eliminación de reservas';
+      setPermissionSuccessToast(`✓ ${permLabel} ${newValue ? 'HABILITADO' : 'DESACTIVADO'} para ${targetUser.name} en Firestore.`);
+      setTimeout(() => {
+        setPermissionSuccessToast(null);
+      }, 4000);
+    } catch (err: any) { reportAdminError(err); }
+    finally { finishAdminOperation(); }
   };
 
-  const handleTogglePasswordVisibility = (username: string) => {
-    setRevealedPasswords((prev) => ({
-      ...prev,
-      [username]: !prev[username]
-    }));
+  const handleBulkSetPermissions = async (mode: 'all_enabled' | 'create_only' | 'view_only') => {
+    if (!beginAdminOperation()) { return; }
+    try {
+      if (!isCristianShute(currentUser)) return;
+
+      let targetCount = 0;
+      for (const usr of effectiveUsers) {
+        if (isMasterAdmin(usr) || isCristianShute(usr)) continue;
+
+        const newPerms = {
+          canCreateReservations: mode === 'all_enabled' || mode === 'create_only',
+          canEditReservations: mode === 'all_enabled',
+          canDeleteReservations: mode === 'all_enabled'
+        };
+
+        const updated: UserAccount = {
+          ...usr,
+          ...newPerms
+        };
+
+        targetCount++;
+        if (onSaveUser) {
+          await onSaveUser(updated, usr.username);
+        }
+      }
+
+      const modeLabels = {
+        all_enabled: 'Total (Crear, Editar y Eliminar habilitados para todos)',
+        create_only: 'Registro Único (Solo creación permitida; edición y eliminación bloqueadas)',
+        view_only: 'Solo Lectura (Bloqueada creación, edición y eliminación)'
+      };
+
+      setPermissionSuccessToast(`✓ Modo "${modeLabels[mode]}" aplicado exitosamente a ${targetCount} usuarios en Firestore.`);
+      setTimeout(() => {
+        setPermissionSuccessToast(null);
+      }, 4500);
+    } catch (err: any) { reportAdminError(err); }
+    finally { finishAdminOperation(); }
   };
 
-  const handleCopyPassword = (username: string, pass: string) => {
-    navigator.clipboard.writeText(pass);
-    setCopiedUsername(username);
-    setTimeout(() => {
-      setCopiedUsername((curr) => (curr === username ? null : curr));
-    }, 2000);
+  const handleDeleteUserConfirm = async () => {
+    if (!beginAdminOperation()) { return; }
+    try {
+      if (!userToDelete) return;
+      if (!isCoordinatorOrAdmin(currentUser)) {
+        setUserToDelete(null);
+        setConfirmDialog({
+          isOpen: true,
+          title: 'Permiso Denegado',
+          message: 'Permiso denegado: Solo los usuarios Administradores o Coordinadores están autorizados para eliminar usuarios.',
+          variant: 'warning',
+          confirmLabel: 'Entendido',
+          hideCancel: true,
+          onConfirm: () => setConfirmDialog(null)
+        });
+        return;
+      }
+
+      if (onDeleteUser) {
+        const res = await onDeleteUser(userToDelete.username);
+        if (!res.success) {
+          setUserToDelete(null);
+          setConfirmDialog({
+            isOpen: true,
+            title: 'No se pudo eliminar el usuario',
+            message: res.message || 'No se pudo eliminar el usuario.',
+            variant: 'danger',
+            confirmLabel: 'Entendido',
+            hideCancel: true,
+            onConfirm: () => setConfirmDialog(null)
+          });
+          return;
+        }
+      } else {
+        // Local fallback
+        setLocalUsers((prev) => prev.filter((u) => u.username !== userToDelete.username));
+      }
+
+      setUserToDelete(null);
+    } catch (err: any) { reportAdminError(err); }
+    finally { finishAdminOperation(); }
   };
 
   // Filtered Users List
@@ -2781,12 +2675,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
 
             <form onSubmit={handleSaveSpaceSubmit} className="space-y-4">
-              {spaceFormError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span>{spaceFormError}</span>
-                </div>
-              )}
+              <AdminFormError message={spaceFormError} />
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Nombre del Espacio *
@@ -2820,26 +2709,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
 
               {/* Color */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Color Identificador
-                </label>
-                <div className="flex flex-wrap items-center gap-2">
-                  {PRESET_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setSpaceForm({ ...spaceForm, color: c })}
-                      className={`w-6 h-6 rounded-full border transition-all flex items-center justify-center cursor-pointer ${
-                        spaceForm.color === c ? 'ring-2 ring-blue-600 ring-offset-2 scale-110' : 'border-slate-300'
-                      }`}
-                      style={{ backgroundColor: c }}
-                    >
-                      {spaceForm.color === c && <Check className="w-3 h-3 text-white" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <AdminColorPicker label="Color Identificador" color={spaceForm.color} onChange={(color) => setSpaceForm({ ...spaceForm, color })} />
 
               {/* Descripción */}
               <div>
@@ -2856,21 +2726,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsSpaceFormOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
-                >
-                  {editingSpaceId ? 'Guardar Cambios' : 'Crear Espacio'}
-                </button>
-              </div>
+              <AdminFormActions onCancel={() => setIsSpaceFormOpen(false)} submitLabel={editingSpaceId ? 'Guardar Cambios' : 'Crear Espacio'} />
             </form>
           </div>
         </ModalOverlay>
@@ -2905,12 +2761,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
 
             <form onSubmit={handleSaveActivitySubmit} className="space-y-4">
-              {activityFormError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span>{activityFormError}</span>
-                </div>
-              )}
+              <AdminFormError message={activityFormError} />
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Nombre de la Actividad o Préstamo *
@@ -2946,26 +2797,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
 
               {/* Color */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Color de Etiqueta
-                </label>
-                <div className="flex flex-wrap items-center gap-2">
-                  {PRESET_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setActivityForm({ ...activityForm, color: c })}
-                      className={`w-6 h-6 rounded-full border transition-all flex items-center justify-center cursor-pointer ${
-                        activityForm.color === c ? 'ring-2 ring-blue-600 ring-offset-2 scale-110' : 'border-slate-300'
-                      }`}
-                      style={{ backgroundColor: c }}
-                    >
-                      {activityForm.color === c && <Check className="w-3 h-3 text-white" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <AdminColorPicker label="Color de Etiqueta" color={activityForm.color} onChange={(color) => setActivityForm({ ...activityForm, color })} />
 
               {/* Descripción */}
               <div>
@@ -2982,21 +2814,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsActivityFormOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
-                >
-                  {editingActivityId ? 'Guardar Cambios' : 'Crear Tipo de Actividad / Préstamo'}
-                </button>
-              </div>
+              <AdminFormActions onCancel={() => setIsActivityFormOpen(false)} submitLabel={editingActivityId ? 'Guardar Cambios' : 'Crear Tipo de Actividad / Préstamo'} />
             </form>
           </div>
         </ModalOverlay>
@@ -3028,12 +2846,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
 
             <form onSubmit={handleSaveEquipmentSubmit} className="space-y-4">
-              {equipmentFormError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span>{equipmentFormError}</span>
-                </div>
-              )}
+              <AdminFormError message={equipmentFormError} />
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Nombre del Equipamiento / Recurso *
@@ -3098,21 +2911,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
 
               {/* Modal Footer */}
-              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsEquipmentFormOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
-                >
-                  {editingEquipmentId ? 'Guardar Cambios' : 'Crear Equipamiento'}
-                </button>
-              </div>
+              <AdminFormActions onCancel={() => setIsEquipmentFormOpen(false)} submitLabel={editingEquipmentId ? 'Guardar Cambios' : 'Crear Equipamiento'} />
             </form>
           </div>
         </ModalOverlay>
