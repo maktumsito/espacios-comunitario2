@@ -9,9 +9,9 @@ const account = { username: 'reader', name: 'Usuario Lector', role: 'Auxiliar', 
   passwordHash: 'scrypt$'+'01'.repeat(16)+'$'+crypto.scryptSync('password','01'.repeat(16),64).toString('hex'),
   canCreateReservations: false, canEditReservations: false, canDeleteReservations: false } as UserAccount;
 afterEach(() => vi.useRealTimers());
-async function withSession(run: (base: string, read: ReturnType<typeof vi.fn>) => Promise<void>, google?: (token: string) => Promise<string | null>, directory = vi.fn(async () => [account])) {
+async function withSession(run: (base: string, read: ReturnType<typeof vi.fn>) => Promise<void>, google?: (token: string) => Promise<string | null>, directory = vi.fn(async () => [account]), migrate?: (account: UserAccount, password: string) => Promise<UserAccount>) {
   const read = vi.fn(async () => account);
-  const sessions = new AppSessions(read, 'test-session-key-at-least-32-characters', google);
+  const sessions = new AppSessions(read, 'test-session-key-at-least-32-characters', google, migrate);
   const app = express(); app.use(express.json()); sessions.register(app, directory);
   app.get('/protected', sessions.requireAuth, (req, res) => res.json((req as any).user));
   app.post('/write', sessions.requireAuth, requireReservationWriter, (_req, res) => res.json({ success: true }));
@@ -80,6 +80,43 @@ it('limits repeated failed passwords on the server', async () => {
   await withSession(async base => {
     for (let count = 0; count < 5; count++) expect((await login(base, 'wrong')).status).toBe(401);
     expect((await login(base)).status).toBe(429);
+  });
+});
+
+const legacyAccount = { ...account, passwordHash: crypto.createHash('sha256').update('espacios_community_salt_2026:password').digest('hex') };
+it('upgrades a correctly verified legacy password before issuing a session without widening permissions', async () => {
+  const upgraded = { ...account, sessionVersion: 1 };
+  const migrate = vi.fn(async () => upgraded);
+  await withSession(async (base, read) => {
+    read.mockResolvedValue(legacyAccount);
+    expect((await login(base, 'wrong')).status).toBe(401);
+    expect((await login(base, legacyAccount.passwordHash)).status).toBe(401);
+    expect(migrate).not.toHaveBeenCalled();
+    const confirmed = await login(base);
+    expect(confirmed.status).toBe(200);
+    expect(migrate).toHaveBeenCalledExactlyOnceWith(legacyAccount, 'password');
+    expect(confirmed.user.canEditReservations).toBe(false);
+    expect(confirmed.user).not.toHaveProperty('passwordHash');
+    read.mockResolvedValue(upgraded);
+    expect((await fetch(`${base}/protected`, { headers: { Authorization: `Bearer ${confirmed.token}` } })).status).toBe(200);
+    expect((await fetch(`${base}/write`, { method: 'POST', headers: { Authorization: `Bearer ${confirmed.token}` } })).status).toBe(403);
+  }, undefined, undefined, migrate);
+});
+
+it('does not issue a session if migration persistence fails', async () => {
+  const migrate = vi.fn().mockRejectedValue(new Error('Database unavailable'));
+  await withSession(async (base, read) => {
+    read.mockResolvedValue(legacyAccount);
+    const result = await login(base);
+    expect(result.status).toBe(503);
+    expect(result).not.toHaveProperty('token');
+  }, undefined, undefined, migrate);
+});
+
+it('rejects legacy credentials when no migration is configured', async () => {
+  await withSession(async (base, read) => {
+    read.mockResolvedValue(legacyAccount);
+    expect((await login(base)).status).toBe(401);
   });
 });
 

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { Express, RequestHandler } from 'express';
 import type { AuthUser, UserAccount, LoginAccount } from '../src/services/authService';
-import { publicProfile,verifyPassword } from './passwords';
+import { publicProfile,verifyPassword, verifyLegacyPassword } from './passwords';
 
 const SESSION_MS = 60 * 60_000;
 
@@ -27,7 +27,8 @@ export class AppSessions {
   private attempts = new Map<string, { count: number; expiresAt: number }>();
 
   constructor(private readAccount: (username: string) => Promise<UserAccount | null>, secret?: string,
-    private verifyGoogleToken?: (token: string) => Promise<string | null>) {
+    private verifyGoogleToken?: (token: string) => Promise<string | null>,
+    private migrateLegacyPassword?: (account: UserAccount, password: string) => Promise<UserAccount>) {
     if (secret && secret.trim().length > 0) {
       this.key = secret.length >= 32 ? secret : crypto.createHash('sha256').update(secret).digest('hex');
     } else {
@@ -151,13 +152,16 @@ export class AppSessions {
         res.status(429).json({ success: false, error: 'Demasiados intentos. Espera un minuto.', remainingSeconds: 60 }); return;
       }
       try {
-        const account = await this.account(username);
+        let account = await this.account(username);
         const stored = account?.passwordHash || '';
-        const valid = account && await verifyPassword(password,stored);
+        const legacy = account && this.migrateLegacyPassword && verifyLegacyPassword(password, stored);
+        const valid = account && (await verifyPassword(password,stored) || legacy);
         if (!valid) {
           this.attempts.set(key, { count: (attempt?.count || 0) + 1, expiresAt: attempt?.expiresAt || now + 60_000 });
           res.status(401).json({ success: false, error: 'Usuario o contraseña incorrectos.' }); return;
         }
+        // Never issue a legacy session: persistence must confirm the upgrade first.
+        if (legacy) account = await this.migrateLegacyPassword!(account!, password);
         this.attempts.delete(key);
         const { passwordHash: _password, ...user } = publicProfile(account);
         res.json({ success: true, user, token: this.issue(user, Date.now(),this.binding(account!)) });

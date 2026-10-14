@@ -7,6 +7,7 @@ import { isPurgeableScheduleSlot, guardedSlotCleanup } from './server/scheduleSl
 import { fetchDispatchReservations, fetchOldSlotPage } from './server/firestoreQueries';
 import { buildConfirmedRating, reservationEndDate } from './server/ratingValidation';
 import { AppSessions, requireReservationWriter } from './server/appSession';
+import { migrateAccountPassword } from './server/accountPasswordMigration';
 import { SharedServerDocument } from './server/sharedDocument';
 import { GmailConnection } from './server/gmailConnection';
 import { registerScheduledCheck, scheduledRetryGate } from './server/scheduledDispatch';
@@ -99,7 +100,8 @@ async token => {
   try { const identity = await serverAuth().verifyIdToken(token);
     return identity.email_verified === true && identity.firebase.sign_in_provider === 'google.com' ? identity.email || null : null;
   } catch { return null; }
-}
+},
+(account, password) => migrateAccountPassword(getServerDatabase(), account, password)
 );
 
 // Helper to get time in America/Santiago
