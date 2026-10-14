@@ -123,6 +123,17 @@ function seed(row: Reservation) {
 }
 beforeEach(() => { localStorage.clear(); memory.rows.clear(); memory.fail = false; memory.loseAck = false; memory.beforeCommit = undefined; memory.commits = 0; seed(original); });
 describe('single occurrence replacement transaction', () => {
+  it('clears a stale zero-confirmation retry after a definitive version rejection', async () => {
+    const rows = [{ ...original, descripcion: 'Cambio pendiente' }];
+    memory.fail = true;
+    await expect(writeReservations({} as any, rows, clean, { operationId: 'stale-retry' })).rejects.toThrow('Sin conexión');
+    expect(getPendingOperations()).toHaveLength(1);
+    memory.fail = false;
+    memory.rows.set('reservas/original', { ...original, version: 2 });
+    await expect(writeReservations({} as any, rows, clean, { operationId: 'stale-retry' })).rejects.toThrow('otro usuario');
+    expect(getPendingOperations()).toEqual([]);
+    expect(memory.rows.get('reservas/original').version).toBe(2);
+  });
   it('does not start a cloud transaction when durable local recovery storage is unavailable', async () => {
     const existing = { id: 'other-pending', reservations: [original], deletedIds: [], confirmedIds: [], allowConflictOverride: false };
     localStorage.setItem('reservation_pending_operations_v1', JSON.stringify([existing]));

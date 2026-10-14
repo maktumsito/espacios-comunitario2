@@ -70,6 +70,7 @@ export class ReservationWriteError extends Error {
     message: string,
     public result: WriteResult,
     public cause?: unknown,
+    public discardPending = false,
   ) {
     super(message);
   }
@@ -346,10 +347,11 @@ export async function writeReservations(
       original.confirmedIds = [
         ...new Set([...original.confirmedIds, ...confirmed.confirmedIds]),
       ];
-      await journalUpdate(original, confirmed.pendingIds.length === 0);
+      await journalUpdate(original, confirmed.pendingIds.length === 0 ||
+        (response.discardPending === true && original.confirmedIds.length === 0));
       options.onProgress?.(confirmed);
       if (response.error)
-        throw new ReservationWriteError(response.error, confirmed);
+        throw new ReservationWriteError(response.error, confirmed, undefined, response.discardPending === true);
       return confirmed;
     } catch (error) {
       if (error instanceof ReservationWriteError) throw error;
@@ -778,13 +780,13 @@ export async function writeReservations(
     }
     return result;
   } catch (cause: any) {
-    if (
-      !result.confirmedIds.length &&
+    // A definitive rejection cannot be repaired by replaying the same payload.
+    // Keep partial commits and uncertain network outcomes available for recovery.
+    const discardPending = !operation.confirmedIds.length &&
       (cause instanceof ReplacementValidationError ||
-        (((!options.operationId && !pending) || options.auditRestore) &&
-          (cause instanceof ReservationVersionError ||
-            /conflicto|límite|ya fue restaurado/i.test(cause?.message || ""))))
-    ) {
+        cause instanceof ReservationVersionError ||
+        /conflicto|límite|ya fue restaurado|bloqueo de mantenimiento/i.test(cause?.message || ""));
+    if (discardPending) {
       try {
         await journalUpdate(operation, true);
       } catch (error) {
@@ -795,9 +797,10 @@ export async function writeReservations(
       }
     }
     throw new ReservationWriteError(
-      `${cause?.message || "Error de conexión"}. Confirmadas: ${result.confirmedIds.length}; pendientes: ${result.pendingIds.length}. Puedes reanudar sin duplicar reservas.`,
+      `${cause?.message || "Error de conexión"}. Confirmadas: ${result.confirmedIds.length}; pendientes: ${result.pendingIds.length}. ${discardPending ? 'Revisa los datos antes de volver a guardar.' : 'Puedes reanudar sin duplicar reservas.'}`,
       result,
       cause,
+      discardPending,
     );
   }
 }

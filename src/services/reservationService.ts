@@ -17,6 +17,7 @@ import { getDb } from '../firebase/config';
 import { Reservation } from '../types';
 import { getStoredAuthUser, isCoordinatorOrAdmin, userCanCreateReservations, userCanEditReservations, userCanDeleteReservations } from './authService';
 import { writeReservations, readPendingOperations, type WriteOptions, type WriteResult } from './reservationWriter';
+import { updateOperationJournal } from './reservationOperationJournal';
 export { getPendingOperations, readPendingOperations, ReservationWriteError, ReservationVersionError } from './reservationWriter';
 import { INITIAL_RESERVATIONS } from '../data/initialData';
 import { isChileanHoliday, verifyHolidayOverrideKey } from '../utils/holidayUtils';
@@ -983,10 +984,23 @@ export async function resumeReservationOperation(id: string): Promise<WriteResul
   if (operation.auditRestore && !isCoordinatorOrAdmin(user)) throw new Error('Solo Administradores o Coordinadores pueden reanudar una restauración.');
   if (operation.reservations.some(r => r.reemplazaReservaId) && (!userCanCreateReservations(user) || !userCanEditReservations(user))) throw new Error('No tienes permisos para reanudar un reemplazo.');
   if (!user || (operation.actor && operation.actor !== user.username) || operation.reservations.some(r=>operation.intent === 'update' || r.version ? !userCanEditReservations(user) : !userCanCreateReservations(user)) || (operation.deletedIds.length && !userCanDeleteReservations(user))) throw new Error('No tienes permisos para reanudar esta operación.');
+  if (operation.reservations.every(r => operation.confirmedIds.includes(r.id)) && operation.deletedIds.every(id => operation.confirmedIds.includes(id))) {
+    await updateOperationJournal(operation, true);
+    return { operationId: operation.id, confirmedIds: operation.confirmedIds, deletedIds: [], pendingIds: [], reservations: [] };
+  }
   return commitReservationChanges(operation.reservations.filter(r=>!operation.confirmedIds.includes(r.id)), {
     operationId: operation.id, deletedIds: operation.deletedIds.filter(id => !operation.confirmedIds.includes(id)),
     allowConflictOverride: operation.allowConflictOverride, intent: operation.intent, requireAtomic: operation.requireAtomic, expectedVersions: operation.expectedVersions, auditRestore: operation.auditRestore
   });
+}
+
+/** Removes only the local retry payload; confirmed reservations remain unchanged. */
+export async function discardReservationOperation(id: string): Promise<void> {
+  const operation = (await readPendingOperations()).find(o => o.id === id);
+  if (!operation) return;
+  const user = getStoredAuthUser();
+  if (!user || (operation.actor && operation.actor !== user.username)) throw new Error('No tienes permisos para descartar esta operación.');
+  await updateOperationJournal(operation, true);
 }
 
 export async function deleteReservationById(id: string,expectedVersion?:number): Promise<WriteResult> {

@@ -280,6 +280,12 @@ export async function commitTrusted(
         };
       },
     },
+  }).catch(error => {
+    if (error instanceof ReservationWriteError && acknowledged.size) {
+      error.discardPending = false;
+      error.result.confirmedIds = [...new Set([...acknowledged, ...error.result.confirmedIds])];
+    }
+    throw error;
   });
   const previousRows = await Promise.all(
     rows
@@ -464,7 +470,7 @@ export function registerReservationApi(
         });
       } catch (error) {
         if (error instanceof ReservationWriteError) {
-          reply({ success: true, error: error.message, result: error.result });
+          reply({ success: true, error: error.message, result: error.result, discardPending: error.discardPending });
         } else if (streaming && res.headersSent)
           reply({ success: false, error: (error as Error).message });
         else apiError(res, error);
