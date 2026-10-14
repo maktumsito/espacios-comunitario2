@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   AuthUser,
-  UserAccount,
-  getAllAuthorizedUsers,
+  LoginAccount,
   authenticateUser,
-  findAuthorizedGoogleAccount,
   authenticateGoogleSession,
-  subscribeToUsers,
   getLockoutStatus
 } from '../services/authService';
 import { auth } from '../firebase/config';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { useLoginAccounts } from '../hooks/useLoginAccounts';
+import { LoginAccountSelector } from './common/LoginAccountSelector';
 import {
   Lock,
   Eye,
@@ -20,8 +19,6 @@ import {
   AlertCircle,
   KeyRound,
   ShieldAlert,
-  Users,
-  Check,
   Clock,
   ShieldCheck
 } from 'lucide-react';
@@ -31,23 +28,25 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<UserAccount | null>(null);
-  const [usersList, setUsersList] = useState<UserAccount[]>(() => getAllAuthorizedUsers());
+  const [selectedAccount, setSelectedAccount] = useState<LoginAccount | null>(null);
+  const accounts = useLoginAccounts();
   const [lockoutSeconds, setLockoutSeconds] = useState<number>(0);
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
-  // Listen in real-time to users synced from Firestore
   useEffect(() => {
-    const unsubscribe = subscribeToUsers((updatedUsers) => {
-      setUsersList(updatedUsers);
-    });
-    return () => unsubscribe();
-  }, []);
+    if (!accounts.loading && selectedAccount && !accounts.users.some(user => user.username === selectedAccount.username)) {
+      setSelectedAccount(null);
+      setPassword('');
+    }
+  }, [accounts.loading, accounts.users, selectedAccount]);
+
+  useEffect(() => {
+    if (selectedAccount && !lockoutSeconds) passwordInputRef.current?.focus();
+  }, [selectedAccount, lockoutSeconds]);
 
   // Check lockout status for the selected user (or globally)
   useEffect(() => {
@@ -75,26 +74,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     return () => clearInterval(timer);
   }, [lockoutSeconds]);
 
-  const handleSelectUser = (usr: UserAccount) => {
+  const handleSelectUser = (usr: LoginAccount) => {
+    if (isLoading) return;
     setSelectedAccount(usr);
     setPassword('');
+    setShowPassword(false);
     setErrorMessage('');
+    passwordInputRef.current?.focus();
     const status = getLockoutStatus(usr.username);
     if (status.isLocked) {
       setLockoutSeconds(status.remainingSeconds);
     } else {
       setLockoutSeconds(0);
     }
-    setTimeout(() => {
-      passwordInputRef.current?.focus();
-    }, 50);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setErrorMessage('');
 
-    if (!selectedAccount && !username.trim()) {
+    if (!selectedAccount || accounts.loading) {
       setErrorMessage('Por favor seleccione su usuario de la lista a continuación para iniciar sesión.');
       return;
     }
@@ -112,7 +112,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
     setIsLoading(true);
     try {
-      const res = await authenticateUser(selectedAccount?.username || username, cleanPass, usersList);
+      const res = await authenticateUser(selectedAccount.username, cleanPass);
       if (res.success && res.user) {
         onLoginSuccess(res.user);
       } else {
@@ -129,23 +129,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   };
 
   const handleGoogleSignIn = async () => {
+    if (!selectedAccount || isLoading || accounts.loading) return;
     setErrorMessage('');
     setIsLoading(true);
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      const email = result.user?.email || '';
-
-      const matchedUser = result.user.emailVerified ? findAuthorizedGoogleAccount(email, usersList) || {username:username.trim() || email} : null;
+      const matchedUser = result.user.emailVerified ? selectedAccount : null;
       if (!matchedUser) {
         await signOut(auth);
-        setErrorMessage('Esta cuenta de Google no tiene acceso asignado. Ingrese con su usuario y contraseña.');
+        setErrorMessage('Esta cuenta de Google no tiene acceso asignado. Seleccione su usuario e ingrese su clave.');
         return;
       }
       onLoginSuccess(await authenticateGoogleSession(matchedUser.username, await result.user.getIdToken()));
     } catch (err: any) {
       console.warn('Google sign-in status:', err?.message || err);
-      setErrorMessage('No se completó el inicio con Google. Por favor ingrese con su usuario y contraseña asignada.');
+      setErrorMessage('No se completó el inicio con Google. Seleccione su usuario e ingrese su clave asignada.');
     } finally {
       setIsLoading(false);
     }
@@ -188,55 +187,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             </span>
           </div>
 
-          {/* Directory of authorized users - REQUIRED SELECTION */}
-          <div className="mb-5">
-            <div className="flex items-center justify-between mb-2.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-blue-600" />
-                1. Seleccione su Usuario *
-              </label>
-              {selectedAccount && (
-                <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  {selectedAccount.role}
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {usersList.map((usr) => {
-                const isSelected = selectedAccount?.username === usr.username;
-                return (
-                  <button
-                    key={usr.username}
-                    type="button"
-                    onClick={() => handleSelectUser(usr)}
-                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer group relative ${
-                      isSelected
-                        ? 'border-blue-600 bg-blue-50/90 ring-2 ring-blue-500/30 shadow-xs'
-                        : 'border-slate-200 bg-slate-50/80 hover:bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    {isSelected && (
-                      <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] shadow-xs">
-                        <Check className="w-2.5 h-2.5" />
-                      </span>
-                    )}
-                    <div
-                      className={`w-7 h-7 mx-auto rounded-full ${usr.avatarColor} text-white text-xs font-bold flex items-center justify-center shadow-xs mb-1.5 group-hover:scale-105 transition-transform`}
-                    >
-                      {usr.initials}
-                    </div>
-                    <div className="text-[11px] font-bold text-slate-800 truncate">
-                      {usr.name}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <LoginAccountSelector users={accounts.users} loading={accounts.loading} error={accounts.error}
+            onRetry={accounts.retry} selectedUsername={selectedAccount?.username} onSelect={handleSelectUser} disabled={isLoading} />
 
           {errorMessage && (
-            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-rose-700 text-xs font-semibold animate-fadeIn">
+            <div role="alert" className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-rose-700 text-xs font-semibold animate-fadeIn">
               <AlertCircle className="w-4.5 h-4.5 shrink-0 mt-0.5" />
               <div className="leading-snug">{errorMessage}</div>
             </div>
@@ -251,10 +206,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4"><label className="block text-sm font-semibold">Usuario<input aria-label="Usuario" autoComplete="username" value={username} onChange={e=>{setUsername(e.target.value);setSelectedAccount(null);}} className="w-full border rounded-lg p-3 text-slate-900" required={!selectedAccount}/></label>
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Clave */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+              <label htmlFor="login-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700">
                 2. Contraseña de Acceso {selectedAccount ? `(${selectedAccount.name.split(' ')[0]})` : ''} *
               </label>
 
@@ -267,7 +222,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  disabled={lockoutSeconds > 0 || isLoading}
+                  disabled={!selectedAccount || accounts.loading || lockoutSeconds > 0 || isLoading}
+                  required
                   onChange={(e) => {
                     setPassword(e.target.value);
                     setErrorMessage('');
@@ -301,7 +257,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             <button
               id="btn-login-submit"
               type="submit"
-              disabled={isLoading || !password.trim() || (!selectedAccount && !username.trim()) || lockoutSeconds > 0}
+              disabled={isLoading || accounts.loading || !password.trim() || !selectedAccount || lockoutSeconds > 0}
               className="w-full mt-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold text-sm rounded-xl shadow-md shadow-blue-500/20 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
@@ -320,7 +276,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             <button
               type="button"
               onClick={handleGoogleSignIn}
-              disabled={isLoading}
+              disabled={isLoading || accounts.loading || !selectedAccount}
               className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer hover:border-slate-400"
             >
               <ShieldCheck className="w-4 h-4 text-emerald-600" />

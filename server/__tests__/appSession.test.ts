@@ -5,14 +5,14 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { AppSessions, requireReservationWriter } from '../appSession';
 import type { UserAccount } from '../../src/services/authService';
 
-const account = { username: 'reader', role: 'Auxiliar', email: 'reader@example.com',
+const account = { username: 'reader', name: 'Usuario Lector', role: 'Auxiliar', initials: 'UL', avatarColor: 'bg-blue-600', email: 'reader@example.com',
   passwordHash: 'scrypt$'+'01'.repeat(16)+'$'+crypto.scryptSync('password','01'.repeat(16),64).toString('hex'),
   canCreateReservations: false, canEditReservations: false, canDeleteReservations: false } as UserAccount;
 afterEach(() => vi.useRealTimers());
-async function withSession(run: (base: string, read: ReturnType<typeof vi.fn>) => Promise<void>, google?: (token: string) => Promise<string | null>) {
+async function withSession(run: (base: string, read: ReturnType<typeof vi.fn>) => Promise<void>, google?: (token: string) => Promise<string | null>, directory = vi.fn(async () => [account])) {
   const read = vi.fn(async () => account);
   const sessions = new AppSessions(read, 'test-session-key-at-least-32-characters', google);
-  const app = express(); app.use(express.json()); sessions.register(app);
+  const app = express(); app.use(express.json()); sessions.register(app, directory);
   app.get('/protected', sessions.requireAuth, (req, res) => res.json((req as any).user));
   app.post('/write', sessions.requireAuth, requireReservationWriter, (_req, res) => res.json({ success: true }));
   const server = app.listen(0, '127.0.0.1');
@@ -25,6 +25,26 @@ const login = async (base: string, password = 'password') => {
     headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'reader', password, role: 'Administrador' }) });
   return { status: response.status, ...await response.json() };
 };
+
+it('lists selectable users without a session while withholding secrets and permissions', async () => {
+  await withSession(async base => {
+    const response = await fetch(`${base}/api/auth/users`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ success: true, users: [{ username: 'reader', name: 'Usuario Lector', role: 'Auxiliar', initials: 'UL', avatarColor: 'bg-blue-600' }] });
+    expect((await fetch(`${base}/protected`)).status).toBe(401);
+    expect((await login(base, 'wrong')).status).toBe(401);
+  });
+});
+
+it('reports a failed directory read instead of returning an empty list', async () => {
+  const directory = vi.fn().mockRejectedValue(new Error('Database unavailable'));
+  await withSession(async base => {
+    const response = await fetch(`${base}/api/auth/users`);
+    expect(response.status).toBe(503);
+    expect((await response.json()).success).toBe(false);
+  }, undefined, directory);
+});
 
 it('rejects legacy client tokens and tampering, and never treats a password hash as the password', async () => {
   await withSession(async base => {

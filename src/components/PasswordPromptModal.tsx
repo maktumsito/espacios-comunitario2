@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AuthUser, UserAccount, getAllAuthorizedUsers, authenticateUser, subscribeToUsers } from '../services/authService';
+import { AuthUser, LoginAccount, authenticateUser } from '../services/authService';
+import { useLoginAccounts } from '../hooks/useLoginAccounts';
+import { LoginAccountSelector } from './common/LoginAccountSelector';
 import { BaseModal } from './common/BaseModal';
 import {
   Lock,
@@ -10,8 +12,6 @@ import {
   AlertCircle,
   X,
   ShieldCheck,
-  CheckCircle2,
-  Check
 } from 'lucide-react';
 
 interface PasswordPromptModalProps {
@@ -27,44 +27,56 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
   onSuccess,
   actionDescription = 'editar o crear reservas'
 }) => {
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [recognizedUser, setRecognizedUser] = useState<AuthUser | null>(null);
-  const [selectedAccount, setSelectedAccount] = useState<UserAccount | null>(null);
-  const [usersList, setUsersList] = useState<UserAccount[]>(() => getAllAuthorizedUsers());
+  const [selectedAccount, setSelectedAccount] = useState<LoginAccount | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const pendingRef = useRef(false);
+  const accounts = useLoginAccounts(isOpen);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Listen in real-time to users synced from Firestore
   useEffect(() => {
-    if (!isOpen) return;
-    const unsubscribe = subscribeToUsers((updatedUsers) => {
-      setUsersList(updatedUsers);
-    });
-    return () => unsubscribe();
+    setPassword('');
+    setSelectedAccount(null);
+    setShowPassword(false);
+    setErrorMessage('');
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!accounts.loading && selectedAccount && !accounts.users.some(user => user.username === selectedAccount.username)) {
+      setSelectedAccount(null);
+      setPassword('');
+    }
+  }, [accounts.loading, accounts.users, selectedAccount]);
+
+  useEffect(() => { if (selectedAccount) inputRef.current?.focus(); }, [selectedAccount]);
 
   if (!isOpen) return null;
 
   const handlePasswordChange = (val: string) => {
     setPassword(val);
     setErrorMessage('');
-    const user = null;
-    setRecognizedUser(user);
   };
 
-  const handleSelectUser = (usr: UserAccount) => {
+  const handleSelectUser = (usr: LoginAccount) => {
+    if (pendingRef.current) return;
     setSelectedAccount(usr);
+    setPassword('');
+    setShowPassword(false);
     setErrorMessage('');
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 50);
+    inputRef.current?.focus();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (pendingRef.current) return;
     setErrorMessage('');
+
+    if (!selectedAccount || accounts.loading) {
+      setErrorMessage('Seleccione su usuario antes de ingresar la clave.');
+      return;
+    }
 
     const cleanPass = password.trim();
     if (!cleanPass) {
@@ -72,20 +84,26 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
       return;
     }
 
+    pendingRef.current = true;
+    setIsLoading(true);
     try {
-      const user = (await authenticateUser(selectedAccount?.username || username,cleanPass)).user;
-      if (user) {
-        onSuccess(user);
+      const result = await authenticateUser(selectedAccount.username, cleanPass);
+      if (result.success && result.user) {
+        onSuccess(result.user);
         setPassword('');
-        setRecognizedUser(null);
         setSelectedAccount(null);
       } else {
-        setErrorMessage('Clave de acceso no reconocida. Intente nuevamente.');
+        setErrorMessage(result.error || 'Clave de acceso no reconocida. Intente nuevamente.');
       }
     } catch {
       setErrorMessage('Error al comprobar clave. Intente nuevamente.');
+    } finally {
+      pendingRef.current = false;
+      setIsLoading(false);
     }
   };
+
+  const close = () => { if (!pendingRef.current) onClose(); };
 
   const headerElement = (
     <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-5 text-white flex items-center justify-between shrink-0">
@@ -103,7 +121,8 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
         </div>
       </div>
       <button
-        onClick={onClose}
+        onClick={close}
+        disabled={isLoading}
         className="min-h-[44px] min-w-[44px] p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer flex items-center justify-center"
         aria-label="Cerrar modal de autenticación"
       >
@@ -115,7 +134,7 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
   return (
     <BaseModal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={close}
       maxWidth="md"
       layer="nested"
       customHeader={headerElement}
@@ -125,29 +144,25 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
       <div className="mb-4 p-3 rounded-xl bg-blue-50/80 border border-blue-200/80 text-blue-900 text-xs leading-relaxed flex items-start gap-2.5">
         <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
         <span>
-          Para garantizar la trazabilidad de los cambios, cada usuario debe ingresar su contraseña personal.
+          Selecciona tu usuario e ingresa tu contraseña personal para habilitar la edición.
         </span>
       </div>
 
       {errorMessage && (
-        <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2 text-rose-700 text-xs font-medium">
+        <div role="alert" className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2 text-rose-700 text-xs font-medium">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{errorMessage}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4"><label className="block text-sm">Usuario<input aria-label="Usuario" autoComplete="username" value={selectedAccount?.username || username} onChange={e=>{setUsername(e.target.value);setSelectedAccount(null);}} className="w-full border rounded-lg p-2" required/></label>
+      <LoginAccountSelector users={accounts.users} loading={accounts.loading} error={accounts.error}
+        onRetry={accounts.retry} selectedUsername={selectedAccount?.username} onSelect={handleSelectUser} disabled={isLoading} />
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-              {selectedAccount ? `Clave de ${selectedAccount.name.split(' ')[0]}` : 'Ingrese su Clave de Acceso'}
+            <label htmlFor="input-password-prompt" className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+              {selectedAccount ? `2. Clave de ${selectedAccount.name.split(' ')[0]}` : '2. Clave de Acceso'}
             </label>
-            {recognizedUser && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 animate-fadeIn">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                {recognizedUser.name}
-              </span>
-            )}
           </div>
 
           <div className="relative rounded-xl shadow-xs">
@@ -159,12 +174,11 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
               id="input-password-prompt"
               type={showPassword ? 'text' : 'password'}
               value={password}
+              required
+              disabled={!selectedAccount || accounts.loading || isLoading}
               onChange={(e) => handlePasswordChange(e.target.value)}
-              placeholder={selectedAccount ? `Clave de ${selectedAccount.name.split(' ')[0]}...` : 'Ingrese clave...'}
-              className={`w-full pl-10 pr-12 py-2.5 bg-slate-50 border rounded-xl text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition ${
-                recognizedUser ? 'border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20' : 'border-slate-300'
-              }`}
-              autoFocus
+              placeholder={selectedAccount ? `Clave de ${selectedAccount.name.split(' ')[0]}...` : 'Seleccione un usuario arriba primero...'}
+              className="w-full pl-10 pr-12 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition disabled:opacity-60"
               autoComplete="current-password"
             />
             <button
@@ -182,7 +196,8 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
         <div className="flex items-center justify-end space-x-2 pt-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
+            disabled={isLoading}
             className="min-h-[44px] px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold text-xs sm:text-sm transition cursor-pointer"
           >
             Cancelar
@@ -190,52 +205,15 @@ export const PasswordPromptModal: React.FC<PasswordPromptModalProps> = ({
           <button
             id="btn-confirm-password"
             type="submit"
-            disabled={!password.trim()}
+            disabled={!selectedAccount || accounts.loading || !password.trim() || isLoading}
             className="min-h-[44px] px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span>Habilitar Edición</span>
+            <span>{isLoading ? 'Validando clave...' : 'Habilitar Edición'}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </form>
 
-      {/* Authorized users list */}
-      <div className="mt-5 pt-4 border-t border-slate-100">
-        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-center">
-          Haz clic para seleccionar tu usuario
-        </p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {usersList.map((usr) => {
-            const isSelected = selectedAccount?.username === usr.username;
-            return (
-              <button
-                key={usr.username}
-                type="button"
-                onClick={() => handleSelectUser(usr)}
-                className={`min-h-[56px] p-2 rounded-xl border text-center transition-all cursor-pointer relative group ${
-                  isSelected
-                    ? 'border-blue-500 bg-blue-50/80 ring-2 ring-blue-400/30 shadow-xs'
-                    : 'border-slate-200/80 bg-slate-50 hover:bg-white hover:border-slate-300'
-                }`}
-              >
-                {isSelected && (
-                  <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[8px]">
-                    <Check className="w-2 h-2" />
-                  </span>
-                )}
-                <div
-                  className={`w-6 h-6 mx-auto rounded-full ${usr.avatarColor} text-white text-[10px] font-bold flex items-center justify-center shadow-xs mb-1 group-hover:scale-105 transition-transform`}
-                >
-                  {usr.initials}
-                </div>
-                <div className="text-[10.5px] font-bold text-slate-800 truncate">
-                  {usr.name}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
     </BaseModal>
   );
 };

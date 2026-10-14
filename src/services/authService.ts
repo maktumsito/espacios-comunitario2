@@ -32,6 +32,18 @@ export interface UserAccount extends AuthUser {
   passwordHash: string;
 }
 
+export type LoginAccount = Pick<AuthUser, 'username' | 'name' | 'role' | 'initials' | 'avatarColor'>;
+
+/** Only the display directory is public; passwords and permissions stay on the server. */
+export async function fetchLoginAccounts(signal?: AbortSignal): Promise<LoginAccount[]> {
+  const response = await fetch('/api/auth/users', { signal, cache: 'no-store' });
+  const result = await response.json();
+  if (!response.ok || result.success !== true || !Array.isArray(result.users)) {
+    throw new Error('No se pudo cargar la lista de usuarios. Intenta nuevamente.');
+  }
+  return result.users;
+}
+
 /** Google identities must match an explicitly registered email, never a substring. */
 export function findAuthorizedGoogleAccount(
   email: string,

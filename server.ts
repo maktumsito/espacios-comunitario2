@@ -778,7 +778,11 @@ async function startServer() {
   }
 
   // Only server-issued, signed sessions can authorize API requests.
-  appSessions.register(app);
+  appSessions.register(app, async () => {
+    const snapshot = await getServerDatabase().collection('usuarios_sistema')
+      .select('username', 'name', 'role', 'initials', 'avatarColor').get();
+    return snapshot.docs.map(doc => doc.data() as UserAccount);
+  });
   registerDataApi(app, getServerDatabase(), appSessions);
   registerReservationApi(app,getServerDatabase(),appSessions);
   registerBackupApi(app,getServerDatabase(),appSessions);

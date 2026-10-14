@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { Express, RequestHandler } from 'express';
-import type { AuthUser, UserAccount } from '../src/services/authService';
+import type { AuthUser, UserAccount, LoginAccount } from '../src/services/authService';
 import { publicProfile,verifyPassword } from './passwords';
 
 const SESSION_MS = 60 * 60_000;
@@ -96,7 +96,19 @@ export class AppSessions {
     } catch { res.status(503).json({ success: false, error: 'No se pudo verificar el acceso. Intenta nuevamente.' }); }
   };
 
-  register(app: Express) {
+  register(app: Express, readLoginAccounts?: () => Promise<LoginAccount[]>) {
+    if (readLoginAccounts) app.get('/api/auth/users', async (_req, res) => {
+      res.set('Cache-Control', 'no-store');
+      try {
+        const accounts = await readLoginAccounts();
+        const users = accounts.map(({ username, name, role, initials, avatarColor }) =>
+          ({ username, name, role, initials, avatarColor }));
+        users.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        res.json({ success: true, users });
+      } catch {
+        res.status(503).json({ success: false, error: 'No se pudo cargar la lista de usuarios. Intenta nuevamente.' });
+      }
+    });
     app.post('/api/auth/session/refresh', this.requireAuth, (req, res) => {
       res.set('Cache-Control', 'no-store');
       const { u: _username, r: _role, ...user } = (req as any).user;
