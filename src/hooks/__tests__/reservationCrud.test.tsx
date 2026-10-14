@@ -16,6 +16,61 @@ function props():UseReservationCrudProps {return {
 };}
 beforeEach(()=> {localStorage.clear();vi.clearAllMocks();vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-06T15:00:00Z'));mocks.audit.mockResolvedValue(undefined);});
 afterEach(()=> {cleanup();vi.useRealTimers();});
+it('merges four reservations in one atomic write and audits every original', async () => {
+  const equipment = { equipmentId: 'chairs', equipmentName: 'Sillas', quantity: 5 };
+  const target = { ...row, version: 2, comentarios: 'Base', equipamientoSolicitado: [equipment] };
+  const early = { ...row, id: 'early', version: 3, horaInicio: '09:00', horaFin: '10:00', descripcion: 'Preparación', comentarios: 'Montaje', cantidadParticipantes: 30 };
+  const late = { ...row, id: 'late', version: 4, horaInicio: '11:00', horaFin: '12:00', descripcion: 'Cierre', equipamientoSolicitado: [{ ...equipment, quantity: 12 }], importante: 'Sí' };
+  const otherSpace = { ...row, id: 'other-space', version: 5, espacio: 'SALA 3', requiereCartaCompromiso: true };
+  const unrelated = { ...row, id: 'unrelated', fecha: '2026-10-13' };
+  const p = props(); p.reservations = [target, early, late, otherSpace, unrelated];
+  mocks.save.mockImplementation(async (rows: Reservation[], options: any) => ({ reservations: rows, deletedIds: options.deletedIds, confirmedIds: rows.map(r => r.id), pendingIds: [] }));
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => expect(await result.current.handleMergeReservations(target.id, ['early', 'late', 'other-space', 'early'])).toBe(true));
+  expect(mocks.save).toHaveBeenCalledTimes(1);
+  const [merged] = mocks.save.mock.calls[0][0];
+  expect(merged).toMatchObject({ id: target.id, horaInicio: '09:00', horaFin: '12:00', espacio: 'SALA 2 / SALA 3', cantidadParticipantes: 30, importante: 'Sí', requiereCartaCompromiso: true, equipamientoSolicitado: [expect.objectContaining({ quantity: 12 })] });
+  expect(merged.descripcion).toContain('Preparación'); expect(merged.descripcion).toContain('Cierre');
+  expect(merged.comentarios).toBe('Base | Montaje');
+  expect(mocks.save.mock.calls[0][1]).toEqual({ deletedIds: ['early', 'late', 'other-space'], requireAtomic: true, expectedVersions: { early: 3, late: 4, 'other-space': 5 } });
+  expect((p.setReservations as any).mock.calls[0][0](p.reservations)).toEqual([merged, unrelated]);
+  expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ previousState: [target, early, late, otherSpace], newStateIsConfirmed: true }));
+});
+
+it('rejects a merge that overlaps an unselected reservation', async () => {
+  const p = props(); p.reservations = [row, { ...row, id: 'early', horaInicio: '08:00', horaFin: '09:00' }, { ...row, id: 'late', horaInicio: '11:00', horaFin: '12:00' }, { ...row, id: 'occupied', horaInicio: '09:00', horaFin: '10:00' }];
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => expect(await result.current.handleMergeReservations(row.id, ['early', 'late'])).toBe(false));
+  expect(mocks.save).not.toHaveBeenCalled(); expect(p.setReservations).not.toHaveBeenCalled();
+  expect(p.triggerSyncToast).toHaveBeenCalledWith(expect.stringContaining('conflicto con otra actividad'), 'error');
+});
+
+it.each(['missing', 'different-day', 'cancelled', 'base', 'empty'])('rejects invalid merge selections (%s)', async scenario => {
+  const p = props();
+  p.reservations = [row, { ...row, id: 'source', fecha: scenario === 'different-day' ? '2026-10-07' : row.fecha, estado: scenario === 'cancelled' ? 'cancelada' : 'activa' }];
+  const ids = scenario === 'empty' ? [] : [scenario === 'missing' ? 'missing' : scenario === 'base' ? row.id : 'source'];
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => expect(await result.current.handleMergeReservations(row.id, ids)).toBe(false));
+  expect(mocks.save).not.toHaveBeenCalled(); expect(p.setReservations).not.toHaveBeenCalled();
+});
+
+it('keeps all originals when the atomic merge fails', async () => {
+  const p = props(); p.reservations = [row, { ...row, id: 'early', horaInicio: '09:00', horaFin: '10:00' }, { ...row, id: 'late', horaInicio: '11:00', horaFin: '12:00' }];
+  mocks.save.mockRejectedValue(new Error('Una reserva cambió de versión'));
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => expect(await result.current.handleMergeReservations(row.id, ['early', 'late'])).toBe(false));
+  expect(p.setReservations).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled();
+});
+
+it('includes the latest next-day end when merging overnight reservations', async () => {
+  const target = { ...row, horaInicio: '20:00', horaFin: '22:00' };
+  const p = props(); p.reservations = [target, { ...row, id: 'overnight', horaInicio: '22:00', horaFin: '02:00', terminaDiaSiguiente: true }, { ...row, id: 'later', horaInicio: '23:00', horaFin: '03:00', terminaDiaSiguiente: true }];
+  mocks.save.mockImplementation(async (rows: Reservation[], options: any) => ({ reservations: rows, deletedIds: options.deletedIds, confirmedIds: [], pendingIds: [] }));
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => expect(await result.current.handleMergeReservations(row.id, ['overnight', 'later'])).toBe(true));
+  expect(mocks.save.mock.calls[0][0][0]).toMatchObject({ horaInicio: '20:00', horaFin: '03:00', terminaDiaSiguiente: true });
+});
+
 it('deletes every reviewed space for one date while retaining other sessions and concurrent additions', async () => {
   const targets = [{ ...row, version: 2, serieRecurrente: 'series' }, { ...row, id: 'other-space', espacio: 'SALA 3', version: 4, estado: 'cancelada' }];
   const future = { ...targets[0], id: 'future', fecha: '2026-10-13' };

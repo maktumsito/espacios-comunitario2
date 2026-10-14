@@ -56,7 +56,7 @@ interface ReservationDetailModalProps {
   onRequestDelete?: (reserva: Reservation) => void;
   onToggleRealizada?: (reserva: Reservation) => void;
   onUpdateReservation?: (updated: Reservation) => void;
-  onMergeReservations?: (targetReservationId: string, sourceReservationId: string) => Promise<boolean | void> | boolean | void;
+  onMergeReservations?: (targetReservationId: string, sourceReservationIds: string[]) => Promise<boolean | void> | boolean | void;
   existingRating?: SpaceRating | null;
   onOpenRatingModal?: (reserva: Reservation, rating?: SpaceRating) => void;
   allReservations?: Reservation[];
@@ -893,8 +893,8 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
           onClose={() => setShowMergeModal(false)}
           targetReservation={reservation}
           allReservations={allReservations}
-          onConfirmMerge={async (targetId, sourceId) => {
-            const ok = await onMergeReservations(targetId, sourceId);
+          onConfirmMerge={async (targetId, sourceIds) => {
+            const ok = await onMergeReservations(targetId, sourceIds);
             if (ok !== false) {
               setShowMergeModal(false);
               onClose();

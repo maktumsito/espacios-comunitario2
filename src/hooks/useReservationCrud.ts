@@ -3,6 +3,7 @@ import { addWeeks, format, parseISO } from 'date-fns';
 import { Reservation, BatchUpdateInfo, isSingleDayMultiSpaceReservation, SpaceBlock } from '../types';
 import { normalizeSpaceName } from '../data/spacesData';
 import { buildReplacementBatch, preserveReplacementExceptions } from '../utils/reservationReplacement';
+import { buildMergedReservation } from '../utils/mergeReservations';
 import { applyChangedSeriesFields, scopedScheduleSlots } from '../utils/recurringSchedule';
 import { calculateEquipmentAvailability, getStoredEquipment } from '../services/equipmentService';
 import { buildReservationMoveBatch, getSeriesEditStartDate, type RecurringMoveScope } from '../utils/recurringEdits';
@@ -33,10 +34,7 @@ import {
   detectBatchConflicts,
   formatConflictMessage,
   DetectedConflictDetail,
-  isReservationActiveForAvailability,
-  timeToMinutes,
-  formatMinutesToTime,
-  getConstituentSpaces
+  isReservationActiveForAvailability
 } from '../utils/conflictDetector';
 import { getTimeIntervalsForReservation } from '../utils/conflictDetector';
 import { findMaintenanceBlockConflicts, formatBlockConflictMessage } from '../utils/conflictDetector';
@@ -105,7 +103,7 @@ export interface UseReservationCrudReturn {
   handleImportReservations: (importedList: Reservation[]) => Promise<void>;
   handleDeleteAllHolidays: () => Promise<{ deletedCount: number }>;
   handleDuplicateReservation: (sourceReserva: Reservation) => void;
-  handleMergeReservations: (targetReservationId: string, sourceReservationId: string) => Promise<boolean>;
+  handleMergeReservations: (targetReservationId: string, sourceReservationIds: string[]) => Promise<boolean>;
 }
 
 export function useReservationCrud({
@@ -1299,10 +1297,11 @@ export function useReservationCrud({
 
   const handleMergeReservations = useCallback(async (
     targetReservationId: string,
-    sourceReservationId: string
+    sourceReservationIds: string[]
   ): Promise<boolean> => {
-    if (!targetReservationId || !sourceReservationId || targetReservationId === sourceReservationId) {
-      triggerSyncToast('Debes seleccionar dos reservas distintas para unificarlas.', 'error');
+    const sourceIds = [...new Set(sourceReservationIds)];
+    if (!targetReservationId || !sourceIds.length || sourceIds.some(id => !id || id === targetReservationId)) {
+      triggerSyncToast('Debes seleccionar al menos una reserva distinta de la principal para unificarlas.', 'error');
       return false;
     }
 
@@ -1311,112 +1310,33 @@ export function useReservationCrud({
       return false;
     }
 
-    const previousReservations = reservations;
     const target = reservations.find((r) => r.id === targetReservationId);
-    const source = reservations.find((r) => r.id === sourceReservationId);
+    const sources = sourceIds.map(id => reservations.find(r => r.id === id));
 
-    if (!target || !source) {
+    if (!target || sources.some(r => !r)) {
       triggerSyncToast('No se encontró una de las reservas seleccionadas para la unificación.', 'error');
       return false;
     }
 
-    // Determine unified start and end times
-    const tStartMin = timeToMinutes(target.horaInicio);
-    let tEndMin = timeToMinutes(target.horaFin);
-    if ((target.horaFin === '00:00' || target.horaFin === '24:00' || tEndMin === 0) && tStartMin > 0 && !target.terminaDiaSiguiente) {
-      tEndMin = 1440;
+    const selectedSources = sources as Reservation[];
+    const deletedSet = getDeletedIds();
+    if ([target, ...selectedSources].some(r => r.fecha !== target.fecha || !isReservationActiveForAvailability(r, deletedSet))) {
+      triggerSyncToast('Todas las reservas seleccionadas deben estar activas y programadas el mismo día.', 'error');
+      return false;
     }
-
-    const sStartMin = timeToMinutes(source.horaInicio);
-    let sEndMin = timeToMinutes(source.horaFin);
-    if ((source.horaFin === '00:00' || source.horaFin === '24:00' || sEndMin === 0) && sStartMin > 0 && !source.terminaDiaSiguiente) {
-      sEndMin = 1440;
-    }
-
-    const mergedStartMin = Math.min(tStartMin, sStartMin);
-    const mergedEndMin = Math.max(tEndMin, sEndMin);
-    const mergedHoraInicio = formatMinutesToTime(mergedStartMin);
-    const mergedHoraFin = mergedEndMin >= 1440 ? '23:59' : formatMinutesToTime(mergedEndMin);
-
-    // Combine spaces
-    let mergedEspacio = target.espacio;
-    if (normalizeSpaceName(target.espacio) !== normalizeSpaceName(source.espacio)) {
-      const partsA = getConstituentSpaces(target.espacio);
-      const partsB = getConstituentSpaces(source.espacio);
-      const combined = Array.from(new Set([...partsA, ...partsB]));
-      mergedEspacio = combined.join(' / ');
-    }
-
-    // Combine descriptions cleanly without repetition
-    let mergedDescripcion = (target.descripcion || '').trim();
-    const sourceDesc = (source.descripcion || '').trim();
-    if (sourceDesc && !mergedDescripcion.includes(sourceDesc)) {
-      mergedDescripcion = mergedDescripcion
-        ? `${mergedDescripcion}\n[Unida con ${source.tipoActividad}]: ${sourceDesc}`
-        : sourceDesc;
-    }
-
-    // Combine comments
-    let mergedComentarios = (target.comentarios || '').trim();
-    const sourceComments = (source.comentarios || '').trim();
-    if (sourceComments && !mergedComentarios.includes(sourceComments)) {
-      mergedComentarios = mergedComentarios
-        ? `${mergedComentarios} | ${sourceComments}`
-        : sourceComments;
-    }
-
-    // Combine equipment
-    const equipMap = new Map<string, any>();
-    (target.equipamientoSolicitado || []).forEach((eq) => {
-      equipMap.set(eq.equipmentId || eq.equipmentName, { ...eq });
-    });
-    (source.equipamientoSolicitado || []).forEach((eq) => {
-      const key = eq.equipmentId || eq.equipmentName;
-      const existing = equipMap.get(key);
-      if (existing) {
-        equipMap.set(key, {
-          ...existing,
-          quantity: Math.max(existing.quantity, eq.quantity),
-          notes: [existing.notes, eq.notes].filter(Boolean).join(' | ')
-        });
-      } else {
-        equipMap.set(key, { ...eq });
-      }
-    });
-
-    const nowIso = new Date().toISOString();
     const mergedReserva: Reservation = {
-      ...target,
-      fecha: target.fecha,
-      horaInicio: mergedHoraInicio,
-      horaFin: mergedHoraFin,
-      terminaDiaSiguiente: Boolean(target.terminaDiaSiguiente || source.terminaDiaSiguiente || mergedEndMin > 1440),
-      espacio: mergedEspacio,
-      tipoActividad: target.tipoActividad || source.tipoActividad,
-      descripcion: mergedDescripcion,
-      comentarios: mergedComentarios,
-      responsable: target.responsable || source.responsable,
-      rut: target.rut || source.rut || '',
-      telefonoContacto: target.telefonoContacto || source.telefonoContacto || '',
-      emailContacto: target.emailContacto || source.emailContacto || '',
-      domicilio: target.domicilio || source.domicilio || '',
-      cantidadParticipantes: Math.max(Number(target.cantidadParticipantes) || 0, Number(source.cantidadParticipantes) || 0) || 10,
-      equipamientoSolicitado: Array.from(equipMap.values()),
-      importante: (target.importante === 'Sí' || source.importante === 'Sí') ? 'Sí' : 'No',
-      requiereCartaCompromiso: Boolean(target.requiereCartaCompromiso || source.requiereCartaCompromiso),
-      estado: 'activa',
+      ...buildMergedReservation(target, selectedSources),
       editadoPor: currentUser?.name || currentUser?.username || 'Usuario',
       fechaEdicion: format(new Date(), 'dd/MM/yyyy HH:mm:ss'),
       version: target.version || 0,
-      updatedAt: nowIso
+      updatedAt: new Date().toISOString()
     };
 
-    // Check conflict against OTHER reservations (excluding both target and source)
-    const deletedSet = getDeletedIds();
+    // Check other activities, excluding every reservation included in the merge.
     const cleanReservations = reservations.filter(
       (r) => !deletedSet.has(r.id) && isReservationActiveForAvailability(r, deletedSet)
     );
-    const conflicts = detectBatchConflicts([mergedReserva], cleanReservations, new Set([target.id, source.id]));
+    const conflicts = detectBatchConflicts([mergedReserva], cleanReservations, new Set([target.id, ...sourceIds]));
     if (conflicts.length > 0) {
       const firstConflict = conflicts[0];
       const conflictMsg = formatConflictMessage(firstConflict);
@@ -1425,23 +1345,27 @@ export function useReservationCrud({
     }
 
     try {
-      const confirmedWrite = await commitReservationChanges([mergedReserva], { deletedIds: [source.id], requireAtomic: true, expectedVersions:{[source.id]:source.version||0} });
+      const confirmedWrite = await commitReservationChanges([mergedReserva], {
+        deletedIds: sourceIds,
+        requireAtomic: true,
+        expectedVersions: Object.fromEntries(selectedSources.map(r => [r.id, r.version || 0]))
+      });
       applyConfirmed(confirmedWrite);
-      triggerSyncToast('Reservas unificadas y confirmadas.', 'success');
-        void safeAudit({
-          action: 'UPDATE',
-          description: `Reservas unificadas: '${target.tipoActividad}' (${target.horaInicio}-${target.horaFin}) se unió con '${source.tipoActividad}' (${source.horaInicio}-${source.horaFin} en ${source.espacio}). Horario resultante: ${mergedReserva.horaInicio}-${mergedReserva.horaFin} en ${mergedReserva.espacio}`,
-          reservaId: mergedReserva.id,
-          user: currentUser,
-          reservaTitle: mergedReserva.tipoActividad,
-          reservaFecha: mergedReserva.fecha,
-          reservaEspacio: mergedReserva.espacio,
-          reservaHorario: `${mergedReserva.horaInicio} - ${mergedReserva.horaFin}`,
-          reservaResponsable: mergedReserva.responsable,
-          previousState: [target, source],
-          newState: confirmedWrite.reservations,
-          newStateIsConfirmed: true
-        });
+      triggerSyncToast(`${selectedSources.length + 1} reservas unificadas y confirmadas.`, 'success');
+      void safeAudit({
+        action: 'UPDATE',
+        description: `${selectedSources.length + 1} reservas unificadas: '${target.tipoActividad}' (${target.horaInicio}-${target.horaFin}) se unió con ${selectedSources.map(r => `'${r.tipoActividad}' (${r.horaInicio}-${r.horaFin} en ${r.espacio})`).join(', ')}. Horario resultante: ${mergedReserva.horaInicio}-${mergedReserva.horaFin} en ${mergedReserva.espacio}`,
+        reservaId: mergedReserva.id,
+        user: currentUser,
+        reservaTitle: mergedReserva.tipoActividad,
+        reservaFecha: mergedReserva.fecha,
+        reservaEspacio: mergedReserva.espacio,
+        reservaHorario: `${mergedReserva.horaInicio} - ${mergedReserva.horaFin}`,
+        reservaResponsable: mergedReserva.responsable,
+        previousState: [target, ...selectedSources],
+        newState: confirmedWrite.reservations,
+        newStateIsConfirmed: true
+      });
     } catch (err: any) { triggerSyncToast(err?.message || 'No se pudieron unificar las reservas.', 'error'); return false; }
 
     return true;

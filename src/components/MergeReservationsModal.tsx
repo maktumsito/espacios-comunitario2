@@ -1,6 +1,6 @@
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Reservation } from '../types';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import {
@@ -9,30 +9,25 @@ import {
   Clock,
   MapPin,
   User,
-  Users,
   AlertCircle,
   Check,
   Search,
-  ArrowRight,
-  Sparkles,
-  Layers,
-  FileText
+  Sparkles
 } from 'lucide-react';
 import {
   timeToMinutes,
-  formatMinutesToTime,
-  getConstituentSpaces,
   isReservationActiveForAvailability
 } from '../utils/conflictDetector';
 import { getDeletedIds } from '../utils/deletedReservationsStore';
 import { normalizeSpaceName } from '../data/spacesData';
+import { buildMergedReservation } from '../utils/mergeReservations';
 
 interface MergeReservationsModalProps {
   isOpen: boolean;
   onClose: () => void;
   targetReservation: Reservation | null;
   allReservations: Reservation[];
-  onConfirmMerge: (targetReservationId: string, sourceReservationId: string) => Promise<boolean | void> | boolean | void;
+  onConfirmMerge: (targetReservationId: string, sourceReservationIds: string[]) => Promise<boolean | void> | boolean | void;
 }
 
 export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
@@ -42,11 +37,16 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
   allReservations,
   onConfirmMerge
 }) => {
-  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [searchFilter, setSearchFilter] = useState('');
   const [isMerging, setIsMerging] = useState(false);
 
-  // Candidates: active reservations on the same date (or adjacent), excluding current reservation
+  useEffect(() => {
+    setSelectedSourceIds([]);
+    setSearchFilter('');
+  }, [isOpen, targetReservation?.id]);
+
+  // Candidates: active reservations on the same date, excluding the base reservation.
   const candidates = useMemo(() => {
     if (!targetReservation) return [];
     const deletedSet = getDeletedIds();
@@ -112,64 +112,23 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
     });
   }, [sortedCandidates, searchFilter]);
 
-  const selectedSource = useMemo(() => {
-    if (!selectedSourceId) return null;
-    return candidates.find((c) => c.id === selectedSourceId) || null;
-  }, [selectedSourceId, candidates]);
+  const selectedSources = useMemo(() => selectedSourceIds
+    .map(id => candidates.find(c => c.id === id))
+    .filter((r): r is Reservation => Boolean(r)), [selectedSourceIds, candidates]);
 
   // Merged preview calculation
   const mergedPreview = useMemo(() => {
-    if (!targetReservation || !selectedSource) return null;
-
-    const tStart = timeToMinutes(targetReservation.horaInicio);
-    let tEnd = timeToMinutes(targetReservation.horaFin);
-    if ((targetReservation.horaFin === '00:00' || targetReservation.horaFin === '24:00' || tEnd === 0) && tStart > 0) {
-      tEnd = 1440;
-    }
-
-    const sStart = timeToMinutes(selectedSource.horaInicio);
-    let sEnd = timeToMinutes(selectedSource.horaFin);
-    if ((selectedSource.horaFin === '00:00' || selectedSource.horaFin === '24:00' || sEnd === 0) && sStart > 0) {
-      sEnd = 1440;
-    }
-
-    const mergedStart = Math.min(tStart, sStart);
-    const mergedEnd = Math.max(tEnd, sEnd);
-
-    // Spaces
-    let mergedSpace = targetReservation.espacio;
-    if (normalizeSpaceName(targetReservation.espacio) !== normalizeSpaceName(selectedSource.espacio)) {
-      const partsA = getConstituentSpaces(targetReservation.espacio);
-      const partsB = getConstituentSpaces(selectedSource.espacio);
-      const combined = Array.from(new Set([...partsA, ...partsB]));
-      mergedSpace = combined.join(' / ');
-    }
-
-    // Equipment count
-    const targetEquipCount = (targetReservation.equipamientoSolicitado || []).reduce((acc, curr) => acc + curr.quantity, 0);
-    const sourceEquipCount = (selectedSource.equipamientoSolicitado || []).reduce((acc, curr) => acc + curr.quantity, 0);
-
-    return {
-      horaInicio: formatMinutesToTime(mergedStart),
-      horaFin: mergedEnd >= 1440 ? '23:59' : formatMinutesToTime(mergedEnd),
-      espacio: mergedSpace,
-      responsable: targetReservation.responsable || selectedSource.responsable,
-      tipoActividad: targetReservation.tipoActividad || selectedSource.tipoActividad,
-      cantidadParticipantes: Math.max(
-        Number(targetReservation.cantidadParticipantes) || 0,
-        Number(selectedSource.cantidadParticipantes) || 0
-      ) || 10,
-      totalEquipamiento: targetEquipCount + sourceEquipCount
-    };
-  }, [targetReservation, selectedSource]);
+    if (!targetReservation || !selectedSources.length) return null;
+    return buildMergedReservation(targetReservation, selectedSources);
+  }, [targetReservation, selectedSources]);
 
   if (!isOpen || !targetReservation) return null;
 
   const handleExecuteMerge = async () => {
-    if (!selectedSourceId) return;
+    if (!selectedSources.length || isMerging) return;
     setIsMerging(true);
     try {
-      const ok = await Promise.resolve(onConfirmMerge(targetReservation.id, selectedSourceId));
+      const ok = await Promise.resolve(onConfirmMerge(targetReservation.id, selectedSources.map(r => r.id)));
       if (ok !== false) {
         onClose();
       }
@@ -197,12 +156,13 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
                 Juntar / Fusionar Reservas
               </h2>
               <p className="text-xs text-blue-100 mt-0.5">
-                Une dos reservas del mismo día en una sola actividad continua o multiespacio.
+                Une dos o más reservas del mismo día en una sola actividad continua o multiespacio.
               </p>
             </div>
           </div>
           <button
             type="button"
+            disabled={isMerging}
             onClick={onClose}
             className="p-1.5 rounded-xl hover:bg-white/20 text-white/80 hover:text-white transition cursor-pointer"
             aria-label="Cerrar ventana"
@@ -255,10 +215,13 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                <span>Selecciona la reserva que deseas juntar con esta:</span>
+                <span>Selecciona las reservas que deseas juntar con esta:</span>
                 <span className="text-slate-500 font-normal">({candidates.length} disponibles hoy)</span>
               </label>
             </div>
+            <p className="text-[11px] text-slate-600" aria-live="polite">
+              {selectedSources.length} reservas adicionales seleccionadas. Puedes marcar o desmarcar varias.
+            </p>
 
             {candidates.length > 5 && (
               <div className="relative">
@@ -267,6 +230,7 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
                   type="text"
                   placeholder="Filtrar por actividad, solicitante o espacio..."
                   value={searchFilter}
+                  disabled={isMerging}
                   onChange={(e) => setSearchFilter(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -278,13 +242,13 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
                 <AlertCircle className="w-6 h-6 mx-auto text-slate-400 mb-1" />
                 <p className="font-semibold text-slate-700">No hay otras reservas activas en esta fecha.</p>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Para juntar reservas, ambas deben estar programadas el mismo día ({formatDateDDMMYYYY(targetReservation.fecha)}).
+                  Para juntar reservas, todas deben estar programadas el mismo día ({formatDateDDMMYYYY(targetReservation.fecha)}).
                 </p>
               </div>
             ) : (
               <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
                 {filteredCandidates.map((c, index) => {
-                  const isSelected = selectedSourceId === c.id;
+                  const isSelected = selectedSourceIds.includes(c.id);
                   const isConsecutive =
                     c.horaInicio === targetReservation.horaFin ||
                     c.horaFin === targetReservation.horaInicio;
@@ -297,7 +261,11 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
                     <button
                       key={c.id}
                       type="button"
-                      onClick={() => setSelectedSourceId(c.id)}
+                      aria-pressed={isSelected}
+                      disabled={isMerging}
+                      onClick={() => setSelectedSourceIds(ids => ids.includes(c.id)
+                        ? ids.filter(id => id !== c.id)
+                        : [...ids, c.id])}
                       className={`w-full text-left p-2.5 rounded-xl border transition flex items-center justify-between gap-3 cursor-pointer ${
                         isSelected
                           ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-500/40'
@@ -353,7 +321,7 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
                           </div>
                         </div>
                         <div
-                          className={`w-5 h-5 rounded-full flex items-center justify-center border transition ${
+                          className={`w-5 h-5 rounded flex items-center justify-center border transition ${
                             isSelected
                               ? 'bg-white text-blue-600 border-white'
                               : 'bg-slate-100 border-slate-300 text-transparent'
@@ -370,20 +338,21 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
           </div>
 
           {/* Resulting Unified Reservation Preview */}
-          {mergedPreview && selectedSource && (
+          {mergedPreview && (
             <div className="p-3.5 bg-gradient-to-br from-emerald-50 to-teal-50/80 rounded-xl border border-emerald-200/90 text-xs space-y-2 animate-fadeIn">
               <div className="flex items-center space-x-1.5 text-emerald-900 font-bold text-xs uppercase tracking-wide">
                 <Sparkles className="w-4 h-4 text-emerald-600" />
                 <span>Vista Previa: Resultado de la Unión</span>
               </div>
               <p className="text-[11px] text-emerald-800">
-                Al confirmar, ambas reservas se combinarán en una única reserva activa con los siguientes parámetros:
+                Al confirmar, las {selectedSources.length + 1} reservas se combinarán en una única reserva activa con los siguientes parámetros:
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 <div className="p-2 bg-white/90 rounded-lg border border-emerald-200">
                   <span className="text-[10px] font-bold text-slate-500 uppercase block">🕒 Horario Unificado:</span>
                   <span className="font-mono font-extrabold text-slate-900 text-sm">
                     {mergedPreview.horaInicio} – {mergedPreview.horaFin}
+                    {mergedPreview.terminaDiaSiguiente && ' (+1 día)'}
                   </span>
                 </div>
                 <div className="p-2 bg-white/90 rounded-lg border border-emerald-200">
@@ -413,6 +382,7 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
           <button
             type="button"
+            disabled={isMerging}
             onClick={onClose}
             className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-xl border border-slate-300 text-xs transition cursor-pointer shadow-xs"
           >
@@ -421,16 +391,16 @@ export const MergeReservationsModal: React.FC<MergeReservationsModalProps> = ({
 
           <button
             type="button"
-            disabled={!selectedSourceId || isMerging}
+            disabled={!selectedSources.length || isMerging}
             onClick={handleExecuteMerge}
             className={`px-5 py-2.5 rounded-xl font-bold text-xs transition flex items-center space-x-1.5 shadow-md cursor-pointer ${
-              selectedSourceId && !isMerging
+              selectedSources.length && !isMerging
                 ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/25 active:scale-95'
                 : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
             }`}
           >
             <GitMerge className="w-4 h-4" />
-            <span>{isMerging ? 'Unificando...' : 'Confirmar y Juntar Reservas'}</span>
+            <span>{isMerging ? 'Unificando...' : selectedSources.length ? `Confirmar y Juntar ${selectedSources.length + 1} Reservas` : 'Confirmar y Juntar Reservas'}</span>
           </button>
         </div>
       </div>
