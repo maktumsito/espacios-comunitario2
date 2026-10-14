@@ -13,6 +13,7 @@ import { canReplaceOccurrence } from './utils/reservationReplacement';
 import { useReplacementReminders } from './hooks/useReplacementReminders';
 import { isRecurringSeriesReservation } from './utils/recurringEdits';
 import { PendingReservationOperations } from './components/PendingReservationOperations';
+import { DeleteDayReservationsModal } from './components/DeleteDayReservationsModal';
 import { Navbar } from './components/Navbar';
 import { FilterBar } from './components/FilterBar';
 import { CalendarView } from './components/CalendarView';
@@ -101,7 +102,7 @@ import {
 } from './services/authService';
 import { LoginScreen } from './components/LoginScreen';
 import { AppFooter } from './components/AppFooter';
-import { Wifi, WifiOff, Clock, ShieldCheck, Filter, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Wifi, WifiOff, Clock, ShieldCheck, Filter, RotateCcw, AlertTriangle, Trash2 } from 'lucide-react';
 import { checkAndRunScheduledBackup } from './services/backupService';
 import { getActiveDraftSummary, removeStoredDraft, ActiveDraftSummary } from './hooks/useReservationAutosave';
 
@@ -120,6 +121,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>(() => getInitialViewMode());
   const [adminSubTab, setAdminSubTab] = useState<'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring'>('spaces');
   const [selectedDailyDate, setSelectedDailyDate] = useState<Date>(() => new Date());
+  const [isDeleteDayModalOpen, setIsDeleteDayModalOpen] = useState(false);
   const [reservationFilters, setReservationFilters] = useState<FilterState>(INITIAL_FILTERS);
   const canWrite = canWriteReservations(currentUser);
 
@@ -536,6 +538,7 @@ export default function App() {
     handleCreateOrUpdate,
     handleMoveReservation,
     handleDelete,
+    handleDeleteDay,
     handleConfirmDeleteSingle,
     handleConfirmDeleteSeries,
     handleRequestDelete,
@@ -961,6 +964,20 @@ export default function App() {
               </span>
             </button>
           </div>
+        )}
+
+        {userCanDeleteReservations(currentUser) && ['calendar', 'daily', 'timeline', 'mobile'].includes(currentView) && (
+          <div className="flex justify-end mb-2">
+            <button type="button" onClick={() => setIsDeleteDayModalOpen(true)}
+              className="min-h-[44px] flex items-center gap-2 px-3 py-2 rounded-xl border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 text-xs sm:text-sm font-semibold">
+              <Trash2 className="w-4 h-4" />
+              Eliminar reservas de un día
+            </button>
+          </div>
+        )}
+        {isDeleteDayModalOpen && userCanDeleteReservations(currentUser) && (
+          <DeleteDayReservationsModal initialDate={format(selectedDailyDate, 'yyyy-MM-dd')}
+            onClose={() => setIsDeleteDayModalOpen(false)} onConfirm={handleDeleteDay} />
         )}
 
         {currentView === 'calendar' && (

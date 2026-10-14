@@ -28,7 +28,7 @@ import {
   setIndexedDbReservations
 } from '../utils/indexedDbStorage';
 import { validateReservationWithZod } from '../schemas/reservationSchema';
-import { validateTimeRange } from '../utils/validationUtils';
+import { validateTimeRange, validateStrictCalendarDate } from '../utils/validationUtils';
 import { recordFirestoreRead } from '../utils/firestoreTracker';
 
 // ============================================================================
@@ -1069,16 +1069,30 @@ export async function reloadAllFromFirestore(): Promise<Reservation[]> {
  * Queries reservations for a specific calendar date directly from Firestore.
  * Requires single-field index on `fecha` (default in Firestore).
  */
-export async function queryReservationsByDate(fecha: string): Promise<Reservation[]> {
+export async function queryReservationsByDate(fecha: string, requireServer = false): Promise<Reservation[]> {
   const db = getDb();
+  if (!db) throw new Error('No hay conexión para consultar las reservas del día.');
   const reservasCol = collection(db, COLLECTION_NAME);
   const q = query(reservasCol, where('fecha', '==', fecha.trim()));
   const snapshot = await getDocs(q);
+  if (requireServer && snapshot.metadata.fromCache) {
+    throw new Error('Conéctate a internet para consultar todas las reservas del día antes de eliminarlas.');
+  }
   const results: Reservation[] = [];
   snapshot.forEach((docSnap) => {
     results.push(normalizeReservationFromFirestore(docSnap.id, docSnap.data()));
   });
   return results.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+}
+
+/** Complete, uncached preview for day deletion, independent of calendar filters. */
+export async function queryReservationsForDayDeletion(fecha: string): Promise<Reservation[]> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !validateStrictCalendarDate(fecha).isValid) {
+    throw new Error('Selecciona una fecha válida para eliminar las reservas.');
+  }
+  const rows = await queryReservationsByDate(fecha, true);
+  return rows.filter(row => row.fecha === fecha && !(row as Reservation & { eliminada?: boolean }).eliminada &&
+    !['eliminada', 'eliminado', 'deleted'].includes(String(row.estado || '').trim().toLowerCase()));
 }
 
 /**

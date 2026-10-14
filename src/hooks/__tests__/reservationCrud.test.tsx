@@ -4,8 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useReservationCrud, type UseReservationCrudProps } from '../useReservationCrud';
 import type { Reservation } from '../../types';
 import { buildReplacementBatch } from '../../utils/reservationReplacement';
-const mocks=vi.hoisted(()=>({save:vi.fn(),audit:vi.fn(),notify:vi.fn(),series:vi.fn()}));
-vi.mock('../../services/reservationService',async original=> ({...(await original<any>()),saveReservation:mocks.save,saveReservationsBatch:mocks.save,commitReservationChanges:mocks.save,queryReservationsBySeries:mocks.series}));
+import { ReservationWriteError } from '../../services/reservationService';
+const mocks=vi.hoisted(()=>({save:vi.fn(),audit:vi.fn(),notify:vi.fn(),series:vi.fn(),day:vi.fn()}));
+vi.mock('../../services/reservationService',async original=> ({...(await original<any>()),saveReservation:mocks.save,saveReservationsBatch:mocks.save,commitReservationChanges:mocks.save,queryReservationsBySeries:mocks.series,queryReservationsForDayDeletion:mocks.day}));
 vi.mock('../../services/auditLogService',()=>({recordAuditEntry:mocks.audit,computeReservationDiff:()=>[]}));
 vi.mock('../../services/notificationService',()=>({notifyTopamiento:mocks.notify,notifyImportantActivity:mocks.notify}));
 const row:Reservation={id:'form',fecha:'2026-10-06',horaInicio:'10:00',horaFin:'11:00',espacio:'SALA 2',responsable:'Vecino',descripcion:'Taller',tipoActividad:'Taller',actividadRecurrente:'No',estado:'activa',version:0};
@@ -15,6 +16,80 @@ function props():UseReservationCrudProps {return {
 };}
 beforeEach(()=> {localStorage.clear();vi.clearAllMocks();vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-06T15:00:00Z'));mocks.audit.mockResolvedValue(undefined);});
 afterEach(()=> {cleanup();vi.useRealTimers();});
+it('deletes every reviewed space for one date while retaining other sessions and concurrent additions', async () => {
+  const targets = [{ ...row, version: 2, serieRecurrente: 'series' }, { ...row, id: 'other-space', espacio: 'SALA 3', version: 4, estado: 'cancelada' }];
+  const future = { ...targets[0], id: 'future', fecha: '2026-10-13' };
+  const concurrent = { ...row, id: 'concurrent' };
+  const p = props(); p.reservations = [targets[0], future]; p.selectedReservation = targets[0];
+  mocks.day.mockResolvedValue(targets);
+  mocks.save.mockResolvedValue({ reservations: [], deletedIds: targets.map(r => r.id), confirmedIds: targets.map(r => r.id), pendingIds: [] });
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => { await result.current.handleDeleteDay(row.fecha, targets); });
+  expect(mocks.save).toHaveBeenCalledWith([], { deletedIds: ['form', 'other-space'], expectedVersions: { form: 2, 'other-space': 4 }, onProgress: expect.any(Function) });
+  const update = (p.setReservations as any).mock.calls.at(-1)[0];
+  expect(update([...targets, future, concurrent])).toEqual([concurrent, future]);
+  expect(p.setIsDetailModalOpen).toHaveBeenCalledWith(false);
+  expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'DELETE', previousState: targets, reservaFecha: row.fecha }));
+});
+
+it.each(['edited', 'moved'] as const)('requires renewed confirmation when a selected day reservation is %s', async change => {
+  const p = props();
+  mocks.day.mockResolvedValue(change === 'edited' ? [{ ...row, version: 3 }] : []);
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => { await expect(result.current.handleDeleteDay(row.fecha, [row])).rejects.toThrow('cambiaron'); });
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(p.setReservations).not.toHaveBeenCalled();
+});
+
+it('preserves unchecked reservations and reservations created since preview', async () => {
+  const unchecked = { ...row, id: 'unchecked', version: 8 }, added = { ...row, id: 'added' };
+  const p = props(); p.reservations = [row, unchecked, added];
+  mocks.day.mockResolvedValue(p.reservations);
+  mocks.save.mockResolvedValue({ reservations: [], deletedIds: [row.id], confirmedIds: [row.id], pendingIds: [] });
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => { await result.current.handleDeleteDay(row.fecha, [row]); });
+  expect(mocks.save.mock.calls[0][1].deletedIds).toEqual([row.id]);
+  expect((p.setReservations as any).mock.calls.at(-1)[0](p.reservations)).toEqual([unchecked, added]);
+  expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ previousState: [row] }));
+});
+
+it('denies bulk deletion without permission and refuses selections from another date', async () => {
+  const p = props(); p.currentUser = { ...p.currentUser!, canDeleteReservations: false };
+  const { result, rerender } = renderHook(() => useReservationCrud(p));
+  await expect(result.current.handleDeleteDay(row.fecha, [row])).rejects.toThrow('permiso');
+  p.currentUser = { ...p.currentUser, canDeleteReservations: true }; rerender();
+  await expect(result.current.handleDeleteDay('2026-10-07', [row])).rejects.toThrow('Consulta nuevamente');
+  expect(mocks.day).not.toHaveBeenCalled(); expect(mocks.save).not.toHaveBeenCalled();
+});
+
+it('retains all reservations when deletion fails before confirmation', async () => {
+  const p = props(); mocks.day.mockResolvedValue([row]); mocks.save.mockRejectedValue(new Error('Sin conexión'));
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => { await expect(result.current.handleDeleteDay(row.fecha, [row])).rejects.toThrow('Sin conexión'); });
+  expect(p.setReservations).not.toHaveBeenCalled(); expect(mocks.audit).not.toHaveBeenCalled();
+});
+
+it('applies and audits only confirmed deletions when a later batch fails', async () => {
+  const other = { ...row, id: 'remaining', espacio: 'SALA 3' }, p = props();
+  p.reservations = [row, other]; mocks.day.mockResolvedValue(p.reservations);
+  mocks.save.mockRejectedValue(new ReservationWriteError('Error en el siguiente lote', { operationId: 'bulk', reservations: [], deletedIds: [row.id], confirmedIds: [row.id], pendingIds: [other.id] }));
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => { await expect(result.current.handleDeleteDay(row.fecha, p.reservations)).rejects.toThrow('Se eliminaron 1 reservas'); });
+  expect((p.setReservations as any).mock.calls[0][0](p.reservations)).toEqual([other]);
+  expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ previousState: [row] }));
+});
+
+it('rejects a second bulk submit while the first is awaiting confirmation', async () => {
+  let resolve!: (result: any) => void;
+  mocks.day.mockResolvedValue([row]); mocks.save.mockReturnValue(new Promise(done => { resolve = done; }));
+  const { result } = renderHook(() => useReservationCrud(props()));
+  let pending!: Promise<void>;
+  await act(async () => { pending = result.current.handleDeleteDay(row.fecha, [row]); });
+  await expect(result.current.handleDeleteDay(row.fecha, [row])).rejects.toThrow('ya está en curso');
+  await act(async () => { resolve({ reservations: [], deletedIds: [row.id], confirmedIds: [row.id], pendingIds: [] }); await pending; });
+  expect(mocks.save).toHaveBeenCalledTimes(1);
+});
+
 it('retains the form until confirmation and rejects a second submit',async()=> {
   let finish:(value:any)=>void=()=>{};mocks.save.mockReturnValue(new Promise(resolve=>finish=resolve));
   const p=props();const {result}=renderHook(()=>useReservationCrud(p));let pending:Promise<boolean>;

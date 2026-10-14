@@ -13,6 +13,7 @@ import {
   saveReservation,
   commitReservationChanges,
   queryReservationsBySeries,
+  queryReservationsForDayDeletion,
   getLocalCache,
   ReservationWriteError,
   ReservationVersionError,
@@ -86,6 +87,7 @@ export interface UseReservationCrudReturn {
     allowConflictOverride?: boolean
   ) => Promise<boolean>;
   handleDelete: (id: string, isSeries?: boolean, seriesId?: string, selection?:Reservation[]) => Promise<void>;
+  handleDeleteDay: (fecha: string, selection: readonly Reservation[]) => Promise<void>;
   handleConfirmDeleteSingle: (id: string) => Promise<void>;
   handleConfirmDeleteSeries: (seriesId: string) => Promise<void>;
   handleRequestDelete: (reserva: Reservation) => void;
@@ -133,6 +135,7 @@ export function useReservationCrud({
 
   const saveInFlight = useRef(false);
   const deleteSelection=useRef<Reservation[]>([]);
+  const dayDeleteInFlight = useRef(false);
   const safeAudit: typeof recordAuditEntry = async (...args) => {
     try { return await recordAuditEntry(...args); }
     catch (error) {
@@ -181,6 +184,56 @@ export function useReservationCrud({
       void safeAudit({ action: isSeries ? 'DELETE_SERIES' : 'DELETE', description: `Eliminadas ${targets.length} reservas`, reservaId: seriesId || id, user: currentUser, previousState: isSeries ? targets : targets[0] });
     } catch (err: any) { triggerSyncToast(err?.message || 'No se pudo eliminar.', 'error'); throw err; }
   }, [currentUser, reservations, selectedReservation, setReservations, setIsDetailModalOpen, setSelectedReservation, triggerSyncToast, handleRequestDelete]);
+
+  const handleDeleteDay = useCallback(async (fecha: string, selection: readonly Reservation[]) => {
+    if (!userCanDeleteReservations(currentUser)) {
+      throw new Error('No tienes permiso para eliminar reservas.');
+    }
+    if (dayDeleteInFlight.current) throw new Error('La eliminación del día ya está en curso.');
+    if (!selection.length || selection.some(row => row.fecha !== fecha) ||
+        new Set(selection.map(row => row.id)).size !== selection.length) {
+      throw new Error('Consulta nuevamente las reservas del día antes de eliminarlas.');
+    }
+    dayDeleteInFlight.current = true;
+    // Keep the reviewed versions: a refreshed calendar must never silently expand deletion.
+    const targets = structuredClone([...selection]);
+    let confirmedIds: string[] = [];
+    const applyDeletion = (result: Awaited<ReturnType<typeof commitReservationChanges>>) => {
+      confirmedIds = [...new Set([...confirmedIds, ...result.deletedIds])];
+      applyConfirmed(result);
+      if (selectedReservation && result.deletedIds.includes(selectedReservation.id)) {
+        setIsDetailModalOpen(false);
+        setSelectedReservation(null);
+      }
+    };
+    try {
+      const current = await queryReservationsForDayDeletion(fecha);
+      const reviewed = new Map(targets.map(row => [row.id, row.version || 0]));
+      const currentById = new Map(current.map(row => [row.id, row]));
+      if (targets.some(row => !currentById.has(row.id) ||
+        reviewed.get(row.id) !== (currentById.get(row.id)!.version || 0))) {
+        throw new Error('Las reservas seleccionadas cambiaron. Consulta nuevamente y confirma la selección actualizada.');
+      }
+      applyDeletion(await commitReservationChanges([], {
+        deletedIds: targets.map(row => row.id),
+        expectedVersions: Object.fromEntries(reviewed),
+        onProgress: applyDeletion,
+      }));
+      triggerSyncToast(`Eliminadas ${confirmedIds.length} reservas del ${fecha.split('-').reverse().join('/')}.`, 'success');
+    } catch (error) {
+      if (error instanceof ReservationWriteError) applyDeletion(error.result);
+      const message = error instanceof Error ? error.message : 'No se pudieron eliminar las reservas del día.';
+      throw new Error(confirmedIds.length
+        ? `Se eliminaron ${confirmedIds.length} reservas. ${message} Consulta nuevamente las reservas restantes o reanuda la operación pendiente.`
+        : message);
+    } finally {
+      if (confirmedIds.length) {
+        void safeAudit({ action: 'DELETE', description: `Eliminación masiva del día ${fecha}: ${confirmedIds.length} reservas`,
+          reservaId: `DAY_${fecha}`, reservaFecha: fecha, user: currentUser, previousState: targets.filter(row => confirmedIds.includes(row.id)) });
+      }
+      dayDeleteInFlight.current = false;
+    }
+  }, [currentUser, selectedReservation, setReservations, setIsDetailModalOpen, setSelectedReservation, triggerSyncToast]);
 
   const handleConfirmDeleteSingle = useCallback(async (id: string) => {
     await handleDelete(id, false,undefined,deleteSelection.current);
@@ -1398,6 +1451,7 @@ export function useReservationCrud({
     handleMoveReservation,
     handleCreateOrUpdate,
     handleDelete,
+    handleDeleteDay,
     handleConfirmDeleteSingle,
     handleConfirmDeleteSeries,
     handleRequestDelete,
