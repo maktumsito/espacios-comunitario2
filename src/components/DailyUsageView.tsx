@@ -3,7 +3,7 @@ import { useTimelineViewport, intersectsViewport } from '../hooks/useTimelineVie
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from 'react';
 import { Reservation, SpaceInfo, FilterState, SpaceBlock } from '../types';
 import { SPACES_LIST, normalizeSpaceName } from '../data/spacesData';
-import { timeToMinutes, formatMinutesToTime, getConflictReservationIds, doSpacesConflict, isReservationActiveForAvailability } from '../utils/conflictDetector';
+import { timeToMinutes, formatMinutesToTime, getConflictReservationIds, doSpacesConflict, getConstituentSpaces, normalizeSpace, isReservationActiveForAvailability } from '../utils/conflictDetector';
 import { getChileanHolidayInfo } from '../utils/holidayUtils';
 import {
   Calendar as CalendarIcon,
@@ -441,30 +441,33 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
   // Normalize, map and assemble spaces preserving user's customized column order (respecting active space filters)
   const activeSpaces = useMemo(() => {
-    let list: SpaceInfo[] = [...(localSpaces && localSpaces.length > 0 ? localSpaces : (spaces && spaces.length > 0 ? spaces : SPACES_LIST))];
+    const configuredSpaces = localSpaces && localSpaces.length > 0 ? localSpaces : (spaces && spaces.length > 0 ? spaces : SPACES_LIST);
+    // Compound names can also have been saved by a previous column reorder.
+    let list = configuredSpaces.filter((space) => getConstituentSpaces(space.name).length === 1);
+    const knownSpaces = new Set(list.map((space) => normalizeSpace(space.name)));
+    const spaceNames = [...configuredSpaces.map((space) => space.name), ...dayReservations.map((r) => r.espacio)];
 
-    // Check if day reservations have any space not in list
-    const knownSpaces = new Set(list.map((s) => normalizeSpaceName(s.name)));
-    dayReservations.forEach((r) => {
-      const norm = normalizeSpaceName(r.espacio);
-      if (norm && !knownSpaces.has(norm)) {
-        knownSpaces.add(norm);
-        list.push({
-          id: norm,
-          name: norm,
+    // Discover individual rooms without creating an extra column for their combination.
+    spaceNames.forEach((name) => {
+      getConstituentSpaces(name).forEach((room) => {
+        if (knownSpaces.has(room)) return;
+        knownSpaces.add(room);
+        list.push(SPACES_LIST.find((space) => normalizeSpace(space.name) === room) ?? {
+          id: room,
+          name: room,
           capacity: 20,
           category: 'Salas de Clases',
           iconName: 'Layers',
           color: '#6366f1',
-          description: norm
+          description: room
         });
-      }
+      });
     });
 
     // If global space filter is active, filter space list
     if (globalFilters?.espacio && globalFilters.espacio.trim()) {
-      const filterNorm = normalizeSpaceName(globalFilters.espacio);
-      const filtered = list.filter((s) => normalizeSpaceName(s.name) === filterNorm);
+      const filterRooms = new Set(getConstituentSpaces(globalFilters.espacio));
+      const filtered = list.filter((s) => filterRooms.has(normalizeSpace(s.name)));
       if (filtered.length > 0) {
         list = filtered;
       }
