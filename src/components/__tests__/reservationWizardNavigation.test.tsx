@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReservationModal } from '../ReservationModal';
+import type { Reservation } from '../../types';
 
 vi.mock('../../utils/commitmentLetterPdf', async original => ({
   ...await original<typeof import('../../utils/commitmentLetterPdf')>(),
@@ -16,6 +17,63 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-10-08T15:00:00Z'));
   HTMLElement.prototype.scrollTo = vi.fn();
   HTMLElement.prototype.scrollIntoView = vi.fn();
+});
+
+describe('changing the main reservation space', () => {
+  const source: Reservation = {
+    id: 'space-change', fecha: '2026-10-14', horaInicio: '10:00', horaFin: '11:00',
+    espacio: 'SALA 2', responsable: 'Vecino de prueba', descripcion: 'Taller comunitario',
+    tipoActividad: 'TALLER CCD', actividadRecurrente: 'No', estado: 'activa', version: 3,
+  };
+
+  it.each(['single', 'specific', 'pattern'] as const)('saves the selected main space in %s mode', async mode => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    const editing: Reservation = mode === 'single' ? source : {
+      ...source, actividadRecurrente: 'Sí', serieRecurrente: 'space-series',
+      tipoRecurrencia: mode === 'specific' ? 'especificas' : 'semanal',
+      diasSemana: 'mie', fechaInicioRecurrencia: source.fecha, fechaFinRecurrencia: '2026-10-21',
+    };
+    const later = { ...editing, id: 'later-space-change', fecha: '2026-10-21', horaInicio: '12:00', horaFin: '13:00' };
+    openForm({ editingReservation: editing, allReservations: mode === 'single' ? [editing] : [editing, later], onSave });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Espacio Requerido' }), { target: { value: 'SALA 3' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Confirmar y guardar reserva de espacio' })); });
+    expect(onSave).toHaveBeenCalledOnce();
+    const batch = onSave.mock.calls[0][4];
+    expect(batch.updatedReservations).toHaveLength(mode === 'single' ? 1 : 2);
+    expect(batch.updatedReservations.every((row: Reservation) => row.espacio === 'SALA 3')).toBe(true);
+    expect(batch.updatedReservations[0]).toMatchObject({ id: source.id, version: source.version, horaInicio: '10:00' });
+    if (mode !== 'single') expect(batch.updatedReservations[1]).toMatchObject({ id: later.id, horaInicio: '12:00', horaFin: '13:00' });
+  });
+
+  it('keeps the second room and its schedule when changing the primary room', async () => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    const editing: Reservation = { ...source, actividadRecurrente: 'Sí', serieRecurrente: 'space-series', tipoRecurrencia: 'especificas' };
+    const second = { ...editing, id: 'second-room', espacio: 'TATAMI', horaInicio: '14:00', horaFin: '15:00' };
+    const later = { ...editing, id: 'later-room', fecha: '2026-10-21' };
+    openForm({ editingReservation: editing, allReservations: [editing, second, later], onSave });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Espacio Requerido' }), { target: { value: 'SALA 3' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Confirmar y guardar reserva de espacio' })); });
+    expect(onSave).toHaveBeenCalledOnce();
+    const batch = onSave.mock.calls[0][4];
+    expect(batch.updatedReservations).toHaveLength(3);
+    expect(batch.updatedReservations.find((row: Reservation) => row.id === second.id)).toMatchObject({ espacio: 'TATAMI', horaInicio: '14:00', horaFin: '15:00' });
+    expect(batch.updatedReservations.filter((row: Reservation) => row.id !== second.id).every((row: Reservation) => row.espacio === 'SALA 3')).toBe(true);
+    expect(batch.addedIds).toEqual([]);
+    expect(batch.deletedIds).toBeUndefined();
+  });
+
+  it('checks conflicts in the new primary room before confirming the change', async () => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    const editing: Reservation = { ...source, actividadRecurrente: 'Sí', serieRecurrente: 'space-series', tipoRecurrencia: 'especificas' };
+    const later = { ...editing, id: 'later-room', fecha: '2026-10-21', horaInicio: '12:00', horaFin: '13:00' };
+    const occupied = { ...source, id: 'occupied-room', espacio: 'SALA 3', responsable: 'Otro vecino' };
+    openForm({ editingReservation: editing, allReservations: [editing, later, occupied], onSave });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Espacio Requerido' }), { target: { value: 'SALA 3' } });
+    const button = screen.getByRole('button', { name: 'Confirmar y guardar reserva de espacio' }) as HTMLButtonElement;
+    await act(async () => { fireEvent.click(button); });
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'Alerta de Topamiento Detectado' })).toBeTruthy();
+  });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 

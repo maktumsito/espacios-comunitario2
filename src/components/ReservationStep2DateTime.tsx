@@ -264,7 +264,18 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
             id="input-reserva-espacio"
             aria-label="Espacio Requerido"
             value={formData.espacio || availableSpaces[0]?.name}
-            onChange={(e) => setFormData({ ...formData, espacio: e.target.value })}
+            onChange={(e) => {
+              const espacio = e.target.value;
+              setFormData(prev => ({ ...prev, espacio }));
+              // Custom schedules take precedence over the base space when saving.
+              // Keep their primary room in sync with an explicit main-space change.
+              if (!isEditingSingleOccurrence) {
+                if (useCustomSchedulesPerDate) Object.keys(dateSchedules).forEach(date =>
+                  handleUpdateDateSchedule(date, 'espacio', espacio));
+                if (useCustomSchedulesPerDay) Object.keys(daySchedules).forEach(day =>
+                  handleUpdateDaySchedule(Number(day), 'espacio', espacio));
+              }
+            }}
             className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs font-bold"
           >
             {availableSpaces.map((s) => (
