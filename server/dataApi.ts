@@ -214,15 +214,13 @@ export function registerDataApi(
         .json({ success: true, docs: records(snapshot, req.body.path) });
     }),
   );
-  app.post(
-    "/api/data/listen",
-    sessions.requireAuth,
-    wrap(async (req, res) => {
-      const ref = reference(db, req.body, (req as any).user),
+  const readView = async (body: any, user: any) => {
+      // Revalidate access even when the native snapshot is already shared.
+      const ref = reference(db, body, user),
         key = JSON.stringify({
-          path: req.body.path,
-          kind: req.body.kind,
-          constraints: req.body.constraints || [],
+          path: body.path,
+          kind: body.kind,
+          constraints: body.constraints || [],
         });
       for (const [id, v] of views)
         if (Date.now() - v.lastUse > 120000) {
@@ -267,12 +265,19 @@ export function registerDataApi(
       view.lastUse = Date.now();
       await view.ready;
       const message =
-        req.body.version === view.version
+        body.version === view.version
           ? { version: view.version, unchanged: true }
           : {
               version: view.version,
-              docs: records(view.snapshot, req.body.path),
+              docs: records(view.snapshot, body.path),
             };
+      return message;
+  };
+  app.post(
+    "/api/data/listen",
+    sessions.requireAuth,
+    wrap(async (req, res) => {
+      const message = await readView(req.body, (req as any).user);
       const content = Buffer.from(JSON.stringify(message) + "\n");
       res.set({
         "Cache-Control": "no-store",
@@ -287,6 +292,25 @@ export function registerDataApi(
       } else res.end(content);
     }),
   );
+  app.post('/api/data/listen-batch', sessions.requireAuth, wrap(async (req, res) => {
+    const queries = req.body.queries;
+    if (!Array.isArray(queries) || !queries.length || queries.length > 50 || queries.some(query => !query || typeof query !== 'object')) {
+      throw new ApiFailure(400, 'Lote de consultas no válido.');
+    }
+    const results = await Promise.all(queries.map(async query => {
+      try { return await readView(query, (req as any).user); }
+      catch (error) {
+        return { error: error instanceof ApiFailure ? error.message : 'No se pudo sincronizar esta vista. Conserva tus datos y vuelve a intentar.',
+          status: error instanceof ApiFailure ? error.status : 503, retryAfterMs: 60_000 };
+      }
+    }));
+    const content = Buffer.from(JSON.stringify({ success: true, results }));
+    res.set({ 'Cache-Control': 'no-store', 'Content-Type': 'application/json' });
+    if (content.length > 2048 && req.get('accept-encoding')?.includes('gzip')) {
+      res.set('Content-Encoding', 'gzip');
+      res.end(gzipSync(content));
+    } else res.end(content);
+  }));
   app.post(
     "/api/data/write",
     sessions.requireAuth,

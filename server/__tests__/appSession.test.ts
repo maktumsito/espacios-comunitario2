@@ -83,6 +83,43 @@ it('limits repeated failed passwords on the server', async () => {
   });
 });
 
+it('reports an exhausted Firestore quota, throttles failed checks and never authorizes with stale permissions', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  const logging = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    await withSession(async (base, read) => {
+      const session = await login(base);
+      const headers = { Authorization: `Bearer ${session.token}` };
+      read.mockRejectedValue(Object.assign(new Error('Read quota exceeded'), { code: 8 }));
+      const response = await fetch(`${base}/protected`, { headers });
+      expect(response.status).toBe(503);
+      expect(response.headers.get('retry-after')).toBe('60');
+      expect(await response.json()).toMatchObject({ success: false, code: 'auth-backend-quota-exceeded', error: expect.stringContaining('cuota') });
+      await Promise.all(Array.from({ length: 5 }, () => fetch(`${base}/write`, { method: 'POST', headers })));
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(logging).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(60_000);
+      read.mockResolvedValue(account);
+      expect((await fetch(`${base}/protected`, { headers })).status).toBe(200);
+      expect((await fetch(`${base}/write`, { method: 'POST', headers })).status).toBe(403);
+    });
+  } finally { logging.mockRestore(); }
+});
+
+it('distinguishes missing server database permissions from invalid client credentials', async () => {
+  const logging = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    await withSession(async (base, read) => {
+      const session = await login(base);
+      read.mockRejectedValue(Object.assign(new Error('Service account denied'), { code: 7 }));
+      const response = await fetch(`${base}/protected`, { headers: { Authorization: `Bearer ${session.token}` } });
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ code: 'auth-backend-permission-denied', error: expect.stringContaining('servidor') });
+      expect((await fetch(`${base}/protected`, { headers: { Authorization: 'Bearer invalid' } })).status).toBe(401);
+    });
+  } finally { logging.mockRestore(); }
+});
+
 const legacyAccount = { ...account, passwordHash: crypto.createHash('sha256').update('espacios_community_salt_2026:password').digest('hex') };
 it('upgrades a correctly verified legacy password before issuing a session without widening permissions', async () => {
   const upgraded = { ...account, sessionVersion: 1 };

@@ -112,9 +112,15 @@ function notifyAuthListeners() {
 export function initGmailAuthListener(): () => void {
   const auth = getFirebaseAuth();
   void restoreGmailConnection();
-  const refresh = () => { void restoreGmailConnection(); };
+  let lastCheck = Date.now();
+  const refresh = () => {
+    if (document.visibilityState !== 'visible' || Date.now() - lastCheck < 5 * 60_000) return;
+    lastCheck = Date.now();
+    void restoreGmailConnection();
+  };
   window.addEventListener('focus', refresh);
-  const interval = setInterval(refresh, 60_000);
+  document.addEventListener('visibilitychange', refresh);
+  const interval = setInterval(refresh, 5 * 60_000);
   const unsubscribe = onAuthStateChanged(auth, (user: User | null) => {
     if (user) {
       currentGoogleUser = {
@@ -132,6 +138,7 @@ export function initGmailAuthListener(): () => void {
   return () => {
     unsubscribe();
     window.removeEventListener('focus', refresh);
+    document.removeEventListener('visibilitychange', refresh);
     clearInterval(interval);
   };
 }

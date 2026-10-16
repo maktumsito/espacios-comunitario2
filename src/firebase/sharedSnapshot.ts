@@ -51,6 +51,7 @@ export function sharedOnSnapshot(ref: Reference, next: (snapshot: any) => void, 
     try {
       // The SDK accepts both document references and queries through this overload at runtime.
       current.unsubscribe = onSnapshot(ref as Query<DocumentData>, { includeMetadataChanges: true }, (snapshot: Snapshot) => {
+        current.failure = undefined;
         if (!snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites) {
           const first = !current.confirmed;
           const fingerprint = 'docs' in snapshot ? undefined : JSON.stringify(snapshot.data());

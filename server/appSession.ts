@@ -5,6 +5,22 @@ import { publicProfile,verifyPassword, verifyLegacyPassword } from './passwords'
 
 const SESSION_MS = 60 * 60_000;
 
+function accountReadFailure(error: unknown) {
+  const code = String((error as any)?.code ?? '').toLowerCase().replace(/_/g, '-');
+  if (['8', 'resource-exhausted', '429'].includes(code)) return {
+    code: 'auth-backend-quota-exceeded', retryAfter: 60,
+    message: 'Firestore alcanzó su cuota de uso. No se pudo verificar el acceso; la operación sigue pendiente. Reintenta cuando se restablezca la cuota.',
+  };
+  if (['7', 'permission-denied', '16', 'unauthenticated'].includes(code)) return {
+    code: 'auth-backend-permission-denied', retryAfter: 60,
+    message: 'El servidor no puede acceder a la base de usuarios. Es necesario revisar sus credenciales y permisos de Firestore. La operación sigue pendiente.',
+  };
+  return {
+    code: 'auth-verification-unavailable', retryAfter: 10,
+    message: 'No se pudo verificar el acceso porque la base de usuarios no está disponible. La operación sigue pendiente; intenta nuevamente.',
+  };
+}
+
 export const requireReservationWriter: RequestHandler = (req, res, next) => {
   const user = (req as any).user as AuthUser | undefined;
   const flags = [user?.canCreateReservations, user?.canEditReservations, user?.canDeleteReservations];
@@ -24,6 +40,7 @@ export class AppSessions {
   private key: string;
   private accounts = new Map<string, { value: UserAccount | null; expiresAt: number }>();
   private pendingAccounts = new Map<string, Promise<UserAccount | null>>();
+  private accountFailures = new Map<string, { error: unknown; expiresAt: number }>();
   private attempts = new Map<string, { count: number; expiresAt: number }>();
 
   constructor(private readAccount: (username: string) => Promise<UserAccount | null>, secret?: string,
@@ -40,15 +57,24 @@ export class AppSessions {
     const name = username.trim().toLowerCase();
     const cached = this.accounts.get(name);
     if (cached?.value === null && cached.expiresAt > Date.now()) return null;
+    const failure = this.accountFailures.get(name);
+    if (failure && failure.expiresAt > Date.now()) throw failure.error;
     const pending = this.pendingAccounts.get(name);
     if (pending) return pending;
     const request = this.readAccount(name).then(value => {
+      this.accountFailures.delete(name);
       // Keep this small even when callers submit arbitrary usernames.
       if (this.accounts.size >= 100) this.accounts.delete(this.accounts.keys().next().value!);
       // Positive permissions/passwords are rechecked for every protected request.
       if (value === null) this.accounts.set(name, { value, expiresAt: Date.now() + 60_000 });
       else this.accounts.delete(name);
       return value;
+    }).catch(error => {
+      const failure = accountReadFailure(error);
+      if (this.accountFailures.size >= 100) this.accountFailures.delete(this.accountFailures.keys().next().value!);
+      this.accountFailures.set(name, { error, expiresAt: Date.now() + failure.retryAfter * 1000 });
+      console.error('[Auth] Account verification read failed', { code: (error as any)?.code, message: (error as any)?.message });
+      throw error;
     });
     this.pendingAccounts.set(name, request);
     try { return await request; }
@@ -76,7 +102,11 @@ export class AppSessions {
         ? { username: claims.u, startedAt: claims.startedAt, version: claims.v } : null;
     } catch { return null; }
   }
-  invalidateAccount(username: string) { this.accounts.delete(username.trim().toLowerCase()); }
+  invalidateAccount(username: string) {
+    const name = username.trim().toLowerCase();
+    this.accounts.delete(name);
+    this.accountFailures.delete(name);
+  }
   acceptsAccount(token: string, account: UserAccount | null): boolean {
     const claims=this.verify(token.replace(/^Bearer\s+/i,'').trim());
     return !!claims && !!account && account.username===claims.username && equal(claims.version,this.binding(account));
@@ -94,7 +124,10 @@ export class AppSessions {
       (req as any).sessionStartedAt = claims.startedAt;
       (req as any).sessionBinding = claims.version;
       next();
-    } catch { res.status(503).json({ success: false, error: 'No se pudo verificar el acceso. Intenta nuevamente.' }); }
+    } catch (error) {
+      const failure = accountReadFailure(error);
+      res.set('Retry-After', String(failure.retryAfter)).status(503).json({ success: false, error: failure.message, code: failure.code });
+    }
   };
 
   register(app: Express, readLoginAccounts?: () => Promise<LoginAccount[]>) {

@@ -42,9 +42,11 @@ export function PendingReservationOperations({ user }: { user: AuthUser | null }
     } finally { busyRef.current = false; setBusy(null); }
   };
   return <>{visible.map(o => <div key={o.id} role="status" className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-300 text-sm">
-    <p>Guardado pendiente: {o.confirmedIds.length} de {o.reservations.length + o.deletedIds.length} reservas confirmadas.</p>
+    <p>{o.reservations.length === 0 && o.deletedIds.length > 0 ? 'Eliminación pendiente:' : 'Guardado pendiente:'} {o.confirmedIds.length} de {o.reservations.length + o.deletedIds.length} reservas confirmadas.</p>
     <button type="button" disabled={!!busy} onClick={() => resume(o)} className="mt-2 px-3 py-2 rounded-lg bg-amber-700 text-white disabled:opacity-50">
-      {busy === o.id ? 'Guardando…' : 'Reanudar guardado'}
+      {o.reservations.length === 0 && o.deletedIds.length > 0
+        ? busy === o.id ? 'Eliminando…' : 'Reanudar eliminación'
+        : busy === o.id ? 'Guardando…' : 'Reanudar guardado'}
     </button>
     <button type="button" disabled={!!busy} onClick={() => setDiscarding(o)} className="mt-2 ml-2 px-3 py-2 rounded-lg border border-amber-700 text-amber-900 disabled:opacity-50">
       Descartar pendiente

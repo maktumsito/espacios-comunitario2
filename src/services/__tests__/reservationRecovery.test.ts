@@ -5,6 +5,7 @@ import { writeReservations } from '../reservationWriter';
 import { readPendingOperations, updateOperationJournal } from '../reservationOperationJournal';
 import { discardReservationOperation, resumeReservationOperation } from '../reservationService';
 import { saveAuthUser } from '../authService';
+import { DataApiError } from '../../firebase/gateway';
 
 const api = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('../../firebase/gateway', async original => ({
@@ -35,6 +36,14 @@ it('retains payload and operation ID when the HTTP acknowledgement is lost', asy
   api.request.mockRejectedValue(new Error('Se perdió la conexión'));
   await expect(writeReservations({} as any, [row], r => r, { actor: 'test', operationId: 'pending' })).rejects.toThrow('conexión');
   expect(await readPendingOperations()).toMatchObject([operation()]);
+});
+
+it('retains all eight pending deletions and their version guards when Firestore cannot verify access due to quota', async () => {
+  const deletedIds = Array.from({ length: 8 }, (_, index) => `yoga-${index}`);
+  const expectedVersions = Object.fromEntries(deletedIds.map(id => [id, 3]));
+  api.request.mockRejectedValue(new DataApiError('Firestore alcanzó su cuota de uso.', 503, 'auth-backend-quota-exceeded', 60_000));
+  await expect(writeReservations({} as any, [], r => r, { actor: 'test', operationId: 'yoga-delete', deletedIds, expectedVersions })).rejects.toThrow('cuota');
+  expect(await readPendingOperations()).toMatchObject([{ id: 'yoga-delete', reservations: [], deletedIds, expectedVersions, confirmedIds: [] }]);
 });
 
 it('keeps a partial operation recoverable even if the remaining group is rejected', async () => {

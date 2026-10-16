@@ -1,4 +1,5 @@
 import * as sdk from "firebase/firestore";
+import { DataViewPoller } from './dataViewPoller';
 export * from "firebase/firestore";
 
 // Browsers use authenticated HTTP. Server code adapts the Admin SDK; Vitest
@@ -17,9 +18,15 @@ export class DataApiError extends Error {
     message: string,
     public status = 500,
     public code = "unavailable",
+    public retryAfterMs = 0,
   ) {
     super(message);
   }
+}
+function responseFailure(response: Response, result: any) {
+  const seconds = Number(response.headers.get('Retry-After'));
+  return new DataApiError(result.error || 'No se pudo completar la operación.', response.status,
+    result.code, Number.isFinite(seconds) ? Math.min(3_600_000, Math.max(0, seconds * 1000)) : 0);
 }
 export async function dataRequest(
   path: string,
@@ -43,12 +50,8 @@ export async function dataRequest(
   });
   const result = await response.json();
   if (!response.ok || result.success === false)
-    throw new DataApiError(
-      result.error || "No se pudo completar la operación.",
-      response.status,
-      result.code,
-    );
-  if (!["/api/data/read", "/api/data/listen"].includes(path))
+    throw responseFailure(response, result);
+  if (!["/api/data/read", "/api/data/listen", "/api/data/listen-batch"].includes(path))
     announceDataChange();
   return result;
 }
@@ -78,7 +81,7 @@ export async function reservationRequest(
   });
   if (!response.ok) {
     const result = await response.json();
-    throw new DataApiError(result.error, response.status);
+    throw responseFailure(response, result);
   }
   const reader = response.body!.getReader(),
     decoder = new TextDecoder();
@@ -397,45 +400,8 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
     return native(ref)
       ? ref.onSnapshot((s: any) => next(wrap(s)), error)
       : (sdk.onSnapshot as any)(ref, ...args);
-  let controller: AbortController | undefined,
-    disposed = false,
-    retry: any,
-    records: any[] = [],
-    version: string | undefined;
-  const start = async () => {
-    controller?.abort();
-    clearTimeout(retry);
-    if (disposed || !sessionToken()) return;
-    controller = new AbortController();
-    try {
-      const response = await fetch("/api/data/listen", {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${sessionToken()}`,
-        },
-        body: JSON.stringify({ ...describe(ref), version: version }),
-      });
-      if (!response.ok) {
-        const result = await response.json();
-        throw new DataApiError(result.error, response.status);
-      }
-      const reader = response.body!.getReader(),
-        decoder = new TextDecoder();
-      let buffer = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let end: number;
-        while ((end = buffer.indexOf("\n")) >= 0) {
-          const line = buffer.slice(0, end);
-          buffer = buffer.slice(end + 1);
-          if (!line.trim()) continue;
-          const message = JSON.parse(line);
-          if (message.error)
-            throw new DataApiError(message.error, message.status);
+  let records: any[] = [];
+  return getDataViewPoller().subscribe(describe(ref), message => {
           if (message.docs) {
             const previous = records;
             records = message.docs;
@@ -443,7 +409,7 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
             const previousById = new Map(
               previous.map((r, i) => [r.id, { ...r, index: i }]),
             );
-            message.changes = previous
+            const changes = previous
               .filter((r) => !currentIds.has(r.id))
               .map((r) => ({
                 type: "removed",
@@ -459,7 +425,7 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
                 old.index !== i ||
                 JSON.stringify(old.data) !== JSON.stringify(r.data)
               )
-                message.changes.push({
+                changes.push({
                   type: old ? "modified" : "added",
                   id: r.id,
                   data: r.data,
@@ -467,28 +433,18 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
                   newIndex: i,
                 });
             });
-          } else
-            for (const c of message.changes || []) {
-              const old = records.findIndex((r) => r.id === c.id);
-              if (old >= 0) records.splice(old, 1);
-              if (c.type !== "removed")
-                records.splice(c.newIndex, 0, { id: c.id, data: c.data });
-            }
-          version = message.version ?? version;
-          if (message.unchanged) continue;
-          cache.set(key(ref), [...records]);
-          next(clientSnapshot(ref, records, message.changes || []));
-        }
-      }
-      // Brief requests avoid keeping a hosted HTTP/CPU allocation active.
-      if (!disposed) retry = setTimeout(start, 30000);
-    } catch (failure: any) {
-      if (failure.name === "AbortError" || disposed) return;
-      error?.(failure);
-      if (failure.status !== 401 && failure.status !== 403)
-        retry = setTimeout(start, 3000);
-    }
-  };
+            cache.set(key(ref), [...records]);
+            next(clientSnapshot(ref, records, changes));
+          }
+  }, failure => error?.(failure));
+}) as typeof sdk.onSnapshot;
+
+let dataViewPoller: DataViewPoller | undefined;
+function getDataViewPoller() {
+  if (dataViewPoller) return dataViewPoller;
+  const poller = new DataViewPoller((queries, signal) => dataRequest('/api/data/listen-batch', { queries }, signal),
+    sessionToken, () => document.visibilityState === 'visible');
+  dataViewPoller = poller;
   const channel =
     typeof BroadcastChannel !== "undefined"
       ? new BroadcastChannel("espacios-data-v1")
@@ -496,11 +452,10 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
   const changed = (e: Event) => {
     if (e instanceof StorageEvent && e.key !== "espacios_auth_token_v2") return;
     cache.clear();
-    version = undefined;
-    void start();
+    poller.refresh(true);
   };
   const focus = () => {
-    if (document.visibilityState === "visible") void start();
+    if (document.visibilityState === "visible") poller.refresh();
   };
   channel?.addEventListener("message", focus);
   window.addEventListener("auth-session-changed", changed);
@@ -508,16 +463,5 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
   window.addEventListener("data-changed", focus);
   window.addEventListener("focus", focus);
   document.addEventListener("visibilitychange", focus);
-  void start();
-  return () => {
-    disposed = true;
-    controller?.abort();
-    clearTimeout(retry);
-    channel?.close();
-    window.removeEventListener("auth-session-changed", changed);
-    window.removeEventListener("storage", changed);
-    window.removeEventListener("data-changed", focus);
-    window.removeEventListener("focus", focus);
-    document.removeEventListener("visibilitychange", focus);
-  };
-}) as typeof sdk.onSnapshot;
+  return poller;
+}

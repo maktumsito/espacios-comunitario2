@@ -140,7 +140,7 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
         setReservations(data);
         setIsInitialLoading(false);
         setIsFirebaseConnected(isLiveFromFirestore);
-        if (isLiveFromFirestore) setConfirmedScope(scopeKey);
+        if (isLiveFromFirestore) { setConfirmedScope(scopeKey); setReadError(false); }
         setIsFirebaseSyncing(!!isRevalidating);
         if (syncTime) {
           setLastSyncTime(syncTime);

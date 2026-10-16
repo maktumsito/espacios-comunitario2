@@ -16,10 +16,31 @@ beforeEach(async () => {
   vi.clearAllMocks();
   service = await import('../gmailDispatchService');
 },30000);
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 const connected = { connected: true, persistent: true, oauthConfigured: true, email: 'cristianshute@gmail.com' };
 
 describe('Gmail session recovery', () => {
+  it('checks background Gmail status at most once per five visible minutes and skips hidden tabs', async () => {
+    vi.useFakeTimers();
+    let visibility: DocumentVisibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    vi.mocked(gmailServerRequest).mockResolvedValue(connected);
+    vi.mocked(onAuthStateChanged).mockReturnValue(() => {});
+    const stop = service.initGmailAuthListener();
+    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < 5; i++) window.dispatchEvent(new Event('focus'));
+    await vi.advanceTimersByTimeAsync(299_999);
+    expect(gmailServerRequest).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(gmailServerRequest).toHaveBeenCalledTimes(2);
+    visibility = 'hidden';
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(gmailServerRequest).toHaveBeenCalledTimes(2);
+    visibility = 'visible'; document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(gmailServerRequest).toHaveBeenCalledTimes(3);
+    stop();
+  });
   it('restores a connection on cold reload without a browser access token or Firebase login', async () => {
     vi.mocked(gmailServerRequest).mockResolvedValue(connected);
     vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => {

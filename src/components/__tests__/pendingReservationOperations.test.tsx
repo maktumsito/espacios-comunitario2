@@ -21,8 +21,8 @@ afterEach(cleanup);
 
 it('removes the banner when resume completes', async () => {
   render(<PendingReservationOperations user={user} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Reanudar guardado' }));
-  await waitFor(() => expect(screen.queryByText(/Guardado pendiente:/)).toBeNull());
+  fireEvent.click(await screen.findByRole('button', { name: 'Reanudar eliminación' }));
+  await waitFor(() => expect(screen.queryByText(/Eliminación pendiente:/)).toBeNull());
 });
 
 it('requires confirmation before discarding, and leaves saved reservations unchanged', async () => {
@@ -35,7 +35,7 @@ it('requires confirmation before discarding, and leaves saved reservations uncha
   expect(state.discard).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Descartar pendiente' }));
   fireEvent.click(screen.getByRole('button', { name: 'Descartar intento' }));
-  await waitFor(() => expect(screen.queryByText(/Guardado pendiente:/)).toBeNull());
+  await waitFor(() => expect(screen.queryByText(/Eliminación pendiente:/)).toBeNull());
   expect(state.discard).toHaveBeenCalledWith('pending');
   expect(state.resume).not.toHaveBeenCalled();
 });
@@ -46,7 +46,7 @@ it('keeps the banner and exposes an error when storage cannot be cleared', async
   fireEvent.click(await screen.findByRole('button', { name: 'Descartar pendiente' }));
   fireEvent.click(screen.getByRole('button', { name: 'Descartar intento' }));
   expect((await screen.findByRole('alert')).textContent).toContain('No se pudo actualizar');
-  expect(screen.getByText(/Guardado pendiente:/)).toBeTruthy();
+  expect(screen.getByText(/Eliminación pendiente:/)).toBeTruthy();
 });
 
 it('does not restore stale initial rows after a journal change', async () => {
@@ -58,12 +58,12 @@ it('does not restore stale initial rows after a journal change', async () => {
     state.rows = []; window.dispatchEvent(new Event('reservation-operations-changed'));
     resolve(stale);
   });
-  expect(screen.queryByText(/Guardado pendiente:/)).toBeNull();
+  expect(screen.queryByText(/Eliminación pendiente:/)).toBeNull();
 });
 
 it('hides pending operations owned by another account', async () => {
   state.rows = [{ ...operation(), actor: 'other' }];
   render(<PendingReservationOperations user={user} />);
   await act(async () => {});
-  expect(screen.queryByRole('button', { name: 'Reanudar guardado' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Reanudar eliminación' })).toBeNull();
 });
