@@ -97,6 +97,7 @@ export async function commitTrusted(
   });
   const receipt = await auditRef.get(),
     old = receipt.data();
+  let confirmedAudit = old;
   if (
     old &&
     (old.operationActor !== actor.username || old.fingerprint !== fingerprint)
@@ -150,10 +151,12 @@ export async function commitTrusted(
         )
           throw new ApiFailure(409, "El identificador ya está en uso.");
         const known = new Set<string>(metadata?.confirmedIds || []);
-        if (chunk.every((id) => known.has(id)))
+        if (chunk.every((id) => known.has(id))) {
+          confirmedAudit = metadata;
           return chunk.flatMap((id) =>
             current.has(id) ? [current.get(id)!] : [],
           );
+        }
         if (chunk.some((id) => known.has(id)))
           throw new ApiFailure(
             409,
@@ -182,12 +185,15 @@ export async function commitTrusted(
           )
         )
           requireManager(fresh);
-        const blocks = await tx.get(db.collection("bloqueos_espacios"));
         if (
-          !options.allowConflictOverride &&
+          active.length && !options.allowConflictOverride &&
           findMaintenanceBlockConflicts(
             active,
-            blocks.docs.map((d: any) => ({ ...d.data(), id: d.id })),
+            // Long blocks starting before the reservation must still match.
+            // A single range field avoids the extra index-range read category.
+            (await tx.get(db.collection("bloqueos_espacios").where(
+              "fechaFin", ">=", active.reduce((date, r) => r.fecha < date ? r.fecha : date, active[0].fecha),
+            ))).docs.map((d: any) => ({ ...d.data(), id: d.id })),
           ).length
         )
           throw new ApiFailure(
@@ -204,7 +210,11 @@ export async function commitTrusted(
           ),
           newState: saved,
         });
-        const pieces = splitBackupPayload(payload, 700000);
+        // A small, single-transaction operation needs only the manifest write.
+        // Keep large/multi-chunk snapshots in parts so audit listeners stay light.
+        const inlineSnapshot = !metadata &&
+          chunk.length === trustedRows.length + deletions.length && Buffer.byteLength(payload) <= 16_000;
+        const pieces = inlineSnapshot ? [] : splitBackupPayload(payload, 700000);
         // Operation pieces are JSON fragments; readAudit joins each committed chunk.
         // Keep one JSON object per piece by using a separate array of rows when large.
 
@@ -260,10 +270,12 @@ export async function commitTrusted(
           operationActor: actor.username,
           fingerprint,
           confirmedIds,
-          operationParts: [
-            ...(metadata?.operationParts || []),
-            { keys: pieces.map((_, i) => `${key}_${i}`) },
-          ],
+          ...(inlineSnapshot ? JSON.parse(payload) : {
+            operationParts: [
+              ...(metadata?.operationParts || []),
+              { keys: pieces.map((_, i) => `${key}_${i}`) },
+            ],
+          }),
         };
         if (Buffer.byteLength(JSON.stringify(entry)) > 900000)
           throw new ApiFailure(
@@ -277,6 +289,7 @@ export async function commitTrusted(
             }),
           );
           tx.set(auditRef, clean(entry));
+          confirmedAudit = clean(entry);
         };
       },
     },
@@ -302,7 +315,9 @@ export async function commitTrusted(
     ...(options.deletedIds || []).filter((id) => acknowledged.has(id)),
     ...result.deletedIds,
   ];
-  return result;
+  // The manifest is already confirmed by the transaction (or durable receipt).
+  // Returning it avoids a second post-commit read for the API response.
+  return { ...result, auditEntry: auditSummary(confirmedAudit) };
 }
 
 export function registerReservationApi(
@@ -455,7 +470,7 @@ export function registerReservationApi(
           if (streaming && !res.destroyed)
             res.write(JSON.stringify({ progress }) + "\n");
         };
-        const result = await commitTrusted(
+        const { auditEntry, ...result } = await commitTrusted(
           db,
           sessions,
           token,
@@ -466,7 +481,7 @@ export function registerReservationApi(
         reply({
           success: true,
           result,
-          auditEntry: await auditRefSummary(db, result.operationId),
+          auditEntry,
         });
       } catch (error) {
         if (error instanceof ReservationWriteError) {
@@ -510,9 +525,8 @@ export function registerReservationApi(
   });
 }
 
-async function auditRefSummary(db: Firestore, id: string) {
-  const s = await db.doc(`audit_logs/AUDIT_OP_${id}`).get();
-  if (!s.exists) return null;
-  const { fingerprint, operationActor, confirmedIds, ...entry } = s.data()!;
+function auditSummary(data: any) {
+  if (!data) return null;
+  const { fingerprint, operationActor, confirmedIds, ...entry } = data;
   return entry;
 }

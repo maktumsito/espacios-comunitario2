@@ -23,7 +23,7 @@ import {
 import { AppSessions } from "../appSession";
 import { hashPassword } from "../passwords";
 import { registerDataApi } from "../dataApi";
-import { registerReservationApi, readAudit } from "../reservationApi";
+import { registerReservationApi, readAudit, commitTrusted } from "../reservationApi";
 import { registerBackupApi } from "../backupApi";
 import { claimDelivery, startDelivery, finishDelivery } from "../deliveryLease";
 import { backupChecksum } from "../../src/utils/backupIntegrity";
@@ -276,6 +276,81 @@ describe.skipIf(!enabled)(
           "bookings",
         ),
       ).toHaveLength(1);
+    });
+    it("avoids unchanged slot writes and stores small audit snapshots without extra part documents", async () => {
+      const created = await post('/api/reservations/commit', { reservations: [row('quota')],
+        options: { operationId: 'quota-create', intent: 'create' } });
+      expect(created.error).toBeUndefined();
+      const slotRef = db.doc('schedule_slots/2026-10-13_SALA%202');
+      const initialSlot = await slotRef.get();
+      const edited = await post('/api/reservations/commit', {
+        reservations: [{ ...created.result.reservations[0], descripcion: 'Metadata only' }],
+        options: { operationId: 'quota-edit', intent: 'update' },
+      });
+      expect(edited.error).toBeUndefined();
+      expect((await slotRef.get()).updateTime?.isEqual(initialSlot.updateTime!)).toBe(true);
+      const auditRef = db.doc('audit_logs/AUDIT_OP_quota-edit');
+      const initialAudit = await auditRef.get();
+      expect((await auditRef.collection('partes').get()).empty).toBe(true);
+      const audit = await readAudit(db, auditRef.id);
+      expect(audit.previousState).toHaveLength(1);
+      expect((audit.newState as any[])[0].descripcion).toBe('Metadata only');
+      expect(edited.auditEntry.newState).toEqual(audit.newState);
+      expect(edited.auditEntry).not.toHaveProperty('fingerprint');
+      expect(edited.auditEntry).not.toHaveProperty('operationActor');
+      expect(edited.result).not.toHaveProperty('auditEntry');
+      const retry = await post('/api/reservations/commit', {
+        reservations: [{ ...created.result.reservations[0], descripcion: 'Metadata only' }],
+        options: { operationId: 'quota-edit', intent: 'update' },
+      });
+      expect(retry.error).toBeUndefined();
+      expect((await auditRef.get()).updateTime?.isEqual(initialAudit.updateTime!)).toBe(true);
+      expect((await slotRef.get()).updateTime?.isEqual(initialSlot.updateTime!)).toBe(true);
+    });
+    it('retains large audit snapshots in parts and reconstructs them completely', async () => {
+      const comentarios = 'á'.repeat(12_000);
+      const created = await post('/api/reservations/commit', {
+        reservations: [{ ...row('large-quota'), comentarios }], options: { operationId: 'large-quota' },
+      });
+      expect(created.error).toBeUndefined();
+      const ref = db.doc('audit_logs/AUDIT_OP_large-quota');
+      expect((await ref.get()).get('operationParts')).toHaveLength(1);
+      expect((await ref.collection('partes').get()).size).toBe(1);
+      expect(((await readAudit(db, ref.id)).newState as any[])[0].comentarios).toBe(comentarios);
+    });
+    it('preserves every audit part when resuming an operation split across transactions', async () => {
+      const rows = Array.from({ length: 220 }, (_, i) => ({ ...row(`multipart-${i}`), espacio: `ESPACIO ${i}` }));
+      const actor = { username: 'editor', name: 'Editor', role: 'Administrador', isMasterAdmin: true };
+      const options = { operationId: 'multipart-quota', intent: 'create' as const };
+      await expect(commitTrusted(db, accounts, editor, actor, rows, { ...options, onProgress: progress => {
+        if (progress.pendingIds.length) throw new Error('Simulated disconnect');
+      } })).rejects.toThrow('Simulated disconnect');
+      const result = await commitTrusted(db, accounts, editor, actor, rows, options);
+      expect(new Set(result.confirmedIds).size).toBe(220);
+      expect(result.pendingIds).toEqual([]);
+      expect(result.auditEntry.operationParts).toHaveLength(2);
+      const audit = await readAudit(db, 'AUDIT_OP_multipart-quota');
+      expect(audit.previousState).toEqual([]);
+      expect(new Set((audit.newState as any[]).map(r => r.id)).size).toBe(220);
+    });
+    it('checks long maintenance ranges and next-day overnight blocks with the bounded query', async () => {
+      await db.doc('bloqueos_espacios/long').set({ espacio: 'SALA 2', fechaInicio: '2026-01-01',
+        fechaFin: '2026-10-13', activo: true, todoElDia: true, motivo: 'Long block' });
+      const long = await post('/api/reservations/commit', { reservations: [row('long')], options: { operationId: 'long' } });
+      expect(long.error).toMatch(/mantenimiento/);
+      await db.doc('bloqueos_espacios/long').delete();
+      await db.doc('bloqueos_espacios/next-day').set({ espacio: 'SALA 2', fechaInicio: '2026-10-14',
+        fechaFin: '2026-10-14', activo: true, todoElDia: true, motivo: 'Next day' });
+      const night = await post('/api/reservations/commit', {
+        reservations: [{ ...row('night-quota'), horaInicio: '23:00', horaFin: '01:00', terminaDiaSiguiente: true }],
+        options: { operationId: 'night-quota' },
+      });
+      expect(night.error).toMatch(/mantenimiento/);
+      const cancelled = await post('/api/reservations/commit', {
+        reservations: [{ ...row('cancelled-quota'), estado: 'cancelada' }], options: { operationId: 'cancelled-quota' },
+      });
+      expect(cancelled.error).toBeUndefined();
+      expect((await db.collection('schedule_slots').get()).empty).toBe(true);
     });
     it("restores authoritative audit once across two concurrent clients", async () => {
       const initial = (

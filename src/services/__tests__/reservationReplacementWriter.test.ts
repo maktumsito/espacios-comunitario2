@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Reservation } from '../../types';
 import { buildReplacementBatch } from '../../utils/reservationReplacement';
 
-const memory = vi.hoisted(() => ({ rows: new Map<string, any>(), fail: false, loseAck: false, beforeCommit: undefined as (() => void) | undefined, commits: 0 }));
+const memory = vi.hoisted(() => ({ rows: new Map<string, any>(), fail: false, loseAck: false, beforeCommit: undefined as (() => void) | undefined, commits: 0, writes: [] as string[], reads: [] as string[] }));
 vi.mock('firebase/firestore', async original => {
   const sdk = await original<any>();
   const snapshot = (path: string) => ({ id: path.split('/').at(-1), exists: () => memory.rows.has(path), data: () => structuredClone(memory.rows.get(path)) });
@@ -13,9 +13,10 @@ vi.mock('firebase/firestore', async original => {
       memory.beforeCommit?.();
       const writes = new Map<string, any>();
       const deleted = new Set<string>();
-      const value = await callback({ get: async (path: string) => snapshot(path), set: (path: string, row: any) => writes.set(path, structuredClone(row)),
+      const value = await callback({ get: async (path: string) => { memory.reads.push(path); return snapshot(path); }, set: (path: string, row: any) => writes.set(path, structuredClone(row)),
         update: (path: string, patch: any) => writes.set(path, { ...memory.rows.get(path), ...structuredClone(patch) }), delete: (path: string) => deleted.add(path) });
       if (memory.fail) throw new Error('Sin conexión');
+      memory.writes.push(...writes.keys(), ...deleted);
       writes.forEach((row, path) => memory.rows.set(path, row));
       deleted.forEach(path => memory.rows.delete(path));
       memory.commits++;
@@ -121,7 +122,57 @@ function seed(row: Reservation) {
     memory.rows.set(path, { ...slot, bookings: [...(memory.rows.get(path)?.bookings || []), ...slot.bookings] });
   }
 }
-beforeEach(() => { localStorage.clear(); memory.rows.clear(); memory.fail = false; memory.loseAck = false; memory.beforeCommit = undefined; memory.commits = 0; seed(original); });
+beforeEach(() => { localStorage.clear(); memory.rows.clear(); memory.fail = false; memory.loseAck = false; memory.beforeCommit = undefined; memory.commits = 0; memory.writes = []; memory.reads = []; seed(original); });
+describe('availability write quota', () => {
+  it('reads a linked reservation only once when it is also a version guard in the same transaction', async () => {
+    const source = { ...original, estado: 'cancelada', reemplazadaPorReservaId: 'linked' };
+    memory.rows.set('reservas/original', source);
+    seed({ ...original, id: 'linked', reemplazaReservaId: original.id });
+    await writeReservations({} as any, [{ ...source, descripcion: 'Actualizada' }], clean, { expectedVersions: { linked: 1 } });
+    expect(memory.reads.filter(path => path === 'reservas/linked')).toHaveLength(1);
+    expect(memory.rows.get('reservas/linked').version).toBe(1);
+  });
+  it('updates metadata without rewriting unchanged availability, regardless of map or booking order', async () => {
+    seed({ ...original, id: 'adjacent', horaInicio: '11:00', horaFin: '12:00' });
+    const path = 'schedule_slots/2026-10-06_SALA%202';
+    const slot = memory.rows.get(path);
+    slot.bookings = slot.bookings.map((b: any) => Object.fromEntries(Object.entries(b).reverse()));
+    slot.updatedAt = 'unchanged';
+    await writeReservations({} as any, [{ ...original, descripcion: 'Solo descripción' }], clean);
+    expect(memory.writes).toEqual(['reservas/original']);
+    expect(memory.rows.get(path).updatedAt).toBe('unchanged');
+    expect(memory.rows.get('reservas/original').version).toBe(2);
+  });
+  it('does not create missing compound placeholders and still updates all rooms on movement', async () => {
+    memory.rows.clear();
+    const row = { ...original, espacio: 'SALA 2 / SALA 3' }; seed(row);
+    await writeReservations({} as any, [{ ...row, horaInicio: '12:00', horaFin: '13:00' }], clean);
+    expect(memory.writes.sort()).toEqual(['reservas/original', 'schedule_slots/2026-10-06_SALA%202', 'schedule_slots/2026-10-06_SALA%203']);
+    expect(memory.rows.has('schedule_slots/2026-10-06_SALA%202%20%2F%20SALA%203')).toBe(false);
+    expect(memory.rows.get('schedule_slots/2026-10-06_SALA%203').bookings[0].startMin).toBe(720);
+  });
+  it('cleans an existing legacy compound entry while preserving unrelated bookings', async () => {
+    memory.rows.clear();
+    const row = { ...original, espacio: 'SALA 2 / SALA 3' }; seed(row);
+    const path = 'schedule_slots/2026-10-06_SALA%202%20%2F%20SALA%203';
+    const booking = [...reservationSlots(row).values()][0].bookings[0];
+    memory.rows.set(path, { fecha: row.fecha, espacio: row.espacio, bookings: [booking, { ...booking, id: 'other' }] });
+    await writeReservations({} as any, [{ ...row, descripcion: 'Actualizada' }], clean);
+    expect(memory.writes).toContain(path);
+    expect(memory.rows.get(path).bookings.map((b: any) => b.id)).toEqual(['other']);
+  });
+  it('acknowledges an identical retry without any reservation or slot writes', async () => {
+    const options = { operationId: 'quota-retry' };
+    await writeReservations({} as any, [{ ...original, descripcion: 'Confirmada' }], clean, options);
+    memory.writes = [];
+    await writeReservations({} as any, [{ ...original, descripcion: 'Confirmada' }], clean, options);
+    expect(memory.writes).toEqual([]);
+  });
+  it('does not pay for a delete of an already absent reservation', async () => {
+    await writeReservations({} as any, [], clean, { deletedIds: ['absent'] });
+    expect(memory.writes).toEqual([]);
+  });
+});
 describe('single occurrence replacement transaction', () => {
   it('clears a stale zero-confirmation retry after a definitive version rejection', async () => {
     const rows = [{ ...original, descripcion: 'Cambio pendiente' }];

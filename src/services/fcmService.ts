@@ -53,6 +53,9 @@ const FCM_NOTIFICATIONS_COLLECTION = 'fcm_notificaciones';
 const LOCAL_DEVICE_ID_KEY = 'fcm_local_device_id_v1';
 const LOCAL_FCM_TOKEN_KEY = 'fcm_stored_token_v1';
 const FCM_LAST_REFRESH_KEY = 'fcm_last_token_refresh_time_v1';
+const FCM_REGISTRATION_KEY = 'fcm_confirmed_registration_v1';
+const REGISTRATION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const pendingRegistrations = new Map<string, Promise<void>>();
 
 export const FCM_VAPID_KEY =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_FIREBASE_VAPID_KEY) ||
@@ -310,28 +313,45 @@ export async function refreshFcmToken(): Promise<string | null> {
  */
 export async function saveDeviceTokenToFirestore(token: string): Promise<void> {
   try {
-    const db = getDb();
+    const currentUser = getCurrentUser();
+    if (!currentUser || !token) return;
     const deviceId = getOrCreateDeviceId();
     const { platform, browser } = detectDevicePlatform();
-    const currentUser = getCurrentUser();
-
-    const deviceDocRef = doc(db, FCM_TOKENS_COLLECTION, deviceId);
-
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const signature = JSON.stringify([deviceId, currentUser.username, token, platform, browser, userAgent]);
+    let receipt: any;
+    try { receipt = JSON.parse(localStorage.getItem(FCM_REGISTRATION_KEY) || 'null'); } catch { /* Storage is optional. */ }
+    const age = Date.now() - receipt?.confirmedAt;
+    if (receipt?.signature === signature && age >= 0 && age < REGISTRATION_INTERVAL_MS) return;
+    const pending = pendingRegistrations.get(signature);
+    if (pending) { await pending; return; }
+    const now = new Date().toISOString();
     const record: FcmDeviceRecord = {
       id: deviceId,
       token,
       deviceId,
       platform,
       browser,
-      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-      username: currentUser?.username || 'Invitado',
-      registeredAt: new Date().toISOString(),
-      lastActive: new Date().toISOString(),
+      userAgent,
+      username: currentUser.username,
+      registeredAt: receipt?.deviceId === deviceId && receipt?.username === currentUser.username && typeof receipt?.registeredAt === 'string'
+        ? receipt.registeredAt : now,
+      lastActive: now,
       notifyImportant: true,
       notifyTopamiento: true
     };
 
-    await setDoc(deviceDocRef, record, { merge: true });
+    const request = (async () => {
+      const db = getDb();
+      if (!db) throw new Error('No hay conexión con la base de datos.');
+      await setDoc(doc(db, FCM_TOKENS_COLLECTION, deviceId), record, { merge: true });
+      // Persist only after Firestore confirms. Failed writes remain retryable.
+      try { localStorage.setItem(FCM_REGISTRATION_KEY, JSON.stringify({ signature, deviceId,
+        username: currentUser.username, registeredAt: record.registeredAt, confirmedAt: Date.now() })); } catch { /* Storage is optional. */ }
+    })();
+    pendingRegistrations.set(signature, request);
+    try { await request; }
+    finally { if (pendingRegistrations.get(signature) === request) pendingRegistrations.delete(signature); }
     console.log(`[FCM] Device registered in Firestore [${platform} - ${browser}] with ID: ${deviceId}`);
   } catch (err) {
     console.warn('[FCM] Could not persist device token to Firestore:', err);

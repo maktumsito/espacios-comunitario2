@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import type { Firestore } from "firebase-admin/firestore";
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { gzipSync } from "node:zlib";
 import type { AppSessions } from "./appSession";
 import { hashPassword, publicProfile, verifyPassword } from "./passwords";
@@ -407,22 +408,20 @@ export function registerDataApi(
         throw new ApiFailure(400, "Perfil no válido.");
       const password = req.body.password;
       const newHash = password ? await hashPassword(password) : undefined;
-      await db.runTransaction(async (tx) => {
+      const users = await db.runTransaction(async (tx) => {
         const oldRef = db.doc(`usuarios_sistema/${accountId(oldName)}`),
           newRef = db.doc(`usuarios_sistema/${accountId(username)}`);
-        const [old, all] = await Promise.all([
-          tx.get(oldRef),
-          tx.get(db.collection("usuarios_sistema")),
-        ]);
+        const all = await tx.get(db.collection("usuarios_sistema"));
+        const old = all.docs.find(d => d.id === oldRef.id);
         if (oldName !== username && all.docs.some((d) => d.id === newRef.id))
           throw new ApiFailure(409, "El identificador ya está en uso.");
-        if (!old.exists && !newHash)
+        if (!old && !newHash)
           throw new ApiFailure(
             400,
             "Asigna una contraseña de al menos ocho caracteres.",
           );
         if (
-          (input.isMasterAdmin || old.get("isMasterAdmin")) &&
+          (input.isMasterAdmin || old?.get("isMasterAdmin")) &&
           actor.isMasterAdmin !== true
         )
           throw new ApiFailure(
@@ -430,7 +429,7 @@ export function registerDataApi(
             "El perfil maestro requiere un administrador maestro.",
           );
         if (
-          old.exists &&
+          old &&
           manager(old.data()) &&
           !manager(input) &&
           all.docs.filter((d) => manager(d.data())).length <= 1
@@ -454,25 +453,26 @@ export function registerDataApi(
             .filter((k) => input[k] !== undefined)
             .map((k) => [k, input[k]]),
         );
-        tx.set(newRef, {
-          ...old.data(),
+        const updated = {
+          ...old?.data(),
           ...profile,
           username,
-          passwordHash: newHash || old.get("passwordHash"),
-          createdAt: old.get("createdAt") || new Date().toISOString(),
+          passwordHash: newHash || old?.get("passwordHash"),
+          createdAt: old?.get("createdAt") || new Date().toISOString(),
           sessionVersion:
-            (old.get("sessionVersion") || 0) +
+            (old?.get("sessionVersion") || 0) +
             (newHash || oldName !== username ? 1 : 0),
-        });
-        if (oldName !== username) tx.delete(oldRef);
+        };
+        if (!old || !isDeepStrictEqual(old.data(), updated)) tx.set(newRef, updated);
+        if (old && oldName !== username) tx.delete(oldRef);
+        return [...all.docs.filter(d => d.id !== oldRef.id && d.id !== newRef.id)
+          .map(d => publicProfile(d.data())), publicProfile(updated)];
       });
       sessions.invalidateAccount(username);
       sessions.invalidateAccount(oldName);
       res.json({
         success: true,
-        users: (await db.collection("usuarios_sistema").get()).docs.map((d) =>
-          publicProfile(d.data()),
-        ),
+        users,
       });
     }),
   );
@@ -485,10 +485,10 @@ export function registerDataApi(
       const username = String(req.body.username || "")
         .trim()
         .toLowerCase();
-      await db.runTransaction(async (tx) => {
+      const users = await db.runTransaction(async (tx) => {
         const all = await tx.get(db.collection("usuarios_sistema")),
           target = all.docs.find((d) => d.id === accountId(username));
-        if (!target) return;
+        if (!target) return all.docs.map(d => publicProfile(d.data()));
         if (target.get("isMasterAdmin"))
           throw new ApiFailure(403, "El perfil maestro está protegido.");
         if (
@@ -497,13 +497,12 @@ export function registerDataApi(
         )
           throw new ApiFailure(409, "Debe conservarse un administrador.");
         tx.delete(target.ref);
+        return all.docs.filter(d => d.id !== target.id).map(d => publicProfile(d.data()));
       });
       sessions.invalidateAccount(username);
       res.json({
         success: true,
-        users: (await db.collection("usuarios_sistema").get()).docs.map((d) =>
-          publicProfile(d.data()),
-        ),
+        users,
       });
     }),
   );

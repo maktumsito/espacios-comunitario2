@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   runTransaction,
+  type DocumentSnapshot,
   type Firestore,
 } from "../firebase/gateway";
 import type { Reservation } from "../types";
@@ -98,6 +99,15 @@ export type ScheduleSlot = {
   espacio: string;
   bookings: SlotBooking[];
 };
+// Booking order and Firestore's map key order have no availability meaning.
+// Compare only the stored index payload, excluding its update timestamp.
+function slotContent(slot: ScheduleSlot): string {
+  const bookings = slot.bookings.map(booking => Object.fromEntries(
+    Object.entries(booking).sort(([a], [b]) => a.localeCompare(b)),
+  ));
+  return JSON.stringify([slot.fecha, slot.espacio,
+    bookings.map(booking => JSON.stringify(booking)).sort()]);
+}
 export function reservationSlots(r: Reservation): Map<string, ScheduleSlot> {
   const slots = new Map<string, ScheduleSlot>();
   if (!isReservationActiveForAvailability(r, new Set())) return slots;
@@ -402,6 +412,13 @@ export async function writeReservations(
   try {
     for (const chunk of chunks) {
       const committed = await runTransaction(db, async (tx) => {
+        // Share reads only inside this transaction attempt. Every retry gets a
+        // fresh map, and unrelated server requests retain strong read semantics.
+        const reservationReads = new Map<string, Promise<DocumentSnapshot>>();
+        const readReservation = (id: string) => {
+          if (!reservationReads.has(id)) reservationReads.set(id, tx.get(doc(db, 'reservas', id)));
+          return reservationReads.get(id)!;
+        };
         const restoration = options.auditRestore;
         const auditRef = restoration
           ? doc(db, "audit_logs", restoration.logId)
@@ -416,7 +433,7 @@ export async function writeReservations(
             if (audit.data().restoreOperationId !== operationId)
               throw new Error("Este cambio ya fue restaurado en otra sesión.");
             const acknowledged = await Promise.all(
-              chunk.map((id) => tx.get(doc(db, "reservas", id))),
+              chunk.map(readReservation),
             );
             return acknowledged
               .filter((s) => s.exists())
@@ -427,7 +444,7 @@ export async function writeReservations(
           chunk.flatMap((id) => allSlotKeys(byId.get(id))),
         );
         const [snapshots, incomingSlotSnapshots] = await Promise.all([
-          Promise.all(chunk.map((id) => tx.get(doc(db, "reservas", id)))),
+          Promise.all(chunk.map(readReservation)),
           Promise.all(
             [...incomingKeys].map((key) =>
               tx.get(doc(db, "schedule_slots", key)),
@@ -444,7 +461,7 @@ export async function writeReservations(
         const guardSnapshots = await Promise.all(
           guards
             .filter(([id]) => !chunk.includes(id))
-            .map(([id]) => tx.get(doc(db, "reservas", id))),
+            .map(([id]) => readReservation(id)),
         );
         const guarded = new Map(current);
         guardSnapshots.forEach((s) => {
@@ -486,7 +503,7 @@ export async function writeReservations(
           ),
         ];
         const linkedSnapshots = await Promise.all(
-          linkedIds.map((id) => tx.get(doc(db, "reservas", id))),
+          linkedIds.map(readReservation),
         );
         const linkedCurrent = new Map<string, Reservation>();
         linkedSnapshots.forEach((s) => {
@@ -630,9 +647,11 @@ export async function writeReservations(
           ...remainingSlotSnapshots,
         ];
         const slots = new Map<string, ScheduleSlot>();
+        const originalSlots = new Map<string, ScheduleSlot>();
         const affected = new Set(chunk);
         slotSnapshots.forEach((s) => {
           const data = s.data();
+          if (s.exists()) originalSlots.set(s.id, data as ScheduleSlot);
           slots.set(s.id, {
             fecha: data?.fecha || s.id.slice(0, 10),
             espacio: data?.espacio || decodeURIComponent(s.id.slice(11)),
@@ -721,6 +740,11 @@ export async function writeReservations(
         );
         if (Array.isArray(hook)) return hook;
         for (const [key, slot] of slots) {
+          const original = originalSlots.get(key);
+          // Missing legacy/compound slots need no empty placeholder. Existing
+          // empty slots stay in place so normal saves do not add delete charges.
+          if ((!original && !slot.bookings.length) ||
+              (original && Array.isArray(original.bookings) && slotContent(original) === slotContent(slot))) continue;
           if (
             new TextEncoder().encode(JSON.stringify(slot)).byteLength > 900_000
           )
@@ -739,7 +763,7 @@ export async function writeReservations(
               ...clean(r),
               lastOperationId: operationId,
             });
-          else if (!r) tx.delete(doc(db, "reservas", id));
+          else if (!r && current.has(id)) tx.delete(doc(db, "reservas", id));
         }
         if (typeof hook === "function") hook();
         if (auditRef && restoration) {
