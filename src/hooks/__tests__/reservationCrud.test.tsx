@@ -16,6 +16,22 @@ function props():UseReservationCrudProps {return {
 };}
 beforeEach(()=> {localStorage.clear();vi.clearAllMocks();vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-06T15:00:00Z'));mocks.audit.mockResolvedValue(undefined);});
 afterEach(()=> {cleanup();vi.useRealTimers();});
+it('persists a past session room correction and applies the confirmed row to the visible agenda', async () => {
+  vi.setSystemTime(new Date('2026-10-16T15:00:00Z'));
+  const gaita: Reservation = { ...row, id: 'RSV_5GBNOSPJ_4', fecha: '2026-10-03', descripcion: 'Ensayo Gaita', espacio: 'SALA 6', actividadRecurrente: 'Sí', serieRecurrente: 'gaita-series', version: 3 };
+  const later = { ...gaita, id: 'later-gaita', fecha: '2026-10-17', espacio: 'SALA DE AUDIO' };
+  const updated = { ...gaita, espacio: 'SALA DE AUDIO' };
+  const confirmed = { ...updated, version: 4 };
+  const p = props(); p.reservations = [gaita, later];
+  mocks.save.mockResolvedValue({ reservations: [confirmed], deletedIds: [], confirmedIds: [gaita.id], pendingIds: [] });
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => { expect(await result.current.handleCreateOrUpdate(updated, false, undefined, false, {
+    scope: 'single', updatedReservations: [updated], affectedIds: [gaita.id],
+  })).toBe(true); });
+  expect(mocks.save).toHaveBeenCalledWith([updated], expect.objectContaining({ requireAtomic: true, intent: 'update' }));
+  expect((p.setReservations as any).mock.calls[0][0](p.reservations)).toEqual([confirmed, later]);
+  expect(mocks.series).not.toHaveBeenCalled();
+});
 it('merges four reservations in one atomic write and audits every original', async () => {
   const equipment = { equipmentId: 'chairs', equipmentName: 'Sillas', quantity: 5 };
   const target = { ...row, version: 2, comentarios: 'Base', equipamientoSolicitado: [equipment] };

@@ -626,7 +626,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       );
       setGenerateFullSeries(isCopy ? true : isRecurringSeries);
       setAllowConflictOverride(false);
-      setUpdateScope(isRecurringSeries ? 'series' : 'single');
+      setUpdateScope(isRecurringSeries && editingReservation.fecha >= getChileLocalDateString() ? 'series' : 'single');
       setRangeStartDate(editingReservation.fecha || format(new Date(), 'yyyy-MM-dd'));
       setRangeEndDate(editingReservation.fecha || format(new Date(), 'yyyy-MM-dd'));
       setSelectedOccurrenceIds(new Set([editingReservation.id]));

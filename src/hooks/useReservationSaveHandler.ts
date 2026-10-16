@@ -253,10 +253,6 @@ export function useReservationSaveHandler({
     };
     const effectiveBookingMode = overridesPayload?.bookingMode || bookingMode;
     const today = getChileLocalDateString();
-    if (isEditingRecurring && editingReservation && updateScope === 'single' && editingReservation.fecha < today) {
-      abortWithFeedback('Esta sesión ya pasó. Elige un alcance hacia adelante para mantener intacto el historial.');
-      return;
-    }
     const editCutoff = isEditingRecurring && editingReservation ? getSeriesEditStartDate(updateScope, editingReservation.fecha, today) : '';
     const inEditScope = (date: string) => {
       if (!isEditingRecurring || updateScope === 'single') return true;

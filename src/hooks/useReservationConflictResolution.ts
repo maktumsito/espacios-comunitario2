@@ -82,7 +82,8 @@ export function useReservationConflictResolution({
   setDateSchedules
 }: UseReservationConflictResolutionProps) {
   const reviewSlots = useMemo<ScheduleSlot[]>(() => {
-    const dates = isEditingRecurring && updateScope !== 'single' && (!scheduleChanged || bookingMode === 'single')
+    const dates = isEditingSingleOccurrence ? [formData.fecha || editingReservation?.fecha || '']
+      : isEditingRecurring && updateScope !== 'single' && (!scheduleChanged || bookingMode === 'single')
       ? [...new Set(affectedReservations.map(r=>r.fecha))] : bookingMode === 'specific' ? specificDates : bookingMode === 'pattern' && !isEditingSingleOccurrence ? generatedDates : [formData.fecha || ''];
     let slots = isEditingRecurring && updateScope !== 'single' && !scheduleChanged
       ? affectedReservations.map(r=>({fecha:r.fecha,espacio:r.espacio,horaInicio:r.horaInicio,horaFin:r.horaFin,terminaDiaSiguiente:r.terminaDiaSiguiente,sourceId:r.id}))

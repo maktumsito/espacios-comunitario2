@@ -26,6 +26,35 @@ describe('changing the main reservation space', () => {
     tipoActividad: 'TALLER CCD', actividadRecurrente: 'No', estado: 'activa', version: 3,
   };
 
+  it('corrects only the selected past Gaita session, preserving its date, times and future sessions', async () => {
+    vi.setSystemTime(new Date('2026-10-16T15:00:00Z'));
+    const onSave = vi.fn().mockResolvedValue(true);
+    const gaita: Reservation = {
+      ...source, id: 'RSV_5GBNOSPJ_4', fecha: '2026-10-03', descripcion: 'Ensayo Gaita',
+      responsable: 'Ralph Benent', espacio: 'SALA 6', horaInicio: '08:00', horaFin: '13:00',
+      actividadRecurrente: 'Sí', serieRecurrente: 'gaita-series', tipoRecurrencia: 'especificas',
+      horarioExtendidoAutorizado: true, claveAutorizacion: 'ccd2026', autorizadoPor: 'Cristian Shute',
+      indiceEnSerie: 4, totalEnSerie: 15,
+    };
+    const later = { ...gaita, id: 'later-gaita', fecha: '2026-10-17', espacio: 'SALA DE AUDIO', horaInicio: '09:00', horaFin: '14:00' };
+    const occupiedLater = { ...source, id: 'occupied-later', fecha: later.fecha, espacio: later.espacio };
+    openForm({ editingReservation: gaita, allReservations: [gaita, later, occupiedLater], onSave,
+      availableSpaces: [
+        { id: 'SALA 6', name: 'SALA 6', capacity: 70, category: 'Salas', iconName: 'Users', color: '#64748b', description: '' },
+        { id: 'SALA DE AUDIO', name: 'SALA DE AUDIO', capacity: 30, category: 'Salas', iconName: 'Users', color: '#64748b', description: '' },
+      ] });
+    expect(document.getElementById('btn-scope-single')!.className).toContain('bg-indigo-600');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Espacio Requerido' }), { target: { value: 'SALA DE AUDIO' } });
+    fireEvent.change(screen.getByPlaceholderText('Ingresa ccd2026'), { target: { value: 'ccd2026' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Confirmar y guardar reserva de espacio' })); });
+    expect(onSave).toHaveBeenCalledOnce();
+    const batch = onSave.mock.calls[0][4];
+    expect(batch.scope).toBe('single');
+    expect(batch.affectedIds).toEqual([gaita.id]);
+    expect(batch.updatedReservations).toHaveLength(1);
+    expect(batch.updatedReservations[0]).toMatchObject({ id: gaita.id, fecha: '2026-10-03', espacio: 'SALA DE AUDIO', horaInicio: '08:00', horaFin: '13:00', version: gaita.version, serieRecurrente: gaita.serieRecurrente, indiceEnSerie: 4, totalEnSerie: 15 });
+  });
+
   it.each(['single', 'specific', 'pattern'] as const)('saves the selected main space in %s mode', async mode => {
     const onSave = vi.fn().mockResolvedValue(true);
     const editing: Reservation = mode === 'single' ? source : {

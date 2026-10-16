@@ -22,9 +22,9 @@ it('preserves overnight duration and keeps midnight representations on a space-o
   const midnight={...base,horaInicio:'23:00',horaFin:'24:00',terminaDiaSiguiente:false};
   expect(buildReservationMoveBatch(midnight,{...midnight,espacio:'SALA 3'},'single',[midnight],'2026-10-06').updatedReservations[0].horaFin).toBe('24:00');
 });
-it('does not move a past recurring occurrence or shift a schedule before midnight',()=>{
+it('corrects a past occurrence individually without shifting a schedule before midnight',()=>{
   const past={...base,fecha:'2026-10-05'};
-  expect(()=>buildReservationMoveBatch(past,{...past,espacio:'SALA 3'},'single',[past],'2026-10-06')).toThrow(/ya pasó/);
+  expect(buildReservationMoveBatch(past,{...past,espacio:'SALA 3'},'single',[past,base],'2026-10-06').updatedReservations).toEqual([{...past,espacio:'SALA 3',terminaDiaSiguiente:false}]);
   const early={...base,id:'early',fecha:'2026-10-20',horaInicio:'00:30',horaFin:'01:30'};
   expect(()=>buildReservationMoveBatch(base,{...base,horaInicio:'09:00',horaFin:'10:00'},'future',[base,early],'2026-10-06')).toThrow(/fuera del día/);
 });

@@ -123,7 +123,7 @@ export function useReservationSeriesState({
       (r as any).eliminada !== true &&
       isReservationActiveForAvailability(r);
 
-    const safeEditingRes = isCleanActive(editingReservation) && (!isEditingRecurring || editingReservation.fecha >= today) ? [editingReservation] : [];
+    const safeEditingRes = isCleanActive(editingReservation) && (!isEditingRecurring || updateScope === 'single' || editingReservation.fecha >= today) ? [editingReservation] : [];
 
     if (!isEditingRecurring || isDuplicating) {
       return safeEditingRes;

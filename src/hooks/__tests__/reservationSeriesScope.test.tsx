@@ -6,6 +6,15 @@ import type { Reservation, UpdateScope } from '../../types';
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-06T15:00:00Z')); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 const rows:Reservation[] = ['2026-10-05','2026-10-06','2026-10-07'].map((fecha,i)=>({id:`scope-${i}`,fecha,horaInicio:'10:00',horaFin:'11:00',espacio:'SALA 2',responsable:'Vecino',descripcion:'Taller',tipoActividad:'Taller',actividadRecurrente:'Sí',serieRecurrente:'series',estado:'activa'}));
+it('includes only the selected past session when correcting one occurrence', () => {
+  localStorage.clear();
+  const { result } = renderHook(() => useReservationSeriesState({ editingReservation: rows[0], allReservations: rows, updateScope: 'single',
+    rangeStartDate: '', rangeEndDate: '', selectedOccurrenceIds: new Set([rows[0].id]),
+    bookingMode: 'specific', recurrenceStartDate: rows[0].fecha, recurrenceEndDate: rows[2].fecha, selectedDays: [1, 2, 3],
+    specificDates: rows.map(row => row.fecha), formData: rows[0], includeHolidaysInSeries: false, holidayOverrideKey: '' }));
+  expect(result.current.affectedReservations).toEqual([rows[0]]);
+  expect(result.current.excludeReservationIds).toEqual([rows[0].id]);
+});
 it.each<UpdateScope>(['series', 'future', 'dateRange', 'selected'])('does not use an earlier pending session as a reference for %s', updateScope => {
   localStorage.clear();
   const { result } = renderHook(() => useReservationSeriesState({ editingReservation: rows[2], allReservations: rows, updateScope,

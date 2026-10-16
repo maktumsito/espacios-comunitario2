@@ -642,7 +642,6 @@ export function useReservationCrud({
           (r) => !deletedSet.has(r.id) && r.estado !== 'eliminada' &&
             (scope === 'single' || !seriesIdForExceptions || r.fecha >= editCutoff && !protectedIds.has(r.id))
         );
-        if (scope === 'single' && seriesIdForExceptions && activeUpdated.some(r => r.fecha < today || protectedIds.has(r.id))) throw new Error('La sesión ya pasó. Elige un alcance hacia adelante para conservar el historial.');
         if (activeUpdated.length === 0) {
           triggerSyncToast('No se encontraron reservas activas para actualizar.', 'warning');
           return false;

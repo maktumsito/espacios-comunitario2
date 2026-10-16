@@ -11,8 +11,9 @@ export function isRecurringSeriesReservation(r: Reservation): boolean {
   return Boolean(r.serieRecurrente || r.recurrenteId) && !isSingleDayMultiSpaceReservation(r);
 }
 
-export function getSeriesEditStartDate(_scope: UpdateScope, sourceDate: string, today = getChileLocalDateString()): string {
-  // Every edit scope starts at the selected occurrence, never an earlier session.
+export function getSeriesEditStartDate(scope: UpdateScope, sourceDate: string, today = getChileLocalDateString()): string {
+  // A single-session correction may target history; bulk edits protect past sessions.
+  if (scope === 'single') return sourceDate;
   return sourceDate > today ? sourceDate : today;
 }
 
@@ -23,7 +24,6 @@ export function buildReservationMoveBatch(original: Reservation, target: Reserva
   const seriesId = original.serieRecurrente || original.recurrenteId;
   if (scope !== 'single' && !isRecurringSeriesReservation(original)) throw new Error('La reserva no pertenece a una serie recurrente.');
   const start = getSeriesEditStartDate(scope, original.fecha, today);
-  if (scope === 'single' && isRecurringSeriesReservation(original) && original.fecha < today) throw new Error('La sesión ya pasó. Elige un alcance hacia adelante para mantener intacto el historial.');
   const affected = scope === 'single' ? [original] : reservations.filter(r =>
     (r.serieRecurrente || r.recurrenteId) === seriesId && r.fecha >= start &&
     !r.reemplazadaPorReservaId && isReservationActiveForAvailability(r));
