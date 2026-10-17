@@ -1,3 +1,4 @@
+import { ReservationSectionHeader } from './ReservationSectionHeader';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useState } from 'react';
 import {
@@ -98,22 +99,7 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
   return (
     <div id="reservation-step-4-container" className="space-y-4">
       {/* Step Header */}
-      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-        <div className="flex items-center space-x-2">
-          <div className="p-1.5 bg-blue-100 text-blue-700 rounded-lg">
-            <Package className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-800 text-xs">4. Recursos y Documentación</h3>
-            <p className="text-[11px] text-slate-500">Agrega equipamiento si lo necesitas y revisa los documentos de esta categoría.</p>
-          </div>
-        </div>
-        {isWizardMode && (
-          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
-            Paso 4 de 5
-          </span>
-        )}
-      </div>
+      <ReservationSectionHeader title="4. Recursos y Documentación" description="Agrega equipamiento si lo necesitas y revisa los documentos de esta categoría." icon={<Package className="h-4 w-4" />} />
 
       {/* 1. Selector de Equipamiento */}
       <div className="space-y-1.5">
@@ -131,11 +117,12 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
 
       {/* 2. Decoupled AI Assistant Demo (Optional Helper) */}
       <div className="rounded-xl border border-indigo-200/90 bg-indigo-50/40 p-3 space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-2">
           <button
             type="button"
             onClick={() => setShowAiAssistant(!showAiAssistant)}
-            className="flex items-center space-x-2 text-indigo-900 font-bold text-xs hover:text-indigo-950 cursor-pointer"
+            aria-expanded={showAiAssistant}
+            className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-indigo-900 font-semibold text-sm hover:text-indigo-950"
           >
             <Bot className="w-4 h-4 text-indigo-600" />
             <span>Asistente Inteligente de Recursos</span>
@@ -146,7 +133,9 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
           <button
             type="button"
             onClick={() => setShowAiAssistant(!showAiAssistant)}
-            className="text-indigo-600 hover:text-indigo-800 text-xs p-1"
+            aria-label={showAiAssistant ? 'Ocultar sugerencias de recursos' : 'Mostrar sugerencias de recursos'}
+            aria-expanded={showAiAssistant}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-indigo-600 hover:bg-indigo-100"
           >
             {showAiAssistant ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
@@ -188,7 +177,7 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
 
       {/* 3. Carta de Compromiso */}
       <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3.5 space-y-2.5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center space-x-2">
             <FileSignature className="w-4 h-4 text-amber-700" />
             <div>
@@ -257,7 +246,7 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
         </label>
         <textarea
           id="input-reserva-comentarios"
-          rows={2}
+          rows={3}
           placeholder="Notas de montaje, requerimiento de llaves, disposición de mesas o recordatorios..."
           value={formData.comentarios || ''}
           onChange={(e) => setFormData((prev) => ({ ...prev, comentarios: e.target.value }))}

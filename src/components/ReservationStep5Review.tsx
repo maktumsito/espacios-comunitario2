@@ -1,3 +1,4 @@
+import { ReservationSectionHeader } from './ReservationSectionHeader';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import {
@@ -64,22 +65,7 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
   return (
     <div id="reservation-step-5-container" className="space-y-4">
       {/* Step Header */}
-      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-        <div className="flex items-center space-x-2">
-          <div className="p-1.5 bg-blue-100 text-blue-700 rounded-lg">
-            <CheckCircle2 className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-800 text-xs">5. Resumen y Confirmación Final</h3>
-            <p className="text-[11px] text-slate-500">Verifica los datos antes de guardar la reserva en la agenda comunitaria</p>
-          </div>
-        </div>
-        {isWizardMode && (
-          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
-            Paso 5 de 5
-          </span>
-        )}
-      </div>
+      <ReservationSectionHeader title="5. Resumen y Confirmación Final" description="Verifica los datos antes de guardar la reserva en la agenda comunitaria" icon={<CheckCircle2 className="h-4 w-4" />} />
 
       {/* Total Sessions Banner */}
       <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl flex items-center justify-between">
@@ -199,12 +185,12 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
             </button>
           </div>
           <div className="space-y-0.5 text-[11px]">
-            <div className="font-bold text-slate-900 text-sm truncate">{formatDisplayTitle(formData.responsable || 'No indicado')}</div>
+            <div className="font-bold text-slate-900 text-sm break-words">{formatDisplayTitle(formData.responsable || 'No indicado')}</div>
             {formData.telefonoContacto && (
               <div className="text-slate-600">Tel: {formData.telefonoContacto}</div>
             )}
             {formData.emailContacto && (
-              <div className="text-slate-600 truncate">✉️ {formData.emailContacto}</div>
+              <div className="text-slate-600 break-all">{formData.emailContacto}</div>
             )}
             <div className="text-slate-500 font-medium">
               Aforo estimado: {formData.cantidadParticipantes || 0} personas
@@ -244,7 +230,7 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
               </span>
             </div>
             {formData.comentarios && (
-              <div className="text-slate-600 truncate">
+              <div className="text-slate-600 whitespace-pre-wrap break-words">
                 Notas: {formData.comentarios}
               </div>
             )}

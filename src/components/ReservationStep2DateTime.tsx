@@ -1,3 +1,4 @@
+import { ReservationSectionHeader } from './ReservationSectionHeader';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import {
@@ -219,22 +220,7 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
 
   return (
     <div id="wizard-step-section-2" className="space-y-4">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-        <div className="flex items-center space-x-2">
-          <div className="p-1.5 bg-blue-100 text-blue-700 rounded-lg">
-            <MapPin className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-800 text-xs">2. Espacio, Fecha y Horarios</h3>
-            <p className="text-[11px] text-slate-500">Espacio físico, fecha, horarios y modalidad de repetición</p>
-          </div>
-        </div>
-        {isWizardMode && (
-          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
-            Paso 2 de 5
-          </span>
-        )}
-      </div>
+      <ReservationSectionHeader title="2. Espacio, Fecha y Horarios" description="Espacio físico, fecha, horarios y modalidad de repetición" icon={<MapPin className="h-4 w-4" />} />
 
       {/* Topamiento Conflict Banner if detected with Instant 1-Click Resolution */}
       <ReservationConflictBanner

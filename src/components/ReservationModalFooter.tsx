@@ -94,8 +94,8 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
   validateStep4
 }) => {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-4 border-t border-slate-200">
-      <div className="flex items-center space-x-2">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 empty:hidden">
         {/* Botón Duplicar Reserva */}
         {editingReservation && !isDuplicating && (
           <button
@@ -146,7 +146,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
         )}
 
         {/* Autosave Status Indicator */}
-        <div id="autosave-status-indicator" className="hidden sm:flex items-center space-x-1.5 text-[11px] text-slate-500 pl-2">
+        <div id="autosave-status-indicator" role="status" className="flex items-center gap-1.5 text-xs text-slate-500 empty:hidden">
           {isAutosaving ? (
             <span className="flex items-center space-x-1 text-blue-600 font-medium">
               <RefreshCw className="w-3 h-3 animate-spin" />
@@ -161,7 +161,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto sm:justify-end">
         {isWizardMode && wizardStep > 1 && (
           <button
             type="button"
@@ -170,10 +170,11 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
               setWizardStep((prev) => (prev > 1 ? ((prev - 1) as 1 | 2 | 3 | 4) : 1));
               scrollToModalTop();
             }}
-            className="min-h-11 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs transition flex items-center space-x-1 cursor-pointer"
+            aria-label="Anterior"
+            className="min-h-11 px-3 py-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-sm font-medium transition-colors flex items-center justify-center gap-1"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span>Anterior</span>
+            <span className="hidden sm:inline">Anterior</span>
           </button>
         )}
 
@@ -182,7 +183,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
           id="btn-cancel-reservation"
           aria-label="Cancelar y cerrar formulario de reserva"
           onClick={onClose}
-          className="min-h-11 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs transition cursor-pointer"
+          className="min-h-11 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 text-sm font-medium transition-colors"
         >
           Cancelar
         </button>
@@ -192,6 +193,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
             id="btn-wizard-next"
             key="wizard-next"
             type="button"
+            aria-label={wizardStep === 1 ? 'Siguiente: Fecha y espacio' : wizardStep === 2 ? 'Siguiente: Solicitante' : wizardStep === 3 ? 'Siguiente: Recursos' : 'Revisar reserva'}
             disabled={
               wizardStep === 1
                 ? !isStep1Completed
@@ -227,7 +229,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
                 scrollToModalTop();
               }
             }}
-            className={`px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-xs transition flex items-center space-x-1.5 ${
+            className={`min-h-11 min-w-0 flex-1 px-4 py-2.5 rounded-lg text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 sm:flex-none ${
               (wizardStep === 1
                 ? !isStep1Completed
                 : wizardStep === 2
@@ -241,7 +243,8 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
                 : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
             }`}
           >
-            <span>
+            <span className="sm:hidden">{wizardStep === 4 ? 'Revisar reserva' : 'Siguiente'}</span>
+            <span className="hidden sm:inline">
               {wizardStep === 1
                 ? 'Siguiente: Fecha y espacio'
                 : wizardStep === 2
@@ -250,7 +253,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
                 ? 'Siguiente: Recursos'
                 : 'Revisar reserva'}
             </span>
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-4 h-4 shrink-0" />
           </button>
         ) : (
           <button
@@ -259,7 +262,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
             type="submit"
             aria-label="Confirmar y guardar reserva de espacio"
             disabled={isFormSubmitDisabled || (isEditingExisting && !canModifyReservation)}
-            className={`px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-xs transition ${
+            className={`min-h-11 min-w-0 flex-1 px-4 py-2.5 rounded-lg text-white text-sm font-semibold transition-colors sm:flex-none ${
               isFormSubmitDisabled || (isEditingExisting && !canModifyReservation)
                 ? 'bg-slate-400 opacity-60 cursor-not-allowed shadow-none'
                 : (conflicts.length > 0 || candidateConflictDates.length > 0) && !allowConflictOverride

@@ -61,9 +61,10 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
   allReservations = []
 }) => {
   return (
-    <div className="space-y-4 pt-1" id="section-applicant-contact">
-      {/* Row 4: Responsable, Teléfono, Participantes */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="space-y-6" id="section-applicant-contact">
+      <section aria-labelledby="applicant-identification-heading" className="min-w-0 space-y-3">
+        <h4 id="applicant-identification-heading" className="text-sm font-semibold text-slate-900">Identificación del solicitante</h4>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {/* Responsable Input */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
@@ -96,6 +97,46 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
           </datalist>
         </div>
 
+        {/* RUT */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="input-reserva-rut" className="font-semibold text-slate-700">R.U.T. Solicitante</label>
+            {formData.rut && rutValidation.isValid && (
+              <span className="text-[10px] text-emerald-600 font-bold flex items-center space-x-0.5">
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Válido</span>
+              </span>
+            )}
+          </div>
+          <input
+            id="input-reserva-rut"
+            type="text"
+            placeholder="Ej: 12.345.678-9"
+            value={formData.rut || ''}
+            onChange={(e) => {
+              const val = e.target.value;
+              const formatted = formatRut(val);
+              setFormData({ ...formData, rut: formatted || val });
+            }}
+            className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 shadow-xs font-mono ${
+              formData.rut && !rutValidation.isValid
+                ? 'border-rose-400 bg-rose-50/20 text-rose-950 focus:ring-rose-400'
+                : 'border-slate-200 focus:ring-blue-500'
+            }`}
+          />
+          {formData.rut && !rutValidation.isValid && (
+            <p className="text-[11px] text-rose-600 font-semibold flex items-center space-x-1 mt-0.5">
+              <AlertTriangle className="w-3 h-3 shrink-0" />
+              <span>{rutValidation.error}</span>
+            </p>
+          )}
+        </div>
+
+        </div>
+      </section>
+      <section aria-labelledby="applicant-contact-heading" className="min-w-0 space-y-3">
+        <h4 id="applicant-contact-heading" className="text-sm font-semibold text-slate-900">Datos de contacto</h4>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {/* Teléfono */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
@@ -130,97 +171,10 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
           )}
         </div>
 
-        {/* Participantes */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label htmlFor="input-reserva-participantes" className="font-semibold text-slate-700 flex items-center space-x-1.5">
-              <Users className="w-3.5 h-3.5 text-blue-500" />
-              <span>Participantes</span>
-            </label>
-            <span className="text-[11px] text-slate-500 font-medium">
-              Sugerido: ~{primarySpaceCapacityWarning.recommendedCapacity} pers.
-            </span>
-          </div>
-          <input
-            id="input-reserva-participantes"
-            type="number"
-            min="1"
-            max="2000"
-            value={formData.cantidadParticipantes || 10}
-            onChange={(e) => setFormData({ ...formData, cantidadParticipantes: Math.max(1, Number(e.target.value) || 0) })}
-            className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-slate-900 focus:outline-none focus:ring-2 shadow-xs font-semibold ${
-              primarySpaceCapacityWarning.hasWarning
-                ? 'border-amber-300 ring-1 ring-amber-300 focus:ring-amber-500 bg-amber-50/20'
-                : 'border-slate-200 focus:ring-blue-500'
-            }`}
-          />
-        </div>
-      </div>
-
-      {/* Capacity Recommendation Non-blocking Warning Banner */}
-      {(primarySpaceCapacityWarning.hasWarning || (secondSpaceCapacityWarning && secondSpaceCapacityWarning.hasWarning)) && (
-        <div className="p-3 rounded-xl bg-amber-50/90 border border-amber-300 text-amber-950 text-xs flex items-start space-x-2.5 shadow-2xs">
-          <span className="text-base mt-0.5 shrink-0">ℹ️</span>
-          <div className="space-y-1">
-            <p className="font-bold text-amber-900">Aviso de Capacidad y Aforo Sugerido (Informativo):</p>
-            {primarySpaceCapacityWarning.hasWarning && (
-              <p className="text-amber-800 text-[11px]">
-                • <strong>{formatDisplayTitle(formData.espacio || 'Espacio principal')}:</strong> Aforo sugerido de <strong>{primarySpaceCapacityWarning.recommendedCapacity} personas</strong> (has indicado {primarySpaceCapacityWarning.requestedCount} participantes).
-              </p>
-            )}
-            {secondSpaceCapacityWarning && secondSpaceCapacityWarning.hasWarning && (
-              <p className="text-amber-800 text-[11px]">
-                • <strong>2° Espacio ({formatDisplayTitle(singleSecondSpace)}):</strong> Aforo sugerido de <strong>{secondSpaceCapacityWarning.recommendedCapacity} personas</strong> (has indicado {secondSpaceCapacityWarning.requestedCount} participantes).
-              </p>
-            )}
-            <p className="text-[10px] text-amber-700/90 italic pt-0.5">
-              Nota: Este aforo es una recomendación orientativa y no restringe la creación o guardado de la reserva.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Row 4.1: RUT, Email, Domicilio */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* RUT */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="font-semibold text-slate-700">R.U.T. Solicitante</label>
-            {formData.rut && rutValidation.isValid && (
-              <span className="text-[10px] text-emerald-600 font-bold flex items-center space-x-0.5">
-                <CheckCircle2 className="w-3 h-3" />
-                <span>Válido</span>
-              </span>
-            )}
-          </div>
-          <input
-            id="input-reserva-rut"
-            type="text"
-            placeholder="Ej: 12.345.678-9"
-            value={formData.rut || ''}
-            onChange={(e) => {
-              const val = e.target.value;
-              const formatted = formatRut(val);
-              setFormData({ ...formData, rut: formatted || val });
-            }}
-            className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 shadow-xs font-mono ${
-              formData.rut && !rutValidation.isValid
-                ? 'border-rose-400 bg-rose-50/20 text-rose-950 focus:ring-rose-400'
-                : 'border-slate-200 focus:ring-blue-500'
-            }`}
-          />
-          {formData.rut && !rutValidation.isValid && (
-            <p className="text-[11px] text-rose-600 font-semibold flex items-center space-x-1 mt-0.5">
-              <AlertTriangle className="w-3 h-3 shrink-0" />
-              <span>{rutValidation.error}</span>
-            </p>
-          )}
-        </div>
-
         {/* Email */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="font-semibold text-slate-700 flex items-center space-x-1.5">
+            <label htmlFor="input-reserva-email" className="font-semibold text-slate-700 flex items-center space-x-1.5">
               <Mail className="w-3.5 h-3.5 text-blue-500" />
               <span>Correo Electrónico</span>
             </label>
@@ -251,9 +205,10 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
           )}
         </div>
 
+          <div className="sm:col-span-2">
         {/* Domicilio */}
         <div className="space-y-1.5">
-          <label className="font-semibold text-slate-700 flex items-center space-x-1.5">
+          <label htmlFor="input-reserva-domicilio" className="font-semibold text-slate-700 flex items-center space-x-1.5">
             <Home className="w-3.5 h-3.5 text-blue-500" />
             <span>Domicilio / Dirección</span>
           </label>
@@ -266,7 +221,63 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
             className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
           />
         </div>
-      </div>
+          </div>
+        </div>
+      </section>
+      <section aria-labelledby="applicant-attendance-heading" className="min-w-0 space-y-3">
+        <h4 id="applicant-attendance-heading" className="text-sm font-semibold text-slate-900">Asistencia estimada</h4>
+        <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2">
+        {/* Participantes */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="input-reserva-participantes" className="font-semibold text-slate-700 flex items-center space-x-1.5">
+              <Users className="w-3.5 h-3.5 text-blue-500" />
+              <span>Participantes</span>
+            </label>
+            <span className="text-[11px] text-slate-500 font-medium">
+              Sugerido: ~{primarySpaceCapacityWarning.recommendedCapacity} pers.
+            </span>
+          </div>
+          <input
+            id="input-reserva-participantes"
+            type="number"
+            min="1"
+            max="2000"
+            value={formData.cantidadParticipantes || 10}
+            onChange={(e) => setFormData({ ...formData, cantidadParticipantes: Math.max(1, Number(e.target.value) || 0) })}
+            className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-slate-900 focus:outline-none focus:ring-2 shadow-xs font-semibold ${
+              primarySpaceCapacityWarning.hasWarning
+                ? 'border-amber-300 ring-1 ring-amber-300 focus:ring-amber-500 bg-amber-50/20'
+                : 'border-slate-200 focus:ring-blue-500'
+            }`}
+          />
+        </div>
+          <p className="pb-2 text-sm leading-5 text-slate-500">Indica el total esperado de asistentes. La capacidad sugerida es orientativa.</p>
+        </div>
+      {/* Capacity Recommendation Non-blocking Warning Banner */}
+      {(primarySpaceCapacityWarning.hasWarning || (secondSpaceCapacityWarning && secondSpaceCapacityWarning.hasWarning)) && (
+        <div className="p-3 rounded-xl bg-amber-50/90 border border-amber-300 text-amber-950 text-xs flex items-start space-x-2.5 shadow-2xs">
+          <span className="text-base mt-0.5 shrink-0">ℹ️</span>
+          <div className="space-y-1">
+            <p className="font-bold text-amber-900">Aviso de Capacidad y Aforo Sugerido (Informativo):</p>
+            {primarySpaceCapacityWarning.hasWarning && (
+              <p className="text-amber-800 text-[11px]">
+                • <strong>{formatDisplayTitle(formData.espacio || 'Espacio principal')}:</strong> Aforo sugerido de <strong>{primarySpaceCapacityWarning.recommendedCapacity} personas</strong> (has indicado {primarySpaceCapacityWarning.requestedCount} participantes).
+              </p>
+            )}
+            {secondSpaceCapacityWarning && secondSpaceCapacityWarning.hasWarning && (
+              <p className="text-amber-800 text-[11px]">
+                • <strong>2° Espacio ({formatDisplayTitle(singleSecondSpace)}):</strong> Aforo sugerido de <strong>{secondSpaceCapacityWarning.recommendedCapacity} personas</strong> (has indicado {secondSpaceCapacityWarning.requestedCount} participantes).
+              </p>
+            )}
+            <p className="text-[10px] text-amber-700/90 italic pt-0.5">
+              Nota: Este aforo es una recomendación orientativa y no restringe la creación o guardado de la reserva.
+            </p>
+          </div>
+        </div>
+      )}
+
+      </section>
 
       {/* Carta de Compromiso: Activación con 1 Clic para actividades que no son cumpleaños ni préstamos */}
       {!isCommitmentLetterEligible(formData.tipoActividad, formData.tipoPrestamo) && (

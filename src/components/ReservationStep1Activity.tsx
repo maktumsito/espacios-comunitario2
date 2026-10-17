@@ -1,3 +1,4 @@
+import { ReservationSectionHeader } from './ReservationSectionHeader';
 import React from 'react';
 import {
   Sparkles,
@@ -34,22 +35,7 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
   return (
     <div id="wizard-step-section-1" className="space-y-4">
       {/* Header of Step 1 */}
-      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-        <div className="flex items-center space-x-2">
-          <div className="p-1.5 bg-blue-100 text-blue-700 rounded-lg">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-800 text-xs">1. Identificación y Tipo de Actividad</h3>
-            <p className="text-[11px] text-slate-500">Define el nombre del taller o evento, su categoría y prioridad</p>
-          </div>
-        </div>
-        {isWizardMode && (
-          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
-            Paso 1 de 5
-          </span>
-        )}
-      </div>
+      <ReservationSectionHeader title="1. Identificación y Tipo de Actividad" description="Define el nombre del taller o evento, su categoría y prioridad" icon={<Sparkles className="h-4 w-4" />} />
 
       {/* Row 1: Nombre de la Actividad */}
       <div className="space-y-1.5">

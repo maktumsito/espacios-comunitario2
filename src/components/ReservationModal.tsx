@@ -1411,8 +1411,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <ModalOverlay onClose={() => { if (!isSubmittingRef.current) onClose(); }} role="dialog" aria-modal="true" aria-label="Crear o editar reserva" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="flex max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] flex-col bg-white rounded-2xl shadow-2xl max-w-4xl w-full border border-slate-100 overflow-hidden">
+    <ModalOverlay onClose={() => { if (!isSubmittingRef.current) onClose(); }} role="dialog" aria-modal="true" aria-label="Crear o editar reserva" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center sm:p-4">
+      <div className="flex h-[100dvh] max-h-[100dvh] w-full max-w-5xl flex-col overflow-hidden bg-white shadow-2xl sm:h-[min(820px,calc(100dvh-2rem))] sm:rounded-2xl sm:border sm:border-slate-200">
         {/* Header */}
         <ReservationModalHeader
           replacementMode={Boolean(replacementSource)}
@@ -1424,8 +1424,34 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
         />
 
         {/* Form Body */}
-        <form id="reservation-modal-form-body" onSubmit={handleSubmit} noValidate className="reservation-form min-h-0 flex-1 p-4 sm:p-6 space-y-5 overflow-y-auto text-sm">
+        <form id="reservation-modal-form" onSubmit={handleSubmit} noValidate className="reservation-form flex min-h-0 flex-1 flex-col overflow-hidden text-sm">
           <fieldset disabled={isSubmitting} className="contents">
+          {isWizardMode && <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-7">
+              <WizardStepsBar
+                wizardStep={wizardStep}
+                isStep1Completed={isStep1ActivityCompleted}
+                isStep2Completed={isStep2DateTimeCompleted}
+                isStep3Completed={isStep3ApplicantCompleted}
+                isStep4Completed={isStep4ResourcesCompleted}
+                isStep5Completed={isStep1ActivityCompleted && isStep2DateTimeCompleted && isStep3ApplicantCompleted}
+                espacio={formData.espacio}
+                responsable={formData.responsable}
+                descripcion={formData.descripcion}
+                equipamientoCount={formData.equipamientoSolicitado?.length || 0}
+                onSelectStep={(targetStep) => {
+                  const prerequisites = [validateStep1Activity, validateStep2DateTime, validateStep3Applicant];
+                  for (const validate of prerequisites.slice(0, targetStep - 1)) {
+                    if (!validate(false)) {
+                      validate(true);
+                      return;
+                    }
+                  }
+                  setWizardStep(targetStep);
+                  scrollToModalTop();
+                }}
+              />
+          </div>}
+          <div id="reservation-modal-form-body" className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-5 sm:px-7 sm:py-6">
           {/* Notification & Context Alerts */}
           <ReservationModalAlerts
             hasDraft={hasDraft}
@@ -1472,33 +1498,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
             />
           )}
 
-          {/* 5-Step Progressive Wizard Stepper */}
-          {isWizardMode && (
-            <div className="space-y-2">
-              <WizardStepsBar
-                wizardStep={wizardStep}
-                isStep1Completed={isStep1ActivityCompleted}
-                isStep2Completed={isStep2DateTimeCompleted}
-                isStep3Completed={isStep3ApplicantCompleted}
-                isStep4Completed={isStep4ResourcesCompleted}
-                isStep5Completed={isStep1ActivityCompleted && isStep2DateTimeCompleted && isStep3ApplicantCompleted}
-                espacio={formData.espacio}
-                responsable={formData.responsable}
-                descripcion={formData.descripcion}
-                equipamientoCount={formData.equipamientoSolicitado?.length || 0}
-                onSelectStep={(targetStep) => {
-                  const prerequisites = [validateStep1Activity, validateStep2DateTime, validateStep3Applicant];
-                  for (const validate of prerequisites.slice(0, targetStep - 1)) {
-                    if (!validate(false)) {
-                      validate(true);
-                      return;
-                    }
-                  }
-                  setWizardStep(targetStep);
-                  scrollToModalTop();
-                }}
-              />
-
+          {isWizardMode && <>
               {hasStep1Conflict && wizardStep === 2 && (
                 <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-rose-100 border border-rose-300 text-rose-900 text-[11px] font-medium">
                   <div className="flex items-center space-x-1.5">
@@ -1516,8 +1516,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                   )}
                 </div>
               )}
-            </div>
-          )}
+          </>}
 
           {/* Paso 1: Identificación y Actividad */}
           {(!isWizardMode || wizardStep === 1) && (
@@ -1715,10 +1714,13 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
             />
           )}
 
+          </div>
+          <div className="shrink-0 space-y-3 border-t border-slate-200 bg-slate-50/70 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-7">
           {/* Non-blocking Form Feedback Banner (D4 & D9) */}
           {formFeedback && (
             <div
               id="modal-form-feedback-banner"
+              role="alert"
               className={`p-3 rounded-xl border flex items-center justify-between gap-2 text-xs font-semibold animate-fadeIn ${
                 formFeedback.type === 'error'
                   ? 'bg-rose-50 border-rose-300 text-rose-900'
@@ -1786,6 +1788,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
             isStep3Completed={isStep3ApplicantCompleted}
             isStep4Completed={isStep4ResourcesCompleted}
           />
+          </div>
           </fieldset>
         </form>
       </div>
