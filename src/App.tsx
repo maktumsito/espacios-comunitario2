@@ -123,15 +123,15 @@ export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>(() => getInitialViewMode());
   const [isSidebarHidden, setIsSidebarHidden] = useState(() => {
     try {
-      return localStorage.getItem('gestindeespacios_sidebar_hidden') === 'true';
+      return localStorage.getItem('gestindeespacios_sidebar_hidden_v2') !== 'false';
     } catch {
-      return false;
+      return true;
     }
   });
   const toggleSidebar = useCallback(() => setIsSidebarHidden(hidden => !hidden), []);
   useEffect(() => {
     try {
-      localStorage.setItem('gestindeespacios_sidebar_hidden', String(isSidebarHidden));
+      localStorage.setItem('gestindeespacios_sidebar_hidden_v2', String(isSidebarHidden));
     } catch {
       // Keep the toggle usable when browser storage is unavailable.
     }
