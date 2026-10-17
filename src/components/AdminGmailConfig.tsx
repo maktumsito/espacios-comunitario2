@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { getAuthSessionToken } from '../services/authService';
 import {
   Mail,
   Send,
@@ -91,8 +92,8 @@ export const AdminGmailConfig: React.FC<AdminGmailConfigProps> = ({
     setIsTriggeringAutomated(true);
     setAutomatedTriggerResult(null);
     try {
-      const sessionUser = sessionStorage.getItem('diaguitas_user');
-      const token = sessionUser ? btoa(sessionUser) : btoa(JSON.stringify({ role: 'admin', email: DEFAULT_GMAIL_SENDER }));
+      const token = getAuthSessionToken();
+      if (!token) throw new Error('Selecciona tu usuario e inicia sesión nuevamente.');
 
       const res = await fetch('/api/email/trigger-scheduled', {
         method: 'POST',

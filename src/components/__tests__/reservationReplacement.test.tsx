@@ -48,7 +48,7 @@ function advanceToReview() {
   expect(screen.getByText(/La fecha, el espacio y el horario se conservan/)).toBeTruthy();
   fireEvent.click(screen.getByText('Siguiente: Solicitante'));
   fireEvent.click(screen.getByText('Siguiente: Recursos'));
-  fireEvent.click(screen.getByText('Revisar reserva'));
+  fireEvent.click(screen.getByRole('button', { name: 'Revisar reserva' }));
 }
 it('uses the existing wizard, keeps the schedule fixed and confirms a linked pair without copying resources', async () => {
   const { save, close } = openReplacement(); advanceToReview();

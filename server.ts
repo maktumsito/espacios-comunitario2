@@ -1,4 +1,5 @@
 import { registerBackupApi } from './server/backupApi';
+import { APP_BUILD_INFO } from './src/buildInfo';
 import { claimDelivery,startDelivery,finishDelivery } from './server/deliveryLease';
 import { registerReservationApi } from './server/reservationApi';
 import { getServerDatabase, serverAuth } from './server/database';
@@ -708,8 +709,9 @@ async function startServer() {
   // -------------------------------------------------------------
   app.get('/api/health', (req, res) => {
     const santiago = getSantiagoTime();
-    res.json({
+    res.set('Cache-Control', 'no-store').json({
       status: 'ok',
+      build: APP_BUILD_INFO,
       serverTimeUtc: new Date().toISOString(),
       santiagoTime: `${santiago.dateStr} ${santiago.timeFormatted}`,
       dayOfWeek: santiago.dayOfWeek
@@ -1073,7 +1075,7 @@ async function startServer() {
       maxAge: '1y',
       immutable: true,
       setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.html') || filePath.endsWith('manifest.json') || filePath.endsWith('sw.js')) {
+        if (filePath.endsWith('.html') || filePath.endsWith('manifest.json') || filePath.endsWith('build-info.json') || filePath.endsWith('sw.js')) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
       }

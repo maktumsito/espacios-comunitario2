@@ -15,7 +15,7 @@ import {
 } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 import { Reservation } from '../types';
-import { getStoredAuthUser, isCoordinatorOrAdmin, userCanCreateReservations, userCanEditReservations, userCanDeleteReservations } from './authService';
+import { getAuthSessionToken, getStoredAuthUser, isCoordinatorOrAdmin, userCanCreateReservations, userCanEditReservations, userCanDeleteReservations } from './authService';
 import { writeReservations, readPendingOperations, type WriteOptions, type WriteResult } from './reservationWriter';
 import { updateOperationJournal } from './reservationOperationJournal';
 export { getPendingOperations, readPendingOperations, ReservationWriteError, ReservationVersionError } from './reservationWriter';
@@ -1322,7 +1322,7 @@ export async function purgeExpiredScheduleSlots(daysOld: number = 30): Promise<n
     }
 
     // Call backend endpoint to safely purge on server side with Firebase admin permissions
-    const token = localStorage.getItem('espacios_auth_token_v2') || sessionStorage.getItem('espacios_auth_token_v2') || '';
+    const token = getAuthSessionToken();
     const res = await fetch('/api/admin/purge-expired-slots', {
       method: 'POST',
       headers: {

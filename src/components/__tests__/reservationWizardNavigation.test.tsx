@@ -219,3 +219,31 @@ it('opens review without saving and requires the final confirmation button', asy
   expect(save).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Confirmar y guardar reserva de espacio' })).toBeTruthy();
 });
+
+it.each([3, 4])('advances from step %i on form submission without saving before review', async step => {
+  const save = vi.fn().mockResolvedValue(true);
+  openForm({ onSave: save });
+  fillActivity();
+  selectStep(step);
+  await act(async () => { fireEvent.submit(document.getElementById('reservation-modal-form')!); });
+  expectStep(step + 1);
+  expect(save).not.toHaveBeenCalled();
+  if (step === 3) {
+    await act(async () => { fireEvent.submit(document.getElementById('reservation-modal-form')!); });
+    expectStep(5);
+    expect(save).not.toHaveBeenCalled();
+  }
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Confirmar y guardar reserva de espacio' })); });
+  expect(save).toHaveBeenCalledOnce();
+});
+
+it('validates the applicant when submitting step 3 instead of jumping to resources or saving', async () => {
+  const save = vi.fn();
+  openForm({ onSave: save, initialEmail: 'correo-invalido' });
+  fillActivity();
+  selectStep(3);
+  await act(async () => { fireEvent.submit(document.getElementById('reservation-modal-form')!); });
+  expectStep(3);
+  expect(screen.getByRole('alert').textContent).toContain('Correo electrónico inválido');
+  expect(save).not.toHaveBeenCalled();
+});

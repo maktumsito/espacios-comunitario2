@@ -1319,6 +1319,20 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
         }
         return;
       }
+      if (wizardStep === 3) {
+        if (validateStep3Applicant(true)) {
+          setWizardStep(4);
+          scrollToModalTop();
+        }
+        return;
+      }
+      if (wizardStep === 4) {
+        if (validateStep4Resources(true)) {
+          setWizardStep(5);
+          scrollToModalTop();
+        }
+        return;
+      }
     }
     executeSave(allowConflictOverride);
   };

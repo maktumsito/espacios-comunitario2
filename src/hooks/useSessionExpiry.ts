@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { getSessionRemainingMs, isSessionExpired, SESSION_DURATION_MS } from '../services/authService';
+import { getSessionRemainingMs, hasBrowserSessionChanged, isSessionExpired, SESSION_DURATION_MS } from '../services/authService';
 
 /** Deadlines also need checking when browsers resume suspended background tabs. */
-export function useSessionExpiry(enabled: boolean, onExpire: () => void) {
+export function useSessionExpiry(enabled: boolean, onExpire: (reason: 'expired' | 'changed') => void) {
   const callback = useRef(onExpire);
   callback.current = onExpire;
   useEffect(() => {
@@ -12,9 +12,14 @@ export function useSessionExpiry(enabled: boolean, onExpire: () => void) {
     const check = () => {
       clearTimeout(timer);
       if (expired) return;
+      if (hasBrowserSessionChanged()) {
+        expired = true;
+        callback.current('changed');
+        return;
+      }
       if (isSessionExpired()) {
         expired = true;
-        callback.current();
+        callback.current('expired');
         return;
       }
       timer = setTimeout(check, Math.max(1, Math.min(SESSION_DURATION_MS, getSessionRemainingMs())));

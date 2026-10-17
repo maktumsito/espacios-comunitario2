@@ -1,5 +1,6 @@
 import * as sdk from "firebase/firestore";
 import { DataViewPoller } from './dataViewPoller';
+import { readBrowserSessionToken } from '../services/browserSession';
 export * from "firebase/firestore";
 
 // Browsers use authenticated HTTP. Server code adapts the Admin SDK; Vitest
@@ -7,12 +8,7 @@ export * from "firebase/firestore";
 export const usesDataApi = () =>
   typeof window !== "undefined" &&
   !(typeof process !== "undefined" && process.env.VITEST);
-export const sessionToken = () =>
-  typeof sessionStorage === "undefined"
-    ? ""
-    : sessionStorage.getItem("espacios_auth_token_v2") ||
-      localStorage.getItem("espacios_auth_token_v2") ||
-      "";
+export const sessionToken = readBrowserSessionToken;
 export class DataApiError extends Error {
   constructor(
     message: string,

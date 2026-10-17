@@ -10,6 +10,9 @@ import {
   writeBatch,
 } from "../firebase/gateway";
 import { getDb } from "../firebase/config";
+import { AUTH_SESSION_ID_KEY, SESSION_CREDENTIAL_STORAGE_KEY, SESSION_TOKEN_STORAGE_KEY, bindBrowserSession,
+  hasBrowserSessionChanged, readBrowserSessionToken, releaseBrowserSession, storeBrowserSessionToken } from './browserSession';
+export { hasBrowserSessionChanged } from './browserSession';
 
 export interface AuthUser {
   username: string;
@@ -154,8 +157,6 @@ export function resetFailedAttempts(username?: string): void {
 // -------------------------------------------------------------
 // Session Token Helpers
 // -------------------------------------------------------------
-const SESSION_TOKEN_STORAGE_KEY = "espacios_auth_token_v2";
-let verifiedSessionToken = "";
 
 async function requestVerifiedSession(
   path: string,
@@ -167,6 +168,7 @@ async function requestVerifiedSession(
   remainingSeconds?: number;
   status?: number;
   expiresAt?: number;
+  token?: string;
 }> {
   const requestToken = getAuthSessionToken();
   const response = await fetch(`/api/auth/${path}`, {
@@ -197,17 +199,10 @@ async function requestVerifiedSession(
   if (path === "session/refresh" && (requestToken !== getAuthSessionToken() || isSessionExpired())) {
     return { success: false, error: "La sesión venció. Selecciona tu usuario e inicia sesión nuevamente." };
   }
-  verifiedSessionToken = result.token;
-  try {
-    sessionStorage.setItem(SESSION_TOKEN_STORAGE_KEY, result.token);
-    localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, result.token);
-  } catch {
-    /* The current browser session can still use its in-memory token. */
-  }
-  window.dispatchEvent(new Event("auth-session-changed"));
   return {
     success: true,
     user: result.user,
+    token: result.token,
     expiresAt:
       typeof result.expiresAt === "number" ? result.expiresAt : undefined,
   };
@@ -223,22 +218,12 @@ export async function authenticateGoogleSession(
   });
   if (!result.success || !result.user)
     throw new Error(result.error || "Google no confirmó el acceso.");
-  saveAuthUser(result.user);
+  saveAuthUser(result.user, SESSION_DURATION_MS, result);
   return result.user;
 }
 
 export function getAuthSessionToken(): string {
-  if (!isBrowser) return "";
-  if (verifiedSessionToken) return verifiedSessionToken;
-  try {
-    return (
-      sessionStorage.getItem(SESSION_TOKEN_STORAGE_KEY) ||
-      localStorage.getItem(SESSION_TOKEN_STORAGE_KEY) ||
-      ""
-    );
-  } catch {
-    return "";
-  }
+  return readBrowserSessionToken();
 }
 
 // In-memory cache for fast synchronous lookup
@@ -563,7 +548,7 @@ export async function authenticateUser(
       return result;
     }
     resetFailedAttempts(cleanUsername);
-    saveAuthUser(result.user);
+    saveAuthUser(result.user, SESSION_DURATION_MS, result);
     return { success: true, user: result.user };
   } catch {
     return {
@@ -689,7 +674,7 @@ export function getSessionRemainingMs(): number {
 export function isSessionExpired(): boolean {
   if (!isBrowser) return true;
   try {
-    return !localStorage.getItem(AUTH_SESSION_STORAGE_KEY) || getSessionRemainingMs() <= 0;
+    return hasBrowserSessionChanged() || !localStorage.getItem(AUTH_SESSION_STORAGE_KEY) || getSessionRemainingMs() <= 0;
   } catch {
     return true;
   }
@@ -725,6 +710,7 @@ export async function refreshSession(
       refreshed.expiresAt ?? Infinity,
     );
     localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, expiresAt.toString());
+    if (refreshed.token) storeBrowserSessionToken(refreshed.token);
     window.dispatchEvent(new Event("auth-session-changed"));
   } catch (err) {
     throw err;
@@ -734,6 +720,7 @@ export async function refreshSession(
 export function getStoredAuthUser(): AuthUser | null {
   if (!isBrowser) return null;
   try {
+    if (hasBrowserSessionChanged()) return null;
     if (isSessionExpired()) {
       clearAuthUser();
       return null;
@@ -756,6 +743,7 @@ export function getCurrentUser(): AuthUser | null {
 export function saveAuthUser(
   user: AuthUser,
   durationMs: number = SESSION_DURATION_MS,
+  session?: { token?: string; expiresAt?: number },
 ): void {
   if (!isBrowser) return;
   try {
@@ -764,13 +752,17 @@ export function saveAuthUser(
       Math.max(durationMs, 60000),
       SESSION_DURATION_MS,
     );
-    const expiresAt = now + boundedDuration;
+    const expiresAt = Math.min(now + boundedDuration, session?.expiresAt ?? Infinity);
     localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(user));
     localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, expiresAt.toString());
     localStorage.setItem(AUTH_SESSION_START_KEY, now.toString());
+    localStorage.setItem(AUTH_SESSION_ID_KEY, crypto.randomUUID());
+    bindBrowserSession();
+    if (session?.token) storeBrowserSessionToken(session.token);
     window.dispatchEvent(new Event("auth-session-changed"));
   } catch (err) {
     console.error("Error saving auth user", err);
+    throw new Error('No se pudo guardar la sesión. Habilita el almacenamiento del navegador e intenta nuevamente.');
   }
 }
 
@@ -781,14 +773,19 @@ export function updateStoredAuthUser(user: AuthUser): void {
 }
 
 export function clearAuthUser(): void {
-  verifiedSessionToken = "";
   if (!isBrowser) return;
+  const changed = hasBrowserSessionChanged();
+  releaseBrowserSession();
   try {
-    localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
-    localStorage.removeItem(AUTH_SESSION_EXPIRY_KEY);
-    localStorage.removeItem(AUTH_SESSION_START_KEY);
-    localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
-    sessionStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+    // Closing an obsolete tab must not log out the new account in other tabs.
+    if (!changed) {
+      localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+      localStorage.removeItem(AUTH_SESSION_EXPIRY_KEY);
+      localStorage.removeItem(AUTH_SESSION_START_KEY);
+      localStorage.removeItem(AUTH_SESSION_ID_KEY);
+      localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+      localStorage.removeItem(SESSION_CREDENTIAL_STORAGE_KEY);
+    }
     window.dispatchEvent(new Event("auth-session-changed"));
   } catch (err) {
     console.error("Error clearing auth user", err);

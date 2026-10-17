@@ -26,9 +26,10 @@ import {
 interface LoginScreenProps {
   onLoginSuccess: (user: AuthUser) => void;
   sessionExpired?: boolean;
+  sessionChanged?: boolean;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, sessionExpired = false }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, sessionExpired = false, sessionChanged = false }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -169,8 +170,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, sessio
 
         {/* Login Card */}
         <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 p-6 sm:p-8 text-slate-800">
-          {sessionExpired && <p role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            Tu sesión venció. Selecciona tu usuario e ingresa nuevamente para continuar.
+          {(sessionExpired || sessionChanged) && <p role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            {sessionChanged
+              ? 'La sesión cambió o se cerró en otra pestaña. Selecciona tu usuario e ingresa nuevamente para continuar.'
+              : 'Tu sesión venció. Selecciona tu usuario e ingresa nuevamente para continuar.'}
           </p>}
           <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
             <div>

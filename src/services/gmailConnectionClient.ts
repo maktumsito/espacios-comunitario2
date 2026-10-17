@@ -1,3 +1,5 @@
+import { readBrowserSessionToken } from './browserSession';
+
 export interface GmailServerStatus {
   connected: boolean;
   persistent: boolean;
@@ -6,7 +8,7 @@ export interface GmailServerStatus {
 }
 
 export async function gmailServerRequest(path: string, body?: unknown): Promise<any> {
-  const token = sessionStorage.getItem('espacios_auth_token_v2') || localStorage.getItem('espacios_auth_token_v2') || '';
+  const token = readBrowserSessionToken();
   const response = await fetch(`/api/email/${path}`, {
     method: body === undefined ? 'GET' : 'POST',
     credentials: 'same-origin',

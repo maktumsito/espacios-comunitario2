@@ -115,6 +115,7 @@ export default function App() {
   const [pendingSeriesMove, setPendingSeriesMove] = useState<{ original: Reservation; target: Reservation; resolve: (result: boolean) => void } | null>(null);
   const [replacementSource, setReplacementSource] = useState<Reservation | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [sessionChanged, setSessionChanged] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     const stored = getStoredAuthUser();
     if (stored && !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(getAuthSessionToken())) {
@@ -529,6 +530,7 @@ export default function App() {
   const handleAuthSuccess = (user: AuthUser) => {
     closingSession.current = false;
     setSessionExpired(false);
+    setSessionChanged(false);
     setCurrentUser(user);
     setIsPasswordPromptOpen(false);
     if (pendingAuthAction) {
@@ -621,9 +623,10 @@ export default function App() {
     setConflictReportData(previous => ({ ...previous, isOpen: false }));
   };
 
-  useSessionExpiry(Boolean(currentUser), () => {
+  useSessionExpiry(Boolean(currentUser), reason => {
     if (closingSession.current) return;
-    setSessionExpired(true);
+    setSessionExpired(reason === 'expired');
+    setSessionChanged(reason === 'changed');
     handleLogout();
   });
 
@@ -683,7 +686,7 @@ export default function App() {
   }, [currentUser, pendingSeriesMove]);
 
   if (!currentUser) {
-    return <LoginScreen onLoginSuccess={handleAuthSuccess} sessionExpired={sessionExpired} />;
+    return <LoginScreen onLoginSuccess={handleAuthSuccess} sessionExpired={sessionExpired} sessionChanged={sessionChanged} />;
   }
 
   return (

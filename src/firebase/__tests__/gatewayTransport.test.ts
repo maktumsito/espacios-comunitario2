@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { dataRequest, reservationRequest } from '../gateway';
+import { bindBrowserSession, releaseBrowserSession } from '../../services/browserSession';
 
-beforeEach(() => localStorage.setItem('espacios_auth_token_v2', 'synthetic-test-session'));
-afterEach(() => { localStorage.clear(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  localStorage.setItem('espacios_auth_user', JSON.stringify({ username: 'test' }));
+  localStorage.setItem('espacios_auth_token_v2', 'synthetic-test-session');
+  bindBrowserSession();
+});
+afterEach(() => { localStorage.clear(); releaseBrowserSession(); vi.unstubAllGlobals(); });
 
 it('does not broadcast a data change for a batch read and start a self-triggered refresh loop', async () => {
   const changed = vi.fn(); window.addEventListener('data-changed', changed);

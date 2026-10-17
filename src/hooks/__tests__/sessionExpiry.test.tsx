@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useSessionExpiry } from '../useSessionExpiry';
 import { AUTH_SESSION_EXPIRY_KEY, AUTH_SESSION_START_KEY, clearAuthUser, getAuthSessionToken, getSessionRemainingMs,
-  isSessionExpired, refreshSession, saveAuthUser, SESSION_DURATION_MS, updateStoredAuthUser } from '../../services/authService';
+  AUTH_SESSION_STORAGE_KEY, getStoredAuthUser, isSessionExpired, refreshSession, saveAuthUser, SESSION_DURATION_MS, updateStoredAuthUser } from '../../services/authService';
+import { AUTH_SESSION_ID_KEY, SESSION_CREDENTIAL_STORAGE_KEY } from '../../services/browserSession';
+import { sessionToken } from '../../firebase/gateway';
 import { LoginScreen } from '../../components/LoginScreen';
 
 const account = { username: 'ana', name: 'Ana', role: 'Coordinador', initials: 'A', avatarColor: 'blue' };
@@ -92,4 +94,72 @@ it('discards a late renewal response after logout', async () => {
   await expect(renewal).rejects.toThrow('La sesión venció');
   expect(getAuthSessionToken()).toBe('');
   expect(isSessionExpired()).toBe(true);
+});
+
+function externalLogin(username = 'beatriz') {
+  const user = { ...account, username, name: username };
+  localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(user));
+  localStorage.setItem(AUTH_SESSION_START_KEY, String(Date.now()));
+  localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, String(Date.now() + SESSION_DURATION_MS));
+  localStorage.setItem(AUTH_SESSION_ID_KEY, 'new-login');
+  const identity = JSON.stringify([username, String(Date.now()), 'new-login']);
+  localStorage.setItem(SESSION_CREDENTIAL_STORAGE_KEY, JSON.stringify({ identity, token: 'new.token' }));
+  localStorage.setItem('espacios_auth_token_v2', 'new.token');
+}
+
+it.each(['beatriz', 'ana'])('requires selecting an account after another tab starts a new login for %s, without clearing that login', username => {
+  saveAuthUser(account, SESSION_DURATION_MS, { token: 'original.token' });
+  sessionStorage.setItem('espacios_auth_token_v2', 'stale.token');
+  const expire = vi.fn(() => clearAuthUser());
+  renderHook(() => useSessionExpiry(true, expire));
+  externalLogin(username);
+  // Requests are blocked even before the storage event reaches the UI.
+  expect(getAuthSessionToken()).toBe('');
+  expect(sessionToken()).toBe('');
+  expect(getStoredAuthUser()).toBeNull();
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: AUTH_SESSION_ID_KEY })));
+  expect(expire).toHaveBeenCalledExactlyOnceWith('changed');
+  expect(JSON.parse(localStorage.getItem(AUTH_SESSION_STORAGE_KEY)!).username).toBe(username);
+  expect(localStorage.getItem('espacios_auth_token_v2')).toBe('new.token');
+  expect(sessionStorage.getItem('espacios_auth_token_v2')).toBeNull();
+  expect(getAuthSessionToken()).toBe('');
+});
+
+it('uses a renewal from another tab without preferring a stale per-tab token or resetting the account', () => {
+  saveAuthUser(account, SESSION_DURATION_MS, { token: 'original.token' });
+  const expire = vi.fn(); renderHook(() => useSessionExpiry(true, expire));
+  act(() => vi.advanceTimersByTime(30 * 60_000));
+  sessionStorage.setItem('espacios_auth_token_v2', 'stale.token');
+  const credential = JSON.parse(localStorage.getItem(SESSION_CREDENTIAL_STORAGE_KEY)!);
+  localStorage.setItem(SESSION_CREDENTIAL_STORAGE_KEY, JSON.stringify({ ...credential, token: 'renewed.token' }));
+  localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, String(Date.now() + SESSION_DURATION_MS));
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: AUTH_SESSION_EXPIRY_KEY })));
+  expect(getAuthSessionToken()).toBe('renewed.token');
+  expect(sessionToken()).toBe('renewed.token');
+  act(() => vi.advanceTimersByTime(30 * 60_000));
+  expect(expire).not.toHaveBeenCalled();
+  expect(getStoredAuthUser()?.username).toBe('ana');
+  act(() => vi.advanceTimersByTime(30 * 60_000));
+  expect(expire).toHaveBeenCalledExactlyOnceWith('expired');
+});
+
+it('closes the tab when another tab logs out and requires a fresh selection', () => {
+  saveAuthUser(account, SESSION_DURATION_MS, { token: 'original.token' });
+  const expire = vi.fn(); renderHook(() => useSessionExpiry(true, expire));
+  localStorage.clear();
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: null })));
+  expect(expire).toHaveBeenCalledExactlyOnceWith('changed');
+  expect(getAuthSessionToken()).toBe('');
+});
+
+it('ignores a late renewal for the old account after a login in another tab', async () => {
+  saveAuthUser(account, SESSION_DURATION_MS, { token: 'original.token' });
+  let respond!: (response: unknown) => void;
+  vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => { respond = resolve; })));
+  const renewal = refreshSession();
+  externalLogin();
+  respond({ ok: true, json: async () => ({ success: true, user: account, token: 'late.token' }) });
+  await expect(renewal).rejects.toThrow();
+  expect(localStorage.getItem('espacios_auth_token_v2')).toBe('new.token');
+  expect(JSON.parse(localStorage.getItem(AUTH_SESSION_STORAGE_KEY)!).username).toBe('beatriz');
 });
