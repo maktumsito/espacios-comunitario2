@@ -67,7 +67,7 @@ interface NavbarProps {
 const agendaViews: ViewMode[] = ["calendar", "daily", "timeline", "mobile"];
 
 const NavbarComponent: React.FC<NavbarProps> = ({
-  isSidebarHidden = false,
+  isSidebarHidden = true,
   onToggleSidebar,
   currentView,
   onViewChange,
