@@ -894,8 +894,8 @@ export default function App() {
 
       {/* Main View Area */}
       <main id="main-content" tabIndex={-1} className={`flex-1 min-w-0 w-full mx-auto outline-none ${
-        currentView === 'calendar' || currentView === 'daily' || currentView === 'timeline' || currentView === 'mobile'
-          ? 'max-w-[1680px] px-3 sm:px-6 py-4'
+        isAgendaView(currentView)
+          ? `${isSidebarHidden ? 'max-w-none' : 'max-w-[1680px]'} px-3 sm:px-6 py-4`
           : 'max-w-[1680px] px-3 sm:px-4 md:px-6 py-4'
       }`}>
         {!generalDataPending && <>
