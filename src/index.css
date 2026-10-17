@@ -232,6 +232,16 @@ button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visib
   font-size: 1rem;
 }
 .reservation-form .text-xs { font-size: 0.875rem; line-height: 1.25rem; }
+/* Dense desktop toolbars keep comfortable hit areas on touch screens. */
+@container (max-width: 140px) {
+  .timeline-booking { padding: 2px 4px; }
+  .timeline-booking .timeline-card-grip { display: none; }
+  .timeline-booking .text-sm { font-size: 12px; line-height: 14px; }
+}
+.timeline-booking[data-short="true"] { padding: 2px 4px; }
+@media (pointer: coarse) {
+  .agenda-controls :is(button, input:not([type="checkbox"]), select, summary) { min-height: 44px; }
+}
 @media print {
   .app-shell { padding-left: 0 !important; padding-bottom: 0 !important; }
 }

@@ -53,12 +53,12 @@ describe('Reservation virtualization', () => {
     const far = Array.from({ length: 100 }, (_, i) => reservation(`far-${i}`, 20));
     const otherDates = Array.from({ length: 2000 }, (_, i) => ({ ...reservation(`other-${i}`, 20), fecha: '2026-10-20' }));
     const { container, rerender } = render(<DailyUsageView reservations={near} conflictReservationIds={new Set()}
-      initialDate={new Date(2026, 8, 22)} onSelectReservation={() => {}} onNewReservationWithSlot={() => {}} />);
+      initialDate={new Date(2026, 8, 22)} onSelectReservation={() => {}} onNewReservationWithSlot={() => {}} onUpdateReservation={() => true} />);
     const scroll = container.querySelector('.overflow-x-auto')!;
     fireEvent.scroll(scroll, { target: { scrollTop: 0 } });
     expect(container.querySelectorAll('[data-reservation-id]').length).toBe(30);
     rerender(<DailyUsageView reservations={[...near, ...far, ...otherDates]} conflictReservationIds={new Set()}
-      initialDate={new Date(2026, 8, 22)} onSelectReservation={() => {}} onNewReservationWithSlot={() => {}} />);
+      initialDate={new Date(2026, 8, 22)} onSelectReservation={() => {}} onNewReservationWithSlot={() => {}} onUpdateReservation={() => true} />);
     fireEvent.scroll(scroll, { target: { scrollTop: 0 } });
     expect(container.querySelectorAll('[data-reservation-id]').length).toBe(30);
     const dragged = container.querySelector('[data-reservation-id="near-1"]')!;

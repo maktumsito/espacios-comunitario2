@@ -113,7 +113,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
     if (!currentUser) return;
     const update = () =>
       setSessionMinutesLeft(
-        Math.max(1, Math.ceil(getSessionRemainingMs() / 60000)),
+        Math.max(0, Math.ceil(getSessionRemainingMs() / 60000)),
       );
     update();
     const timer = setInterval(update, 15000);
@@ -494,7 +494,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                             await refreshSession();
                             setSessionMinutesLeft(
                               Math.max(
-                                1,
+                                0,
                                 Math.ceil(getSessionRemainingMs() / 60000),
                               ),
                             );

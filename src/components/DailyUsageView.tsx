@@ -1,9 +1,12 @@
 import { NotificationPortal } from './common/NotificationPortal';
 import { useTimelineViewport, intersectsViewport } from '../hooks/useTimelineViewport';
+import { useDragAutoScroll } from '../hooks/useDragAutoScroll';
+import { useAvailableTimelineHeight } from '../hooks/useAvailableTimelineHeight';
+import { getDragTiming, getTimelineDropSlot } from '../utils/timelineDrag';
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from 'react';
 import { Reservation, SpaceInfo, FilterState, SpaceBlock } from '../types';
 import { SPACES_LIST, normalizeSpaceName } from '../data/spacesData';
-import { timeToMinutes, formatMinutesToTime, getConflictReservationIds, doSpacesConflict, getConstituentSpaces, normalizeSpace, isReservationActiveForAvailability } from '../utils/conflictDetector';
+import { timeToMinutes, formatMinutesToTime, getConflictReservationIds, doSpacesConflict, getConstituentSpaces, normalizeSpace, isReservationActiveForAvailability, getTimeIntervalsForReservation, findMaintenanceBlockConflicts } from '../utils/conflictDetector';
 import { getChileanHolidayInfo } from '../utils/holidayUtils';
 import {
   Calendar as CalendarIcon,
@@ -93,12 +96,13 @@ const DEFAULT_ORDERED_SPACES: string[] = [
   'MULTICANCHA',
   'BOX 1'
 ];
+const EMPTY_BLOCKS: readonly SpaceBlock[] = [];
 
 const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   reservations,
   allReservations,
   conflictReservationIds,
-  spaceBlocks = [],
+  spaceBlocks = EMPTY_BLOCKS,
   globalFilters,
   onFilterChange,
   onClearGlobalFilters,
@@ -192,12 +196,17 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     endMinutes: number;
     startTime: string;
     endTime: string;
+    overnight: boolean;
     hasConflict?: boolean;
     conflictDetails?: string;
     isBlocked?: boolean;
     blockReason?: string;
   } | null>(null);
   const [dragOverHeaderSpace, setDragOverHeaderSpace] = useState<string | null>(null);
+  const grabOffsetMinutes = useRef(0);
+  const moveInProgress = useRef(false);
+  const [movingReservationId, setMovingReservationId] = useState<string | null>(null);
+  const previewCache = useRef<{ key: string; availability: unknown; blocks: unknown; info: NonNullable<typeof dragTargetInfo> } | null>(null);
 
   // Drag & Drop State for Space Columns Reordering
   const [draggedHeaderIndex, setDraggedHeaderIndex] = useState<number | null>(null);
@@ -520,10 +529,26 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     };
   };
 
+  const availabilityIndex = useReservationDateIndex(allReservations ?? reservations);
+  // Normalize intervals once per data change/drag, including bookings hidden by filters.
+  const dragAvailability = useMemo(() => {
+    const dates = draggedReservation ? getTimeIntervalsForReservation(draggedReservation).map(slot => slot.date) : [];
+    const rows = [...new Map(dates.flatMap(date => availabilityIndex.get(date) ?? []).map(r => [r.id, r])).values()]
+      .filter(r => r.id !== draggedReservation?.id && isReservationActiveForAvailability(r))
+      .map(reservation => ({ reservation, intervals: getTimeIntervalsForReservation(reservation) }));
+    return new Map(activeSpaces.map(space => [space.name, rows.filter(row => doSpacesConflict(row.reservation.espacio, space.name))]));
+  }, [availabilityIndex, activeSpaces, draggedReservation]);
+
   // --- DRAG & DROP HANDLERS FOR RESERVATIONS ---
   const handleReservationDragStart = (e: React.DragEvent, res: Reservation) => {
     e.stopPropagation();
+    if (!onUpdateReservation || moveInProgress.current) { e.preventDefault(); return; }
     setHoveredCardInfo(null);
+    setHoveredSlot(null);
+    previewCache.current = null;
+    const timing = getDragTiming(res, dateStr);
+    grabOffsetMinutes.current = Math.max(0, (e.clientY - e.currentTarget.getBoundingClientRect().top) / HOUR_HEIGHT * 60)
+      + Math.max(0, START_MINUTES - timing.start);
     setDraggedReservation(res);
     e.dataTransfer.setData('text/plain', res.id);
     e.dataTransfer.setData('application/json', JSON.stringify({
@@ -536,83 +561,69 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   };
 
   const handleReservationDragEnd = () => {
+    previewCache.current = null;
     setDraggedReservation(null);
     setDragTargetInfo(null);
     setDragOverHeaderSpace(null);
   };
 
-  const handleColumnDragOver = (e: React.DragEvent, spaceName: string) => {
-    if (!draggedReservation) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-
-    // Calculate Y offset relative to timetable body
-    const rect = e.currentTarget.getBoundingClientRect();
-    const offsetY = e.clientY - rect.top;
-
-    // Snapping to 15-minute intervals
-    const origStartMin = timeToMinutes(draggedReservation.horaInicio);
-    const rawEndMin = timeToMinutes(draggedReservation.horaFin);
-    const origEndMin = rawEndMin + (draggedReservation.terminaDiaSiguiente || rawEndMin === 0 && origStartMin > 0 ? 1440 : 0);
-    const duration = Math.max(30, origEndMin - origStartMin);
-
-    const relativeMinutes = (offsetY / HOUR_HEIGHT) * 60;
-    const rawTargetStart = START_MINUTES + relativeMinutes;
-    // Snap to nearest 15 mins
-    const snappedStart = Math.round(rawTargetStart / 15) * 15;
-    const clampedStart = Math.max(START_MINUTES, Math.min(START_MINUTES + TOTAL_MINUTES - duration, snappedStart));
-    const clampedEnd = clampedStart + duration;
-
-    const startTimeStr = formatMinutesToTime(clampedStart);
-    const endTimeStr = formatMinutesToTime(clampedEnd);
-
-    // Detect active maintenance blocks in this slot
-    const normTargetSpace = normalizeSpaceName(spaceName);
-    const matchingBlock = spaceBlocks?.find((b) => {
-      if (!b.activo) return false;
-      if (dateStr < b.fechaInicio || dateStr > b.fechaFin) return false;
-      const bNorm = normalizeSpaceName(b.espacio);
-      const sNorm = normTargetSpace;
-      const matchesSpace =
-        bNorm === sNorm ||
-        (b.bloquearSubEspacios && sNorm.includes(bNorm)) ||
-        (b.bloquearSubEspacios && bNorm.includes(sNorm));
-      if (!matchesSpace) return false;
-      if (b.todoElDia) return true;
-      const bStart = timeToMinutes(b.horaInicio || '08:00');
-      const bEnd = timeToMinutes(b.horaFin || '22:30');
-      return bStart < clampedEnd && clampedStart < bEnd;
-    });
-
-    // Detect conflicting reservations in this space and time (excluding current reservation being dragged)
-    const conflictingRes = rawDayReservations.find((r) => {
-      if (r.id === draggedReservation.id) return false;
-      if (!isReservationActiveForAvailability(r)) return false;
-      if (!doSpacesConflict(r.espacio, spaceName)) return false;
-      const rStart = timeToMinutes(r.horaInicio);
-      let rEnd = timeToMinutes(r.horaFin);
-      if ((r.horaFin === '00:00' || r.horaFin === '24:00' || rEnd === 0) && rStart > 0 && !r.terminaDiaSiguiente) {
-        rEnd = 1440;
-      }
-      return rStart < clampedEnd && clampedStart < rEnd;
-    });
-
-    setDragTargetInfo({
-      spaceName,
-      startMinutes: clampedStart,
-      endMinutes: clampedEnd,
-      startTime: startTimeStr,
-      endTime: endTimeStr,
+  const getColumnTarget = (column: Element, clientY: number, spaceName: string) => {
+    if (!draggedReservation) return null;
+    const slot = getTimelineDropSlot(draggedReservation, dateStr,
+      START_MINUTES + (clientY - column.getBoundingClientRect().top) / HOUR_HEIGHT * 60,
+      grabOffsetMinutes.current, START_MINUTES, END_HOUR * 60);
+    if (!slot) return null;
+    const key = `${draggedReservation.id}:${spaceName}:${slot.startMinutes}:${slot.endMinutes}`;
+    const cached = previewCache.current;
+    if (cached?.key === key && cached.availability === dragAvailability && cached.blocks === spaceBlocks) return cached.info;
+    const candidate = { ...draggedReservation, espacio: spaceName, horaInicio: slot.startTime, horaFin: slot.endTime, terminaDiaSiguiente: slot.overnight };
+    const intervals = getTimeIntervalsForReservation(candidate);
+    const conflictingRes = dragAvailability.get(spaceName)?.find(row => row.intervals.some(other =>
+      intervals.some(target => target.date === other.date && target.startMin < other.endMin && other.startMin < target.endMin)))?.reservation;
+    const matchingBlock = findMaintenanceBlockConflicts([candidate], spaceBlocks)[0]?.block;
+    const info = {
+      spaceName, ...slot,
       hasConflict: !!conflictingRes,
       conflictDetails: conflictingRes ? `${conflictingRes.descripcion || conflictingRes.tipoActividad} (${conflictingRes.horaInicio} – ${conflictingRes.horaFin})` : undefined,
       isBlocked: !!matchingBlock,
-      blockReason: matchingBlock ? `${matchingBlock.motivo || 'Mantención'}${matchingBlock.descripcion ? `: ${matchingBlock.descripcion}` : ''}` : undefined
-    });
+      blockReason: matchingBlock ? `${matchingBlock.motivo || 'Mantención'}${matchingBlock.descripcion ? `: ${matchingBlock.descripcion}` : ''}` : undefined,
+    };
+    previewCache.current = { key, availability: dragAvailability, blocks: spaceBlocks, info };
+    return info;
+  };
+
+  const handleColumnDragOver = (e: React.DragEvent, spaceName: string) => {
+    if (!draggedReservation) return;
+    e.preventDefault();
+    const target = getColumnTarget(e.currentTarget, e.clientY, spaceName);
+    e.dataTransfer.dropEffect = target?.isBlocked ? 'none' : 'move';
+    setDragOverHeaderSpace(null);
+    setDragTargetInfo(target);
+  };
+
+  const commitMove = async (updated: Reservation) => {
+    if (!onUpdateReservation || moveInProgress.current) return;
+    moveInProgress.current = true;
+    setMovingReservationId(updated.id);
+    handleReservationDragEnd();
+    try {
+      const result = await onUpdateReservation(updated);
+      if (result !== false) setToastMessage({ text: 'Actividad reasignada exitosamente',
+        sub: `${updated.tipoActividad || 'Reserva'} en ${updated.espacio} (${updated.horaInicio} – ${updated.horaFin})` });
+    } catch (error) {
+      setToastMessage({ text: 'No se pudo mover la actividad', sub: error instanceof Error ? error.message : 'Intenta nuevamente.' });
+    } finally {
+      moveInProgress.current = false;
+      setMovingReservationId(null);
+    }
   };
 
   const handleColumnDrop = async (e: React.DragEvent, spaceName: string) => {
     e.preventDefault();
-    if (!draggedReservation || !dragTargetInfo || !onUpdateReservation) {
+    e.stopPropagation();
+    // Resolve from the drop event itself; the last preview may belong to another column.
+    const target = getColumnTarget(e.currentTarget, e.clientY, spaceName);
+    if (!draggedReservation || !target || !onUpdateReservation) {
       setDraggedReservation(null);
       setDragTargetInfo(null);
       setDragOverHeaderSpace(null);
@@ -621,8 +632,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
     // Check if dropping on the exact same space and time (no-op)
     const isSameSpace = normalizeSpaceName(draggedReservation.espacio) === normalizeSpaceName(spaceName);
-    const isSameStart = draggedReservation.horaInicio === dragTargetInfo.startTime;
-    const isSameEnd = draggedReservation.horaFin === dragTargetInfo.endTime;
+    const isSameStart = draggedReservation.horaInicio === target.startTime;
+    const isSameEnd = draggedReservation.horaFin === target.endTime;
     if (isSameSpace && isSameStart && isSameEnd) {
       setDraggedReservation(null);
       setDragTargetInfo(null);
@@ -631,10 +642,10 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     }
 
     // Block moving to a space with active maintenance block
-    if (dragTargetInfo.isBlocked) {
+    if (target.isBlocked) {
       setToastMessage({
         text: 'Reubicación cancelada: Espacio en mantención',
-        sub: `${spaceName}: ${dragTargetInfo.blockReason || 'Bloqueo activo en este horario'}`
+        sub: `${spaceName}: ${target.blockReason || 'Bloqueo activo en este horario'}`
       });
       setDraggedReservation(null);
       setDragTargetInfo(null);
@@ -645,27 +656,17 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     const updatedRes: Reservation = {
       ...draggedReservation,
       espacio: spaceName,
-      horaInicio: dragTargetInfo.startTime,
-      horaFin: dragTargetInfo.endTime,
-      terminaDiaSiguiente: false
+      horaInicio: target.startTime,
+      horaFin: target.endTime,
+      terminaDiaSiguiente: target.overnight
     };
 
-    const prevRes = draggedReservation;
-    setDraggedReservation(null);
-    setDragTargetInfo(null);
-    setDragOverHeaderSpace(null);
-
-    const result = await Promise.resolve(onUpdateReservation(updatedRes));
-    if (result !== false) {
-      setToastMessage({
-        text: 'Actividad reasignada exitosamente',
-        sub: `${prevRes.tipoActividad || 'Reserva'} en ${spaceName} (${updatedRes.horaInicio} – ${updatedRes.horaFin})`
-      });
-    }
+    await commitMove(updatedRes);
   };
 
   const handleHeaderDrop = async (e: React.DragEvent, targetSpaceName: string) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!draggedReservation || !onUpdateReservation) return;
 
     if (normalizeSpaceName(draggedReservation.espacio) === normalizeSpaceName(targetSpaceName)) {
@@ -680,18 +681,13 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
       espacio: targetSpaceName
     };
 
-    const prevRes = draggedReservation;
-    setDraggedReservation(null);
-    setDragTargetInfo(null);
-    setDragOverHeaderSpace(null);
-
-    const result = await Promise.resolve(onUpdateReservation(updatedRes));
-    if (result !== false) {
-      setToastMessage({
-        text: 'Espacio reasignado exitosamente',
-        sub: `${prevRes.tipoActividad || 'Reserva'} ahora en ${targetSpaceName} (${updatedRes.horaInicio} – ${updatedRes.horaFin})`
-      });
+    const block = findMaintenanceBlockConflicts([updatedRes], spaceBlocks)[0]?.block;
+    if (block) {
+      setToastMessage({ text: 'Reubicación cancelada: Espacio en mantención', sub: block.motivo });
+      handleReservationDragEnd();
+      return;
     }
+    await commitMove(updatedRes);
   };
 
   // --- INSTANT SPACE COLUMNS REORDERING & DRAG-AND-DROP ---
@@ -743,6 +739,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
       // If we are dragging a reservation over the header
       if (draggedReservation) {
         e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragTargetInfo(null);
         const sp = activeSpaces[index];
         if (sp) setDragOverHeaderSpace(sp.name);
       }
@@ -867,8 +865,31 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   })), [activeSpaces, dayReservations, dateStr, START_MINUTES, TOTAL_MINUTES]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  useAvailableTimelineHeight(scrollContainerRef);
 
   const headerRef = useRef<HTMLDivElement>(null);
+  useDragAutoScroll(scrollContainerRef, Boolean(draggedReservation || draggedHeaderIndex !== null), (x, y) => {
+    const column = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-drop-space]');
+    if (column && scrollContainerRef.current?.contains(column)) {
+      setDragTargetInfo(getColumnTarget(column, y, column.dataset.dropSpace!));
+    } else setDragTargetInfo(null);
+  });
+  useEffect(() => {
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      handleReservationDragEnd();
+      setDraggedHeaderIndex(null);
+      setDragOverHeaderIndex(null);
+    };
+    if (!draggedReservation && draggedHeaderIndex === null) return;
+    window.addEventListener('keydown', cancel);
+    return () => window.removeEventListener('keydown', cancel);
+  }, [draggedReservation, draggedHeaderIndex]);
+  useEffect(() => {
+    handleReservationDragEnd();
+    setDraggedHeaderIndex(null);
+    setDragOverHeaderIndex(null);
+  }, [dateStr]);
   const viewport = useTimelineViewport(scrollContainerRef, headerRef, TOTAL_HOURS, HOUR_HEIGHT);
   const [focusedReservationId, setFocusedReservationId] = useState<string | null>(null);
   const pendingFocus = useRef<string | null>(null);
@@ -881,15 +902,16 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     }
   }, [selectedDate]);
 
-  // Dynamic minimum width adapted to selected density mode
-  const gridMinWidth = useMemo(() => {
-    const colWidth = isCompact ? 150 : 200;
-    const timeColWidth = isCompact ? 64 : 72;
-    return activeSpaces.length * colWidth + timeColWidth;
-  }, [activeSpaces.length, isCompact]);
+  // Fit more rooms while keeping simultaneous reservations wide enough to use.
+  const columnWidths = useMemo(() => new Map(activeSpaces.map(space => {
+    const lanes = Math.max(1, ...[...bookingsBySpace.get(space.id)!.layoutMap.values()].map(layout => layout.totalCols));
+    return [space.id, Math.max(isCompact ? 96 : 112, lanes * (isCompact ? 56 : 64))];
+  })), [activeSpaces, bookingsBySpace, isCompact]);
+  const timeColumnWidth = 48;
+  const gridMinWidth = timeColumnWidth + [...columnWidths.values()].reduce((sum, width) => sum + width, 0);
 
   return (
-    <div className="w-full space-y-2 pb-1 relative">
+    <div className="w-full min-w-0 space-y-1.5 pb-1 relative">
       {/* Toast Notification Banner */}
       {toastMessage && (
         <NotificationPortal><div className="fixed top-20 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 flex items-center space-x-3 animate-in fade-in slide-in-from-top-4 duration-200">
@@ -944,11 +966,11 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
       )}
 
       {/* 1. TOP HEADER TOOLBAR (Sticky / Frozen) */}
-      <div className="relative z-30 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl px-3 sm:px-4 py-2.5 shadow-xs flex flex-col md:flex-row lg:items-center justify-between gap-3">
+      <div className="agenda-controls relative z-30 bg-white border border-slate-200 rounded-lg px-2 py-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         {/* Left Side: Date pill card with green "HOY" badge */}
-        <div className="flex items-center space-x-3 flex-wrap gap-y-2">
-          <div className="flex items-center space-x-2.5 px-3 py-1.5 min-h-[44px] bg-slate-50 border border-slate-200 rounded-xl">
-            <span className="text-sm md:text-base font-bold text-slate-800 capitalize">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-2 px-2 py-1 min-h-9 sm:min-h-8 bg-slate-50 border border-slate-200 rounded-md">
+            <span className="text-xs font-bold text-slate-800 capitalize">
               {format(selectedDate, "EEEE, dd-MM-yyyy", { locale: es })}
             </span>
             {isToday && (
@@ -965,7 +987,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
           </div>
 
           {hasActiveGlobalFilters && (
-            <div className="flex items-center space-x-1.5 text-xs text-blue-800 bg-blue-50 px-2.5 py-1 min-h-[44px] rounded-lg border border-blue-200">
+            <div className="flex items-center space-x-1.5 text-xs text-blue-800 bg-blue-50 px-2 py-0.5 min-h-8 rounded-md border border-blue-200">
               <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
               <span>
                 Filtrado ({dayReservations.length}/{allReservationsForToday.length})
@@ -985,17 +1007,17 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
         </div>
 
         {/* Right Side: Action and Date Navigation controls */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {/* Navegación cronológica en bloque unificado */}
-          <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5 shadow-2xs min-h-[44px]">
+          <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
             {/* Anterior */}
             <button
               id="btn-schedule-prev"
               aria-label="Ir al día anterior"
               onClick={handlePrevDay}
-              className="px-3 py-2 min-h-[44px] min-w-[44px] rounded-lg text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition cursor-pointer flex items-center justify-center space-x-1"
+              className="px-2 py-1 min-h-11 min-w-9 sm:min-h-7 rounded-md text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition-colors flex items-center justify-center gap-1"
             >
-              <span>◀</span>
+              <ChevronLeft className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Anterior</span>
             </button>
 
@@ -1004,7 +1026,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
               id="btn-schedule-today"
               aria-label="Ir a la fecha de hoy"
               onClick={handleToday}
-              className="px-3.5 py-2 min-h-[44px] min-w-[44px] rounded-lg text-xs font-bold bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 transition cursor-pointer flex items-center justify-center"
+              className="px-2.5 py-1 min-h-11 min-w-9 sm:min-h-7 rounded-md text-xs font-bold bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 transition-colors flex items-center justify-center"
             >
               Hoy
             </button>
@@ -1014,15 +1036,15 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
               id="btn-schedule-next"
               aria-label="Ir al día siguiente"
               onClick={handleNextDay}
-              className="px-3 py-2 min-h-[44px] min-w-[44px] rounded-lg text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition cursor-pointer flex items-center justify-center space-x-1"
+              className="px-2 py-1 min-h-11 min-w-9 sm:min-h-7 rounded-md text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition-colors flex items-center justify-center gap-1"
             >
               <span className="hidden sm:inline">Siguiente</span>
-              <span>▶</span>
+              <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
 
           {/* Ir a fecha Picker input pill */}
-          <div className="flex items-center space-x-1.5 px-2.5 py-1 min-h-[44px] bg-white border border-slate-200 rounded-xl text-xs shadow-2xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+          <div className="flex items-center gap-1 px-2 py-0.5 min-h-11 sm:min-h-8 bg-white border border-slate-200 rounded-lg text-xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
             <span className="text-slate-500 font-semibold whitespace-nowrap text-[11px]">Ir a fecha:</span>
             <input
               id="input-goto-date"
@@ -1052,7 +1074,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                   }
                 }
               }}
-              className="px-1 py-1 text-xs text-slate-700 font-mono font-medium focus:outline-none bg-transparent cursor-pointer min-h-[36px]"
+              className="min-w-0 px-0.5 py-0.5 text-xs text-slate-700 font-mono font-medium focus:outline-none bg-transparent cursor-pointer min-h-9 sm:min-h-7"
             />
           </div>
 
@@ -1069,7 +1091,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
               placeholder="Buscar en este día..."
               value={searchQuery}
               onChange={(e) => handleDailySearchChange(e.target.value)}
-              className="pl-8 pr-7 py-2 min-h-[44px] text-xs bg-white hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-32 sm:w-40 lg:w-48 transition shadow-2xs"
+              className="pl-8 pr-7 py-1 min-h-11 sm:min-h-8 text-xs bg-white hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-36 sm:w-40 transition-colors"
             />
             {searchQuery && (
               <button
@@ -1089,7 +1111,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
             id="btn-print-schedule"
             aria-label="Imprimir o exportar esta planilla como PDF"
             onClick={() => setIsPrintModalOpen(true)}
-            className="px-3.5 py-2 min-h-[44px] rounded-xl text-xs font-semibold bg-[#eff6ff] hover:bg-[#dbeafe] text-[#0369a1] border border-[#bfdbfe] shadow-2xs transition flex items-center space-x-1.5 cursor-pointer"
+            className="px-2.5 py-1 min-h-11 sm:min-h-8 rounded-lg text-xs font-semibold bg-[#eff6ff] hover:bg-[#dbeafe] text-[#0369a1] border border-[#bfdbfe] transition-colors flex items-center gap-1.5"
             title="Imprimir o exportar esta planilla como PDF oficial"
           >
             <Printer className="w-4 h-4" />
@@ -1098,9 +1120,9 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
         </div>
       </div>
 
-      <section aria-label="Comparar espacios" className="flex flex-wrap items-start gap-3 rounded-xl border border-slate-200 bg-white p-3">
+      <section aria-label="Comparar espacios" className="agenda-controls flex flex-wrap items-start gap-2 rounded-lg border border-slate-200 bg-white px-2 py-0.5">
         <details className="min-w-0 flex-1">
-          <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-slate-700">Espacios a comparar: {activeSpaces.length} de {availableScheduleSpaces.length}</summary>
+          <summary className="min-h-11 sm:min-h-8 cursor-pointer py-2 sm:py-1.5 text-xs font-semibold text-slate-700">Espacios a comparar: <span className="font-mono tabular-nums">{activeSpaces.length} de {availableScheduleSpaces.length}</span></summary>
           <div className="mt-2 space-y-3 border-t border-slate-100 pt-3">
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => changeComparisonSpaces(null)} className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm text-blue-700">Todos</button>
@@ -1118,7 +1140,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
             <p className="text-sm text-slate-500">La selección cambia las columnas visibles. Se siguen aplicando los filtros de la agenda.</p>
           </div>
         </details>
-        <button type="button" aria-pressed={isCompact} onClick={() => setIsCompact(value => !value)} className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm text-slate-700">{isCompact ? 'Ampliar columnas' : 'Compactar columnas'}</button>
+        <button type="button" aria-pressed={isCompact} onClick={() => setIsCompact(value => !value)} className="min-h-11 sm:min-h-8 rounded-md border border-slate-200 px-2 text-xs text-slate-700">{isCompact ? 'Ampliar columnas' : 'Compactar columnas'}</button>
       </section>
       {activeSpaces.length === 0 && <p role="status" className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">No hay espacios visibles. Selecciona al menos uno o revisa el filtro de espacio de la agenda.</p>}
 
@@ -1270,13 +1292,13 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
           onScroll={() => {
             if (hoveredCardInfo) setHoveredCardInfo(null);
           }}
-          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-140px)] min-h-0 h-[calc(100dvh-140px)] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
+          className="overflow-x-auto overflow-y-auto min-h-0 h-[65dvh] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
         >
           <div className="relative" style={{ minWidth: `${gridMinWidth}px` }}>
             {/* STICKY HEADER ROW: "HORA" + All Space Columns */}
             <div ref={headerRef} className="sticky top-0 z-30 flex border-b border-slate-200 bg-[#f8fafc] text-xs font-bold text-slate-700 shadow-2xs">
               {/* Left "HORA" header (Sticky on horizontal & vertical scroll) */}
-              <div className={`${isCompact ? 'w-[64px] p-2 text-[10px]' : 'w-[72px] p-3 text-[11px]'} shrink-0 text-center uppercase tracking-wider font-extrabold text-slate-600 border-r border-slate-200 bg-[#f1f5f9] flex items-center justify-center select-none sticky left-0 z-40 shadow-xs`}>
+              <div style={{ width: timeColumnWidth }} className="shrink-0 p-1 text-[10px] text-center uppercase tracking-wide font-extrabold text-slate-600 border-r border-slate-200 bg-[#f1f5f9] flex items-center justify-center select-none sticky left-0 z-40 shadow-xs">
                 HORA
               </div>
 
@@ -1290,10 +1312,13 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                 return (
                   <div
                     key={space.id}
+                    style={{ minWidth: columnWidths.get(space.id) }}
                     draggable={allowSpaceReorder}
                     onDragStart={(e) => handleHeaderDragStart(e, idx)}
+                    onDragEnd={() => { setDraggedHeaderIndex(null); setDragOverHeaderIndex(null); }}
                     onDragOver={(e) => handleHeaderDragOver(e, idx)}
-                    onDragLeave={() => {
+                    onDragLeave={(e) => {
+                      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
                       if (dragOverHeaderIndex === idx) setDragOverHeaderIndex(null);
                       if (dragOverHeaderSpace === space.name) setDragOverHeaderSpace(null);
                     }}
@@ -1304,7 +1329,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                         handleHeaderColumnDrop(e, idx);
                       }
                     }}
-                    className={`flex-1 ${isCompact ? 'min-w-[150px] p-1.5' : 'min-w-[200px] p-2'} text-center border-r border-slate-200 transition-all select-none relative group/header flex flex-col justify-center ${
+                    className={`flex-1 px-1 py-1.5 text-center border-r border-slate-200 transition-colors select-none relative group/header flex flex-col justify-center ${
                       allowSpaceReorder ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
                     } ${
                       isReservationHeaderTarget
@@ -1383,7 +1408,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
             {/* GRID BODY: Left time labels + Space Columns + Time Line + Floating Event Cards */}
             <div className="relative flex" style={{ height: `${TOTAL_HEIGHT}px` }}>
               {/* 1. LEFT TIME COLUMN (08:00 to 22:00) - Sticky on horizontal scroll */}
-              <div className={`${isCompact ? 'w-[64px]' : 'w-[72px]'} shrink-0 bg-[#f8fafc] border-r border-slate-200 sticky left-0 select-none z-20 shadow-xs`}>
+              <div style={{ width: timeColumnWidth }} className="shrink-0 bg-[#f8fafc] border-r border-slate-200 sticky left-0 select-none z-20 shadow-xs">
                 {hourSlots.map((h, i) => {
                   const topPx = i * HOUR_HEIGHT;
                   const hourLabel = `${String(h).padStart(2, '0')}:00`;
@@ -1442,14 +1467,17 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                   return (
                     <div
                       key={space.id}
+                      style={{ minWidth: columnWidths.get(space.id), containerType: 'inline-size' }}
+                      data-drop-space={space.name}
                       onDragOver={(e) => handleColumnDragOver(e, space.name)}
-                      onDragLeave={() => {
+                      onDragLeave={(e) => {
+                        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
                         if (dragTargetInfo?.spaceName === space.name) {
                           setDragTargetInfo(null);
                         }
                       }}
                       onDrop={(e) => handleColumnDrop(e, space.name)}
-                      className={`flex-1 ${isCompact ? 'min-w-[150px]' : 'min-w-[200px]'} border-r border-slate-200/80 relative transition group/col ${
+                      className={`flex-1 border-r border-slate-200/80 relative transition-colors group/col ${
                         isDragTarget
                           ? 'bg-blue-50/40 ring-2 ring-blue-400/80 ring-inset'
                           : isSpecial
@@ -1556,10 +1584,10 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                       {isDragTarget && dragTargetInfo && (
                         <div
                           style={{
-                            top: `${((dragTargetInfo.startMinutes - START_MINUTES) / 60) * HOUR_HEIGHT}px`,
-                            height: `${Math.max(42, ((dragTargetInfo.endMinutes - dragTargetInfo.startMinutes) / 60) * HOUR_HEIGHT)}px`
+                            top: `${((Math.max(START_MINUTES, dragTargetInfo.startMinutes) - START_MINUTES) / 60) * HOUR_HEIGHT}px`,
+                            height: `${Math.max(24, ((Math.min(END_HOUR * 60, dragTargetInfo.endMinutes) - Math.max(START_MINUTES, dragTargetInfo.startMinutes)) / 60) * HOUR_HEIGHT)}px`
                           }}
-                          className={`absolute left-1 right-1 rounded-xl border-2 border-dashed z-30 pointer-events-none flex flex-col items-center justify-center p-1.5 shadow-lg transition-all ${
+                          className={`absolute left-1 right-1 rounded-xl border-2 border-dashed z-30 pointer-events-none flex flex-col items-center justify-center p-1.5 shadow-lg transition-colors ${
                             dragTargetInfo.isBlocked
                               ? 'bg-amber-500/25 border-amber-600 text-amber-950 ring-2 ring-amber-400/40'
                               : dragTargetInfo.hasConflict
@@ -1644,6 +1672,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                           <div
                             key={res.id}
                             data-reservation-id={res.id}
+                            data-short={isVeryShort || undefined}
                             ref={node => {
                               if (node && pendingFocus.current === res.id) {
                                 pendingFocus.current = null;
@@ -1655,7 +1684,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                             role="button"
                             tabIndex={0}
                             aria-label={`Reserva de ${formatDisplayTitle(res.tipoActividad)}, ${res.horaInicio} a ${res.horaFin}, responsable ${formatDisplayTitle(res.responsable)}. Presiona Enter o Espacio para ver detalles.`}
-                            draggable
+                            draggable={Boolean(onUpdateReservation) && !movingReservationId}
+                            aria-busy={movingReservationId === res.id}
                             onDragStart={(e) => handleReservationDragStart(e, res)}
                             onDragEnd={handleReservationDragEnd}
                             onClick={(e) => {
@@ -1694,7 +1724,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                             onMouseLeave={() => {
                               setHoveredCardInfo((current) => (current?.res.id === res.id ? null : current));
                             }}
-                            className={`absolute rounded-md ${paddingClass} ${styling.bg} border ${styling.border} ${styling.shadow} cursor-grab active:cursor-grabbing hover:z-30 hover:ring-2 hover:ring-blue-400/80 transition-all flex flex-col justify-between overflow-hidden select-none z-10 group/card focus:ring-2 focus:ring-blue-500 focus:outline-none focus:z-40 ${
+                            className={`timeline-booking absolute rounded-md ${paddingClass} ${styling.bg} border ${styling.border} ${styling.shadow} cursor-grab active:cursor-grabbing hover:z-30 hover:ring-2 hover:ring-blue-400/80 transition-all flex flex-col justify-between overflow-hidden select-none z-10 group/card focus:ring-2 focus:ring-blue-500 focus:outline-none focus:z-40 ${
                               isBeingDragged ? 'opacity-30 scale-95 ring-2 ring-blue-500' : ''
                             } ${isOverlapping ? 'ring-1 ring-rose-400/50' : ''}`}
                             title={`${isConflict || isOverlapping ? '⚠️ ¡TOPAMIENTO / RESERVAS PARALELAS!\n' : ''}${res.horaInicio} - ${res.horaFin}\nActividad: ${formatDisplayTitle(mainTitle)}${hasDistinctSubcategory ? `\nTipo: ${formatDisplayTitle(res.tipoActividad)}` : ''}\nResponsable: ${formatDisplayTitle(res.responsable)}${res.telefonoContacto ? `\nTel: ${res.telefonoContacto}` : ''}\n\n👉 ¡Arrastra esta tarjeta a cualquier espacio u horario para moverla!\n(Haz clic para ver detalles)`}
@@ -1702,11 +1732,11 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                             {/* Main Content Area */}
                             <div className="flex-1 min-h-0 flex flex-col justify-start overflow-hidden">
                               {/* Header row: Time Badge, Status Badges & Quick Action Icons */}
-                              <div className="flex items-center justify-between min-h-[13px] mb-1 gap-1">
+                              <div className={`relative flex items-center justify-between min-h-[13px] gap-1 ${isVeryShort ? '' : 'mb-0.5'}`}>
                                 <div className="flex items-center space-x-1 min-w-0">
-                                  <GripVertical className="w-2.5 h-2.5 text-slate-400 shrink-0 opacity-40 group-hover/card:opacity-100 transition" />
-                                  <span className="font-mono tabular-nums font-bold text-xs text-slate-700 bg-white/95 px-1 py-0.2 rounded border border-black/5 shadow-2xs shrink-0 select-none">
-                                    {isOverlapping && layout.totalCols >= 2 ? res.horaInicio : `${res.horaInicio} – ${res.horaFin}`}
+                                  <GripVertical className="timeline-card-grip w-2.5 h-2.5 text-slate-400 shrink-0 opacity-40 group-hover/card:opacity-100 transition" />
+                                  <span data-reservation-time aria-label={`${res.horaInicio} a ${res.horaFin}`} className="font-mono tabular-nums font-bold text-[10px] leading-3 whitespace-nowrap text-slate-700 bg-white/95 px-0.5 rounded border border-black/5 shrink-0 select-none">
+                                    {isOverlapping && layout.totalCols >= 2 ? res.horaInicio : `${res.horaInicio}–${res.horaFin}`}
                                   </span>
                                   {isConflict && (
                                     <span title="Topamiento de horario" className="text-[7.5px] bg-rose-600 text-white px-1 py-0.2 rounded font-black uppercase tracking-tight shrink-0">
@@ -1732,7 +1762,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                                 </div>
                                 
                                 {/* Quick edit/duplicate/delete icons on hover */}
-                                <div className="hidden group-hover/card:flex items-center space-x-0.5 ml-1 shrink-0 bg-white/95 backdrop-blur-xs p-0.5 rounded shadow-2xs">
+                                <div className="absolute right-0 top-0 hidden group-hover/card:flex group-focus-within/card:flex items-center space-x-0.5 shrink-0 bg-white/95 p-0.5 rounded shadow-2xs">
                                   {onDuplicateReservation && (
                                     <button
                                       type="button"
@@ -1786,7 +1816,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                               {isVeryShort ? (
                                 /* Very short layout (height < 44px, e.g. 30 min) */
                                 <div className="flex flex-col justify-center min-w-0 overflow-hidden leading-tight">
-                                  <div className="text-sm font-semibold text-slate-900 truncate leading-tight" title={formatDisplayTitle(mainTitle)}>
+                                  <div className="text-xs font-semibold text-slate-900 truncate leading-3" title={formatDisplayTitle(mainTitle)}>
                                     {displayTitle}
                                   </div>
                                 </div>

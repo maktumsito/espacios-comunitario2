@@ -23,19 +23,19 @@ export const AgendaToolbar = React.memo(function AgendaToolbar({
   return (
     <section
       aria-label="Vistas de la agenda"
-      className="mb-4 flex flex-wrap items-center justify-between gap-3"
+      className="agenda-controls mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
     >
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <h1 className="text-base font-bold tracking-tight text-slate-900">
           Agenda
         </h1>
-        <p className="text-sm text-slate-600" aria-live="polite">
+        <p className="text-xs text-slate-600" aria-live="polite">
           {summary}
         </p>
       </div>
       <div className="flex w-full items-center gap-2 sm:w-auto">
         <div
-          className="grid flex-1 grid-cols-3 rounded-xl border border-slate-200 bg-white p-1 sm:flex"
+          className="grid flex-1 grid-cols-3 rounded-lg border border-slate-200 bg-white p-0.5 sm:flex"
           role="group"
           aria-label="Presentación de la agenda"
         >
@@ -54,7 +54,7 @@ export const AgendaToolbar = React.memo(function AgendaToolbar({
                 view === value || (value === "timeline" && view === "daily")
               }
               onClick={() => onViewChange(value)}
-              className={`min-h-11 rounded-lg px-4 text-sm font-semibold transition-colors ${view === value || (value === "timeline" && view === "daily") ? "bg-blue-50 text-blue-800" : "text-slate-600 hover:bg-slate-50"}`}
+              className={`min-h-11 rounded-md px-3 text-xs font-semibold transition-colors sm:min-h-7 ${view === value || (value === "timeline" && view === "daily") ? "bg-blue-50 text-blue-800" : "text-slate-600 hover:bg-slate-50"}`}
             >
               {label}
             </button>
@@ -65,7 +65,7 @@ export const AgendaToolbar = React.memo(function AgendaToolbar({
           type="button"
           onClick={onToggleFilters}
           aria-expanded={filtersOpen}
-          className={`inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold ${hasActiveFilters || filtersOpen ? "border-blue-200 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-700"}`}
+          className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold sm:min-h-8 ${hasActiveFilters || filtersOpen ? "border-blue-200 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-700"}`}
         >
           <Filter className="h-4 w-4" />
           Filtros

@@ -30,6 +30,7 @@ import { useReservationModals } from './hooks/useReservationModals';
 import { useAdminConfig } from './hooks/useAdminConfig';
 import { useRatingsState } from './hooks/useRatingsState';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
+import { useSessionExpiry } from './hooks/useSessionExpiry';
 import { useAuditLogs } from './hooks/useAuditLogs';
 import { useSpaceBlocks } from './hooks/useSpaceBlocks';
 import { lazyWithRetry } from './utils/lazyWithRetry';
@@ -94,7 +95,7 @@ import {
   AuthUser,
   getStoredAuthUser,
   getAuthSessionToken,
-  saveAuthUser,
+  updateStoredAuthUser,
   clearAuthUser,
   getAllAuthorizedUsers,
   isCoordinatorOrAdmin,
@@ -110,8 +111,10 @@ import { getActiveDraftSummary, removeStoredDraft, ActiveDraftSummary } from './
 
 export default function App() {
   const editorLoadRequest = useRef(0);
+  const closingSession = useRef(false);
   const [pendingSeriesMove, setPendingSeriesMove] = useState<{ original: Reservation; target: Reservation; resolve: (result: boolean) => void } | null>(null);
   const [replacementSource, setReplacementSource] = useState<Reservation | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     const stored = getStoredAuthUser();
     if (stored && !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(getAuthSessionToken())) {
@@ -317,7 +320,7 @@ export default function App() {
           canDeleteReservations: matchingAccount.canDeleteReservations
         };
         setCurrentUser(updatedUser);
-        saveAuthUser(updatedUser);
+        updateStoredAuthUser(updatedUser);
       }
     }
   }, [userAccounts, currentUser]);
@@ -537,7 +540,8 @@ export default function App() {
   }, [reservations]);
 
   const handleAuthSuccess = (user: AuthUser) => {
-    saveAuthUser(user);
+    closingSession.current = false;
+    setSessionExpired(false);
     setCurrentUser(user);
     setIsPasswordPromptOpen(false);
     if (pendingAuthAction) {
@@ -602,10 +606,39 @@ export default function App() {
   });
 
   const handleLogout = () => {
+    if (closingSession.current) return;
+    closingSession.current = true;
     editorLoadRequest.current++;
     clearAuthUser();
     setCurrentUser(null);
+    setPendingAuthAction(null);
+    pendingSeriesMove?.resolve(false);
+    setPendingSeriesMove(null);
+    setReplacementSource(null);
+    setSelectedReservation(null);
+    setEditingReservation(null);
+    setIsReservationModalOpen(false);
+    setIsDetailModalOpen(false);
+    setIsImportExportModalOpen(false);
+    setIsAuditLogOpen(false);
+    setIsDeleteModalOpen(false);
+    setIsPendingDeletionsModalOpen(false);
+    setIsChangePasswordOpen(false);
+    setIsPasswordPromptOpen(false);
+    setIsRatingModalOpen(false);
+    setIsGlobalPrintModalOpen(false);
+    setIsNotificationCenterOpen(false);
+    setIsGmailDispatchModalOpen(false);
+    setIsDeleteDayModalOpen(false);
+    setIsCommandPaletteOpen(false);
+    setConflictReportData(previous => ({ ...previous, isOpen: false }));
   };
+
+  useSessionExpiry(Boolean(currentUser), () => {
+    if (closingSession.current) return;
+    setSessionExpired(true);
+    handleLogout();
+  });
 
   const handleCalendarSelectReservation = useCallback((r: Reservation) => {
     setSelectedReservation(r);
@@ -663,7 +696,7 @@ export default function App() {
   }, [currentUser, pendingSeriesMove]);
 
   if (!currentUser) {
-    return <LoginScreen onLoginSuccess={handleAuthSuccess} />;
+    return <LoginScreen onLoginSuccess={handleAuthSuccess} sessionExpired={sessionExpired} />;
   }
 
   return (
@@ -895,7 +928,9 @@ export default function App() {
       {/* Main View Area */}
       <main id="main-content" tabIndex={-1} className={`flex-1 min-w-0 w-full mx-auto outline-none ${
         isAgendaView(currentView)
-          ? `${isSidebarHidden ? 'max-w-none' : 'max-w-[1680px]'} px-3 sm:px-6 py-4`
+          ? (currentView === 'daily' || currentView === 'timeline'
+            ? 'max-w-none px-2 sm:px-3 py-2'
+            : `${isSidebarHidden ? 'max-w-none' : 'max-w-[1680px]'} px-3 sm:px-6 py-4`)
           : 'max-w-[1680px] px-3 sm:px-4 md:px-6 py-4'
       }`}>
         {!generalDataPending && <>
@@ -1614,7 +1649,7 @@ export default function App() {
             updatedUser.username.toLowerCase() === currentUser.username.toLowerCase()
           ) {
             setCurrentUser(updatedUser);
-            saveAuthUser(updatedUser);
+            updateStoredAuthUser(updatedUser);
           }
         }}
         isGmailDispatchModalOpen={isGmailDispatchModalOpen && !generalDataPending}

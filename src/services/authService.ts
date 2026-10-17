@@ -168,6 +168,7 @@ async function requestVerifiedSession(
   status?: number;
   expiresAt?: number;
 }> {
+  const requestToken = getAuthSessionToken();
   const response = await fetch(`/api/auth/${path}`, {
     method: "POST",
     headers: {
@@ -191,6 +192,10 @@ async function requestVerifiedSession(
       remainingSeconds: result.remainingSeconds,
       status: response.status,
     };
+  }
+  // A renewal response must never restore credentials after logout or expiry.
+  if (path === "session/refresh" && (requestToken !== getAuthSessionToken() || isSessionExpired())) {
+    return { success: false, error: "La sesión venció. Selecciona tu usuario e inicia sesión nuevamente." };
   }
   verifiedSessionToken = result.token;
   try {
@@ -666,9 +671,12 @@ export function getSessionRemainingMs(): number {
   try {
     const expiryRaw = localStorage.getItem(AUTH_SESSION_EXPIRY_KEY);
     if (!expiryRaw) return 0;
-    const expiresAt = parseInt(expiryRaw, 10);
-    if (isNaN(expiresAt)) return 0;
-    const remaining = expiresAt - Date.now();
+    const expiresAt = Number(expiryRaw);
+    const startedAt = Number(localStorage.getItem(AUTH_SESSION_START_KEY));
+    if (!Number.isFinite(expiresAt)) return 0;
+    const deadline = startedAt > 0 && Number.isFinite(startedAt)
+      ? Math.min(expiresAt, startedAt + 12 * 60 * 60 * 1000) : expiresAt;
+    const remaining = deadline - Date.now();
     return remaining > 0 ? remaining : 0;
   } catch {
     return 0;
@@ -680,27 +688,11 @@ export function getSessionRemainingMs(): number {
  */
 export function isSessionExpired(): boolean {
   if (!isBrowser) return true;
-  const user = localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
-  if (!user) return true;
-  const expiryRaw = localStorage.getItem(AUTH_SESSION_EXPIRY_KEY);
-  if (!expiryRaw) {
-    // Missing or corrupted expiry is untrusted: treat as expired
+  try {
+    return !localStorage.getItem(AUTH_SESSION_STORAGE_KEY) || getSessionRemainingMs() <= 0;
+  } catch {
     return true;
   }
-  const expiresAt = parseInt(expiryRaw, 10);
-  if (isNaN(expiresAt)) return true;
-
-  // Enforce absolute maximum session ceiling (12 hours) from initial session start
-  const startRaw = localStorage.getItem(AUTH_SESSION_START_KEY);
-  if (startRaw) {
-    const startedAt = parseInt(startRaw, 10);
-    const MAX_ABSOLUTE_SESSION_MS = 12 * 60 * 60 * 1000;
-    if (!isNaN(startedAt) && Date.now() - startedAt > MAX_ABSOLUTE_SESSION_MS) {
-      return true;
-    }
-  }
-
-  return Date.now() >= expiresAt;
 }
 
 /**
@@ -714,13 +706,15 @@ export async function refreshSession(
     const userRaw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
     if (!userRaw || isSessionExpired()) {
       clearAuthUser();
-      return;
+      throw new Error("La sesión venció. Selecciona tu usuario e inicia sesión nuevamente.");
     }
     const refreshed = await requestVerifiedSession("session/refresh", {});
-    if (!refreshed.success)
+    if (!refreshed.success) {
+      if (isSessionExpired()) clearAuthUser();
       throw new Error(
         refreshed.error || "Inicia sesión nuevamente para renovar el acceso.",
       );
+    }
     const boundedDuration = Math.min(
       Math.max(durationMs, 60000),
       SESSION_DURATION_MS,
@@ -731,6 +725,7 @@ export async function refreshSession(
       refreshed.expiresAt ?? Infinity,
     );
     localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, expiresAt.toString());
+    window.dispatchEvent(new Event("auth-session-changed"));
   } catch (err) {
     throw err;
   }
@@ -773,9 +768,16 @@ export function saveAuthUser(
     localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(user));
     localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, expiresAt.toString());
     localStorage.setItem(AUTH_SESSION_START_KEY, now.toString());
+    window.dispatchEvent(new Event("auth-session-changed"));
   } catch (err) {
     console.error("Error saving auth user", err);
   }
+}
+
+/** Updating account details must not restart the authenticated session clock. */
+export function updateStoredAuthUser(user: AuthUser): void {
+  if (!isBrowser || isSessionExpired()) return;
+  localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(user));
 }
 
 export function clearAuthUser(): void {
