@@ -16,7 +16,9 @@ export function getSourceHash(root = process.cwd()) {
     }
   };
   for (const dir of ['src', 'server', 'public']) visit(dir);
-  for (const file of ['server.ts', 'index.html', 'vite.config.ts', 'package.json', 'package-lock.json',
+  // Installation may generate a lockfile in AI Studio exports; it is not an
+  // application source file and must not change the source identification.
+  for (const file of ['server.ts', 'index.html', 'vite.config.ts', 'package.json',
     'firebase-applet-config.json', 'scripts/build.mjs', 'scripts/build-info.mjs']) {
     if (existsSync(path.join(root, file))) files.push(file);
   }
