@@ -121,6 +121,21 @@ export default function App() {
     return stored;
   });
   const [currentView, setCurrentView] = useState<ViewMode>(() => getInitialViewMode());
+  const [isSidebarHidden, setIsSidebarHidden] = useState(() => {
+    try {
+      return localStorage.getItem('gestindeespacios_sidebar_hidden') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const toggleSidebar = useCallback(() => setIsSidebarHidden(hidden => !hidden), []);
+  useEffect(() => {
+    try {
+      localStorage.setItem('gestindeespacios_sidebar_hidden', String(isSidebarHidden));
+    } catch {
+      // Keep the toggle usable when browser storage is unavailable.
+    }
+  }, [isSidebarHidden]);
   const [adminSubTab, setAdminSubTab] = useState<'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring'>('spaces');
   const [selectedDailyDate, setSelectedDailyDate] = useState<Date>(() => new Date());
   const [isDeleteDayModalOpen, setIsDeleteDayModalOpen] = useState(false);
@@ -652,7 +667,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell min-h-[100dvh] bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white lg:pl-56 pb-20 lg:pb-0">
+    <div className={`app-shell min-h-[100dvh] bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white pb-20 lg:pb-0 ${isSidebarHidden ? '' : 'lg:pl-56'}`}>
       {/* Network Status Banner (Hallazgo 8) */}
       {!isOnline && (
         <div
@@ -688,6 +703,8 @@ export default function App() {
 
       {/* Top Navigation */}
       <Navbar
+        isSidebarHidden={isSidebarHidden}
+        onToggleSidebar={toggleSidebar}
         currentView={currentView}
         onViewChange={(v) => {
           persistViewPreference(v);

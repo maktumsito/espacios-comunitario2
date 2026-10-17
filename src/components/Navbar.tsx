@@ -33,6 +33,8 @@ import {
 } from "lucide-react";
 
 interface NavbarProps {
+  isSidebarHidden?: boolean;
+  onToggleSidebar?: () => void;
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
   onNewReservation: () => void;
@@ -65,6 +67,8 @@ interface NavbarProps {
 const agendaViews: ViewMode[] = ["calendar", "daily", "timeline", "mobile"];
 
 const NavbarComponent: React.FC<NavbarProps> = ({
+  isSidebarHidden = false,
+  onToggleSidebar,
   currentView,
   onViewChange,
   onNewReservation,
@@ -289,7 +293,8 @@ const NavbarComponent: React.FC<NavbarProps> = ({
         Ir al contenido
       </a>
       <aside
-        className="no-print fixed inset-y-0 left-0 z-40 hidden w-56 flex-col border-r border-slate-200 bg-white lg:flex"
+        id="desktop-sidebar"
+        className={`no-print fixed inset-y-0 left-0 z-40 hidden w-56 flex-col border-r border-slate-200 bg-white ${isSidebarHidden ? '' : 'lg:flex'}`}
         aria-label="Menú principal"
       >
         <div className="flex h-20 items-center gap-3 px-5">
@@ -349,14 +354,34 @@ const NavbarComponent: React.FC<NavbarProps> = ({
 
       <header className="no-print sticky top-0 z-40 border-b border-slate-200 bg-white text-slate-900">
         <div className="mx-auto flex h-16 w-full max-w-[1680px] items-center justify-between gap-2 px-3 sm:px-6">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold lg:text-base">
-              <span className="lg:hidden">CCD Diaguitas</span>
-              <span className="hidden lg:inline">{pageTitle}</span>
-            </p>
-            <p className="hidden text-xs text-slate-500 sm:block lg:hidden">
-              Espacios comunitarios
-            </p>
+          <div className="flex min-w-0 items-center gap-2">
+            {onToggleSidebar && (
+              <button
+                id="btn-toggle-sidebar"
+                type="button"
+                onClick={onToggleSidebar}
+                aria-label={isSidebarHidden ? "Mostrar menú lateral" : "Ocultar menú lateral"}
+                title={isSidebarHidden ? "Mostrar menú lateral" : "Ocultar menú lateral"}
+                aria-expanded={!isSidebarHidden}
+                aria-controls="desktop-sidebar"
+                className={`hidden lg:inline-flex ${iconButton}`}
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M9 3v18" />
+                  <path d={isSidebarHidden ? "m13 9 3 3-3 3" : "m16 9-3 3 3 3"} />
+                </svg>
+              </button>
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold lg:text-base">
+                <span className="lg:hidden">CCD Diaguitas</span>
+                <span className="hidden lg:inline">{pageTitle}</span>
+              </p>
+              <p className="hidden text-xs text-slate-500 sm:block lg:hidden">
+                Espacios comunitarios
+              </p>
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             {onOpenCommandPalette && (
