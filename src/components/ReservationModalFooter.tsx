@@ -5,12 +5,10 @@ import {
   Clock,
   RefreshCw,
   Check,
-  FileSignature,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { Reservation, UpdateScope } from '../types';
-import { isCommitmentLetterEligible } from '../utils/commitmentLetterPdf';
+import { Reservation } from '../types';
 
 interface ReservationModalFooterProps {
   replacementMode?: boolean;
@@ -96,7 +94,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
   validateStep4
 }) => {
   return (
-    <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-4 border-t border-slate-200">
       <div className="flex items-center space-x-2">
         {/* Botón Duplicar Reserva */}
         {editingReservation && !isDuplicating && (
@@ -163,40 +161,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
         </div>
       </div>
 
-      <div className="flex items-center space-x-2 sm:space-x-3">
-        {(isCommitmentLetterEligible(formData.tipoActividad, formData.tipoPrestamo) || formData.requiereCartaCompromiso) ? (
-          <button
-            id="btn-footer-carta-compromiso"
-            type="button"
-            onClick={() => setShowCommitmentLetterModal(true)}
-            className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-black shadow-xs transition flex items-center space-x-1.5 cursor-pointer"
-            title="Generar y descargar Carta de Compromiso oficial"
-          >
-            <FileSignature className="w-3.5 h-3.5 text-amber-800" />
-            <span className="hidden sm:inline">Carta de Compromiso</span>
-            <span className="sm:hidden">Carta</span>
-          </button>
-        ) : (
-          <button
-            id="btn-footer-activar-carta-compromiso"
-            type="button"
-            onClick={() => {
-              if (setFormData) {
-                setFormData((prev) => ({ ...prev, requiereCartaCompromiso: true }));
-              }
-              if (setDescargarCartaAlCrear) {
-                setDescargarCartaAlCrear(true);
-              }
-              setShowCommitmentLetterModal(true);
-            }}
-            className="px-3 py-2 rounded-xl bg-white hover:bg-amber-50/80 border border-slate-200 hover:border-amber-300 text-slate-700 hover:text-amber-950 text-xs font-bold shadow-2xs transition flex items-center space-x-1.5 cursor-pointer"
-            title="Activar Carta de Compromiso con 1 clic para esta actividad y previsualizar"
-          >
-            <FileSignature className="w-3.5 h-3.5 text-amber-600" />
-            <span className="hidden sm:inline">+ Carta Compromiso</span>
-            <span className="sm:hidden">+ Carta</span>
-          </button>
-        )}
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {isWizardMode && wizardStep > 1 && (
           <button
             type="button"
@@ -205,7 +170,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
               setWizardStep((prev) => (prev > 1 ? ((prev - 1) as 1 | 2 | 3 | 4) : 1));
               scrollToModalTop();
             }}
-            className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs transition flex items-center space-x-1 cursor-pointer"
+            className="min-h-11 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs transition flex items-center space-x-1 cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4" />
             <span>Anterior</span>
@@ -217,7 +182,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
           id="btn-cancel-reservation"
           aria-label="Cancelar y cerrar formulario de reserva"
           onClick={onClose}
-          className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs transition cursor-pointer"
+          className="min-h-11 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-xs transition cursor-pointer"
         >
           Cancelar
         </button>
@@ -225,6 +190,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
         {isWizardMode && wizardStep < 5 ? (
           <button
             id="btn-wizard-next"
+            key="wizard-next"
             type="button"
             disabled={
               wizardStep === 1
@@ -237,7 +203,8 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
                 ? !isStep4Completed
                 : false
             }
-            onClick={() => {
+            onClick={(event) => {
+              event.preventDefault();
               if (wizardStep === 1) {
                 if (validateStep1 && !validateStep1(true)) return;
                 setWizardStep(2);
@@ -276,18 +243,19 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
           >
             <span>
               {wizardStep === 1
-                ? 'Siguiente: Espacio y Horario'
+                ? 'Siguiente: Fecha y espacio'
                 : wizardStep === 2
                 ? 'Siguiente: Solicitante'
                 : wizardStep === 3
                 ? 'Siguiente: Recursos'
-                : 'Siguiente: Resumen y Confirmación'}
+                : 'Revisar reserva'}
             </span>
             <ChevronRight className="w-4 h-4" />
           </button>
         ) : (
           <button
             id="btn-submit-reservation"
+            key="submit-reservation"
             type="submit"
             aria-label="Confirmar y guardar reserva de espacio"
             disabled={isFormSubmitDisabled || (isEditingExisting && !canModifyReservation)}

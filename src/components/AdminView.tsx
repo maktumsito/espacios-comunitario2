@@ -260,6 +260,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setAdminError(err?.message || 'No se pudo guardar. Tus datos se conservaron.');
   };
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
+  const [spaceSearch, setSpaceSearch] = useState('');
+  const [compactSpaces, setCompactSpaces] = useState(true);
 
   useEffect(() => {
     if (initialTab) {
@@ -1020,71 +1022,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const canManageUsers = isCoordinatorOrAdmin(currentUser);
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto p-3 sm:p-6 space-y-6">
+    <div className="w-full max-w-[1600px] mx-auto space-y-5">
       {adminSaving && <p role="status" className="text-sm text-blue-700">Guardando y esperando confirmación…</p>}
       {adminError && <p role="alert" className="p-3 rounded-xl bg-rose-50 text-rose-800">{adminError}</p>}
-      {/* Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div className="space-y-1.5">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-                Panel de Administración
-              </h1>
-              <p className="text-xs text-slate-500">
-                Configuración maestra de Espacios, Préstamos, Actividades, Equipamiento, Mantención, Solicitantes y Usuarios
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Header Right Actions: User info, Logout and Reset */}
-        <div className="flex flex-wrap items-center gap-3">
-          {currentUser && (
-            <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 py-1.5 px-3 rounded-xl shadow-2xs">
-              <div
-                className={`w-6 h-6 rounded-full ${currentUser.avatarColor || 'bg-blue-600'} text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-xs`}
-              >
-                {currentUser.initials}
-              </div>
-              <div className="text-left leading-tight">
-                <span className="text-xs font-bold text-slate-800 block truncate max-w-[120px]">
-                  {currentUser.name}
-                </span>
-                {showCategories && (
-                  <span className="text-[10px] text-slate-500 font-medium block">
-                    {currentUser.role}
-                  </span>
-                )}
-              </div>
-              {onOpenChangePassword && (
-                <button
-                  type="button"
-                  onClick={() => onOpenChangePassword()}
-                  title="Cambiar mi clave de acceso personal"
-                  className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-blue-700 hover:bg-blue-100 bg-blue-50 border border-blue-200 text-xs font-bold transition cursor-pointer"
-                >
-                  <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="hidden sm:inline">Cambiar mi Clave</span>
-                </button>
-              )}
-              {onLogout && (
-                <button
-                  onClick={onLogout}
-                  title="Cerrar sesión"
-                  className="ml-1 flex items-center space-x-1 px-2 py-1 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs font-semibold transition cursor-pointer"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Cerrar Sesión</span>
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Global Reset Defaults */}
+      <header className="flex flex-col items-start justify-between gap-3 sm:flex-row">
+        <div><h1 className="text-xl font-bold tracking-tight text-slate-900">Administración</h1><p className="mt-1 text-sm text-slate-600">Gestiona espacios, operación, personas y configuración.</p></div>
+        <details className="max-w-full rounded-xl border border-slate-200 bg-white p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-700">Sistema y opciones avanzadas</summary>
+          <div className="mt-3 flex flex-col items-start gap-3">          {/* Global Reset Defaults */}
           {showCategories && (
             <button
               id="btn-admin-reset-defaults"
@@ -1118,116 +1063,39 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <Database className="w-3.5 h-3.5 text-emerald-600" />
               <span>Copias de Seguridad (15 Días)</span>
             </button>
-          )}
-        </div>
-      </div>
+          )}</div>
+        </details>
+      </header>
 
-      {/* Navigation Sub-Tabs */}
-      <div className="flex items-center space-x-2 border-b border-slate-200 pb-2 overflow-x-auto">
-        <button
-          id="admin-tab-spaces"
-          onClick={() => handleTabChange('spaces')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'spaces'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>Espacios y Salas ({spaces.length})</span>
-        </button>
-
-        <button
-          id="admin-tab-activities"
-          onClick={() => handleTabChange('activities')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'activities'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-          }`}
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>Tipos de Actividades y Préstamos ({activityTypes.length})</span>
-        </button>
-
-        <button
-          id="admin-tab-equipment"
-          onClick={() => handleTabChange('equipment')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'equipment'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-          }`}
-        >
-          <Package className="w-4 h-4" />
-          <span>Equipamiento y Recursos ({effectiveEquipment.length})</span>
-        </button>
-
-        <button
-          id="admin-tab-maintenance"
-          onClick={() => handleTabChange('maintenance')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'maintenance'
-              ? 'bg-amber-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-          }`}
-        >
-          <Hammer className="w-4 h-4" />
-          <span>Mantención y Bloqueos ({(spaceBlocks || []).length})</span>
-        </button>
-
-        <button
-          id="admin-tab-applicants"
-          onClick={() => handleTabChange('applicants')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'applicants'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-          }`}
-        >
-          <UserCheck className="w-4 h-4" />
-          <span>Registro de Solicitantes</span>
-        </button>
-
-        <button
-          id="admin-tab-recurring"
-          onClick={() => handleTabChange('recurring')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'recurring'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-          }`}
-        >
-          <Repeat className="w-4 h-4" />
-          <span>Actividades Recurrentes</span>
-        </button>
-
-        <button
-          id="admin-tab-users"
-          onClick={() => handleTabChange('users')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'users'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Usuarios y Accesos ({effectiveUsers.length})</span>
-        </button>
-
-        <button
-          id="admin-tab-gmail"
-          onClick={() => handleTabChange('gmail')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'gmail'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-          }`}
-        >
-          <Mail className="w-4 h-4" />
-          <span>Despacho Gmail</span>
-        </button>
-      </div>
+      <label className="block text-sm font-medium text-slate-700 sm:hidden">Sección de administración
+        <select value={activeTab} onChange={event => handleTabChange(event.target.value as AdminTab)} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">
+          <optgroup label="Catálogos"><option value="spaces">Espacios y salas</option><option value="activities">Tipos de actividad</option><option value="equipment">Equipamiento y recursos</option></optgroup>
+          <optgroup label="Operación"><option value="maintenance">Mantención y bloqueos</option><option value="recurring">Actividades recurrentes</option></optgroup>
+          <optgroup label="Personas"><option value="applicants">Registro de solicitantes</option><option value="users">Usuarios y accesos</option></optgroup>
+          <optgroup label="Sistema"><option value="gmail">Despacho Gmail</option></optgroup>
+        </select>
+      </label>
+      <nav aria-label="Secciones de administración" className="hidden sm:grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 xl:grid-cols-4">
+        {([
+          { label: 'Catálogos', items: [
+            { tab: 'spaces', label: `Espacios y salas (${spaces.length})` },
+            { tab: 'activities', label: `Tipos de actividades y préstamos (${activityTypes.length})` },
+            { tab: 'equipment', label: `Equipamiento y recursos (${effectiveEquipment.length})` },
+          ] },
+          { label: 'Operación', items: [
+            { tab: 'maintenance', label: `Mantención y bloqueos (${(spaceBlocks || []).length})` },
+            { tab: 'recurring', label: 'Actividades recurrentes' },
+          ] },
+          { label: 'Personas', items: [
+            { tab: 'applicants', label: 'Registro de solicitantes' },
+            { tab: 'users', label: `Usuarios y accesos (${effectiveUsers.length})` },
+          ] },
+          { label: 'Sistema', items: [{ tab: 'gmail', label: 'Despacho Gmail' }] },
+        ] as { label: string; items: { tab: AdminTab; label: string }[] }[]).map(group => <div key={group.label} className="min-w-0">
+          <h2 className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{group.label}</h2>
+          <div className="space-y-1">{group.items.map(item => <button key={item.tab} id={`admin-tab-${item.tab}`} type="button" onClick={() => handleTabChange(item.tab)} aria-current={activeTab === item.tab ? 'page' : undefined} className={`flex min-h-11 w-full items-center rounded-lg px-2 py-2 text-left text-sm ${activeTab === item.tab ? 'bg-blue-50 font-semibold text-blue-800' : 'text-slate-600 hover:bg-slate-50'}`}>{item.label}</button>)}</div>
+        </div>)}
+      </nav>
 
       {/* TAB 1: SPACES MANAGEMENT */}
       {activeTab === 'spaces' && (
@@ -1254,7 +1122,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
             )}
           </div>
 
-          {/* Space Management Banner with DnD hint and toggle */}
+          <details className="rounded-xl border border-slate-200 bg-white p-3" open={allowSpaceReorder || undefined}>
+            <summary className="min-h-8 cursor-pointer text-sm font-medium text-slate-600">Orden de espacios: {allowSpaceReorder ? 'edición activada' : 'bloqueado'} · {spaces.length} espacios</summary>
+            <div className="mt-3">          {/* Space Management Banner with DnD hint and toggle */}
           <div className="bg-blue-50/60 border border-blue-200/70 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-blue-900">
             <div className="flex items-center space-x-2">
               {allowSpaceReorder ? (
@@ -1308,9 +1178,22 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
           </div>
 
+            </div>
+          </details>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <label className="w-full text-sm font-medium text-slate-700 sm:max-w-md">Buscar espacio
+              <input id="admin-space-search" type="search" value={spaceSearch} onChange={event => setSpaceSearch(event.target.value)} placeholder="Nombre o categoría" className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" />
+            </label>
+            <div role="group" aria-label="Presentación de espacios" className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
+              <button type="button" aria-pressed={compactSpaces} onClick={() => setCompactSpaces(true)} className={`min-h-11 rounded-md px-3 text-sm ${compactSpaces ? 'bg-blue-50 font-semibold text-blue-800' : 'text-slate-600'}`}>Lista</button>
+              <button type="button" aria-pressed={!compactSpaces} onClick={() => setCompactSpaces(false)} className={`min-h-11 rounded-md px-3 text-sm ${!compactSpaces ? 'bg-blue-50 font-semibold text-blue-800' : 'text-slate-600'}`}>Tarjetas</button>
+            </div>
+          </div>
+          {!spaces.some(space => `${space.name} ${space.category}`.toLocaleLowerCase('es').includes(spaceSearch.trim().toLocaleLowerCase('es'))) && <p role="status" className="rounded-xl border border-dashed border-slate-300 p-5 text-sm text-slate-600">No hay espacios que coincidan. <button type="button" onClick={() => setSpaceSearch('')} className="min-h-11 font-semibold text-blue-700 underline">Limpiar búsqueda</button></p>}
           {/* Spaces Grid (Draggable Cards) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {spaces.map((space, index) => {
+          <div className={compactSpaces ? "space-y-2" : "grid grid-cols-1 md:grid-cols-2 gap-4"}>
+            {spaces.map((space, index) => ({ space, index })).filter(({ space }) => `${space.name} ${space.category}`.toLocaleLowerCase('es').includes(spaceSearch.trim().toLocaleLowerCase('es'))).map(({ space, index }) => {
               const isDragged = draggedSpaceIndex === index;
               const isDropTarget = dragOverSpaceIndex === index;
 
@@ -1324,7 +1207,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     if (dragOverSpaceIndex === index) setDragOverSpaceIndex(null);
                   }}
                   onDrop={(e) => handleSpaceDrop(e, index)}
-                  className={`bg-white border rounded-2xl p-5 shadow-xs flex flex-col justify-between space-y-4 transition-all ${
+                  className={`bg-white border rounded-xl ${compactSpaces ? 'p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between' : 'p-5 flex flex-col justify-between space-y-4'} transition-colors ${
                     allowSpaceReorder ? 'cursor-grab active:cursor-grabbing' : ''
                   } relative group ${
                     isDropTarget
@@ -1371,13 +1254,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       )}
                     </div>
 
-                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
+                    <p className={`${compactSpaces ? 'hidden' : 'block'} text-sm text-slate-600 leading-relaxed`}>
                       {space.description || 'Sin descripción.'}
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                    <span className="text-[10px] font-mono text-slate-400">ID: {space.id}</span>
+                  <div className={`flex flex-wrap items-center justify-between gap-3 ${compactSpaces ? '' : 'pt-3 border-t border-slate-100'}`}>
+                    <details className="text-sm text-slate-500"><summary className="min-h-11 cursor-pointer py-3">Detalles</summary><p className="max-w-sm break-words py-2">{space.description || 'Sin descripción.'}</p><p className="break-all text-xs">ID: {space.id}</p></details>
                     {canManage && (
                       <div className="flex items-center space-x-1.5">
                         <button

@@ -43,12 +43,12 @@ function openReplacement(save = vi.fn().mockResolvedValue(true), close = vi.fn()
 function advanceToReview() {
   fireEvent.change(screen.getByLabelText(/Nombre de la Actividad/), { target: { value: 'Reunión excepcional' } });
   fireEvent.change(screen.getByLabelText('Motivo obligatorio'), { target: { value: 'Reunión de vecinos' } });
-  fireEvent.click(screen.getByText('Siguiente: Espacio y Horario'));
+  fireEvent.click(screen.getByText('Siguiente: Fecha y espacio'));
   expect(document.getElementById('input-reserva-fecha')).toBeNull();
   expect(screen.getByText(/La fecha, el espacio y el horario se conservan/)).toBeTruthy();
   fireEvent.click(screen.getByText('Siguiente: Solicitante'));
   fireEvent.click(screen.getByText('Siguiente: Recursos'));
-  fireEvent.click(screen.getByText('Siguiente: Resumen y Confirmación'));
+  fireEvent.click(screen.getByText('Revisar reserva'));
 }
 it('uses the existing wizard, keeps the schedule fixed and confirms a linked pair without copying resources', async () => {
   const { save, close } = openReplacement(); advanceToReview();

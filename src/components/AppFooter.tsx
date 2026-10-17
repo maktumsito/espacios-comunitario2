@@ -29,71 +29,22 @@ export const AppFooter: React.FC<AppFooterProps> = ({
   }, [lastSyncTime]);
 
   return (
-    <footer
-      id="app-footer"
-      className="no-print mt-auto border-t border-slate-200/90 bg-white/95 backdrop-blur-xs py-3.5 px-4 sm:px-6 lg:px-8 text-xs text-slate-500 shadow-2xs transition-colors"
-      role="contentinfo"
-    >
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-        {/* Left / Primary: System identification & exact required 'Última actualización: [Fecha/Hora]' */}
-        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 sm:gap-3 text-center sm:text-left">
-          {/* Status Indicator Icon */}
-          <div className="flex items-center space-x-1.5" title={isFirebaseConnected ? 'Conectado a Firestore' : 'Modo local activo'}>
-            <span
-              className={`w-2.5 h-2.5 rounded-full shrink-0 transition-colors ${
-                isSyncing
-                  ? 'bg-blue-500 animate-ping'
-                  : isFirebaseConnected
-                  ? 'bg-emerald-500 shadow-xs shadow-emerald-500/50'
-                  : 'bg-amber-400'
-              }`}
-            />
-            <span className="font-semibold text-slate-700">
-              {isSyncing ? 'Sincronizando...' : isFirebaseConnected ? 'Nube Activa' : 'Caché Local'}
-            </span>
-          </div>
-
-          <span className="text-slate-300 hidden sm:inline" aria-hidden="true">
-            •
-          </span>
-
-          {/* Requested specific phrase: 'Última actualización: [Fecha/Hora]' */}
-          <div
-            id="footer-last-sync-container"
-            className="flex items-center space-x-1.5 text-slate-700 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg shadow-2xs"
-            title={lastSyncTime ? `Sincronización confirmada: ${new Date(lastSyncTime).toLocaleString('es-CL')}` : 'Sin sincronización registrada'}
-          >
-            <span className="text-slate-500">Última actualización:</span>
-            <span id="footer-last-sync-value" className="font-bold text-slate-900 font-mono">
-              {formattedLastSync}
-            </span>
-          </div>
+    <footer id="app-footer" className="no-print mt-auto border-t border-slate-200 bg-white px-3 py-4 text-sm text-slate-500 sm:px-6" role="contentinfo">
+      <div className="mx-auto flex max-w-[1680px] flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="lg:hidden">{isSyncing ? 'Sincronizando cambios' : isFirebaseConnected ? 'Conectado' : 'Sin conexión · datos locales'}</p>
+          <p id="footer-last-sync-container">Última actualización: <span id="footer-last-sync-value" className="tabular-nums">{formattedLastSync}</span></p>
         </div>
-
-        {/* Right / Secondary: Cache details, count, and manual sync trigger */}
-        <div className="flex items-center justify-center sm:justify-end gap-3 text-slate-500">
-          <a href="/privacidad.html" className="hover:text-blue-700 underline underline-offset-2">Privacidad</a>
-          <div className="flex items-center space-x-1.5" title="Reservas en caché local e IndexedDB">
-            <Database className="w-3.5 h-3.5 text-slate-400" />
-            <span>
-              <strong className="text-slate-700">{totalReservations}</strong> {totalReservations === 1 ? 'reserva' : 'reservas'}
-            </span>
-          </div>
-
-          {onManualSync && (
-            <button
-              type="button"
-              id="btn-footer-manual-sync"
-              onClick={onManualSync}
-              disabled={isSyncing}
-              aria-label="Sincronizar ahora con la base de datos"
-              title="Sincronizar ahora"
-              className="inline-flex items-center space-x-1 text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 px-2 py-1 rounded-lg transition cursor-pointer disabled:opacity-50 text-[11px] font-semibold"
-            >
-              <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-blue-600' : ''}`} />
-              <span className="hidden md:inline">Sincronizar</span>
-            </button>
-          )}
+        <div className="flex flex-wrap items-start gap-4">
+          <a href="/privacidad.html" className="inline-flex min-h-11 items-center text-slate-600 underline underline-offset-2 hover:text-blue-700">Privacidad</a>
+          <details className="max-w-full">
+            <summary className="min-h-11 cursor-pointer py-2.5 text-slate-600">Detalles de sincronización</summary>
+            <div className="space-y-3 py-2">
+              <p className="flex items-center gap-2"><Database className="h-4 w-4" />{totalReservations} reservas cargadas</p>
+              <p>{isSyncing ? 'Sincronizando cambios' : isFirebaseConnected ? 'Conectado a la nube' : 'Usando datos locales'}</p>
+              {onManualSync && <button id="btn-footer-manual-sync" type="button" onClick={onManualSync} disabled={isSyncing} aria-label="Sincronizar ahora con la base de datos" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />Sincronizar ahora</button>}
+            </div>
+          </details>
         </div>
       </div>
     </footer>

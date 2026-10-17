@@ -1,5 +1,5 @@
 import { VirtualCardGrid } from './common/VirtualCardGrid';
-import React, { useState, useMemo, useCallback, memo, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
 import { Reservation, SpaceInfo, isSingleDayMultiSpaceReservation, SpaceBlock } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
 import { getChileanHolidayInfo, ChileanHoliday } from '../utils/holidayUtils';
@@ -49,8 +49,9 @@ export const COLOR_LEGEND_ITEMS = [
 
 export const ColorLegendBar: React.FC = () => {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-1.5 sm:p-2 shadow-2xs">
-      <div className="flex items-center justify-between flex-wrap gap-1.5 text-xs">
+    <details className="bg-white border border-slate-200 rounded-xl p-2 shadow-2xs">
+      <summary className="min-h-9 cursor-pointer py-2 text-sm font-medium text-slate-600">Colores por tipo de actividad</summary>
+      <div className="flex items-center justify-between flex-wrap gap-2 pt-2 text-sm">
         <div className="flex items-center space-x-1.5 text-slate-500 font-bold shrink-0">
           <Sparkles className="w-3.5 h-3.5 text-blue-600" />
           <span>Código de Colores:</span>
@@ -59,7 +60,7 @@ export const ColorLegendBar: React.FC = () => {
           {COLOR_LEGEND_ITEMS.map((item) => (
             <div
               key={item.label}
-              className={`flex items-center space-x-1 px-2 py-0.5 rounded-md border text-[10.5px] font-semibold ${item.bg} ${item.border} ${item.text}`}
+              className={`flex items-center space-x-1 px-2 py-0.5 rounded-md border text-xs font-semibold ${item.bg} ${item.border} ${item.text}`}
             >
               <span
                 className="w-2 h-2 rounded-full shrink-0"
@@ -70,7 +71,7 @@ export const ColorLegendBar: React.FC = () => {
           ))}
         </div>
       </div>
-    </div>
+    </details>
   );
 };
 
@@ -108,13 +109,13 @@ const CalendarHeader = memo<CalendarHeaderProps>(({
               {format(currentDate, 'MMMM yyyy', { locale: es })}
             </h2>
             {isHistoricalLoading && (
-              <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-semibold border border-blue-200 animate-pulse">
+              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-semibold border border-blue-200 animate-pulse">
                 Sincronizando mes histórico...
               </span>
             )}
           </div>
           <p className="text-[11px] text-slate-500">
-            Haz clic en cualquier día para ver el resumen o entrar al Horario Diario detallado
+            Selecciona un día para ver todas sus actividades y reservar.
           </p>
         </div>
       </div>
@@ -125,7 +126,7 @@ const CalendarHeader = memo<CalendarHeaderProps>(({
           id="btn-cal-prev-month"
           aria-label="Mes anterior"
           onClick={onPrevMonth}
-          className="p-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg border border-slate-200 shadow-xs transition cursor-pointer"
+          className="min-h-11 min-w-11 p-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg border border-slate-200 shadow-xs transition cursor-pointer"
           title="Mes anterior"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -136,7 +137,7 @@ const CalendarHeader = memo<CalendarHeaderProps>(({
           id="btn-cal-today"
           aria-label="Ir a la fecha de hoy"
           onClick={onToday}
-          className="px-3 py-1 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 rounded-lg border border-slate-200 shadow-xs transition cursor-pointer"
+          className="min-h-11 px-3 py-2 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 rounded-lg border border-slate-200 shadow-xs transition cursor-pointer"
         >
           Hoy
         </button>
@@ -146,7 +147,7 @@ const CalendarHeader = memo<CalendarHeaderProps>(({
           id="btn-cal-next-month"
           aria-label="Mes siguiente"
           onClick={onNextMonth}
-          className="p-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg border border-slate-200 shadow-xs transition cursor-pointer"
+          className="min-h-11 min-w-11 p-2 bg-white hover:bg-slate-50 text-slate-700 rounded-lg border border-slate-200 shadow-xs transition cursor-pointer"
           title="Mes siguiente"
         >
           <ChevronRight className="w-4 h-4" />
@@ -205,17 +206,17 @@ const CalendarEventTag = memo<CalendarEventTagProps>(({
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
       aria-label={`Actividad: ${displayTitle} a las ${reservation.horaInicio} en ${formatDisplayTitle(reservation.espacio)}`}
-      className={`w-full text-left relative text-[10px] px-1.5 py-0.5 rounded truncate font-medium text-white flex items-center space-x-1 shadow-xs transition hover:opacity-90 hover:scale-[1.02] cursor-pointer border-0 ${
+      className={`w-full text-left relative text-xs px-1.5 py-0.5 rounded truncate font-medium text-white flex items-center space-x-1 shadow-xs transition hover:opacity-90 hover:scale-[1.02] cursor-pointer border-0 ${
         isCancelled ? 'opacity-50 line-through grayscale-[50%]' : ''
       }`}
       style={{ backgroundColor: isCancelled ? '#64748b' : color }}
     >
-      <span className="font-mono tabular-nums text-[9px] opacity-90 shrink-0">{reservation.horaInicio}</span>
+      <span className="font-mono tabular-nums text-xs opacity-90 shrink-0">{reservation.horaInicio}</span>
       {isCancelled && (
-        <span className="shrink-0 text-[9px] font-bold text-rose-200" title="Reserva Cancelada">🚫</span>
+        <span className="shrink-0 text-xs font-bold text-rose-200" title="Reserva Cancelada">🚫</span>
       )}
       {reservation.solicitudEliminacion && !isCancelled && (
-        <span className="shrink-0 text-[9px]" title="Solicitud de eliminación en espera">⏳</span>
+        <span className="shrink-0 text-xs" title="Solicitud de eliminación en espera">⏳</span>
       )}
       <span className="truncate">{displayTitle}</span>
 
@@ -223,12 +224,12 @@ const CalendarEventTag = memo<CalendarEventTagProps>(({
       {showTooltip && (
         <div className="fixed z-50 pointer-events-none bg-slate-900 text-white rounded-xl p-3 shadow-2xl border border-slate-700 text-xs w-64 space-y-1.5 animate-fadeIn -translate-y-full -translate-x-4 mt-[-8px]">
           {isCancelled && (
-            <div className="text-[10px] text-rose-300 font-bold bg-rose-950/80 px-2 py-1 rounded border border-rose-500/50">
+            <div className="text-xs text-rose-300 font-bold bg-rose-950/80 px-2 py-1 rounded border border-rose-500/50">
               🚫 Reserva Cancelada (Horario liberado para disponibilidad)
             </div>
           )}
           {reservation.solicitudEliminacion && !isCancelled && (
-            <div className="text-[10px] text-amber-300 font-bold bg-amber-950/80 px-2 py-1 rounded border border-amber-500/50">
+            <div className="text-xs text-amber-300 font-bold bg-amber-950/80 px-2 py-1 rounded border border-amber-500/50">
               ⏳ Solicitud de eliminación en espera de autorización
             </div>
           )}
@@ -250,7 +251,7 @@ const CalendarEventTag = memo<CalendarEventTagProps>(({
             </div>
           )}
           {reservation.tipoActividad && (
-            <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800">
+            <div className="text-xs text-slate-400 pt-1 border-t border-slate-800">
               Tipo: <span className="text-slate-200 font-semibold">{formatDisplayTitle(reservation.tipoActividad)}</span>
             </div>
           )}
@@ -326,17 +327,18 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
       onClick={handleCellClick}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
+      aria-pressed={isSelected}
       aria-label={`Día ${format(day, 'd MMMM yyyy', { locale: es })}: ${dayReservations.length} ${dayReservations.length === 1 ? 'actividad' : 'actividades'}${holidayInfo ? `, feriado: ${holidayInfo.name}` : ''}`}
-      className={`min-h-[80px] sm:min-h-[90px] lg:min-h-[100px] p-1.5 sm:p-2 transition-all cursor-pointer flex flex-col justify-between group hover:bg-blue-50/30 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:z-10 ${
+      className={`min-h-[76px] sm:min-h-[90px] lg:min-h-[100px] p-1 sm:p-2 transition-colors cursor-pointer flex flex-col justify-between group hover:bg-blue-50/30 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:z-10 ${
         holidayInfo
           ? 'bg-rose-50/40 border-t border-rose-200'
           : !isCurrentMonth
           ? 'opacity-40 bg-slate-50/40'
           : 'bg-white'
       } ${isSelected ? 'ring-2 ring-blue-600 bg-blue-50/40 z-10' : ''}`}
-      title="Clic o Espacio para seleccionar • Doble clic o Enter para abrir en Uso Diario"
+      title="Clic o Espacio para seleccionar • Doble clic o Enter para abrir la vista diaria"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-1">
         <div className="flex items-center space-x-1">
           <span
             className={`text-xs font-semibold w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full ${
@@ -353,7 +355,7 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
           </span>
           {holidayInfo && (
             <span
-              className="text-[9px] font-bold text-rose-700 bg-rose-100/90 px-1 py-0.2 rounded leading-tight truncate max-w-[65px]"
+              className="text-xs font-bold text-rose-700 bg-rose-100/90 px-1 py-0.2 rounded leading-tight truncate max-w-[65px]"
               title={`Feriado en Chile: ${holidayInfo.name}`}
             >
               🇨🇱 {holidayInfo.name.split(' ')[0]}
@@ -362,18 +364,22 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
         </div>
 
         {dayReservations.length > 0 && (
-          <span className="text-[9.5px] px-1 py-0.2 rounded font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+          <span className="hidden sm:inline text-xs px-1 py-0.2 rounded font-semibold bg-slate-100 text-slate-600 border border-slate-200">
             {dayReservations.length} {dayReservations.length === 1 ? 'act.' : 'acts.'}
           </span>
         )}
       </div>
 
-      {/* Event Tags inside cell: Maximum 2 lines for clean, unbloated view */}
-      <div className="mt-1 space-y-1 flex-1 overflow-hidden animate-in fade-in duration-200">
+      <div className="mt-2 space-y-1 sm:hidden">
+        <span className="block whitespace-nowrap text-xs font-medium text-slate-600">{dayReservations.length > 0 ? `${dayReservations.length} act.` : dayBlocks.length ? 'Bloq.' : '—'}</span>
+        <div className="flex gap-1" aria-hidden="true">{dayReservations.slice(0, 3).map(reservation => <span key={reservation.id} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: getReservationTypeVisual(reservation).accent }} />)}</div>
+      </div>
+      {/* Detailed tags have space to remain legible from the tablet breakpoint. */}
+      <div className="hidden sm:block mt-1 space-y-1 flex-1 overflow-hidden animate-in fade-in duration-200">
         {dayBlocks.slice(0, 1).map((block) => (
           <div
             key={block.id}
-            className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 font-bold flex items-center space-x-1 shadow-2xs truncate"
+            className="text-xs px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 font-bold flex items-center space-x-1 shadow-2xs truncate"
             title={`Bloqueado por ${block.motivo}: ${block.espacio} (${block.todoElDia ? 'Todo el día' : `${block.horaInicio} - ${block.horaFin}`})`}
           >
             <Hammer className="w-2.5 h-2.5 shrink-0" />
@@ -392,7 +398,7 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
           );
         })}
         {dayReservations.length > Math.max(0, 2 - dayBlocks.slice(0, 1).length) && (
-          <div className="text-[9px] font-bold text-blue-700 bg-blue-50/90 border border-blue-200/80 px-1.5 py-0.2 rounded text-center truncate">
+          <div className="text-xs font-bold text-blue-700 bg-blue-50/90 border border-blue-200/80 px-1.5 py-0.2 rounded text-center truncate">
             +{dayReservations.length - Math.max(0, 2 - dayBlocks.slice(0, 1).length)} más
           </div>
         )}
@@ -442,14 +448,14 @@ const AgendaReservationCard = memo<AgendaReservationCardProps>(({
 
       {/* Top line: Time & Badge */}
       <div className="flex items-center justify-between pl-1 gap-1">
-        <div className={`flex items-center space-x-1 text-xs font-mono font-bold shrink-0 ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+        <div className={`flex items-center space-x-1 text-sm font-mono font-bold shrink-0 ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
           <Clock className="w-3 h-3 text-blue-600" />
           <span className="tabular-nums">{reservation.horaInicio} - {reservation.horaFin}</span>
         </div>
 
         <div className="flex items-center space-x-1 shrink-0">
           {isCancelled && (
-            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-0.5">
+            <span className="text-xs font-bold px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-0.5">
               <span>🚫</span>
               <span>Cancelada</span>
             </span>
@@ -460,17 +466,17 @@ const AgendaReservationCard = memo<AgendaReservationCardProps>(({
             </span>
           )}
           {isSingleDayMultiSpaceReservation(reservation) ? (
-            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase tracking-wider">
+            <span className="text-xs font-bold px-1.5 py-0.2 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase tracking-wider">
               Multi-Espacio
             </span>
           ) : reservation.actividadRecurrente === 'Sí' ? (
-            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-purple-50 text-purple-700 border border-purple-200 uppercase tracking-wider">
+            <span className="text-xs font-bold px-1.5 py-0.2 rounded-full bg-purple-50 text-purple-700 border border-purple-200 uppercase tracking-wider">
               Recurrente
             </span>
           ) : null}
           {reservation.solicitudEliminacion && !isCancelled && (
             <span
-              className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-0.5"
+              className="text-xs font-bold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-0.5"
               title="Solicitud de eliminación en espera de autorización"
             >
               <span>⏳</span>
@@ -482,7 +488,7 @@ const AgendaReservationCard = memo<AgendaReservationCardProps>(({
 
       {/* Activity Name */}
       <div className="pl-1 min-w-0">
-        <h4 className={`text-xs font-bold transition truncate leading-snug ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-900 group-hover:text-blue-700'}`}>
+        <h4 className={`text-sm font-bold transition break-words leading-snug ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-900 group-hover:text-blue-700'}`}>
           {displayTitle}
         </h4>
       </div>
@@ -523,7 +529,8 @@ const SelectedDayAgenda = memo<SelectedDayAgendaProps>(({
   onNewReservationForDate,
   onNavigateToDay
 }) => {
-  const [isExpanded, setIsExpanded] = useState<boolean>(false);
+  const [isExpanded, setIsExpanded] = useState<boolean>(true);
+  useEffect(() => { setIsExpanded(true); }, [selectedDayStr]);
 
   const handleAddNew = useCallback(() => {
     onNewReservationForDate(selectedDayStr);
@@ -537,18 +544,18 @@ const SelectedDayAgenda = memo<SelectedDayAgendaProps>(({
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3 shadow-xs space-y-2.5">
-      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${isExpanded ? 'pb-2.5 border-b border-slate-200' : ''}`}>
+      <div className={`flex flex-col items-start justify-between gap-2 ${isExpanded ? 'pb-2.5 border-b border-slate-200' : ''}`}>
         <div>
           <div className="flex items-center flex-wrap gap-2">
-            <h3 className="text-xs sm:text-sm font-bold text-slate-900 capitalize flex items-center gap-1.5">
+            <h3 className="text-sm font-bold text-slate-900 capitalize flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-blue-600" />
               <span>Programación del {format(selectedDay, "EEEE, dd 'de' MMMM yyyy", { locale: es })}</span>
             </h3>
-            <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-200">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-200">
               {selectedDayReservations.length} {selectedDayReservations.length === 1 ? 'actividad' : 'actividades'}
             </span>
             {holidayInfo && (
-              <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold border border-rose-200 flex items-center space-x-1">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold border border-rose-200 flex items-center space-x-1">
                 <span>🇨🇱</span>
                 <span>Feriado: {holidayInfo.name}</span>
               </span>
@@ -577,7 +584,7 @@ const SelectedDayAgenda = memo<SelectedDayAgendaProps>(({
               className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
               title="Abrir vista de cuadrícula horaria completa para este día"
             >
-              <span>Ver en Horario Diario</span>
+              <span>Ver vista diaria</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
@@ -614,7 +621,7 @@ const SelectedDayAgenda = memo<SelectedDayAgendaProps>(({
                     onClick={handleOpenDailyUsage}
                     className="text-xs text-slate-600 hover:text-slate-900 font-semibold cursor-pointer"
                   >
-                    Ver cuadrícula en Horario Diario
+                    Ver vista diaria
                   </button>
                 </>
               )}
@@ -622,6 +629,9 @@ const SelectedDayAgenda = memo<SelectedDayAgendaProps>(({
           </div>
         ) : (
           <VirtualCardGrid
+            fixedColumns={1}
+            maxHeight={500}
+            estimatedRowHeight={150}
             key={selectedDayStr}
             items={selectedDayReservations}
             renderItem={res => (
@@ -653,6 +663,7 @@ interface CalendarViewProps {
   onNewReservationForDate: (dateStr: string) => void;
   onLoadHistoricalMonth?: (year: number, month: number) => Promise<any>;
   onVisibleMonthChange?: (date: Date) => void;
+  onSelectedDateChange?: (date: Date) => void;
   isHistoricalLoading?: boolean;
 }
 
@@ -666,6 +677,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   onNewReservationForDate,
   onLoadHistoricalMonth,
   onVisibleMonthChange,
+  onSelectedDateChange,
   isHistoricalLoading = false
 }) => {
   const [currentDate, setCurrentDate] = useState<Date>(() => propSelectedDate || new Date());
@@ -774,9 +786,12 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
     onVisibleMonthChange?.(now);
   }, [onVisibleMonthChange]);
 
+  const agendaRef = useRef<HTMLDivElement>(null);
   const handleSelectDay = useCallback((day: Date) => {
     setSelectedDay(day);
-  }, []);
+    onSelectedDateChange?.(day);
+    if (window.innerWidth < 1280) agendaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [onSelectedDateChange]);
 
   return (
     <div className="w-full h-full mx-auto p-0.5 sm:p-1.5 space-y-2 flex flex-col flex-1">
@@ -792,6 +807,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
       {/* Color Legend Bar */}
       <ColorLegendBar />
 
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
       {/* Month Grid */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
         <CalendarWeekDaysHeader />
@@ -817,7 +833,8 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
         </div>
       </div>
 
-      {/* Selected Day Agenda View */}
+      {/* Selected day remains next to the month on desktop. */}
+      <div ref={agendaRef} className="min-w-0 scroll-mt-20 xl:sticky xl:top-20">
       <SelectedDayAgenda
         selectedDay={selectedDay}
         selectedDayStr={selectedDayStr}
@@ -828,6 +845,8 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
         onNewReservationForDate={onNewReservationForDate}
         onNavigateToDay={onNavigateToDay}
       />
+      </div>
+      </div>
     </div>
   );
 };

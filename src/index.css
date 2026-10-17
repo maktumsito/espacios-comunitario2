@@ -221,3 +221,17 @@ body {
     break-inside: avoid !important;
   }
 }
+
+/* Shared controls for the operational layout. Preserve visible keyboard focus. */
+button:not(:disabled), summary, select { cursor: pointer; }
+button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 3px;
+}
+.reservation-form :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  font-size: 1rem;
+}
+.reservation-form .text-xs { font-size: 0.875rem; line-height: 1.25rem; }
+@media print {
+  .app-shell { padding-left: 0 !important; padding-bottom: 0 !important; }
+}

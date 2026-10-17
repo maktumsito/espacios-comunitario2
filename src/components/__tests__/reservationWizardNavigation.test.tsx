@@ -195,3 +195,27 @@ describe('reservation wizard navigation', () => {
     expect(HTMLElement.prototype.scrollTo).not.toHaveBeenCalled();
   });
 });
+
+
+it('keeps conflicts contextual to the schedule step and preserves conflict blocking', () => {
+  openForm({ allReservations: [{ id: 'occupied', descripcion: 'Horario ocupado', fecha: '2026-10-14', espacio: 'SALA 2', horaInicio: '10:00', horaFin: '11:00', responsable: 'Otra organización', tipoActividad: 'Taller', actividadRecurrente: 'No' }] });
+  expect(screen.queryByText(/Este espacio está ocupado en el horario seleccionado/)).toBeNull();
+  fillActivity();
+  selectStep(2);
+  expect(screen.getByText(/Este espacio está ocupado en el horario seleccionado/)).toBeTruthy();
+  expect((document.getElementById('btn-wizard-next') as HTMLButtonElement).disabled).toBe(true);
+  selectStep(5);
+  expectStep(2);
+});
+
+
+it('opens review without saving and requires the final confirmation button', async () => {
+  const save = vi.fn().mockResolvedValue(true);
+  openForm({ onSave: save });
+  fillActivity();
+  selectStep(4);
+  fireEvent.click(screen.getByRole('button', { name: 'Revisar reserva' }));
+  expectStep(5);
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Confirmar y guardar reserva de espacio' })).toBeTruthy();
+});

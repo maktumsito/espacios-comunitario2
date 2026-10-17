@@ -19,3 +19,15 @@ it('reports month navigation to the subscription owner and preserves historical 
   fireEvent.click(screen.getByRole('button', { name: 'Ir a la fecha de hoy' }));
   expect(onMonth.mock.calls.at(-1)?.[0].getFullYear()).toBe(new Date().getFullYear());
 });
+
+
+it('shares the selected day with other agenda presentations without navigating away', () => {
+  const selected = vi.fn(), navigate = vi.fn();
+  render(<CalendarView reservations={[]} selectedDate={new Date(2026, 9, 17)}
+    onSelectedDateChange={selected} onNavigateToDay={navigate}
+    onSelectReservation={vi.fn()} onNewReservationForDate={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: /^Día 19 octubre 2026:/ }));
+  expect(selected.mock.calls[0][0]).toEqual(new Date(2026, 9, 19));
+  expect(navigate).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Día 19 octubre 2026: 0 actividades' }).getAttribute('aria-pressed')).toBe('true');
+});

@@ -1,11 +1,15 @@
-import { ModalOverlay } from './common/ModalOverlay';
-import React, { useState, useEffect, useRef } from 'react';
-import { ViewMode } from '../types';
-import { AuthUser, isCoordinatorOrAdmin, getSessionRemainingMs, refreshSession } from '../services/authService';
-import { showToast } from '../services/toastNotificationService';
+import React, { useEffect, useRef, useState } from "react";
+import { ModalOverlay } from "./common/ModalOverlay";
+import { ViewMode } from "../types";
+import {
+  AuthUser,
+  isCoordinatorOrAdmin,
+  getSessionRemainingMs,
+  refreshSession,
+} from "../services/authService";
+import { showToast } from "../services/toastNotificationService";
 import {
   Calendar,
-  Clock,
   BarChart3,
   AlertTriangle,
   Plus,
@@ -15,21 +19,18 @@ import {
   KeyRound,
   Building2,
   Bell,
-  BellRing,
   Star,
   History,
   MoreHorizontal,
-  ChevronDown,
   Cloud,
   CloudOff,
   RefreshCw,
   Database,
-  Filter,
   Mail,
   Search,
-  Smartphone,
-  X
-} from 'lucide-react';
+  X,
+  Trash2,
+} from "lucide-react";
 
 interface NavbarProps {
   currentView: ViewMode;
@@ -49,6 +50,7 @@ interface NavbarProps {
   isFilterBarOpen?: boolean;
   onToggleFilterBar?: () => void;
   hasActiveFilters?: boolean;
+  onDeleteDay?: () => void;
   totalReservas: number;
   conflictsCount: number;
   currentUser?: AuthUser | null;
@@ -59,6 +61,8 @@ interface NavbarProps {
   syncErrorMessage?: string | null;
   onRetrySync?: () => void;
 }
+
+const agendaViews: ViewMode[] = ["calendar", "daily", "timeline", "mobile"];
 
 const NavbarComponent: React.FC<NavbarProps> = ({
   currentView,
@@ -78,508 +82,425 @@ const NavbarComponent: React.FC<NavbarProps> = ({
   isFilterBarOpen = false,
   onToggleFilterBar,
   hasActiveFilters = false,
-  totalReservas,
   conflictsCount,
   currentUser,
   onLogout,
   isFirebaseConnected = false,
   isFirebaseSyncing = false,
   lastSyncTime = null,
-  syncErrorMessage = null,
-  onRetrySync
+  syncErrorMessage,
+  onRetrySync,
+  onDeleteDay,
 }) => {
-  // Session countdown
-  const [sessionMinutesLeft, setSessionMinutesLeft] = useState<number>(60);
-  const [isToolsMenuOpen, setIsToolsMenuOpen] = useState<boolean>(false);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
-  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
-
+  const [sessionMinutesLeft, setSessionMinutesLeft] = useState(60);
+  const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [isRefreshingSession, setIsRefreshingSession] = useState(false);
   const toolsMenuRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const closeDrawerOnDesktop = () => { if (window.innerWidth >= 768) setIsMobileDrawerOpen(false); };
-    window.addEventListener('resize', closeDrawerOnDesktop);
-    return () => window.removeEventListener('resize', closeDrawerOnDesktop);
-  }, []);
-
-  useEffect(() => {
-    if (!isToolsMenuOpen && !isUserMenuOpen) return;
-    const closeMenus = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || event.repeat || event.isComposing) return;
-      event.preventDefault();
-      const menu = isUserMenuOpen ? userMenuRef.current : toolsMenuRef.current;
-      setIsToolsMenuOpen(false); setIsUserMenuOpen(false);
-      menu?.querySelector('button')?.focus();
-    };
-    window.addEventListener('keydown', closeMenus);
-    return () => window.removeEventListener('keydown', closeMenus);
-  }, [isToolsMenuOpen, isUserMenuOpen]);
+  const lastAgenda = useRef<ViewMode>(
+    window.innerWidth < 1024 ? "mobile" : "calendar",
+  );
+  const isAgenda = agendaViews.includes(currentView);
+  if (isAgenda) lastAgenda.current = currentView;
 
   useEffect(() => {
     if (!currentUser) return;
-    const updateTime = () => {
-      const ms = getSessionRemainingMs();
-      setSessionMinutesLeft(Math.max(1, Math.ceil(ms / 60000)));
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 15000);
-    return () => clearInterval(interval);
+    const update = () =>
+      setSessionMinutesLeft(
+        Math.max(1, Math.ceil(getSessionRemainingMs() / 60000)),
+      );
+    update();
+    const timer = setInterval(update, 15000);
+    return () => clearInterval(timer);
   }, [currentUser]);
 
-  // Click outside listener for dropdowns
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (toolsMenuRef.current && !toolsMenuRef.current.contains(event.target as Node)) {
+    const closeOutside = (event: MouseEvent) => {
+      if (!toolsMenuRef.current?.contains(event.target as Node))
         setIsToolsMenuOpen(false);
-      }
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+      if (!userMenuRef.current?.contains(event.target as Node))
         setIsUserMenuOpen(false);
-      }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    const closeEscape = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Escape" ||
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing
+      )
+        return;
+      if (!isToolsMenuOpen && !isUserMenuOpen) return;
+      event.preventDefault();
+      (isUserMenuOpen ? userMenuRef : toolsMenuRef).current
+        ?.querySelector("button")
+        ?.focus();
+      setIsToolsMenuOpen(false);
+      setIsUserMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOutside);
+    window.addEventListener("keydown", closeEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      window.removeEventListener("keydown", closeEscape);
+    };
+  }, [isToolsMenuOpen, isUserMenuOpen]);
+
+  useEffect(() => {
+    const closeDrawer = () => {
+      if (window.innerWidth >= 1024) setIsMobileDrawerOpen(false);
+    };
+    window.addEventListener("resize", closeDrawer);
+    return () => window.removeEventListener("resize", closeDrawer);
   }, []);
 
+  const run = (action?: () => void) => {
+    setIsMobileDrawerOpen(false);
+    setIsToolsMenuOpen(false);
+    setIsUserMenuOpen(false);
+    action?.();
+  };
+  const navItems = [
+    {
+      view: lastAgenda.current,
+      id: "nav-tab-agenda",
+      label: "Agenda",
+      Icon: Calendar,
+      active: isAgenda,
+    },
+    {
+      view: "ratings" as ViewMode,
+      id: "nav-tab-ratings",
+      label: "Calificaciones",
+      Icon: Star,
+      active: currentView === "ratings",
+    },
+    {
+      view: "conflicts" as ViewMode,
+      id: "nav-tab-conflicts",
+      label: "Conflictos",
+      Icon: AlertTriangle,
+      active: currentView === "conflicts",
+      count: conflictsCount,
+    },
+    {
+      view: "analytics" as ViewMode,
+      id: "nav-tab-analytics",
+      label: "Informes",
+      Icon: BarChart3,
+      active: currentView === "analytics",
+    },
+    {
+      view: "admin" as ViewMode,
+      id: "nav-tab-admin",
+      label: "Administración",
+      Icon: ShieldCheck,
+      active: ["admin", "directory", "maintenance"].includes(currentView),
+    },
+  ];
+  const navigation = (mobile = false) =>
+    navItems.map(({ view, id, label, Icon, active, count }) => (
+      <button
+        key={id}
+        id={mobile ? id.replace("nav-tab-", "nav-mobile-tab-") : id}
+        type="button"
+        onClick={() => run(() => onViewChange(view))}
+        aria-current={active ? "page" : undefined}
+        className={`flex w-full min-h-12 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-left transition-colors ${active ? "bg-blue-50 text-blue-800" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+      >
+        <Icon className="h-5 w-5 shrink-0" />
+        <span className="flex-1">{label}</span>
+        {!!count && (
+          <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs text-amber-900">
+            {count}
+          </span>
+        )}
+      </button>
+    ));
+  const toolButton = (
+    label: string,
+    action: (() => void) | undefined,
+    Icon: typeof Printer,
+    id?: string,
+  ) =>
+    action && (
+      <button
+        key={label}
+        id={id}
+        type="button"
+        onClick={() => run(action)}
+        className="flex min-h-12 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span>{label}</span>
+      </button>
+    );
+  const tools = () => (
+    <>
+      {toolButton("Imprimir agenda diaria", onOpenPrintModal, Printer)}
+      {toolButton(
+        "Preparar envío por Gmail",
+        onOpenGmailDispatch,
+        Mail,
+        isMobileDrawerOpen
+          ? "mobile-drawer-btn-gmail-dispatch"
+          : "navbar-btn-gmail-dispatch",
+      )}
+      {toolButton(
+        "Importar, exportar y respaldos",
+        onOpenImportExport,
+        Database,
+      )}
+      {isCoordinatorOrAdmin(currentUser) && (
+        <>
+          {toolButton(
+            `Solicitudes de eliminación${pendingDeletionsCount ? ` (${pendingDeletionsCount})` : ""}`,
+            onOpenPendingDeletions,
+            History,
+          )}
+          {toolButton("Papelera y auditoría", onOpenAuditLog, History)}
+        </>
+      )}
+      {onDeleteDay && (
+        <div className="mt-2 border-t border-slate-200 pt-2">
+          {toolButton(
+            "Eliminar reservas de un día",
+            onDeleteDay,
+            Trash2,
+            "btn-tools-delete-day",
+          )}
+        </div>
+      )}
+    </>
+  );
+  const pageTitle = isAgenda
+    ? "Agenda"
+    : navItems.find((item) => item.active)?.label || "Espacios";
+  const iconButton =
+    "inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-blue-600";
+
   return (
-    <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-40 text-slate-900">
-      <div className="w-full max-w-[1680px] mx-auto px-2 sm:px-4 lg:px-6">
-        <div className="flex items-center justify-between h-14 gap-1.5 sm:gap-3">
-          {/* Logo & Brand Identity */}
-          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 shrink">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs shrink-0">
-              <Building2 className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <span className="font-bold text-sm sm:text-base lg:text-lg tracking-tight text-slate-900 block truncate">
-                CCD Diaguitas
-              </span>
-              <p className="text-xs text-slate-500 hidden xl:block truncate">
-                Gestión de Espacios Comunitarios
-              </p>
-            </div>
-
-            {/* Cloud Sync Status Indicator */}
-            <div className="hidden xl:flex items-center pl-2.5 border-l border-slate-200">
-              {isFirebaseSyncing ? (
-                <div
-                  id="sync-status-syncing"
-                  className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold"
-                  title="Sincronizando cambios con Firebase Firestore"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600 shrink-0" />
-                  <span className="hidden 2xl:inline">Sincronizando...</span>
-                </div>
-              ) : isFirebaseConnected ? (
-                <div
-                  id="sync-status-connected"
-                  className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold"
-                  title={`Conectado en tiempo real.${lastSyncTime ? ` Sincronizado: ${lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                  <Cloud className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span className="hidden 2xl:inline">En Línea</span>
-                  {lastSyncTime && (
-                    <span className="text-emerald-700/80 font-mono text-[11px]">
-                      ({lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  id="sync-status-local"
-                  onClick={onRetrySync}
-                  className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-semibold transition cursor-pointer"
-                  title={syncErrorMessage || 'Modo sin conexión. Clic para reintentar sincronización.'}
-                >
-                  <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                  <CloudOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span className="hidden 2xl:inline">Caché Local</span>
-                  <span className="underline text-amber-700 font-bold ml-1">Reintentar</span>
-                </button>
-              )}
-            </div>
+    <>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-white focus:p-3 focus:text-blue-800"
+      >
+        Ir al contenido
+      </a>
+      <aside
+        className="no-print fixed inset-y-0 left-0 z-40 hidden w-56 flex-col border-r border-slate-200 bg-white lg:flex"
+        aria-label="Menú principal"
+      >
+        <div className="flex h-20 items-center gap-3 px-5">
+          <Building2 className="h-8 w-8 shrink-0 text-blue-700" />
+          <div>
+            <p className="font-bold text-slate-900">CCD Diaguitas</p>
+            <p className="text-xs text-slate-500">Espacios comunitarios</p>
           </div>
-
-          {/* Desktop Navigation Tabs */}
-          <nav aria-label="Navegación principal" className="hidden md:flex items-center space-x-0.5 lg:space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink min-w-0 overflow-x-auto scrollbar-none">
-            <button
-              id="nav-tab-mobile"
-              onClick={() => onViewChange('mobile')}
-              className={`min-h-[40px] flex items-center space-x-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer whitespace-nowrap ${
-                currentView === 'mobile'
-                  ? 'bg-white text-blue-700 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <Smartphone className="w-4 h-4 text-blue-600" />
-              <span className="hidden lg:inline">Agenda Móvil</span>
-            </button>
-
-            <button
-              id="nav-tab-calendar"
-              onClick={() => onViewChange('calendar')}
-              className={`min-h-[40px] flex items-center space-x-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer whitespace-nowrap ${
-                currentView === 'calendar'
-                  ? 'bg-white text-blue-700 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <Calendar className="w-4 h-4" />
-              <span>Calendario</span>
-            </button>
-
-            <button
-              id="nav-tab-timeline"
-              onClick={() => onViewChange('timeline')}
-              className={`min-h-[40px] flex items-center space-x-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer whitespace-nowrap ${
-                currentView === 'timeline' || currentView === 'daily'
-                  ? 'bg-white text-blue-700 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <Clock className="w-4 h-4" />
-              <span>Uso Diario</span>
-            </button>
-
-            <button
-              id="nav-tab-analytics"
-              onClick={() => onViewChange('analytics')}
-              className={`min-h-[40px] flex items-center space-x-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer whitespace-nowrap ${
-                currentView === 'analytics'
-                  ? 'bg-white text-blue-700 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span className="hidden lg:inline">Métricas</span>
-            </button>
-
-            <button
-              id="nav-tab-ratings"
-              onClick={() => onViewChange('ratings')}
-              className={`min-h-[40px] flex items-center space-x-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer whitespace-nowrap ${
-                currentView === 'ratings'
-                  ? 'bg-white text-amber-700 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
-            >
-              <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
-              <span className="hidden lg:inline">Calificaciones</span>
-            </button>
-
-            {conflictsCount > 0 && (
-              <button
-                id="nav-tab-conflicts"
-                onClick={() => onViewChange('conflicts')}
-                className={`min-h-[40px] flex items-center space-x-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
-                  currentView === 'conflicts'
-                    ? 'bg-rose-600 text-white shadow-xs font-bold'
-                    : 'bg-white text-slate-700 hover:text-slate-900 border border-slate-200'
-                }`}
-              >
-                <AlertTriangle className={`w-4 h-4 ${currentView === 'conflicts' ? 'text-white' : 'text-amber-600'}`} />
-                <span className="hidden lg:inline">Conflictos</span>
-                <span className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                  currentView === 'conflicts'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-amber-100 text-amber-800'
-                }`}>
-                  {conflictsCount}
-                </span>
-              </button>
+        </div>
+        <nav aria-label="Navegación principal" className="space-y-1 px-3 py-4">
+          {navigation()}
+        </nav>
+        <div className="mt-auto border-t border-slate-100 p-4">
+          <div
+            id={
+              isFirebaseSyncing
+                ? "sync-status-syncing"
+                : isFirebaseConnected
+                  ? "sync-status-connected"
+                  : "sync-status-local"
+            }
+            className="flex items-center gap-2 text-sm text-slate-600"
+            role="status"
+            title={
+              syncErrorMessage ||
+              (lastSyncTime
+                ? `Última actualización: ${lastSyncTime.toLocaleString("es-CL")}`
+                : "Estado de conexión")
+            }
+          >
+            {isFirebaseSyncing ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : isFirebaseConnected ? (
+              <Cloud className="h-4 w-4 text-emerald-700" />
+            ) : (
+              <CloudOff className="h-4 w-4 text-amber-700" />
             )}
-
+            <span>
+              {isFirebaseSyncing
+                ? "Sincronizando"
+                : isFirebaseConnected
+                  ? "Conectado"
+                  : "Sin conexión"}
+            </span>
+          </div>
+          {!isFirebaseConnected && !isFirebaseSyncing && onRetrySync && (
             <button
-              id="nav-tab-admin"
-              onClick={() => onViewChange('admin')}
-              className={`min-h-[40px] flex items-center space-x-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer whitespace-nowrap ${
-                currentView === 'admin'
-                  ? 'bg-blue-600 text-white shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-              }`}
+              type="button"
+              onClick={onRetrySync}
+              className="mt-2 min-h-11 text-sm font-semibold text-blue-700 underline"
             >
-              <ShieldCheck className="w-4 h-4" />
-              <span>Admin</span>
+              Reintentar conexión
             </button>
-          </nav>
+          )}
+        </div>
+      </aside>
 
-          {/* Right Action Toolbar */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
-            {/* Primary Action: Nueva Reserva (Prominent CTA) */}
-            <button
-              id="btn-new-reservation"
-              onClick={onNewReservation}
-              className="min-h-[40px] flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold shadow-xs transition active:scale-95 cursor-pointer shrink-0"
-            >
-              <Plus className="w-4 h-4 shrink-0 stroke-[2.5]" />
-              <span className="hidden sm:inline">Nueva Reserva</span>
-              <span className="sm:hidden">Nueva</span>
-            </button>
-
-            {/* Notification Center Bell */}
-            {onOpenNotificationCenter && (
-              <button
-                id="btn-navbar-notifications"
-                type="button"
-                onClick={onOpenNotificationCenter}
-                aria-label={unreadNotificationsCount > 0 ? `Centro de notificaciones: ${unreadNotificationsCount} sin leer` : 'Centro de notificaciones'}
-                className="min-w-[40px] min-h-[40px] sm:min-w-[44px] sm:min-h-[44px] relative p-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-blue-600 shadow-xs transition cursor-pointer flex items-center justify-center"
-              >
-                {unreadNotificationsCount > 0 ? (
-                  <BellRing className="w-4 h-4 text-blue-600" />
-                ) : (
-                  <Bell className="w-4 h-4" />
-                )}
-                {unreadNotificationsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center shadow-xs border-2 border-white">
-                    {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
-                  </span>
-                )}
-              </button>
-            )}
-
-            {/* Spotlight / Command Palette Trigger */}
+      <header className="no-print sticky top-0 z-40 border-b border-slate-200 bg-white text-slate-900">
+        <div className="mx-auto flex h-16 w-full max-w-[1680px] items-center justify-between gap-2 px-3 sm:px-6">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold lg:text-base">
+              <span className="lg:hidden">CCD Diaguitas</span>
+              <span className="hidden lg:inline">{pageTitle}</span>
+            </p>
+            <p className="hidden text-xs text-slate-500 sm:block lg:hidden">
+              Espacios comunitarios
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             {onOpenCommandPalette && (
               <button
                 id="btn-navbar-command-palette"
                 type="button"
                 onClick={onOpenCommandPalette}
                 aria-label="Buscar reservas o ejecutar comandos (Ctrl+K o Cmd+K)"
-                className="min-h-[40px] sm:min-h-[44px] hidden sm:flex items-center space-x-1.5 px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-600 hover:text-slate-900 shadow-2xs transition cursor-pointer text-xs font-semibold"
-                title="Buscador rápido global y comandos (Ctrl+K o Cmd+K)"
+                className={`${iconButton} sm:gap-2 sm:px-3`}
               >
-                <Search className="w-4 h-4 text-slate-500" />
-                <span className="hidden 2xl:inline text-slate-600">Buscar...</span>
-                <kbd className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-500 bg-white border border-slate-200 rounded shadow-2xs">
-                  Ctrl/⌘ K
+                <Search className="h-5 w-5" />
+                <span className="hidden text-sm xl:inline">
+                  Buscar reservas
+                </span>
+                <kbd className="hidden rounded border border-slate-200 px-1 text-xs text-slate-500 xl:inline">
+                  Ctrl K
                 </kbd>
               </button>
             )}
-
-            {/* Filter Toggle Button (Kept hidden by default) */}
-            {onToggleFilterBar && (
+            {onOpenNotificationCenter && (
               <button
-                id="btn-navbar-toggle-filters"
+                id="btn-navbar-notifications"
                 type="button"
-                onClick={onToggleFilterBar}
-                aria-label={isFilterBarOpen ? 'Ocultar panel de filtros' : 'Mostrar panel de filtros'}
-                aria-pressed={isFilterBarOpen}
-                className={`min-h-[40px] sm:min-h-[44px] flex items-center space-x-1.5 px-2.5 sm:px-3 py-2 rounded-xl border transition cursor-pointer text-xs font-semibold ${
-                  isFilterBarOpen
-                    ? 'bg-blue-50 text-blue-700 border-blue-300 shadow-2xs'
-                    : hasActiveFilters
-                    ? 'bg-amber-50 text-amber-800 border-amber-300 shadow-2xs'
-                    : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border-slate-200 shadow-2xs'
-                }`}
-                title={isFilterBarOpen ? 'Ocultar filtros' : 'Mostrar filtros de búsqueda'}
+                onClick={onOpenNotificationCenter}
+                aria-label={`Centro de notificaciones${unreadNotificationsCount ? `: ${unreadNotificationsCount} sin leer` : ""}`}
+                className={`${iconButton} relative`}
               >
-                <Filter className="w-4 h-4 text-slate-600" />
-                <span className="hidden xl:inline">Filtros</span>
-                {hasActiveFilters && (
-                  <span className="w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white"></span>
+                <Bell className="h-5 w-5" />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute right-0 top-0 rounded-full bg-rose-600 px-1.5 text-[11px] font-bold text-white">
+                    {unreadNotificationsCount > 99
+                      ? "99+"
+                      : unreadNotificationsCount}
+                  </span>
                 )}
               </button>
             )}
-
-            {/* Herramientas Dropdown (Desktop) */}
-            <div className="relative hidden md:block" ref={toolsMenuRef}>
+            <div className="relative hidden lg:block" ref={toolsMenuRef}>
               <button
                 id="btn-navbar-more-options"
                 type="button"
-                onClick={() => setIsToolsMenuOpen(!isToolsMenuOpen)}
+                onClick={() => {
+                  setIsToolsMenuOpen(!isToolsMenuOpen);
+                  setIsUserMenuOpen(false);
+                }}
                 aria-label="Menú de herramientas del sistema"
                 aria-expanded={isToolsMenuOpen}
-                className="min-h-[40px] sm:min-h-[44px] flex items-center space-x-1.5 px-2.5 sm:px-3 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 shadow-xs transition cursor-pointer text-xs font-semibold"
+                aria-controls="navbar-tools-panel"
+                className={iconButton}
               >
-                <MoreHorizontal className="w-4 h-4 text-slate-600" />
-                <span className="hidden xl:inline">Herramientas</span>
-                {pendingDeletionsCount > 0 && (
-                  <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 rounded-full">
-                    {pendingDeletionsCount}
-                  </span>
-                )}
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isToolsMenuOpen ? 'rotate-180' : ''}`} />
+                <MoreHorizontal className="h-5 w-5" />
               </button>
-
               {isToolsMenuOpen && (
-                <div className="absolute right-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-xl shadow-xl py-2 z-50 animate-in fade-in zoom-in-95">
-                  {onOpenPendingDeletions && isCoordinatorOrAdmin(currentUser) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsToolsMenuOpen(false);
-                        onOpenPendingDeletions();
-                      }}
-                      className="min-h-[44px] w-full text-left px-4 py-2.5 text-xs font-medium text-amber-900 hover:bg-amber-50 flex items-center space-x-3 transition cursor-pointer"
-                    >
-                      <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold">Eliminaciones en Espera</span>
-                          {pendingDeletionsCount > 0 && (
-                            <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 rounded-full">
-                              {pendingDeletionsCount}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[11px] text-slate-500 block truncate">Autorizar o descartar solicitudes</span>
-                      </div>
-                    </button>
-                  )}
-
-                  {onOpenPrintModal && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsToolsMenuOpen(false);
-                        onOpenPrintModal();
-                      }}
-                      className="min-h-[44px] w-full text-left px-4 py-2.5 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-3 transition cursor-pointer"
-                    >
-                      <Printer className="w-4 h-4 text-blue-600 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <span className="font-bold block">Imprimir Planilla</span>
-                        <span className="text-[11px] text-slate-400 block truncate">Exportar horario diario en PDF</span>
-                      </div>
-                    </button>
-                  )}
-
-                  {onOpenGmailDispatch && (
-                    <button
-                      type="button"
-                      id="navbar-btn-gmail-dispatch"
-                      onClick={() => {
-                        setIsToolsMenuOpen(false);
-                        onOpenGmailDispatch();
-                      }}
-                      className="min-h-[44px] w-full text-left px-4 py-2.5 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-3 transition cursor-pointer"
-                    >
-                      <Mail className="w-4 h-4 text-blue-600 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-1.5">
-                          <span className="font-bold block">Enviar por Gmail</span>
-                          <span className="text-[9px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded">API</span>
-                        </div>
-                        <span className="text-[11px] text-slate-400 block truncate">Despacho diario cristianshute@gmail.com</span>
-                      </div>
-                    </button>
-                  )}
-
-                  {onOpenAuditLog && isCoordinatorOrAdmin(currentUser) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsToolsMenuOpen(false);
-                        onOpenAuditLog();
-                      }}
-                      className="min-h-[44px] w-full text-left px-4 py-2.5 text-xs font-medium text-indigo-900 hover:bg-indigo-50 flex items-center space-x-3 transition cursor-pointer"
-                    >
-                      <History className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <span className="font-bold block">Restaurar Cambios</span>
-                        <span className="text-[11px] text-slate-500 block truncate">Papelera y registro de auditoría</span>
-                      </div>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsToolsMenuOpen(false);
-                      onOpenImportExport();
-                    }}
-                    className="min-h-[44px] w-full text-left px-4 py-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center space-x-3 transition cursor-pointer"
-                  >
-                    <Database className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <span className="font-bold block">Copias de Seguridad y Base de Datos</span>
-                      <span className="text-[11px] text-slate-400 block truncate">Respaldos periódicos y CSV</span>
-                    </div>
-                  </button>
+                <div
+                  id="navbar-tools-panel"
+                  className="absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
+                >
+                  {tools()}
                 </div>
               )}
             </div>
-
-            {/* User Session & Profile Controls */}
             {currentUser ? (
               <div className="relative" ref={userMenuRef}>
                 <button
-                  type="button"
                   id="btn-navbar-user-profile"
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  aria-label={`Perfil de usuario: ${currentUser.name}. Tiempo de sesión: ${sessionMinutesLeft} minutos.`}
-                  className="min-h-[44px] flex items-center space-x-2 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition cursor-pointer"
+                  type="button"
+                  onClick={() => {
+                    setIsUserMenuOpen(!isUserMenuOpen);
+                    setIsToolsMenuOpen(false);
+                  }}
+                  aria-label={`Perfil de usuario: ${currentUser.name}`}
+                  aria-expanded={isUserMenuOpen}
+                  aria-controls="navbar-user-panel"
+                  className={`${iconButton} gap-2 px-1 sm:px-2`}
                 >
-                  <div className={`w-7 h-7 rounded-lg ${currentUser.avatarColor || 'bg-blue-600'} text-white text-xs font-bold flex items-center justify-center shadow-xs shrink-0`}>
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white ${currentUser.avatarColor || "bg-blue-700"}`}
+                  >
                     {currentUser.initials}
-                  </div>
-                  <div className="hidden xl:block text-left leading-tight">
-                    <span className="text-xs font-bold text-slate-800 block truncate max-w-[100px]">
-                      {currentUser.name}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-medium block truncate">
-                      {currentUser.role}
-                    </span>
-                  </div>
-                  <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200/80 px-1.5 py-0.5 rounded-md hidden sm:inline-block">
-                    {sessionMinutesLeft}m
                   </span>
-                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                  <span className="hidden text-sm xl:inline">
+                    {currentUser.name}
+                  </span>
+                  {sessionMinutesLeft <= 5 && (
+                    <span className="text-xs text-amber-800">
+                      {sessionMinutesLeft} min
+                    </span>
+                  )}
                 </button>
-
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-200 rounded-xl shadow-xl py-2 z-50 animate-in fade-in zoom-in-95">
-                    <div className="px-4 py-2 border-b border-slate-100">
-                      <p className="text-xs font-bold text-slate-900 truncate">{currentUser.name}</p>
-                      <p className="text-[11px] text-slate-500 capitalize">{currentUser.role}</p>
-                      <div className="mt-2 flex items-center justify-between bg-blue-50/70 p-2 rounded-lg text-[11px] text-blue-800">
-                        <span>Sesión restante: {sessionMinutesLeft} min</span>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              await refreshSession();
-                              setSessionMinutesLeft(Math.ceil(getSessionRemainingMs() / 60_000));
-                            } catch (error) {
-                              showToast.error(error instanceof Error ? error.message : 'No se pudo renovar la sesión.');
-                            }
-                          }}
-                          className="text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
-                        >
-                          Reiniciar
-                        </button>
-                      </div>
+                  <div
+                    id="navbar-user-panel"
+                    className="absolute right-0 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
+                  >
+                    <div className="border-b border-slate-100 p-3">
+                      <p className="font-semibold">{currentUser.name}</p>
+                      <p className="text-sm text-slate-500">
+                        {currentUser.role}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Sesión: {sessionMinutesLeft} min restantes
+                      </p>
+                      <button
+                        type="button"
+                        className="min-h-11 text-sm font-semibold text-blue-700"
+                        disabled={isRefreshingSession}
+                        onClick={async () => {
+                          setIsRefreshingSession(true);
+                          try {
+                            await refreshSession();
+                            setSessionMinutesLeft(
+                              Math.max(
+                                1,
+                                Math.ceil(getSessionRemainingMs() / 60000),
+                              ),
+                            );
+                            showToast.success("Sesión renovada");
+                          } catch (error) {
+                            showToast.error(
+                              error instanceof Error
+                                ? error.message
+                                : "No se pudo renovar la sesión",
+                            );
+                          } finally {
+                            setIsRefreshingSession(false);
+                          }
+                        }}
+                      >
+                        Renovar sesión
+                      </button>
                     </div>
-
-                    {onOpenChangePassword && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          onOpenChangePassword();
-                        }}
-                        className="min-h-[44px] w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2.5 transition cursor-pointer"
-                      >
-                        <KeyRound className="w-4 h-4 text-amber-600" />
-                        <span>Cambiar mi Clave</span>
-                      </button>
+                    <p className="px-3 py-2 text-sm text-slate-600">
+                      {isFirebaseSyncing
+                        ? "Sincronizando cambios"
+                        : isFirebaseConnected
+                          ? "Conectado a la nube"
+                          : "Sin conexión · datos locales"}
+                    </p>
+                    {toolButton(
+                      "Cambiar mi clave",
+                      onOpenChangePassword,
+                      KeyRound,
                     )}
-
-                    {onLogout && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          onLogout();
-                        }}
-                        className="min-h-[44px] w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 flex items-center space-x-2.5 transition cursor-pointer border-t border-slate-100"
-                      >
-                        <LogOut className="w-4 h-4 text-rose-600" />
-                        <span>Cerrar Sesión</span>
-                      </button>
-                    )}
+                    {toolButton("Cerrar sesión", onLogout, LogOut)}
                   </div>
                 )}
               </div>
@@ -588,277 +509,90 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                 id="btn-navbar-unlock"
                 type="button"
                 onClick={onOpenPasswordPrompt}
-                className="min-h-[42px] flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-bold transition cursor-pointer"
+                aria-label="Habilitar permisos de edición"
+                className={iconButton}
               >
-                <KeyRound className="w-4 h-4 text-amber-600" />
-                <span>Clave de Edición</span>
+                <KeyRound className="h-5 w-5" />
               </button>
             )}
-
-            {/* Mobile Quick Search Button */}
-            {onOpenCommandPalette && (
-              <button
-                type="button"
-                id="btn-mobile-command-palette"
-                onClick={onOpenCommandPalette}
-                aria-label="Búsqueda rápida y comandos (Ctrl+K o Cmd+K)"
-                className="sm:hidden min-w-[44px] min-h-[44px] p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer transition"
-                title="Buscador rápido"
-              >
-                <Search className="w-5 h-5 text-slate-600" />
-              </button>
-            )}
-
-            {/* Mobile Tools Drawer Button */}
             <button
+              id="btn-new-reservation"
               type="button"
-              id="btn-mobile-more-tools"
-              onClick={() => setIsMobileDrawerOpen(true)}
-              aria-label="Abrir menú de herramientas y opciones"
-              className="md:hidden min-w-[44px] min-h-[44px] p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer transition"
+              onClick={onNewReservation}
+              className="ml-2 hidden min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800 lg:inline-flex"
             >
-              <MoreHorizontal className="w-5 h-5" />
+              <Plus className="h-4 w-4" />
+              Nueva reserva
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Mobile Navigation Tab Bar (WCAG 2.5.8 Compliant: min-h-[44px] touch targets) */}
-      <nav aria-label="Navegación móvil" className="flex md:hidden overflow-x-auto px-2 py-1.5 space-x-1.5 border-t border-slate-200 bg-slate-50 scrollbar-none items-center">
+      <nav
+        aria-label="Navegación móvil"
+        className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-slate-200 bg-white px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden"
+      >
         <button
-          type="button"
           id="nav-mobile-tab-mobile"
-          onClick={() => onViewChange('mobile')}
-          className={`min-h-[44px] min-w-[44px] flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs whitespace-nowrap font-bold transition cursor-pointer ${
-            currentView === 'mobile' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200'
-          }`}
-        >
-          <Smartphone className="w-4 h-4 shrink-0" />
-          <span>Agenda Móvil</span>
-        </button>
-
-        <button
           type="button"
-          onClick={() => onViewChange('calendar')}
-          className={`min-h-[44px] min-w-[44px] flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs whitespace-nowrap font-bold transition cursor-pointer ${
-            currentView === 'calendar' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200'
-          }`}
+          onClick={() => onViewChange(lastAgenda.current)}
+          aria-current={isAgenda ? "page" : undefined}
+          className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-xs font-semibold ${isAgenda ? "bg-blue-50 text-blue-800" : "text-slate-600"}`}
         >
-          <Calendar className="w-4 h-4 shrink-0" />
-          <span>Calendario</span>
+          <Calendar className="h-5 w-5" />
+          Agenda
         </button>
-
         <button
+          id="btn-mobile-new-reservation"
           type="button"
-          onClick={() => onViewChange('timeline')}
-          className={`min-h-[44px] min-w-[44px] flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs whitespace-nowrap font-bold transition cursor-pointer ${
-            currentView === 'timeline' || currentView === 'daily' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200'
-          }`}
+          onClick={onNewReservation}
+          className="mx-2 flex min-h-12 items-center justify-center gap-1.5 rounded-xl bg-blue-700 text-sm font-semibold text-white"
         >
-          <Clock className="w-4 h-4 shrink-0" />
-          <span>Uso Diario</span>
+          <Plus className="h-5 w-5" />
+          Reservar
         </button>
-
         <button
+          id="btn-mobile-more-tools"
           type="button"
-          onClick={() => onViewChange('analytics')}
-          className={`min-h-[44px] min-w-[44px] flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs whitespace-nowrap font-bold transition cursor-pointer ${
-            currentView === 'analytics' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200'
-          }`}
+          onClick={() => setIsMobileDrawerOpen(true)}
+          aria-haspopup="dialog"
+          className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-xs font-semibold text-slate-600"
         >
-          <BarChart3 className="w-4 h-4 shrink-0" />
-          <span>Métricas</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onViewChange('ratings')}
-          className={`min-h-[44px] min-w-[44px] flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs whitespace-nowrap font-bold transition cursor-pointer ${
-            currentView === 'ratings' ? 'bg-amber-500 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200'
-          }`}
-        >
-          <Star className="w-4 h-4 shrink-0" />
-          <span>Calificaciones</span>
-        </button>
-
-        {conflictsCount > 0 && (
-          <button
-            type="button"
-            onClick={() => onViewChange('conflicts')}
-            className={`min-h-[44px] min-w-[44px] flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs whitespace-nowrap font-bold transition cursor-pointer ${
-              currentView === 'conflicts' ? 'bg-rose-600 text-white shadow-xs' : 'bg-rose-50 text-rose-700 border border-rose-200'
-            }`}
-          >
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>Topamientos ({conflictsCount})</span>
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => onViewChange('admin')}
-          className={`min-h-[44px] min-w-[44px] flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs whitespace-nowrap font-bold transition cursor-pointer ${
-            currentView === 'admin' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200'
-          }`}
-        >
-          <ShieldCheck className="w-4 h-4 shrink-0" />
-          <span>Admin</span>
+          <MoreHorizontal className="h-5 w-5" />
+          Más
         </button>
       </nav>
-
-      {/* Mobile Tools Drawer Modal (Clean touch-friendly interface) */}
       {isMobileDrawerOpen && (
-        <ModalOverlay onClose={() => setIsMobileDrawerOpen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Menú de herramientas móviles"
-          className="fixed inset-0 md:hidden flex flex-col justify-end bg-slate-900/60 backdrop-blur-xs animate-in fade-in"
-          onClick={() => setIsMobileDrawerOpen(false)}
+        <ModalOverlay
+          onClose={() => setIsMobileDrawerOpen(false)}
+          closeOnBackdrop
+          aria-label="Navegación y herramientas"
+          className="fixed inset-0 flex items-end justify-center bg-slate-900/40 lg:hidden"
         >
-          <div
-            className="bg-white rounded-t-2xl p-5 space-y-3 max-h-[80vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <span className="font-bold text-base text-slate-900">Herramientas del Sistema</span>
+          <div className="max-h-[85dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-lg font-bold">Más opciones</h2>
               <button
                 type="button"
                 onClick={() => setIsMobileDrawerOpen(false)}
-                aria-label="Cerrar herramientas"
-                className="min-w-[44px] min-h-[44px] p-2 text-slate-400 hover:text-slate-700 flex items-center justify-center"
+                aria-label="Cerrar opciones"
+                className={iconButton}
               >
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
-
-            <div className="space-y-2">
-              {onOpenCommandPalette && (
-                <button
-                  type="button"
-                  id="mobile-drawer-btn-command-palette"
-                  onClick={() => {
-                    setIsMobileDrawerOpen(false);
-                    onOpenCommandPalette();
-                  }}
-                  className="min-h-[48px] w-full px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-between bg-blue-50/80 hover:bg-blue-100/80 text-blue-900 border border-blue-200 transition cursor-pointer"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Search className="w-5 h-5 text-blue-600" />
-                    <span>Buscador Rápido (Spotlight)</span>
-                  </div>
-                  <kbd className="text-xs font-mono font-bold px-2 py-0.5 bg-white border border-blue-200 rounded text-blue-700">
-                    Ctrl/⌘ K
-                  </kbd>
-                </button>
-              )}
-
-              {onToggleFilterBar && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMobileDrawerOpen(false);
-                    onToggleFilterBar();
-                  }}
-                  className={`min-h-[48px] w-full px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-between border transition cursor-pointer ${
-                    isFilterBarOpen
-                      ? 'bg-blue-50 text-blue-900 border-blue-300'
-                      : hasActiveFilters
-                      ? 'bg-amber-50 text-amber-900 border-amber-300'
-                      : 'bg-slate-50 text-slate-800 border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <Filter className="w-5 h-5 text-blue-600" />
-                    <span>Filtros de Búsqueda</span>
-                  </div>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-white border border-slate-200">
-                    {isFilterBarOpen ? 'Visible' : hasActiveFilters ? 'Activo (Oculto)' : 'Oculto'}
-                  </span>
-                </button>
-              )}
-
-              {onOpenPendingDeletions && isCoordinatorOrAdmin(currentUser) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMobileDrawerOpen(false);
-                    onOpenPendingDeletions();
-                  }}
-                  className="min-h-[48px] w-full px-4 py-3 rounded-xl bg-amber-50 text-amber-900 text-sm font-bold flex items-center justify-between border border-amber-200"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Clock className="w-5 h-5 text-amber-600" />
-                    <span>Eliminaciones en Espera</span>
-                  </div>
-                  {pendingDeletionsCount > 0 && (
-                    <span className="bg-amber-500 text-white text-xs font-black px-2 py-0.5 rounded-full">
-                      {pendingDeletionsCount}
-                    </span>
-                  )}
-                </button>
-              )}
-
-              {onOpenPrintModal && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMobileDrawerOpen(false);
-                    onOpenPrintModal();
-                  }}
-                  className="min-h-[48px] w-full px-4 py-3 rounded-xl bg-blue-50 text-blue-900 text-sm font-bold flex items-center space-x-3 border border-blue-200"
-                >
-                  <Printer className="w-5 h-5 text-blue-600" />
-                  <span>Imprimir Planilla Diaria (PDF)</span>
-                </button>
-              )}
-
-              {onOpenGmailDispatch && (
-                <button
-                  type="button"
-                  id="mobile-drawer-btn-gmail-dispatch"
-                  onClick={() => {
-                    setIsMobileDrawerOpen(false);
-                    onOpenGmailDispatch();
-                  }}
-                  className="min-h-[48px] w-full px-4 py-3 rounded-xl bg-blue-50 text-blue-900 text-sm font-bold flex items-center space-x-3 border border-blue-200"
-                >
-                  <Mail className="w-5 h-5 text-blue-600" />
-                  <span>Enviar Actividades por Gmail</span>
-                </button>
-              )}
-
-              {onOpenAuditLog && isCoordinatorOrAdmin(currentUser) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMobileDrawerOpen(false);
-                    onOpenAuditLog();
-                  }}
-                  className="min-h-[48px] w-full px-4 py-3 rounded-xl bg-indigo-50 text-indigo-900 text-sm font-bold flex items-center space-x-3 border border-indigo-200"
-                >
-                  <History className="w-5 h-5 text-indigo-600" />
-                  <span>Restaurar Cambios y Auditoría</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileDrawerOpen(false);
-                  onOpenImportExport();
-                }}
-                className="min-h-[48px] w-full px-4 py-3 rounded-xl bg-emerald-50 text-emerald-900 text-sm font-bold flex items-center space-x-3 border border-emerald-200"
-              >
-                <Database className="w-5 h-5 text-emerald-600" />
-                <span>Respaldos y Base de Datos</span>
-              </button>
+            <nav aria-label="Secciones">{navigation(true)}</nav>
+            <div className="mt-3 border-t border-slate-200 pt-3">
+              <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Herramientas
+              </p>
+              {tools()}
             </div>
           </div>
         </ModalOverlay>
       )}
-    </header>
+    </>
   );
 };
 
 export const Navbar = React.memo(NavbarComponent);
-

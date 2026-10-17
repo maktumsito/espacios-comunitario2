@@ -127,34 +127,6 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
           ))}
         </select>
 
-        {/* Quick select pills for frequent types */}
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {effectiveActivityNames.slice(0, 6).map((t) => {
-            const isSelected = formData.tipoActividad === t;
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => {
-                  const requires = isCommitmentLetterEligible(t, t);
-                  setFormData((prev) => ({
-                    ...prev,
-                    tipoActividad: t,
-                    tipoPrestamo: t,
-                    requiereCartaCompromiso: requires ? true : prev.requiereCartaCompromiso
-                  }));
-                }}
-                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer border ${
-                  isSelected
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                    : 'bg-white hover:bg-slate-100 text-slate-600 border-slate-200'
-                }`}
-              >
-                {t}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* Early notice for Carta de Compromiso if applicable */}
@@ -168,24 +140,7 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
             </span>
           </div>
         </div>
-      ) : (
-        <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-[11px]">
-          <span className="text-slate-600 flex items-center space-x-1.5">
-            <FileSignature className="w-3.5 h-3.5 text-slate-400" />
-            <span>Carta de Compromiso:</span>
-            <span className="font-medium text-slate-500">
-              {formData.requiereCartaCompromiso ? 'Activada manualmente' : 'No requerida por defecto'}
-            </span>
-          </span>
-          <button
-            type="button"
-            onClick={() => setFormData((prev) => ({ ...prev, requiereCartaCompromiso: !prev.requiereCartaCompromiso }))}
-            className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
-          >
-            {formData.requiereCartaCompromiso ? 'Desactivar' : 'Activar para esta actividad'}
-          </button>
-        </div>
-      )}
+      ) : <p className="text-sm text-slate-500">Los recursos y documentos opcionales se configuran en el paso 4.</p>}
 
       {/* Actividad Importante / Prioridad Institucional */}
       <div className="space-y-1.5">
@@ -201,9 +156,11 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
             </span>
           )}
         </label>
-        <div
+        <button
+          type="button"
+          aria-pressed={formData.importante === 'Sí'}
           onClick={() => setFormData((prev) => ({ ...prev, importante: prev.importante === 'Sí' ? 'No' : 'Sí' }))}
-          className={`p-3 rounded-xl border-2 transition cursor-pointer flex items-center justify-between shadow-2xs ${
+          className={`w-full text-left p-3 rounded-xl border-2 transition cursor-pointer flex items-center justify-between shadow-2xs ${
             formData.importante === 'Sí'
               ? 'bg-amber-50/90 border-amber-300 text-amber-900'
               : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -215,7 +172,7 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
             </div>
             <div className="min-w-0">
               <span className="text-xs font-bold block truncate">
-                {formData.importante === 'Sí' ? 'Marcada como Actividad Destacada ⭐' : 'Actividad Normal'}
+                {formData.importante === 'Sí' ? 'Marcada como Actividad destacada' : 'Actividad Normal'}
               </span>
               <span className="text-[10px] text-slate-500 block truncate">
                 {formData.importante === 'Sí' ? 'Genera notificación prioritaria a coordinadores' : 'Taller o evento comunitario habitual'}
@@ -230,7 +187,7 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
           >
             <Check className="w-3 h-3 stroke-[3]" />
           </div>
-        </div>
+        </button>
       </div>
     </div>
   );

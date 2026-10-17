@@ -69,3 +69,28 @@ it.each(['SALA 2', 'SALA 2 / SALA 5'])('keeps the room filter working for %s', (
   expect(container.querySelectorAll('[data-reservation-id="shared"]')).toHaveLength(headers.length);
   expect(screen.queryByTitle(`${shared.espacio} (orden fijo)`)).toBeNull();
 });
+
+
+it('filters comparison columns without modifying bookings or room configuration', () => {
+  const { container } = renderDay([shared], configured);
+  const before = container.querySelectorAll('[title$="(orden fijo)"]').length;
+  fireEvent.click(screen.getByText(/Espacios a comparar:/));
+  fireEvent.click(screen.getByRole('button', { name: 'Limpiar selección' }));
+  expect(container.querySelectorAll('[title$="(orden fijo)"]')).toHaveLength(0);
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Sala 2' }));
+  expect(container.querySelectorAll('[title$="(orden fijo)"]')).toHaveLength(1);
+  expect(container.querySelectorAll('[data-reservation-id="shared"]')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Todos' }));
+  expect(container.querySelectorAll('[title$="(orden fijo)"]')).toHaveLength(before);
+});
+
+it('preserves hidden rooms when reordering comparison columns', () => {
+  localStorage.setItem('allow_reorder_spaces', 'true');
+  const reorder = vi.fn();
+  render(<DailyUsageView reservations={[shared]} allReservations={[shared]} spaces={configured}
+    selectedDate={new Date(2026, 9, 15)} comparisonSpaces={['SALA 5', 'SALA 2']}
+    onSelectReservation={vi.fn()} onNewReservationWithSlot={vi.fn()} onReorderSpaces={reorder} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Mover "SALA 2" a la izquierda' }));
+  expect(reorder.mock.calls[0][0].map((space: SpaceInfo) => space.name)).toEqual(['SALA 2', 'SALA 5', 'SALA 3', 'SALA 4', 'SALA 6']);
+  localStorage.removeItem('allow_reorder_spaces');
+});

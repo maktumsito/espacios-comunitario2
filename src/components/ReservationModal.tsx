@@ -1411,8 +1411,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <ModalOverlay onClose={() => { if (!isSubmittingRef.current) onClose(); }} role="dialog" aria-modal="true" aria-label="Crear o editar reserva" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full border border-slate-100 overflow-hidden my-6">
+    <ModalOverlay onClose={() => { if (!isSubmittingRef.current) onClose(); }} role="dialog" aria-modal="true" aria-label="Crear o editar reserva" className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+      <div className="flex max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] flex-col bg-white rounded-2xl shadow-2xl max-w-4xl w-full border border-slate-100 overflow-hidden">
         {/* Header */}
         <ReservationModalHeader
           replacementMode={Boolean(replacementSource)}
@@ -1424,7 +1424,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
         />
 
         {/* Form Body */}
-        <form id="reservation-modal-form-body" onSubmit={handleSubmit} noValidate className="p-6 space-y-5 max-h-[82vh] overflow-y-auto text-xs">
+        <form id="reservation-modal-form-body" onSubmit={handleSubmit} noValidate className="reservation-form min-h-0 flex-1 p-4 sm:p-6 space-y-5 overflow-y-auto text-sm">
           <fieldset disabled={isSubmitting} className="contents">
           {/* Notification & Context Alerts */}
           <ReservationModalAlerts
@@ -1499,11 +1499,11 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                 }}
               />
 
-              {hasStep1Conflict && (
+              {hasStep1Conflict && wizardStep === 2 && (
                 <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-rose-100 border border-rose-300 text-rose-900 text-[11px] font-medium">
                   <div className="flex items-center space-x-1.5">
                     <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                    <span>Atención: Existe un topamiento de horario en el Paso 2 (Espacio y Horario). Resuélvelo antes de avanzar.</span>
+                    <span>Este espacio está ocupado en el horario seleccionado. Ajusta el espacio o las horas antes de continuar.</span>
                   </div>
                   {wizardStep !== 2 && (
                     <button

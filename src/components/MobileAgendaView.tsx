@@ -346,7 +346,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                         <span>{res.horaInicio} - {res.horaFin}</span>
                       </div>
                       {res.terminaDiaSiguiente && (
-                        <span className="text-[10px] font-extrabold bg-indigo-100 text-indigo-900 px-1.5 py-0.5 rounded">
+                        <span className="text-xs font-extrabold bg-indigo-100 text-indigo-900 px-1.5 py-0.5 rounded">
                           +1 día
                         </span>
                       )}
@@ -354,14 +354,14 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
 
                     <div className="flex items-center space-x-1.5">
                       {liveState?.status === 'live' && (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
                           <span>EN CURSO</span>
                         </span>
                       )}
 
                       {isConflict && (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-extrabold">
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-xs font-extrabold">
                           <AlertTriangle className="w-3 h-3 text-rose-600" />
                           <span>TOPAMIENTO</span>
                         </span>
@@ -378,7 +378,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                   {/* Space & Activity Title */}
                   <div>
                     <div className="flex items-center space-x-2 mb-1">
-                      <span className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5 min-w-0">
+                      <span className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 min-w-0">
                         <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: spaceColor }} />
                         <span className="truncate">{formatDisplayTitle(res.espacio)}</span>
                       </span>
@@ -390,7 +390,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                   </div>
 
                   {/* Badges and metadata */}
-                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-1.5 text-sm">
                     {res.actividadRecurrente === 'Sí' && (
                       <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200">
                         <Repeat className="w-3 h-3" />
@@ -439,12 +439,12 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                       {isExpanded ? (
                         <div className="mt-1 p-2.5 rounded-xl bg-slate-100/80 text-xs text-slate-700 space-y-1.5 animate-fadeIn">
                           {res.comentarios && (
-                            <p className="text-[11px]">
+                            <p className="text-sm">
                               <strong className="text-slate-900">Comentarios:</strong> {res.comentarios}
                             </p>
                           )}
                           {res.equipamientoSolicitado && res.equipamientoSolicitado.length > 0 && (
-                            <div className="text-[11px]">
+                            <div className="text-sm">
                               <strong className="text-slate-900">Equipamiento:</strong>
                               <ul className="list-disc pl-4 space-y-0.5 mt-0.5">
                                 {res.equipamientoSolicitado.map((eq, i) => (
@@ -456,7 +456,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                           <button
                             type="button"
                             onClick={(e) => toggleCardExpand(res.id, e)}
-                            className="text-blue-700 text-[11px] font-bold flex items-center space-x-1 cursor-pointer pt-1"
+                            className="text-blue-700 text-sm font-bold flex items-center space-x-1 cursor-pointer pt-1"
                           >
                             <span>Menos detalles</span>
                             <ChevronUp className="w-3 h-3" />
@@ -466,7 +466,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                         <button
                           type="button"
                           onClick={(e) => toggleCardExpand(res.id, e)}
-                          className="text-blue-700 text-[11px] font-semibold flex items-center space-x-1 cursor-pointer hover:underline"
+                          className="text-blue-700 text-sm font-semibold flex items-center space-x-1 cursor-pointer hover:underline"
                         >
                           <span>Ver notas y equipos</span>
                           <ChevronDown className="w-3 h-3" />
@@ -587,33 +587,14 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
   return (
     <div id="mobile-agenda-view-container" className="w-full max-w-3xl mx-auto pb-24 text-slate-900 animate-fadeIn">
       {/* 1. TOP MOBILE HEADER & DATE CONTROLS */}
-      <header className="sticky top-0 z-30 bg-[#f7f9fc]/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 py-2.5">
-        <div className="flex items-center justify-between gap-2">
-          {/* Day & Date Title */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-1.5">
-              <span className="text-xs font-bold uppercase tracking-wider text-blue-700">
-                {DAY_NAMES_SHORT[selectedDate.getDay()]}
-              </span>
-              <span className="text-xs text-slate-400">•</span>
-              <span className="text-xs text-slate-500 font-medium truncate">
-                {selectedDate.getDate()} {MONTH_NAMES[selectedDate.getMonth()]} {selectedDate.getFullYear()}
-              </span>
-            </div>
-            <div className="flex items-center space-x-2 mt-0.5">
-              <h1 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
-                Agenda Diaria
-              </h1>
-              {isTodayActive && (
-                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-bold">
-                  Hoy
-                </span>
-              )}
-            </div>
-          </div>
+      <header className="relative z-20 bg-[#f7f9fc]/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 py-2.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-base font-semibold text-slate-900">
+            {DAY_NAMES_SHORT[selectedDate.getDay()]} · {selectedDate.getDate()} {MONTH_NAMES[selectedDate.getMonth()]} {selectedDate.getFullYear()}
+          </h2>
 
           {/* Quick Action Navigation Controls */}
-          <div className="flex items-center space-x-1 shrink-0">
+          <div className="flex items-center justify-between gap-1 shrink-0">
             {/* Native Date Picker Popover Button */}
             <label
               htmlFor="mobile-native-date-picker"
@@ -666,20 +647,6 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
           </div>
         </div>
 
-        {/* Compact desktop matrix shortcut */}
-        {onSwitchToDesktopView && (
-          <div className="mt-1.5 flex items-center justify-end text-xs">
-            <button
-              type="button"
-              onClick={onSwitchToDesktopView}
-              className="text-slate-600 hover:text-blue-700 font-semibold flex items-center space-x-1 cursor-pointer py-1 px-2 rounded-lg hover:bg-white transition"
-            >
-              <Monitor className="w-3.5 h-3.5" />
-              <span>Ver matriz</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-        )}
       </header>
 
       {/* 2. HORIZONTAL DAY STRIP CAROUSEL (Touch swipeable) */}
@@ -702,7 +669,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                     : 'bg-white/70 text-slate-700 border-transparent hover:border-slate-200 active:bg-white'
                 }`}
               >
-                <span className={`text-[11px] font-semibold uppercase ${isSel ? 'text-blue-600' : 'text-slate-400'}`}>
+                <span className={`text-sm font-semibold uppercase ${isSel ? 'text-blue-600' : 'text-slate-400'}`}>
                   {item.dayName}
                 </span>
                 <span className={`text-base font-bold ${isSel ? 'text-blue-900' : 'text-slate-800'}`}>
@@ -710,7 +677,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                 </span>
                 {item.count > 0 ? (
                   <span
-                    className={`mt-0.5 text-[10px] px-1.5 py-0.2 rounded-full font-bold leading-tight ${
+                    className={`mt-0.5 text-xs px-1.5 py-0.2 rounded-full font-bold leading-tight ${
                       isSel ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
                     }`}
                   >
@@ -756,7 +723,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
           )}
 
           {activeSpaceBlocksToday.length > 0 && (
-            <div className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 font-semibold text-[11px]">
+            <div className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 font-semibold text-sm">
               <Wrench className="w-3.5 h-3.5 text-amber-700" />
               <span>{activeSpaceBlocksToday.length} mantención</span>
             </div>
@@ -775,7 +742,8 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
               id="mobile-search-input"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por solicitante, taller o RUT..."
+              aria-label="Buscar actividades en este día"
+              placeholder="Buscar en este día"
               className="w-full min-h-[44px] pl-9 pr-8 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 font-medium"
             />
             {searchQuery && (
@@ -850,7 +818,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
             }`}
           >
             <span>Todos los espacios</span>
-            <span className="text-[10px] opacity-80 font-mono">({dayReservations.length})</span>
+            <span className="text-xs opacity-80 font-mono">({dayReservations.length})</span>
           </button>
 
           {spaces.map((space) => {
@@ -876,7 +844,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                 <span>{space.name}</span>
                 {countInSpace > 0 && (
                   <span
-                    className={`text-[10px] font-bold px-1.5 rounded-full ${
+                    className={`text-xs font-bold px-1.5 rounded-full ${
                       isSelected ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
                     }`}
                   >
@@ -889,7 +857,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
           </div>
           <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1" aria-label="Colores por tipo de reserva">
             {RESERVATION_TYPE_LEGEND.map((item) => (
-              <span key={item.key} className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-semibold ${item.bgClass} ${item.borderClass} ${item.softTextClass}`}>
+              <span key={item.key} className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-1 text-xs font-semibold ${item.bgClass} ${item.borderClass} ${item.softTextClass}`}>
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.accent }} />
                 {item.label}
               </span>
@@ -913,11 +881,11 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
             >
               <div className="flex items-center justify-between font-bold">
                 <span className="text-amber-800 uppercase tracking-tight">{block.espacio}</span>
-                <span className="text-[11px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">
+                <span className="text-sm bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded">
                   {block.todoElDia ? 'Todo el día' : `${block.horaInicio || '08:00'} - ${block.horaFin || '22:30'}`}
                 </span>
               </div>
-              <p className="text-[11px] text-amber-900 font-medium">
+              <p className="text-sm text-amber-900 font-medium">
                 <strong className="text-amber-950">Motivo:</strong> {block.motivo} - {block.descripcion}
               </p>
             </div>

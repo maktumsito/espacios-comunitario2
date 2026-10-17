@@ -48,12 +48,12 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
   effectiveFormDataForLetter,
   effectiveSeriesSlotsForLetter
 }) => {
-  if (isWizardMode && wizardStep !== 4) return null;
-
   const requiresLetter = isCommitmentLetterEligible(formData.tipoActividad, formData.tipoPrestamo) || Boolean(formData.requiereCartaCompromiso);
   const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [appliedAiNotice, setAppliedAiNotice] = useState(false);
+
+  if (isWizardMode && wizardStep !== 4) return null;
 
   // Decoupled intelligent assistant: deterministic rule-based resource matcher
   const handleApplyAiSuggestions = (keywords: string) => {
@@ -105,7 +105,7 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
           </div>
           <div>
             <h3 className="font-bold text-slate-800 text-xs">4. Recursos y Documentación</h3>
-            <p className="text-[11px] text-slate-500">Equipamiento solicitado, Carta de Compromiso y observaciones</p>
+            <p className="text-[11px] text-slate-500">Agrega equipamiento si lo necesitas y revisa los documentos de esta categoría.</p>
           </div>
         </div>
         {isWizardMode && (
@@ -194,26 +194,34 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
             <div>
               <h4 className="text-xs font-bold text-slate-900">Carta de Compromiso</h4>
               <p className="text-[11px] text-slate-600">
-                {requiresLetter ? 'Documento normativo requerido para este préstamo' : 'Opcional para esta categoría'}
+                {isCommitmentLetterEligible(formData.tipoActividad, formData.tipoPrestamo) ? 'Documento requerido para esta categoría' : requiresLetter ? 'Documento incluido en esta reserva' : 'Opcional para esta categoría'}
               </p>
             </div>
           </div>
           <button
             type="button"
             id="btn-preview-commitment-letter"
+            disabled={!requiresLetter}
+            title={!requiresLetter ? 'Incluye la carta en esta reserva para previsualizarla' : 'Previsualizar carta'}
             onClick={() => setShowCommitmentLetterModal(true)}
-            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition shadow-xs flex items-center space-x-1.5 cursor-pointer"
+            className="disabled:opacity-50 disabled:cursor-not-allowed min-h-11 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition shadow-xs flex items-center space-x-1.5 cursor-pointer"
           >
             <FileText className="w-3.5 h-3.5" />
             <span>Previsualizar Carta</span>
           </button>
         </div>
 
+        {!isCommitmentLetterEligible(formData.tipoActividad, formData.tipoPrestamo) && <label className="flex min-h-11 items-center gap-2 text-sm text-slate-700">
+          <input id="input-requiere-carta" type="checkbox" checked={Boolean(formData.requiereCartaCompromiso)} onChange={event => setFormData(prev => ({ ...prev, requiereCartaCompromiso: event.target.checked }))} className="h-4 w-4" />
+          Incluir carta de compromiso en esta reserva
+        </label>}
+
         <div className="flex items-center justify-between pt-2 border-t border-amber-200/70 text-xs">
           <label className="flex items-center space-x-2 text-slate-700 cursor-pointer">
             <input
               type="checkbox"
-              checked={descargarCartaAlCrear}
+              checked={requiresLetter && descargarCartaAlCrear}
+              disabled={!requiresLetter}
               onChange={(e) => setDescargarCartaAlCrear(e.target.checked)}
               className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
             />

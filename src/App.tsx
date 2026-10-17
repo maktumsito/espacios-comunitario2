@@ -15,6 +15,8 @@ import { isRecurringSeriesReservation } from './utils/recurringEdits';
 import { PendingReservationOperations } from './components/PendingReservationOperations';
 import { DeleteDayReservationsModal } from './components/DeleteDayReservationsModal';
 import { Navbar } from './components/Navbar';
+import { AgendaToolbar } from './components/AgendaToolbar';
+import { isAgendaView, getAgendaPeriodCount, getAgendaPeriodLabel } from './utils/agendaPeriod';
 import { FilterBar } from './components/FilterBar';
 import { CalendarView } from './components/CalendarView';
 import { DailyUsageView } from './components/DailyUsageView';
@@ -122,6 +124,7 @@ export default function App() {
   const [adminSubTab, setAdminSubTab] = useState<'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring'>('spaces');
   const [selectedDailyDate, setSelectedDailyDate] = useState<Date>(() => new Date());
   const [isDeleteDayModalOpen, setIsDeleteDayModalOpen] = useState(false);
+  const [comparisonSpaces, setComparisonSpaces] = useState<string[] | null>(null);
   const [reservationFilters, setReservationFilters] = useState<FilterState>(INITIAL_FILTERS);
   const canWrite = canWriteReservations(currentUser);
 
@@ -333,6 +336,12 @@ export default function App() {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
 
   // Global Keyboard Shortcuts (Ctrl+K, Cmd+K, '/', Alt+N)
+  const visiblePeriodCounts = useMemo(() => ({
+    filtered: getAgendaPeriodCount(filteredReservations, currentView, selectedDailyDate),
+    all: getAgendaPeriodCount(reservations, currentView, selectedDailyDate),
+  }), [filteredReservations, reservations, currentView, selectedDailyDate]);
+  const visiblePeriodLabel = getAgendaPeriodLabel(currentView, selectedDailyDate);
+
   useKeyboardShortcuts({
     enabled: Boolean(currentUser),
     onToggleCommandPalette: () => setIsCommandPaletteOpen((prev) => !prev),
@@ -643,7 +652,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f7fb] text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white overflow-x-hidden">
+    <div className="app-shell min-h-[100dvh] bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white lg:pl-56 pb-20 lg:pb-0">
       {/* Network Status Banner (Hallazgo 8) */}
       {!isOnline && (
         <div
@@ -710,6 +719,7 @@ export default function App() {
             setIsReservationModalOpen(true);
           }, 'crear una nueva reserva');
         }}
+        onDeleteDay={userCanDeleteReservations(currentUser) ? () => setIsDeleteDayModalOpen(true) : undefined}
         onOpenImportExport={() => {
           requireAuth(() => setIsImportExportModalOpen(true), 'importar o exportar reservas');
         }}
@@ -775,8 +785,9 @@ export default function App() {
             })
           }
           onClose={() => setIsFilterBarOpen(false)}
-          totalFiltered={filteredReservations.length}
-          totalAll={reservations.length}
+          totalFiltered={visiblePeriodCounts.filtered}
+          totalAll={visiblePeriodCounts.all}
+          periodLabel={visiblePeriodLabel}
           conflictsCount={conflictsCount}
           availableSpaces={spaces}
           availableActivityTypes={activityTypes}
@@ -816,7 +827,7 @@ export default function App() {
           <div className="flex items-center space-x-2 text-blue-900 font-medium">
             <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
             <span>
-              Filtros activos aplicados ({filteredReservations.length} de {reservations.length} reservas)
+              Filtros activos: {visiblePeriodCounts.filtered} de {visiblePeriodCounts.all} reservas en {visiblePeriodLabel}
             </span>
           </div>
           <div className="flex items-center space-x-2.5">
@@ -865,9 +876,9 @@ export default function App() {
       )}
 
       {/* Main View Area */}
-      <main className={`flex-1 w-full mx-auto ${
+      <main id="main-content" tabIndex={-1} className={`flex-1 min-w-0 w-full mx-auto outline-none ${
         currentView === 'calendar' || currentView === 'daily' || currentView === 'timeline' || currentView === 'mobile'
-          ? 'max-w-none px-1.5 sm:px-3 lg:px-4 py-1.5'
+          ? 'max-w-[1680px] px-3 sm:px-6 py-4'
           : 'max-w-[1680px] px-3 sm:px-4 md:px-6 py-4'
       }`}>
         {!generalDataPending && <>
@@ -966,15 +977,13 @@ export default function App() {
           </div>
         )}
 
-        {userCanDeleteReservations(currentUser) && ['calendar', 'daily', 'timeline', 'mobile'].includes(currentView) && (
-          <div className="flex justify-end mb-2">
-            <button type="button" onClick={() => setIsDeleteDayModalOpen(true)}
-              className="min-h-[44px] flex items-center gap-2 px-3 py-2 rounded-xl border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 text-xs sm:text-sm font-semibold">
-              <Trash2 className="w-4 h-4" />
-              Eliminar reservas de un día
-            </button>
-          </div>
-        )}
+        {isAgendaView(currentView) && <AgendaToolbar
+          view={currentView}
+          onViewChange={view => { persistViewPreference(view); setCurrentView(view); }}
+          summary={`${visiblePeriodCounts.filtered} ${visiblePeriodCounts.filtered === 1 ? 'reserva' : 'reservas'} en ${visiblePeriodLabel}`}
+          filtersOpen={isFilterBarOpen} hasActiveFilters={hasActiveFilters}
+          onToggleFilters={() => setIsFilterBarOpen(open => !open)}
+        />}
         {isDeleteDayModalOpen && userCanDeleteReservations(currentUser) && (
           <DeleteDayReservationsModal initialDate={format(selectedDailyDate, 'yyyy-MM-dd')}
             onClose={() => setIsDeleteDayModalOpen(false)} onConfirm={handleDeleteDay} />
@@ -990,6 +999,7 @@ export default function App() {
               selectedDate={selectedDailyDate}
               spaceBlocks={spaceBlocks}
               onVisibleMonthChange={setSelectedDailyDate}
+              onSelectedDateChange={setSelectedDailyDate}
               onLoadHistoricalMonth={reservationReadScope ? undefined : loadHistoricalMonth}
               isHistoricalLoading={isHistoricalLoading}
               onNavigateToDay={(day) => {
@@ -1011,6 +1021,8 @@ export default function App() {
             <TimelineSkeleton />
           ) : (
             <DailyUsageView
+              comparisonSpaces={comparisonSpaces}
+              onComparisonSpacesChange={setComparisonSpaces}
               reservations={filteredReservations}
               allReservations={reservations}
               conflictReservationIds={conflictReservationIds}

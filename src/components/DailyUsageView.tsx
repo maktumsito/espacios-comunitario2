@@ -69,6 +69,8 @@ interface DailyUsageViewProps {
   onNewReservationWithSlot: (space: string, date: string, startTime: string, endTime: string) => void;
   onUpdateReservation?: (reserva: Reservation) => Promise<boolean | void> | boolean | void;
   onReorderSpaces?: (spaces: SpaceInfo[]) => void;
+  comparisonSpaces?: string[] | null;
+  onComparisonSpacesChange?: (names: string[] | null) => void;
   onNavigateToMaintenance?: () => void;
   onDateChange?: (date: Date) => void;
 }
@@ -111,6 +113,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   onNewReservationWithSlot,
   onUpdateReservation,
   onReorderSpaces,
+  comparisonSpaces,
+  onComparisonSpacesChange,
   onNavigateToMaintenance,
   onDateChange
 }) => {
@@ -277,7 +281,13 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   }, [rawDayReservations, dateStr]);
 
   // Vista compacta de fábrica (optimizada para máxima visibilidad horizontal y vertical)
-  const isCompact = true;
+  const [isCompact, setIsCompact] = useState(false);
+  const [localComparisonSpaces, setLocalComparisonSpaces] = useState<string[] | null>(null);
+  const selectedComparisonSpaces = comparisonSpaces === undefined ? localComparisonSpaces : comparisonSpaces;
+  const changeComparisonSpaces = (names: string[] | null) => {
+    if (onComparisonSpacesChange) onComparisonSpacesChange(names);
+    else setLocalComparisonSpaces(names);
+  };
   const START_HOUR = startHour;
   const END_HOUR = endHour;
   const HOUR_HEIGHT = 56; // px per hour (compacta de fábrica)
@@ -440,7 +450,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   }, [rawDayReservations, searchQuery]);
 
   // Normalize, map and assemble spaces preserving user's customized column order (respecting active space filters)
-  const activeSpaces = useMemo(() => {
+  const availableScheduleSpaces = useMemo(() => {
     const configuredSpaces = localSpaces && localSpaces.length > 0 ? localSpaces : (spaces && spaces.length > 0 ? spaces : SPACES_LIST);
     // Compound names can also have been saved by a previous column reorder.
     let list = configuredSpaces.filter((space) => getConstituentSpaces(space.name).length === 1);
@@ -464,18 +474,20 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
       });
     });
 
-    // If global space filter is active, filter space list
-    if (globalFilters?.espacio && globalFilters.espacio.trim()) {
-      const filterRooms = new Set(getConstituentSpaces(globalFilters.espacio));
-      const filtered = list.filter((s) => filterRooms.has(normalizeSpace(s.name)));
-      if (filtered.length > 0) {
-        list = filtered;
-      }
-    }
-
-    // Do NOT force hardcoded sort: preserves user's chosen column order exactly!
     return list;
-  }, [localSpaces, spaces, dayReservations, globalFilters?.espacio]);
+  }, [localSpaces, spaces, dayReservations]);
+
+  const activeSpaces = useMemo(() => {
+    let list = availableScheduleSpaces;
+    if (globalFilters?.espacio?.trim()) {
+      const filterRooms = new Set(getConstituentSpaces(globalFilters.espacio));
+      list = list.filter(space => filterRooms.has(normalizeSpace(space.name)));
+    }
+    if (selectedComparisonSpaces !== null) {
+      list = list.filter(space => selectedComparisonSpaces.includes(space.name));
+    }
+    return list;
+  }, [availableScheduleSpaces, globalFilters?.espacio, selectedComparisonSpaces]);
 
 
   // Conflict IDs for the day (utilizes precomputed global Set when provided for O(1) lookups)
@@ -700,18 +712,21 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     newSpaces.splice(toIndex, 0, moved);
 
     // 1. Optimistic state update: Instant 0ms visual reordering ("altiro")
-    setLocalSpaces(newSpaces);
+    const visibleIds = new Set(activeSpaces.map(space => space.id));
+    let nextVisible = 0;
+    const fullOrder = availableScheduleSpaces.map(space => visibleIds.has(space.id) ? newSpaces[nextVisible++] : space);
+    setLocalSpaces(fullOrder);
 
     // 2. Propagate to parent & storage without blocking
     if (onReorderSpaces) {
-      onReorderSpaces(newSpaces);
+      onReorderSpaces(fullOrder);
     }
 
     setToastMessage({
       text: `Espacio reordenado al instante`,
       sub: `"${targetSpace.name}" movido a la posición ${toIndex + 1}`
     });
-  }, [activeSpaces, onReorderSpaces]);
+  }, [activeSpaces, availableScheduleSpaces, onReorderSpaces]);
 
   const handleHeaderDragStart = (e: React.DragEvent, index: number) => {
     if (!allowSpaceReorder) {
@@ -868,9 +883,9 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
   // Dynamic minimum width adapted to selected density mode
   const gridMinWidth = useMemo(() => {
-    const colWidth = isCompact ? 130 : 150;
+    const colWidth = isCompact ? 150 : 200;
     const timeColWidth = isCompact ? 64 : 72;
-    return Math.max(isCompact ? 1050 : 1320, activeSpaces.length * colWidth + timeColWidth);
+    return activeSpaces.length * colWidth + timeColWidth;
   }, [activeSpaces.length, isCompact]);
 
   return (
@@ -929,7 +944,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
       )}
 
       {/* 1. TOP HEADER TOOLBAR (Sticky / Frozen) */}
-      <div className="sticky top-16 z-30 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl px-3 sm:px-4 py-2.5 shadow-xs flex flex-col md:flex-row lg:items-center justify-between gap-3">
+      <div className="relative z-30 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl px-3 sm:px-4 py-2.5 shadow-xs flex flex-col md:flex-row lg:items-center justify-between gap-3">
         {/* Left Side: Date pill card with green "HOY" badge */}
         <div className="flex items-center space-x-3 flex-wrap gap-y-2">
           <div className="flex items-center space-x-2.5 px-3 py-1.5 min-h-[44px] bg-slate-50 border border-slate-200 rounded-xl">
@@ -1082,6 +1097,30 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
           </button>
         </div>
       </div>
+
+      <section aria-label="Comparar espacios" className="flex flex-wrap items-start gap-3 rounded-xl border border-slate-200 bg-white p-3">
+        <details className="min-w-0 flex-1">
+          <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-slate-700">Espacios a comparar: {activeSpaces.length} de {availableScheduleSpaces.length}</summary>
+          <div className="mt-2 space-y-3 border-t border-slate-100 pt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => changeComparisonSpaces(null)} className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm text-blue-700">Todos</button>
+              <button type="button" onClick={() => changeComparisonSpaces([])} className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm text-slate-600">Limpiar selección</button>
+              <label className="flex flex-wrap items-center gap-2 text-sm text-slate-600">Seleccionar grupo
+                <select aria-label="Seleccionar grupo de espacios" value="" onChange={event => { if (event.target.value) changeComparisonSpaces(availableScheduleSpaces.filter(space => space.category === event.target.value).map(space => space.name)); }} className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">Elegir categoría</option>{[...new Set(availableScheduleSpaces.map(space => space.category))].map(category => <option key={category} value={category}>{category}</option>)}</select>
+              </label>
+            </div>
+            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-4">{availableScheduleSpaces.map(space => <label key={space.id} className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-slate-700 hover:bg-slate-50">
+              <input type="checkbox" checked={selectedComparisonSpaces === null || selectedComparisonSpaces.includes(space.name)} onChange={event => {
+                const selected = selectedComparisonSpaces ?? availableScheduleSpaces.map(item => item.name);
+                changeComparisonSpaces(event.target.checked ? [...selected, space.name] : selected.filter(name => name !== space.name));
+              }} className="h-4 w-4" />{formatDisplayTitle(space.name)}
+            </label>)}</div>
+            <p className="text-sm text-slate-500">La selección cambia las columnas visibles. Se siguen aplicando los filtros de la agenda.</p>
+          </div>
+        </details>
+        <button type="button" aria-pressed={isCompact} onClick={() => setIsCompact(value => !value)} className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm text-slate-700">{isCompact ? 'Ampliar columnas' : 'Compactar columnas'}</button>
+      </section>
+      {activeSpaces.length === 0 && <p role="status" className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">No hay espacios visibles. Selecciona al menos uno o revisa el filtro de espacio de la agenda.</p>}
 
       {/* Active Global / Daily Filters Notification Bar */}
       {hasActiveGlobalFilters && (
@@ -1265,7 +1304,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                         handleHeaderColumnDrop(e, idx);
                       }
                     }}
-                    className={`flex-1 ${isCompact ? 'min-w-[124px] sm:min-w-[130px] p-1.5' : 'min-w-[145px] sm:min-w-[150px] p-2'} text-center border-r border-slate-200 transition-all select-none relative group/header flex flex-col justify-center ${
+                    className={`flex-1 ${isCompact ? 'min-w-[150px] p-1.5' : 'min-w-[200px] p-2'} text-center border-r border-slate-200 transition-all select-none relative group/header flex flex-col justify-center ${
                       allowSpaceReorder ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
                     } ${
                       isReservationHeaderTarget
@@ -1410,7 +1449,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                         }
                       }}
                       onDrop={(e) => handleColumnDrop(e, space.name)}
-                      className={`flex-1 ${isCompact ? 'min-w-[124px] sm:min-w-[130px]' : 'min-w-[145px] sm:min-w-[150px]'} border-r border-slate-200/80 relative transition group/col ${
+                      className={`flex-1 ${isCompact ? 'min-w-[150px]' : 'min-w-[200px]'} border-r border-slate-200/80 relative transition group/col ${
                         isDragTarget
                           ? 'bg-blue-50/40 ring-2 ring-blue-400/80 ring-inset'
                           : isSpecial
@@ -1666,7 +1705,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                               <div className="flex items-center justify-between min-h-[13px] mb-1 gap-1">
                                 <div className="flex items-center space-x-1 min-w-0">
                                   <GripVertical className="w-2.5 h-2.5 text-slate-400 shrink-0 opacity-40 group-hover/card:opacity-100 transition" />
-                                  <span className="font-mono tabular-nums font-bold text-[8.5px] sm:text-[9px] text-slate-700 bg-white/95 px-1 py-0.2 rounded border border-black/5 shadow-2xs shrink-0 select-none">
+                                  <span className="font-mono tabular-nums font-bold text-xs text-slate-700 bg-white/95 px-1 py-0.2 rounded border border-black/5 shadow-2xs shrink-0 select-none">
                                     {isOverlapping && layout.totalCols >= 2 ? res.horaInicio : `${res.horaInicio} – ${res.horaFin}`}
                                   </span>
                                   {isConflict && (
@@ -1747,28 +1786,28 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                               {isVeryShort ? (
                                 /* Very short layout (height < 44px, e.g. 30 min) */
                                 <div className="flex flex-col justify-center min-w-0 overflow-hidden leading-tight">
-                                  <div className="text-[9px] font-bold text-slate-900 truncate leading-tight" title={formatDisplayTitle(mainTitle)}>
+                                  <div className="text-sm font-semibold text-slate-900 truncate leading-tight" title={formatDisplayTitle(mainTitle)}>
                                     {displayTitle}
                                   </div>
                                 </div>
                               ) : isShort ? (
                                 /* Short layout (44px - 68px, e.g. 45-60 min) */
                                 <div className="flex-1 min-h-0 flex flex-col justify-center overflow-hidden">
-                                  <div className="text-[9.5px] font-bold text-slate-900 leading-tight line-clamp-2 break-words" title={formatDisplayTitle(mainTitle)}>
+                                  <div className="text-sm font-semibold text-slate-900 leading-tight line-clamp-2 break-words" title={formatDisplayTitle(mainTitle)}>
                                     {displayTitle}
                                   </div>
                                 </div>
                               ) : isMedium ? (
                                 /* Medium layout (68px - 110px, e.g. 1.5 - 2 hrs) */
                                 <div className="flex-1 min-h-0 flex flex-col justify-start overflow-hidden">
-                                  <div className="text-[10px] sm:text-[10.5px] font-bold text-slate-900 leading-tight line-clamp-3 sm:line-clamp-4 break-words" title={formatDisplayTitle(mainTitle)}>
+                                  <div className="text-sm font-semibold text-slate-900 leading-tight line-clamp-3 sm:line-clamp-4 break-words" title={formatDisplayTitle(mainTitle)}>
                                     {displayTitle}
                                   </div>
                                 </div>
                               ) : (
                                 /* Tall layout (height >= 110px, e.g. 2+ hrs) */
                                 <div className="flex-1 min-h-0 flex flex-col justify-start overflow-hidden">
-                                  <div className="text-[10.5px] sm:text-[11px] font-bold text-slate-900 leading-snug line-clamp-5 sm:line-clamp-6 break-words" title={formatDisplayTitle(mainTitle)}>
+                                  <div className="text-sm font-semibold text-slate-900 leading-snug line-clamp-5 sm:line-clamp-6 break-words" title={formatDisplayTitle(mainTitle)}>
                                     {displayTitle}
                                   </div>
                                 </div>

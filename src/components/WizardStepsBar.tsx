@@ -100,10 +100,10 @@ export const WizardStepsBar: React.FC<WizardStepsBarProps> = React.memo(({
       </div>
 
       {/* Desktop / Tablet view: 5 interactive step tabs */}
-      <div className="hidden sm:grid grid-cols-5 gap-1.5">
+      <div className="hidden sm:grid grid-cols-5 gap-2">
         {steps.map((st) => {
           const isActive = wizardStep === st.num;
-          const isDone = st.isCompleted && !isActive;
+          const isDone = st.isCompleted && st.num < wizardStep;
 
           return (
             <button
@@ -111,6 +111,7 @@ export const WizardStepsBar: React.FC<WizardStepsBarProps> = React.memo(({
               type="button"
               id={`wizard-step-tab-${st.num}`}
               onClick={() => onSelectStep(st.num)}
+              aria-current={isActive ? 'step' : undefined}
               className={`flex items-center space-x-2 p-2 rounded-xl border text-left transition-all duration-150 cursor-pointer ${
                 isActive
                   ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
@@ -132,7 +133,7 @@ export const WizardStepsBar: React.FC<WizardStepsBarProps> = React.memo(({
               </div>
               <div className="min-w-0 flex-1">
                 <span
-                  className={`text-[11px] font-bold block truncate leading-tight ${
+                  className={`text-sm font-bold block leading-tight break-words ${
                     isActive ? 'text-white' : 'text-slate-800'
                   }`}
                 >

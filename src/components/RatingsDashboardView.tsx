@@ -138,87 +138,28 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
-      {/* Top Banner: Automatic Monday Email Summary & Quick Actions */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-3xl p-6 shadow-xl border border-blue-700/30 relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-3 py-1 bg-amber-400 text-slate-950 rounded-full text-xs font-black uppercase tracking-wider flex items-center space-x-1.5 shadow-sm">
-                <Cake className="w-3.5 h-3.5" />
-                <span>Solo Préstamos de Cumpleaños</span>
-              </span>
-              <span className="px-3 py-1 bg-blue-800 text-blue-100 rounded-full text-xs font-bold flex items-center space-x-1 border border-blue-600/50">
-                <Zap className="w-3.5 h-3.5 text-amber-300" />
-                <span>Envío Automático los Lunes</span>
-              </span>
-              <span className="px-3 py-1 bg-white/15 text-white rounded-full text-xs font-semibold flex items-center space-x-1 border border-white/20">
-                <Clock className="w-3.5 h-3.5 text-amber-300" />
-                <span>Última semana y próximas fechas</span>
-              </span>
+      <header className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div><h1 className="text-xl font-bold tracking-tight text-slate-900">Calificaciones</h1><p className="mt-1 text-sm text-slate-600">Revisa los préstamos de cumpleaños y registra su evaluación.</p><p className="mt-1 text-xs text-slate-500">Última semana y próximos cumpleaños</p></div>
+          <details className="rounded-xl border border-slate-200 bg-white p-3 sm:max-w-sm">
+            <summary className="min-h-6 cursor-pointer text-sm font-semibold text-slate-700">Informe de cumpleaños</summary>
+            <p className="mt-3 text-sm text-slate-600">Prepara el reporte semanal para revisarlo en tu aplicación de correo antes de enviarlo.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={handleCopyEmailText} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"><Copy className="h-4 w-4" />{copiedEmail ? 'Texto copiado' : 'Copiar informe'}</button>
+              <button type="button" onClick={handleTriggerAutoSend} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-700 px-3 text-sm font-semibold text-white hover:bg-blue-800"><Send className="h-4 w-4" />{autoSendSuccess ? 'Correo preparado' : 'Preparar correo'}</button>
             </div>
-
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-              Calificaciones de Préstamos de Cumpleaños
-            </h2>
-            <p className="text-xs sm:text-sm text-blue-100/90 leading-relaxed">
-              Exclusivo para evaluar eventos y celebraciones de cumpleaños (limpieza, puntualidad, mobiliario y comportamiento). Los días lunes se envía y consolida automáticamente el reporte para <strong>cristianshute@gmail.com</strong>.
-            </p>
-          </div>
-
-          {/* Email Actions buttons */}
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <button
-              onClick={handleCopyEmailText}
-              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-2xl text-xs font-bold transition flex items-center space-x-2 backdrop-blur-xs cursor-pointer"
-            >
-              {copiedEmail ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              <span>{copiedEmail ? '¡Copiado al Portapapeles!' : 'Copiar Texto del Informe'}</span>
-            </button>
-
-            <button
-              onClick={handleTriggerAutoSend}
-              className="px-5 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 rounded-2xl text-xs font-black shadow-lg transition flex items-center space-x-2 cursor-pointer"
-            >
-              <Send className="w-4 h-4" />
-              <span>{autoSendSuccess ? '¡Enviando Correo...!' : 'Enviar Correo Automático (Lunes)'}</span>
-            </button>
-          </div>
+          </details>
         </div>
-
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 mt-6 border-t border-white/10 text-xs">
-          <div className="p-3 bg-white/5 rounded-2xl border border-white/10">
-            <span className="text-amber-300 block text-[11px]">🎂 Cumpleaños Evaluados</span>
-            <span className="text-2xl font-black text-white">{stats.total}</span>
-          </div>
-          <div className="p-3 bg-white/5 rounded-2xl border border-white/10">
-            <span className="text-blue-300 block text-[11px]">⏳ Pendientes de Calificar</span>
-            <span className="text-2xl font-black text-amber-300">{stats.pending}</span>
-          </div>
-          <div className="p-3 bg-white/5 rounded-2xl border border-white/10">
-            <span className="text-rose-300 block text-[11px]">⚠️ Con Incidentes / Daños</span>
-            <span className="text-2xl font-black text-rose-300">{stats.incidents}</span>
-          </div>
-          <div className="p-3 bg-white/5 rounded-2xl border border-white/10">
-            <span className="text-emerald-300 block text-[11px]">Promedio de Cumpleaños</span>
-            <div className="text-2xl font-black text-emerald-300 flex items-center space-x-1">
-              {stats.avg !== null ? (
-                <>
-                  <span>{stats.avg.toFixed(1)}</span>
-                  <Star className="w-4 h-4 fill-emerald-300 text-emerald-300" />
-                </>
-              ) : (
-                <span className="text-xs font-semibold text-slate-300 italic">Sin calificaciones</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-y border-slate-200 py-4 sm:grid-cols-4">
+          <div><dt className="text-sm text-slate-600">Listos para calificar</dt><dd className="text-2xl font-bold text-slate-900">{readyToRateReservations.length}</dd></div>
+          <div><dt className="text-sm text-slate-600">Evaluados</dt><dd className="text-2xl font-bold text-slate-900">{stats.total}</dd></div>
+          <div><dt className="text-sm text-slate-600">Con incidentes</dt><dd className="text-2xl font-bold text-slate-900">{stats.incidents}</dd></div>
+          <div><dt className="text-sm text-slate-600">Evaluación promedio</dt><dd className="text-2xl font-bold text-slate-900">{stats.avg !== null ? `${stats.avg.toFixed(1)} / 5` : <span className="text-sm font-medium">Sin evaluaciones</span>}</dd></div>
+        </dl>
+      </header>
 
       {/* Main Grid: Pending Birthday Loans on Left, Completed Ratings on Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.5fr)] gap-6">
         {/* Left Column: Préstamos de Cumpleaños Pendientes de Calificar */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -239,8 +180,8 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span>Listas</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+              <span>Por calificar</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-xs ${
                 pendingTab === 'ready' ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'
               }`}>
                 {readyToRateReservations.length}
@@ -255,8 +196,8 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span>Por realizar</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+              <span>Próximos</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-xs ${
                 pendingTab === 'upcoming' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-700'
               }`}>
                 {upcomingReservations.length}
@@ -264,7 +205,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
             </button>
           </div>
 
-          <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
+          <div className="space-y-2.5 max-h-[70dvh] overflow-y-auto pr-1">
             {pendingTab === 'ready' ? (
               readyToRateReservations.length === 0 ? (
                 <div className="p-6 text-center bg-white rounded-2xl border border-slate-200 text-slate-400 text-xs">
@@ -281,7 +222,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-0.5 min-w-0">
                         <div className="flex items-center space-x-1.5">
-                          <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded-md border border-amber-300 flex items-center space-x-1">
+                          <span className="text-xs bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded-md border border-amber-300 flex items-center space-x-1">
                             <Cake className="w-3 h-3 text-amber-700" />
                             <span>Cumpleaños</span>
                           </span>
@@ -289,27 +230,27 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                             {formatDisplayTitle(res.descripcion || res.tipoActividad)}
                           </span>
                         </div>
-                        <span className="text-[11px] text-blue-600 font-semibold flex items-center space-x-1">
+                        <span className="text-sm text-blue-600 font-semibold flex items-center space-x-1">
                           <Building2 className="w-3 h-3 shrink-0" />
                           <span className="truncate">{formatDisplayTitle(res.espacio)}</span>
                         </span>
                       </div>
 
-                      <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded-lg shrink-0">
+                      <span className="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded-lg shrink-0">
                         {formatDateDDMMYYYY(res.fecha)}
                       </span>
                     </div>
 
-                    <div className="text-[11px] text-slate-600 space-y-0.5 pt-1 border-t border-slate-100">
+                    <div className="text-sm text-slate-600 space-y-0.5 pt-1 border-t border-slate-100">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-slate-700">Solicitante: {formatDisplayTitle(res.responsable)}</span>
                         <span className="font-mono text-slate-500">{res.horaInicio} - {res.horaFin}</span>
                       </div>
                       {res.telefonoContacto && (() => {
                         const phoneAction = getPhoneContactActions(res.telefonoContacto);
-                        if (!phoneAction) return <div className="text-[10px] text-slate-500 font-mono">📞 {res.telefonoContacto}</div>;
+                        if (!phoneAction) return <div className="text-xs text-slate-500 font-mono">📞 {res.telefonoContacto}</div>;
                         return (
-                          <div className="flex items-center space-x-1.5 text-[10px] font-mono">
+                          <div className="flex items-center space-x-1.5 text-xs font-mono">
                             <a
                               href={phoneAction.telHref}
                               className="text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1"
@@ -358,7 +299,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-0.5 min-w-0">
                         <div className="flex items-center space-x-1.5">
-                          <span className="text-[10px] bg-blue-100 text-blue-900 font-bold px-2 py-0.5 rounded-md border border-blue-300 flex items-center space-x-1">
+                          <span className="text-xs bg-blue-100 text-blue-900 font-bold px-2 py-0.5 rounded-md border border-blue-300 flex items-center space-x-1">
                             <Clock className="w-3 h-3 text-blue-700" />
                             <span>Por Realizar</span>
                           </span>
@@ -366,25 +307,25 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                             {formatDisplayTitle(res.descripcion || res.tipoActividad)}
                           </span>
                         </div>
-                        <span className="text-[11px] text-blue-600 font-semibold flex items-center space-x-1">
+                        <span className="text-sm text-blue-600 font-semibold flex items-center space-x-1">
                           <Building2 className="w-3 h-3 shrink-0" />
                           <span className="truncate">{formatDisplayTitle(res.espacio)}</span>
                         </span>
                       </div>
 
-                      <span className="text-[10px] font-mono font-bold bg-blue-50 text-blue-800 border border-blue-200 px-2 py-1 rounded-lg shrink-0">
+                      <span className="text-xs font-mono font-bold bg-blue-50 text-blue-800 border border-blue-200 px-2 py-1 rounded-lg shrink-0">
                         {formatDateDDMMYYYY(res.fecha)}
                       </span>
                     </div>
 
-                    <div className="text-[11px] text-slate-600 space-y-0.5 pt-1 border-t border-slate-100">
+                    <div className="text-sm text-slate-600 space-y-0.5 pt-1 border-t border-slate-100">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-slate-700">Solicitante: {formatDisplayTitle(res.responsable)}</span>
                         <span className="font-mono text-slate-500">{res.horaInicio} - {res.horaFin}</span>
                       </div>
                     </div>
 
-                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-[10px] text-slate-500 text-center font-medium">
+                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 text-center font-medium">
                       🔒 La calificación se habilitará cuando concluya el evento
                     </div>
                   </div>
@@ -395,14 +336,15 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
         </div>
 
         {/* Right Column (2 cols wide): Historial de Calificaciones de Cumpleaños */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="min-w-0 space-y-4">
           {/* Filters & Search Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Buscar por solicitante, espacio, evaluador de turno..."
+                aria-label="Buscar evaluaciones por solicitante, espacio o evaluador"
+                placeholder="Buscar evaluaciones"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -444,7 +386,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
           </div>
 
           {/* Ratings Cards List */}
-          <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[70dvh] overflow-y-auto pr-1">
             {filteredRatings.length === 0 ? (
               <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 text-slate-400 text-xs">
                 <Cake className="w-10 h-10 text-amber-300 mx-auto mb-2" />
@@ -471,12 +413,12 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                           <span className="font-bold text-slate-900 text-sm">{formatDisplayTitle(rating.responsable)}</span>
                           {rating.telefonoContacto && (() => {
                             const phoneAction = getPhoneContactActions(rating.telefonoContacto);
-                            if (!phoneAction) return <span className="text-[11px] font-mono text-slate-500">📞 {rating.telefonoContacto}</span>;
+                            if (!phoneAction) return <span className="text-sm font-mono text-slate-500">📞 {rating.telefonoContacto}</span>;
                             return (
                               <div className="flex items-center space-x-1.5">
                                 <a
                                   href={phoneAction.telHref}
-                                  className="text-[11px] font-mono text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1"
+                                  className="text-sm font-mono text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1"
                                   title="Llamar"
                                 >
                                   <span>📞</span>
@@ -494,7 +436,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                               </div>
                             );
                           })()}
-                          <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-300 flex items-center space-x-1">
+                          <span className="text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-300 flex items-center space-x-1">
                             <Cake className="w-3 h-3 text-amber-700" />
                             <span>Cumpleaños</span>
                           </span>
@@ -543,7 +485,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                     </div>
 
                     {/* Breakdown Scores Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-[11px]">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-sm">
                       <div className="p-2 bg-slate-50 rounded-xl">
                         <span className="text-slate-500 block">Limpieza y Orden</span>
                         <span className="font-bold text-slate-800">{rating.limpieza} / 5 ⭐</span>
@@ -569,7 +511,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                           <AlertTriangle className="w-3.5 h-3.5" />
                           <span>Incidentes Reportados en Cumpleaños:</span>
                         </span>
-                        <ul className="list-disc list-inside text-[11px] space-y-0.5 pl-1">
+                        <ul className="list-disc list-inside text-sm space-y-0.5 pl-1">
                           {rating.huboDanos && (
                             <li><strong>Daños / Roturas:</strong> {rating.detalleDanos || 'Daños en el mobiliario o espacio.'}</li>
                           )}
@@ -582,7 +524,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                     )}
 
                     {/* Observaciones & Evaluator Signature */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-500">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-sm text-slate-500">
                       {rating.observaciones ? (
                         <p className="italic text-slate-700 max-w-lg">
                           "{rating.observaciones}"
