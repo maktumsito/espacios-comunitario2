@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-li
 import { useState } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useSessionExpiry } from '../useSessionExpiry';
-import { AUTH_SESSION_EXPIRY_KEY, AUTH_SESSION_START_KEY, clearAuthUser, getAuthSessionToken, getSessionRemainingMs,
+import { AUTH_SESSION_EXPIRY_KEY, AUTH_SESSION_START_KEY, AUTH_SESSION_TOKEN_EXPIRY_KEY, clearAuthUser, getAuthSessionToken, getSessionRemainingMs,
   AUTH_SESSION_STORAGE_KEY, getStoredAuthUser, isSessionExpired, refreshSession, saveAuthUser, SESSION_DURATION_MS, updateStoredAuthUser } from '../../services/authService';
 import { AUTH_SESSION_ID_KEY, SESSION_CREDENTIAL_STORAGE_KEY } from '../../services/browserSession';
 import { sessionToken } from '../../firebase/gateway';
@@ -61,12 +61,16 @@ it('reschedules the deadline after explicit renewal and does not extend it for p
   expect(expire).toHaveBeenCalledOnce();
 });
 
-it('honors the absolute ceiling and rejects invalid deadlines', () => {
+it('allows active sessions beyond twelve hours and rejects invalid deadlines', () => {
+  const now = Date.now();
+  vi.setSystemTime(now - 13 * SESSION_DURATION_MS);
   saveAuthUser(account);
-  localStorage.setItem(AUTH_SESSION_START_KEY, String(Date.now() - 12 * SESSION_DURATION_MS + 1000));
-  expect(getSessionRemainingMs()).toBe(1000);
+  vi.setSystemTime(now);
+  localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, String(now + SESSION_DURATION_MS));
+  localStorage.setItem(AUTH_SESSION_TOKEN_EXPIRY_KEY, String(now + SESSION_DURATION_MS));
+  expect(getSessionRemainingMs()).toBe(SESSION_DURATION_MS);
   act(() => vi.advanceTimersByTime(1000));
-  expect(isSessionExpired()).toBe(true);
+  expect(isSessionExpired()).toBe(false);
   for (const invalid of ['Infinity', 'NaN', '123junk', '']) {
     localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, invalid);
     expect(isSessionExpired()).toBe(true);
@@ -101,6 +105,7 @@ function externalLogin(username = 'beatriz') {
   localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(user));
   localStorage.setItem(AUTH_SESSION_START_KEY, String(Date.now()));
   localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, String(Date.now() + SESSION_DURATION_MS));
+  localStorage.setItem(AUTH_SESSION_TOKEN_EXPIRY_KEY, String(Date.now() + SESSION_DURATION_MS));
   localStorage.setItem(AUTH_SESSION_ID_KEY, 'new-login');
   const identity = JSON.stringify([username, String(Date.now()), 'new-login']);
   localStorage.setItem(SESSION_CREDENTIAL_STORAGE_KEY, JSON.stringify({ identity, token: 'new.token' }));
@@ -133,6 +138,7 @@ it('uses a renewal from another tab without preferring a stale per-tab token or 
   const credential = JSON.parse(localStorage.getItem(SESSION_CREDENTIAL_STORAGE_KEY)!);
   localStorage.setItem(SESSION_CREDENTIAL_STORAGE_KEY, JSON.stringify({ ...credential, token: 'renewed.token' }));
   localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, String(Date.now() + SESSION_DURATION_MS));
+  localStorage.setItem(AUTH_SESSION_TOKEN_EXPIRY_KEY, String(Date.now() + SESSION_DURATION_MS));
   act(() => window.dispatchEvent(new StorageEvent('storage', { key: AUTH_SESSION_EXPIRY_KEY })));
   expect(getAuthSessionToken()).toBe('renewed.token');
   expect(sessionToken()).toBe('renewed.token');
@@ -162,4 +168,96 @@ it('ignores a late renewal for the old account after a login in another tab', as
   await expect(renewal).rejects.toThrow();
   expect(localStorage.getItem('espacios_auth_token_v2')).toBe('new.token');
   expect(JSON.parse(localStorage.getItem(AUTH_SESSION_STORAGE_KEY)!).username).toBe('beatriz');
+});
+
+it.each(['mousemove', 'pointermove', 'mousedown', 'keydown', 'input', 'change', 'touchstart', 'touchmove', 'wheel'])(
+  'restarts the inactivity deadline on %s without making a request for every event', event => {
+    saveAuthUser(account, SESSION_DURATION_MS, { token: 'original.token' });
+    const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+    const expire = vi.fn(); renderHook(() => useSessionExpiry(true, expire));
+    act(() => vi.advanceTimersByTime(30 * 60_000));
+    act(() => window.dispatchEvent(new Event(event)));
+    expect(getSessionRemainingMs()).toBe(SESSION_DURATION_MS);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(expire).not.toHaveBeenCalled();
+  },
+);
+
+it('keeps working beyond the original deadline and expires exactly one hour after the last activity', async () => {
+  saveAuthUser(account, SESSION_DURATION_MS, { token: 'original.token' });
+  const fetch = vi.fn().mockImplementation(async () => ({ ok: true, json: async () => ({
+    success: true, user: account, token: `renewed.${Date.now()}`, expiresAt: Date.now() + SESSION_DURATION_MS,
+  }) }));
+  vi.stubGlobal('fetch', fetch);
+  const expire = vi.fn(); renderHook(() => useSessionExpiry(true, expire));
+  for (let minute = 0; minute < 90; minute++) {
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+      window.dispatchEvent(new Event(minute % 2 ? 'input' : 'mousemove'));
+    });
+    expect(expire).not.toHaveBeenCalled();
+    expect(getSessionRemainingMs()).toBe(SESSION_DURATION_MS);
+  }
+  await act(async () => vi.advanceTimersByTimeAsync(SESSION_DURATION_MS - 1));
+  expect(expire).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(1));
+  expect(expire).toHaveBeenCalledExactlyOnceWith('expired');
+  // Only two credential renewals, including the one needed to cover the final idle period.
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it('never renews or extends an idle session for focus, background checks or storage events', () => {
+  saveAuthUser(account, SESSION_DURATION_MS, { token: 'original.token' });
+  const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  const expire = vi.fn(); renderHook(() => useSessionExpiry(true, expire));
+  act(() => vi.advanceTimersByTime(59 * 60_000));
+  for (const event of ['focus', 'pageshow', 'storage']) fireEvent(window, new Event(event));
+  fireEvent(document, new Event('visibilitychange'));
+  expect(getSessionRemainingMs()).toBe(60_000);
+  act(() => vi.advanceTimersByTime(60_000));
+  expect(expire).toHaveBeenCalledExactlyOnceWith('expired');
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('does not revive an expired session on activity after suspension and removes activity listeners', () => {
+  saveAuthUser(account);
+  const expire = vi.fn(); const { unmount } = renderHook(() => useSessionExpiry(true, expire));
+  vi.setSystemTime(Date.now() + SESSION_DURATION_MS);
+  fireEvent.mouseMove(window);
+  expect(expire).toHaveBeenCalledExactlyOnceWith('expired');
+  unmount();
+  saveAuthUser(account);
+  act(() => vi.advanceTimersByTime(30 * 60_000));
+  fireEvent.mouseMove(window);
+  expect(getSessionRemainingMs()).toBe(30 * 60_000);
+});
+
+it('shares activity with another tab without changing the bound login', () => {
+  saveAuthUser(account, SESSION_DURATION_MS, { token: 'original.token' });
+  const expire = vi.fn(); renderHook(() => useSessionExpiry(true, expire));
+  act(() => vi.advanceTimersByTime(30 * 60_000));
+  localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, String(Date.now() + SESSION_DURATION_MS));
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: AUTH_SESSION_EXPIRY_KEY })));
+  expect(getSessionRemainingMs()).toBe(SESSION_DURATION_MS);
+  expect(getAuthSessionToken()).toBe('original.token');
+  expect(expire).not.toHaveBeenCalled();
+});
+
+it('retries a failed automatic renewal without extending the idle deadline', async () => {
+  saveAuthUser(account, SESSION_DURATION_MS, { token: 'original.token' });
+  const fetch = vi.fn().mockRejectedValueOnce(new Error('Sin conexión')).mockImplementation(async () => ({
+    ok: true, json: async () => ({ success: true, user: account, token: 'renewed.token', expiresAt: Date.now() + SESSION_DURATION_MS }),
+  }));
+  vi.stubGlobal('fetch', fetch);
+  const expire = vi.fn(); renderHook(() => useSessionExpiry(true, expire));
+  act(() => vi.advanceTimersByTime(30 * 60_000));
+  fireEvent.input(window);
+  const idleDeadline = localStorage.getItem(AUTH_SESSION_EXPIRY_KEY);
+  await act(async () => vi.advanceTimersByTimeAsync(25 * 60_000));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  await act(async () => vi.advanceTimersByTimeAsync(30_000));
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(localStorage.getItem(AUTH_SESSION_EXPIRY_KEY)).toBe(idleDeadline);
+  expect(getAuthSessionToken()).toBe('renewed.token');
+  expect(expire).not.toHaveBeenCalled();
 });

@@ -157,19 +157,19 @@ it('rejects legacy credentials when no migration is configured', async () => {
   });
 });
 
-it('renews a verified session without extending its absolute twelve-hour ceiling', async () => {
+it('renews an active session beyond twelve hours but rejects an unrenewed credential after one hour', async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   await withSession(async base => {
     let { token } = await login(base);
     let expiresAt = 0;
-    for (let count = 0; count < 14; count++) {
+    for (let count = 0; count < 16; count++) {
       vi.advanceTimersByTime(50 * 60_000);
       const response = await fetch(`${base}/api/auth/session/refresh`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
       expect(response.status).toBe(200);
       ({ token, expiresAt } = await response.json());
     }
-    expect(expiresAt - Date.now()).toBe(20 * 60_000);
-    vi.advanceTimersByTime(21 * 60_000);
+    expect(expiresAt - Date.now()).toBe(60 * 60_000);
+    vi.advanceTimersByTime(60 * 60_000);
     expect((await fetch(`${base}/protected`, { headers: { Authorization: `Bearer ${token}` } })).status).toBe(401);
   });
 });

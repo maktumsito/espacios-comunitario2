@@ -86,7 +86,7 @@ export class AppSessions {
   }
   private issue(user: AuthUser, startedAt = Date.now(), version: string): string {
     const body = Buffer.from(JSON.stringify({ u: user.username, startedAt, v: version,
-      exp: Math.min(Date.now() + SESSION_MS, startedAt + 12 * SESSION_MS) })).toString('base64url');
+      exp: Date.now() + SESSION_MS })).toString('base64url');
     const signature = crypto.createHmac('sha256', this.key).update(body).digest('base64url');
     return `${body}.${signature}`;
   }
@@ -98,7 +98,7 @@ export class AppSessions {
     try {
       const claims = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
       return typeof claims.u === 'string' && typeof claims.v === 'string' && typeof claims.exp === 'number' && claims.exp > Date.now() &&
-        typeof claims.startedAt === 'number' && claims.startedAt <= Date.now() && Date.now() < claims.startedAt + 12 * SESSION_MS
+        typeof claims.startedAt === 'number' && claims.startedAt <= Date.now()
         ? { username: claims.u, startedAt: claims.startedAt, version: claims.v } : null;
     } catch { return null; }
   }
@@ -148,7 +148,7 @@ export class AppSessions {
       const { u: _username, r: _role, ...user } = (req as any).user;
       const startedAt = (req as any).sessionStartedAt;
       res.json({ success: true, user, token: this.issue(user, startedAt, (req as any).sessionBinding),
-        expiresAt: Math.min(Date.now() + SESSION_MS, startedAt + 12 * SESSION_MS) });
+        expiresAt: Date.now() + SESSION_MS });
     });
     app.post('/api/auth/google-session', async (req, res) => {
       res.set('Cache-Control', 'no-store');

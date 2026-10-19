@@ -117,7 +117,13 @@ const NavbarComponent: React.FC<NavbarProps> = ({
       );
     update();
     const timer = setInterval(update, 15000);
-    return () => clearInterval(timer);
+    window.addEventListener('auth-session-changed', update);
+    window.addEventListener('storage', update);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('auth-session-changed', update);
+      window.removeEventListener('storage', update);
+    };
   }, [currentUser]);
 
   useEffect(() => {
@@ -449,6 +455,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                   id="btn-navbar-user-profile"
                   type="button"
                   onClick={() => {
+                    setSessionMinutesLeft(Math.max(0, Math.ceil(getSessionRemainingMs() / 60000)));
                     setIsUserMenuOpen(!isUserMenuOpen);
                     setIsToolsMenuOpen(false);
                   }}
@@ -482,7 +489,10 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                         {currentUser.role}
                       </p>
                       <p className="mt-2 text-sm text-slate-600">
-                        Sesión: {sessionMinutesLeft} min restantes
+                        Cierre por inactividad en {sessionMinutesLeft} min
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        El plazo se reinicia al mover el mouse, escribir o interactuar.
                       </p>
                       <button
                         type="button"

@@ -643,29 +643,47 @@ export function canViewAuditLog(user?: AuthUser | null): boolean {
   return role === "administrador" || role === "coordinador";
 }
 
-// Duración de la sesión: 1 hora exacta (60 minutos = 3.600.000 ms)
+// Cierre de sesión tras una hora sin actividad.
 export const SESSION_DURATION_MS = 60 * 60 * 1000;
 export const AUTH_SESSION_EXPIRY_KEY = "espacios_auth_session_expiry_v1";
 export const AUTH_SESSION_START_KEY = "espacios_auth_session_start_v1";
+export const AUTH_SESSION_TOKEN_EXPIRY_KEY = "espacios_auth_token_expiry_v1";
 
 /**
  * Retorna los milisegundos restantes de la sesión actual (o 0 si ya expiró)
  */
-export function getSessionRemainingMs(): number {
+export function getSessionRemainingMs(now = Date.now()): number {
   if (!isBrowser) return 0;
   try {
     const expiryRaw = localStorage.getItem(AUTH_SESSION_EXPIRY_KEY);
     if (!expiryRaw) return 0;
     const expiresAt = Number(expiryRaw);
-    const startedAt = Number(localStorage.getItem(AUTH_SESSION_START_KEY));
     if (!Number.isFinite(expiresAt)) return 0;
-    const deadline = startedAt > 0 && Number.isFinite(startedAt)
-      ? Math.min(expiresAt, startedAt + 12 * 60 * 60 * 1000) : expiresAt;
-    const remaining = deadline - Date.now();
+    const remaining = expiresAt - now;
     return remaining > 0 ? remaining : 0;
   } catch {
     return 0;
   }
+}
+
+/** The server credential has its own deadline, independent of user activity. */
+export function getSessionTokenRemainingMs(now = Date.now()): number {
+  if (!isBrowser) return 0;
+  const raw = localStorage.getItem(AUTH_SESSION_TOKEN_EXPIRY_KEY);
+  // Compatibility with sessions opened before the inactivity timer was added.
+  if (raw === null) return getSessionRemainingMs(now);
+  const expiresAt = Number(raw);
+  return Number.isFinite(expiresAt) ? Math.max(0, expiresAt - now) : 0;
+}
+
+/** Activity may extend a live session, but must never revive an expired login. */
+export function recordSessionActivity(): boolean {
+  if (isSessionExpired()) return false;
+  if (localStorage.getItem(AUTH_SESSION_TOKEN_EXPIRY_KEY) === null) {
+    localStorage.setItem(AUTH_SESSION_TOKEN_EXPIRY_KEY, localStorage.getItem(AUTH_SESSION_EXPIRY_KEY)!);
+  }
+  localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, String(Date.now() + SESSION_DURATION_MS));
+  return true;
 }
 
 /**
@@ -674,7 +692,8 @@ export function getSessionRemainingMs(): number {
 export function isSessionExpired(): boolean {
   if (!isBrowser) return true;
   try {
-    return hasBrowserSessionChanged() || !localStorage.getItem(AUTH_SESSION_STORAGE_KEY) || getSessionRemainingMs() <= 0;
+    return hasBrowserSessionChanged() || !localStorage.getItem(AUTH_SESSION_STORAGE_KEY) ||
+      getSessionRemainingMs() <= 0 || getSessionTokenRemainingMs() <= 0;
   } catch {
     return true;
   }
@@ -685,6 +704,7 @@ export function isSessionExpired(): boolean {
  */
 export async function refreshSession(
   durationMs: number = SESSION_DURATION_MS,
+  { preserveIdleDeadline = false }: { preserveIdleDeadline?: boolean } = {},
 ): Promise<void> {
   if (!isBrowser) return;
   try {
@@ -709,7 +729,8 @@ export async function refreshSession(
       now + boundedDuration,
       refreshed.expiresAt ?? Infinity,
     );
-    localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, expiresAt.toString());
+    localStorage.setItem(AUTH_SESSION_TOKEN_EXPIRY_KEY, String(refreshed.expiresAt ?? now + SESSION_DURATION_MS));
+    if (!preserveIdleDeadline) localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, expiresAt.toString());
     if (refreshed.token) storeBrowserSessionToken(refreshed.token);
     window.dispatchEvent(new Event("auth-session-changed"));
   } catch (err) {
@@ -755,6 +776,7 @@ export function saveAuthUser(
     const expiresAt = Math.min(now + boundedDuration, session?.expiresAt ?? Infinity);
     localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(user));
     localStorage.setItem(AUTH_SESSION_EXPIRY_KEY, expiresAt.toString());
+    localStorage.setItem(AUTH_SESSION_TOKEN_EXPIRY_KEY, String(session?.expiresAt ?? expiresAt));
     localStorage.setItem(AUTH_SESSION_START_KEY, now.toString());
     localStorage.setItem(AUTH_SESSION_ID_KEY, crypto.randomUUID());
     bindBrowserSession();
@@ -782,6 +804,7 @@ export function clearAuthUser(): void {
       localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
       localStorage.removeItem(AUTH_SESSION_EXPIRY_KEY);
       localStorage.removeItem(AUTH_SESSION_START_KEY);
+      localStorage.removeItem(AUTH_SESSION_TOKEN_EXPIRY_KEY);
       localStorage.removeItem(AUTH_SESSION_ID_KEY);
       localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
       localStorage.removeItem(SESSION_CREDENTIAL_STORAGE_KEY);
