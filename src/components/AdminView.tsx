@@ -828,19 +828,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
         return;
       }
 
-      if (isCristianShute(targetUser)) {
-        setConfirmDialog({
-          isOpen: true,
-          title: 'Usuario Maestro Protegido',
-          message: 'La cuenta de Cristian Shute mantiene acceso maestro permanente y no puede ser restringida.',
-          variant: 'info',
-          confirmLabel: 'Aceptar',
-          hideCancel: true,
-          onConfirm: () => setConfirmDialog(null)
-        });
-        return;
-      }
-
       const updatedUser: UserAccount = {
         ...targetUser,
         canCreateReservations: permKey === 'canCreateReservations' ? newValue : userCanCreateReservations(targetUser),
@@ -1675,12 +1662,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         )}
                       </div>
 
-                      {isCristianShute(usr) ? (
-                        <div className="p-2 rounded-lg bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-900 flex items-center gap-2">
-                          <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
-                          <span className="font-bold leading-tight">Acceso Maestro Permanente: Registro, edición y eliminación sin restricciones.</span>
-                        </div>
-                      ) : (
                         <div className="space-y-1.5">
                           {/* Permiso 1: Registrar Nuevas Reservas */}
                           <div className="flex items-center justify-between text-xs py-1 border-b border-slate-200/60">
@@ -1823,7 +1804,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             )}
                           </div>
                         </div>
-                      )}
                     </div>
                   </div>
 
@@ -1843,7 +1823,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         </button>
                         {isMaster ? (
                           <span
-                            title="Usuario Maestro Protegido. Acceso permanente no eliminable."
+                            title="Cuenta maestra protegida contra la eliminación."
                             className="px-2 py-1 bg-amber-50 text-amber-800 border border-amber-200/80 rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-2xs"
                           >
                             <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />

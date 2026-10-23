@@ -182,3 +182,19 @@ it('also rejects unauthorized permission changes in backup profiles', () => {
   expect(() => validateUserPermissions({ username: 'master', isMasterAdmin: true }, { ...existing, canEditReservations: true }, existing)).toThrow('Solo Cristian Shute');
   expect(() => validateUserPermissions({ username: 'cristian shute', isMasterAdmin: true }, { ...existing, canEditReservations: true }, existing)).not.toThrow();
 });
+
+it('lets Cristian revoke and restore his own reservation permissions while keeping user administration', async () => {
+  await withUsers(async ({ post, login, rows }) => {
+    const { token } = await login('cristian shute');
+    const keys = ['canCreateReservations', 'canEditReservations', 'canDeleteReservations'];
+    for (const value of [false, true]) {
+      const user = { username: 'cristian shute', name: 'Cristian Shute', role: 'Administrador', isMasterAdmin: true,
+        ...Object.fromEntries(keys.map(key => [key, value])) };
+      expect((await post('/api/users/save', { user, originalUsername: user.username }, token)).status).toBe(200);
+      expect(rows.get(`usuarios_sistema/${accountId(user.username)}`)).toMatchObject(user);
+      expect((await post('/api/auth/session/refresh', {}, token)).user).toMatchObject(user);
+      for (const key of keys)
+        expect((await post(`/check/${key}`, {}, token)).status).toBe(value ? 200 : 403);
+    }
+  });
+});

@@ -258,6 +258,40 @@ it('preserves bulk permission changes, excludes protected accounts and prevents 
   expect(save).toHaveBeenCalledTimes(1);
 });
 
+it('lets Cristian disable and restore each of his own reservation permissions', async () => {
+  let user = { ...operator, username: 'cristian shute', name: 'Cristian Shute', role: 'Administrador', isMasterAdmin: true,
+    canCreateReservations: true, canEditReservations: true, canDeleteReservations: true };
+  const save = vi.fn().mockResolvedValue(undefined);
+  const view = () => <AdminView {...props({ initialTab: 'users', currentUser: user, users: [user], onSaveUser: save })} />;
+  const { rerender } = render(view());
+  expect(screen.queryByText(/Acceso Maestro Permanente/)).toBeNull();
+  const keys = ['canCreateReservations', 'canEditReservations', 'canDeleteReservations'] as const;
+  let call = 0;
+  for (const value of [false, true]) {
+    for (const [index, key] of keys.entries()) {
+      fireEvent.click(screen.getAllByTitle('Haz clic para activar o desactivar este permiso')[index]);
+      call += 1;
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(call));
+      const [updated, originalUsername] = save.mock.calls[call - 1];
+      expect(originalUsername).toBe('cristian shute');
+      expect(updated).toMatchObject({ ...user, [key]: value });
+      user = updated;
+      rerender(view());
+    }
+    expect(screen.getAllByText(value ? 'Activado' : 'Bloqueado')).toHaveLength(3);
+  }
+  expect(screen.getByText('Protegido')).toBeTruthy();
+});
+
+it('shows Cristian\'s actual reservation permissions to other administrators', () => {
+  const user = { ...operator, username: 'cristian shute', name: 'Cristian Shute', role: 'Administrador', isMasterAdmin: true,
+    canCreateReservations: false, canEditReservations: true, canDeleteReservations: false };
+  render(<AdminView {...props({ initialTab: 'users', users: [user] })} />);
+  expect(screen.getAllByText('Restringido')).toHaveLength(2);
+  expect(screen.getByText('Permitido')).toBeTruthy();
+  expect(screen.queryByTitle('Haz clic para activar o desactivar este permiso')).toBeNull();
+});
+
 it('retains the equipment-service fallback when no save callback is supplied', async () => {
   const pending = deferred();
   vi.mocked(saveEquipmentItem).mockImplementationOnce(async item => { await pending.promise; return [item]; });
