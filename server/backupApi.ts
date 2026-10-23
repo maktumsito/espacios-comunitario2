@@ -7,6 +7,7 @@ import {
   ApiFailure,
   manager,
   requireManager,
+  validateUserPermissions,
 } from "./dataApi";
 import { validateBackupRecord } from "../src/utils/backupIntegrity";
 
@@ -41,6 +42,7 @@ async function prepareEntities(
         409,
         "El respaldo contiene perfiles que requieren alta y contraseña individual antes de restaurarlos.",
       );
+    validateUserPermissions(actor, u, existing);
     if (
       existing.isMasterAdmin !== u.isMasterAdmin &&
       actor.isMasterAdmin !== true
@@ -90,6 +92,9 @@ async function prepareEntities(
       `usuarios_sistema/${accountId(u.username)}`,
       {
         ...profile,
+        ...Object.fromEntries(['canCreateReservations', 'canEditReservations', 'canDeleteReservations']
+          .filter(key => existing[key] !== undefined && profile[key] === undefined)
+          .map(key => [key, existing[key]])),
         passwordHash: existing.passwordHash,
         sessionVersion: existing.sessionVersion || 0,
       },

@@ -66,7 +66,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   const hasMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
   const isFormValid =
     (skipCurrentPassword || currentPassword.trim().length > 0) &&
-    newPassword.trim().length >= 3 &&
+    newPassword.trim().length >= 8 && newPassword.trim().length <= 256 &&
     isPasswordMatch;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,8 +79,8 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       return;
     }
 
-    if (newPassword.trim().length < 8) {
-      setErrorMsg('La nueva clave de acceso debe tener al menos 8 caracteres.');
+    if (newPassword.trim().length < 8 || newPassword.trim().length > 256) {
+      setErrorMsg('La nueva clave de acceso debe tener entre 8 y 256 caracteres.');
       return;
     }
 
@@ -94,8 +94,8 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     try {
       const res = await changeUserPassword(
         activeUser.username,
-        currentPassword,
-        newPassword,
+        currentPassword.trim(),
+        newPassword.trim(),
         skipCurrentPassword
       );
 
@@ -253,6 +253,9 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                 type={showNewPassword ? 'text' : 'password'}
                 required
                 placeholder="Nueva clave deseada"
+                autoComplete="new-password"
+                minLength={8}
+                maxLength={256}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="w-full pl-3.5 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium shadow-xs"

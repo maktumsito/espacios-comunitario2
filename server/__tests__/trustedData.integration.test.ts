@@ -22,7 +22,7 @@ import {
 } from "firebase/auth";
 import { AppSessions } from "../appSession";
 import { hashPassword } from "../passwords";
-import { registerDataApi } from "../dataApi";
+import { accountId, registerDataApi } from "../dataApi";
 import { registerReservationApi, readAudit, commitTrusted } from "../reservationApi";
 import { registerBackupApi } from "../backupApi";
 import { claimDelivery, startDelivery, finishDelivery } from "../deliveryLease";
@@ -44,7 +44,7 @@ describe.skipIf(!enabled)(
       sdk = clientDb(sdkApp);
     connectFirestoreEmulator(sdk, "127.0.0.1", 8087);
     const accounts = new AppSessions(async (name) => {
-      const s = await db.doc(`usuarios_sistema/${name}`).get();
+      const s = await db.doc(`usuarios_sistema/${accountId(name)}`).get();
       return s.exists ? (s.data() as any) : null;
     }, "synthetic-trusted-server-secret-32-characters");
     const api = express();
@@ -237,6 +237,51 @@ describe.skipIf(!enabled)(
           )
         ).status,
       ).toBe(200);
+    });
+    it('enforces assigned user permissions on real reservation transactions and active sessions', async () => {
+      await db.doc(`usuarios_sistema/${accountId('cristian shute')}`).set({
+        username: 'cristian shute', name: 'Titular de prueba', role: 'Administrador', isMasterAdmin: true,
+        passwordHash: await hashPassword('Fixture-master-123!'),
+      });
+      const master = await post('/api/auth/session', { username: 'cristian shute', password: 'Fixture-master-123!' }, '');
+      const user = { username: 'ana.prueba', name: 'Ana de prueba', role: 'Auxiliar',
+        canCreateReservations: true, canEditReservations: false, canDeleteReservations: false };
+      expect((await post('/api/users/save', { user, password: 'Fixture-ana-123!' }, master.token)).status).toBe(200);
+      const ana = await post('/api/auth/session', { username: user.username, password: 'Fixture-ana-123!' }, '');
+      expect(ana.status).toBe(200);
+      const created = await post('/api/reservations/commit', { reservations: [row('ana-reservation')],
+        options: { operationId: 'ana-create', intent: 'create' } }, ana.token);
+      expect(created.status).toBe(200);
+      const original = created.result.reservations[0];
+      const edit = { reservations: [{ ...original, descripcion: 'Editada por Ana' }], options: { operationId: 'ana-edit', intent: 'update' } };
+      expect((await post('/api/reservations/commit', edit, ana.token)).error).toMatch(/permiso/);
+      expect((await db.doc('reservas/ana-reservation').get()).get('version')).toBe(1);
+      expect((await post('/api/users/save', { user: { ...user, canEditReservations: true } }, editor)).status).toBe(403);
+      expect((await post('/api/users/save', { user: { ...user, canEditReservations: true } }, master.token)).status).toBe(200);
+      expect((await post('/api/reservations/commit', edit, ana.token)).error).toBeUndefined();
+      expect((await db.doc('reservas/ana-reservation').get()).get('version')).toBe(2);
+      const remove = { reservations: [], options: { operationId: 'ana-delete', deletedIds: ['ana-reservation'], expectedVersions: { 'ana-reservation': 2 } } };
+      expect((await post('/api/reservations/commit', remove, ana.token)).error).toMatch(/permiso/);
+      expect((await db.doc('reservas/ana-reservation').get()).exists).toBe(true);
+      expect((await post('/api/users/save', { user: { ...user, canEditReservations: true, canDeleteReservations: true } }, master.token)).status).toBe(200);
+      expect((await post('/api/reservations/commit', remove, ana.token)).error).toBeUndefined();
+      expect((await db.doc('reservas/ana-reservation').get()).exists).toBe(false);
+      expect((await post('/api/users/save', { user: { ...user, canCreateReservations: false } }, master.token)).status).toBe(200);
+      expect((await post('/api/reservations/commit', { reservations: [row('ana-blocked')],
+        options: { operationId: 'ana-blocked', intent: 'create' } }, ana.token)).error).toMatch(/permiso/);
+      expect((await db.doc('reservas/ana-blocked').get()).exists).toBe(false);
+    });
+
+    it('preserves existing passwords on profile edits and authenticates a reassigned password', async () => {
+      const before = (await db.doc('usuarios_sistema/reader').get()).get('passwordHash');
+      const user = { username: 'reader', name: 'Lector actualizado', role: 'Auxiliar' };
+      expect((await post('/api/users/save', { user, password: '' })).status).toBe(200);
+      expect((await db.doc('usuarios_sistema/reader').get()).get('passwordHash')).toBe(before);
+      expect((await post('/api/auth/session/refresh', {}, reader)).status).toBe(200);
+      expect((await post('/api/users/save', { user, password: '  Reassigned-123!  ' })).status).toBe(200);
+      expect((await post('/api/auth/session/refresh', {}, reader)).status).toBe(401);
+      expect((await post('/api/auth/session', { username: 'reader', password: 'Synthetic-only-123!' }, '')).status).toBe(401);
+      expect((await post('/api/auth/session', { username: 'reader', password: 'Reassigned-123!' }, '')).status).toBe(200);
     });
     it("rejects stale edits and deletions, captures authoritative audit and retries after later edits safely", async () => {
       const request = {

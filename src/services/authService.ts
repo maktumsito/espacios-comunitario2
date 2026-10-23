@@ -1,4 +1,5 @@
 import { dataRequest, announceDataChange } from "../firebase/gateway";
+import { isReservationPermissionAdmin, reservationPermission } from '../utils/userPermissions';
 import { sharedOnSnapshot as onSnapshot } from "../firebase/sharedSnapshot";
 import {
   collection,
@@ -374,73 +375,37 @@ export function isMasterAdmin(user?: AuthUser | null): boolean {
  * Identifica si un usuario es específicamente Cristian Shute (Super Administrador titular y dueño de la cuenta maestra).
  */
 export function isCristianShute(user?: AuthUser | null): boolean {
-  return (
-    !!user && user.isMasterAdmin===true &&
-    ["cristian shute"].includes(user.username.trim().toLowerCase())
-  );
+  return isReservationPermissionAdmin(user);
 }
 
 /**
  * Determina si el usuario tiene permiso para registrar nuevas reservas.
- * Cristian Shute siempre posee permiso maestro absoluto.
  * Si Cristian Shute configuró explícitamente el permiso en el usuario, se respeta la decisión.
  */
 export function userCanCreateReservations(
   user?: AuthUser | UserAccount | null,
 ): boolean {
-  if (!user) return false;
-
-  if (typeof user.canCreateReservations === "boolean") {
-    return user.canCreateReservations;
-  }
-  // Default por rol si aún no se ha configurado explícitamente:
-  const role = (user.role || "").trim().toLowerCase();
-  if (
-    role === "auxiliar" ||
-    role === "tecnico" ||
-    role === "técnico" ||
-    role.includes("operativo")
-  ) {
-    return false;
-  }
-  return (
-    isCoordinatorOrAdmin(user) ||
-    ["recepción", "recepcion", "gestión", "gestion"].includes(role)
-  );
+  return reservationPermission(user, 'canCreateReservations');
 }
 
 /**
  * Determina si el usuario tiene permiso para editar o cambiar reservas existentes.
- * Cristian Shute siempre posee permiso maestro absoluto.
  * Si Cristian Shute configuró explícitamente el permiso en el usuario, se respeta la decisión.
  */
 export function userCanEditReservations(
   user?: AuthUser | UserAccount | null,
 ): boolean {
-  if (!user) return false;
-
-  if (typeof user.canEditReservations === "boolean") {
-    return user.canEditReservations;
-  }
-  // Default por rol si aún no se ha configurado explícitamente:
-  return isCoordinatorOrAdmin(user);
+  return reservationPermission(user, 'canEditReservations');
 }
 
 /**
  * Determina si el usuario tiene permiso para eliminar reservas directamente.
- * Cristian Shute siempre posee permiso maestro absoluto.
  * Si Cristian Shute configuró explícitamente el permiso en el usuario, se respeta la decisión.
  */
 export function userCanDeleteReservations(
   user?: AuthUser | UserAccount | null,
 ): boolean {
-  if (!user) return false;
-
-  if (typeof user.canDeleteReservations === "boolean") {
-    return user.canDeleteReservations;
-  }
-  // Default por rol si aún no se ha configurado explícitamente:
-  return isCoordinatorOrAdmin(user);
+  return reservationPermission(user, 'canDeleteReservations');
 }
 
 /**

@@ -5,6 +5,8 @@ import { isDeepStrictEqual } from "node:util";
 import { gzipSync } from "node:zlib";
 import type { AppSessions } from "./appSession";
 import { hashPassword, publicProfile, verifyPassword } from "./passwords";
+import { defaultNewUserPermissions, isReservationPermissionAdmin, reservationPermission, reservationPermissionKeys } from '../src/utils/userPermissions';
+export { reservationPermission } from '../src/utils/userPermissions';
 import {
   claimScheduledBackup,
   finishScheduledBackup,
@@ -22,20 +24,15 @@ export const manager = (user: any) =>
   ["administrador", "coordinador"].includes(
     (user.role || "").trim().toLowerCase(),
   );
-export function reservationPermission(
-  user: any,
-  key:
-    "canCreateReservations" | "canEditReservations" | "canDeleteReservations",
-) {
-  if (typeof user[key] === "boolean") return user[key];
-  return (
-    manager(user) ||
-    user.isMasterAdmin === true ||
-    (key === "canCreateReservations" &&
-      ["recepción", "recepcion", "gestión", "gestion"].includes(
-        (user.role || "").toLowerCase(),
-      ))
-  );
+export function validateUserPermissions(actor: any, input: any, existing?: any) {
+  const defaults = defaultNewUserPermissions(input.role);
+  for (const key of reservationPermissionKeys) {
+    if (input[key] !== undefined && typeof input[key] !== 'boolean')
+      throw new ApiFailure(400, 'Los permisos de reservas deben ser valores booleanos.');
+    const expected = existing ? reservationPermission(existing, key) : defaults[key];
+    if (!isReservationPermissionAdmin(actor) && input[key] !== undefined && input[key] !== expected)
+      throw new ApiFailure(403, 'Solo Cristian Shute puede asignar o modificar permisos de reservas.');
+  }
 }
 export const accountId = (name: string) =>
   encodeURIComponent(name.trim().toLowerCase()).replace(/\./g, "_");
@@ -395,6 +392,7 @@ export function registerDataApi(
         !username ||
         username.length > 150 ||
         typeof input.name !== "string" ||
+        !input.name.trim() ||
         input.name.length > 200 ||
         ![
           "Administrador",
@@ -407,12 +405,22 @@ export function registerDataApi(
       )
         throw new ApiFailure(400, "Perfil no válido.");
       const password = req.body.password;
-      const newHash = password ? await hashPassword(password) : undefined;
+      if (password !== undefined && typeof password !== 'string')
+        throw new ApiFailure(400, 'Contraseña no válida.');
+      const cleanPassword = password?.trim();
+      if (cleanPassword && (cleanPassword.length < 8 || cleanPassword.length > 256))
+        throw new ApiFailure(400, 'La contraseña debe tener entre 8 y 256 caracteres.');
+      const newHash = cleanPassword ? await hashPassword(cleanPassword) : undefined;
       const users = await db.runTransaction(async (tx) => {
         const oldRef = db.doc(`usuarios_sistema/${accountId(oldName)}`),
           newRef = db.doc(`usuarios_sistema/${accountId(username)}`);
         const all = await tx.get(db.collection("usuarios_sistema"));
         const old = all.docs.find(d => d.id === oldRef.id);
+        if (old && old.get('username')?.trim().toLowerCase() !== oldName)
+          throw new ApiFailure(409, 'El identificador coincide con otra cuenta existente. Usa un identificador diferente.');
+        validateUserPermissions(actor, input, old?.data());
+        if (input.isMasterAdmin !== undefined && typeof input.isMasterAdmin !== 'boolean')
+          throw new ApiFailure(400, 'El permiso maestro debe ser un valor booleano.');
         if (oldName !== username && all.docs.some((d) => d.id === newRef.id))
           throw new ApiFailure(409, "El identificador ya está en uso.");
         if (!old && !newHash)
@@ -453,7 +461,11 @@ export function registerDataApi(
             .filter((k) => input[k] !== undefined)
             .map((k) => [k, input[k]]),
         );
+        if (!isReservationPermissionAdmin(actor)) {
+          for (const key of reservationPermissionKeys) delete profile[key];
+        }
         const updated = {
+          ...(!old ? defaultNewUserPermissions(input.role) : {}),
           ...old?.data(),
           ...profile,
           username,
@@ -517,7 +529,11 @@ export function registerDataApi(
         override = req.body.override === true && actor.isMasterAdmin === true;
       if (username !== actor.username && !override)
         throw new ApiFailure(403, "Solo puedes cambiar tu propia contraseña.");
-      const next = await hashPassword(req.body.newPassword);
+      const currentPassword = typeof req.body.currentPassword === 'string' ? req.body.currentPassword.trim() : '';
+      const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword.trim() : '';
+      if (newPassword.length < 8 || newPassword.length > 256)
+        throw new ApiFailure(400, 'La contraseña debe tener entre 8 y 256 caracteres.');
+      const next = await hashPassword(newPassword);
       await db.runTransaction(async (tx) => {
         const ref = db.doc(`usuarios_sistema/${accountId(username)}`),
           old = await tx.get(ref);
@@ -525,7 +541,7 @@ export function registerDataApi(
         if (
           !override &&
           !(await verifyPassword(
-            req.body.currentPassword || "",
+            currentPassword,
             old.get("passwordHash"),
           ))
         )

@@ -150,6 +150,55 @@ it('keeps user-save authorization and entered values when the role changes', asy
   expect(save.mock.calls[0][0]).toMatchObject({ name: 'Usuario nuevo', username: 'usuario nuevo', initials: 'UN' });
 });
 
+it('creates a user with an assigned password and the permissions selected by Cristian', async () => {
+  const save = vi.fn().mockResolvedValue(undefined);
+  const currentUser = { ...props().currentUser!, username: 'cristian shute', isMasterAdmin: true };
+  render(<AdminView {...props({ initialTab: 'users', currentUser, onSaveUser: save })} />);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Crear Nuevo Usuario' })[0]);
+  fireEvent.change(screen.getByPlaceholderText('Ej: Carla Morales, Roberto Lagos'), { target: { value: 'Ana Prueba' } });
+  fireEvent.change(screen.getByLabelText('Clave de Acceso'), { target: { value: 'Assigned-only-123!' } });
+  fireEvent.click(screen.getByLabelText('Editar y modificar reservas existentes'));
+  fireEvent.click(screen.getByLabelText('Eliminar reservas directamente'));
+  expect(form().checkValidity()).toBe(true);
+  fireEvent.submit(form());
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ name: 'Ana Prueba', passwordHash: 'Assigned-only-123!',
+    canCreateReservations: true, canEditReservations: false, canDeleteReservations: true }), undefined);
+});
+
+it('uses role defaults for new users while non-Cristian permission controls stay disabled', async () => {
+  render(<AdminView {...props({ initialTab: 'users', onSaveUser: vi.fn() })} />);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Crear Nuevo Usuario' })[0]);
+  fireEvent.change(screen.getByLabelText('Rol y Nivel de Acceso'), { target: { value: 'Auxiliar' } });
+  for (const input of within(screen.getByRole('dialog')).getAllByRole('checkbox') as HTMLInputElement[]) {
+    expect(input.disabled).toBe(true);
+    expect(input.checked).toBe(false);
+  }
+});
+
+it('allows the browser to submit an edited profile while retaining its existing password', async () => {
+  const save = vi.fn().mockResolvedValue(undefined);
+  render(<AdminView {...props({ initialTab: 'users', onSaveUser: save })} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+  const password = screen.getByLabelText('Clave de Acceso') as HTMLInputElement;
+  expect(password.value).toBe('');
+  expect(password.required).toBe(false);
+  fireEvent.change(screen.getByPlaceholderText('Ej: Carla Morales, Roberto Lagos'), { target: { value: 'Nombre editado' } });
+  expect(form().checkValidity()).toBe(true);
+  fireEvent.submit(form());
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ name: 'Nombre editado', passwordHash: '' }), 'operator');
+});
+
+it('routes a manager password reassignment through the authorized profile editor', () => {
+  const openPassword = vi.fn();
+  render(<AdminView {...props({ initialTab: 'users', onOpenChangePassword: openPassword })} />);
+  fireEvent.click(screen.getByTitle('Restablecer o modificar clave de este usuario'));
+  expect(openPassword).not.toHaveBeenCalled();
+  expect(screen.getByText('Editar Usuario')).toBeTruthy();
+  expect(screen.getByLabelText('Clave de Acceso')).toBeTruthy();
+});
+
 it('retains the managed confirmation when user deletion is declined by the server', async () => {
   const remove = vi.fn().mockResolvedValue({ success: false, message: 'Usuario protegido' });
   render(<AdminView {...props({ initialTab: 'users', onDeleteUser: remove })} />);

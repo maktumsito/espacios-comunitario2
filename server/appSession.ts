@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { Express, RequestHandler } from 'express';
 import type { AuthUser, UserAccount, LoginAccount } from '../src/services/authService';
 import { publicProfile,verifyPassword, verifyLegacyPassword } from './passwords';
+import { reservationPermission, reservationPermissionKeys } from '../src/utils/userPermissions';
 
 const SESSION_MS = 60 * 60_000;
 
@@ -23,10 +24,7 @@ function accountReadFailure(error: unknown) {
 
 export const requireReservationWriter: RequestHandler = (req, res, next) => {
   const user = (req as any).user as AuthUser | undefined;
-  const flags = [user?.canCreateReservations, user?.canEditReservations, user?.canDeleteReservations];
-  const allowed = !!user && (flags.some(flag => flag === true) ||
-    (flags.every(flag => typeof flag !== 'boolean') && (user.isMasterAdmin === true ||
-      ['administrador', 'coordinador', 'recepción', 'gestión'].includes((user.role || '').trim().toLowerCase()))));
+  const allowed = reservationPermissionKeys.some(key => reservationPermission(user, key));
   if (!allowed) { res.status(403).json({ success: false, error: 'Esta cuenta tiene acceso de solo lectura.' }); return; }
   next();
 };

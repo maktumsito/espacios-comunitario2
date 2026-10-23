@@ -21,6 +21,7 @@ import {
 } from '../services/equipmentService';
 import { ConfirmationModal } from './common/ConfirmationModal';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
+import { defaultNewUserPermissions } from '../utils/userPermissions';
 
 const MaintenanceDashboardView = lazyWithRetry(
   () => import('./MaintenanceDashboardView').then(m => ({ default: m.MaintenanceDashboardView })),
@@ -758,8 +759,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
         return;
       }
 
-      if ((!editingUsername && !cleanPassword) || (cleanPassword && cleanPassword.length < 8)) {
-        setUserFormError('Asigna al menos ocho caracteres. Al editar, deja la clave vacía para conservarla.');
+      if ((!editingUsername && !cleanPassword) || (cleanPassword && (cleanPassword.length < 8 || cleanPassword.length > 256))) {
+        setUserFormError('Asigna entre 8 y 256 caracteres. Al editar, deja la clave vacía para conservarla.');
         return;
       }
 
@@ -1641,7 +1642,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            if (onOpenChangePassword) {
+                            if (onOpenChangePassword && (isMasterAdmin(currentUser) || currentUser?.username === usr.username)) {
                               onOpenChangePassword(usr);
                             } else {
                               handleOpenUserForm(usr);
@@ -2276,8 +2277,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     Rol y Nivel de Acceso *
                   </label>
                   <select
+                    aria-label="Rol y Nivel de Acceso"
                     value={userForm.role}
-                    onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
+                    onChange={(e) => setUserForm({ ...userForm, role: e.target.value,
+                      ...(!editingUsername && !isShute ? defaultNewUserPermissions(e.target.value) : {}) })}
                     className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="Administrador">👑 Administrador (Acceso total, panel maestro y usuarios)</option>
@@ -2293,7 +2296,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-bold text-slate-700">
-                    Clave de Acceso (Contraseña de desbloqueo) *
+                    Clave de Acceso (Contraseña de desbloqueo) {editingUsername ? '(opcional)' : '*'}
                   </label>
                   <button
                     type="button"
@@ -2310,8 +2313,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <div className="relative">
                   <input
                     type={showFormPassword ? 'text' : 'password'}
-                    required
-                    placeholder="Nueva clave de al menos ocho caracteres..."
+                    aria-label="Clave de Acceso"
+                    autoComplete="new-password"
+                    required={!editingUsername}
+                    minLength={8}
+                    maxLength={256}
+                    placeholder={editingUsername ? 'Deja vacío para conservar la clave actual' : 'Nueva clave de al menos ocho caracteres...'}
                     value={userForm.passwordHash}
                     onChange={(e) => setUserForm({ ...userForm, passwordHash: e.target.value })}
                     className="w-full pl-3.5 pr-10 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2396,6 +2403,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     </div>
                     <input
                       type="checkbox"
+                      aria-label="Registrar nuevas reservas"
                       disabled={!isShute}
                       checked={Boolean(userForm.canCreateReservations)}
                       onChange={(e) =>
@@ -2412,6 +2420,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     </div>
                     <input
                       type="checkbox"
+                      aria-label="Editar y modificar reservas existentes"
                       disabled={!isShute}
                       checked={Boolean(userForm.canEditReservations)}
                       onChange={(e) =>
@@ -2428,6 +2437,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     </div>
                     <input
                       type="checkbox"
+                      aria-label="Eliminar reservas directamente"
                       disabled={!isShute}
                       checked={Boolean(userForm.canDeleteReservations)}
                       onChange={(e) =>
