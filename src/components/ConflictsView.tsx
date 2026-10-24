@@ -6,7 +6,7 @@ import { Reservation, SpaceBlock } from '../types';
 import { detectAllConflicts, detectReservationsBlockedByMaintenance } from '../utils/conflictDetector';
 import { SPACES_LIST } from '../data/spacesData';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
-import { cleanConflictingMinuteReservations } from '../services/reservationService';
+import { DuplicateReview } from './maintenance/DuplicateReview';
 import {
   AlertTriangle,
   Clock,
@@ -36,8 +36,6 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
   onSelectReservation,
   onEditReservation
 }) => {
-  const [isCleaning, setIsCleaning] = useState(false);
-  const [cleanedMessage, setCleanedMessage] = useState<string | null>(null);
   const [expandedSuggestions, setExpandedSuggestions] = useState<Record<string, boolean>>({});
   const conflicts = useMemo(()=>detectAllConflicts(reservations),[reservations]);
   const maintenanceCollisions = useMemo(()=>spaceBlocks ? detectReservationsBlockedByMaintenance(reservations, spaceBlocks) : [],[reservations,spaceBlocks]);
@@ -49,23 +47,6 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
       ...prev,
       [key]: !prev[key]
     }));
-  };
-
-  const handleCleanMinuteConflicts = async () => {
-    setIsCleaning(true);
-    try {
-      const res = await cleanConflictingMinuteReservations(reservations);
-      if (res.deletedCount > 0) {
-        setCleanedMessage(`Se eliminaron con éxito ${res.deletedCount} reservas con minutos solapadas.`);
-      } else {
-        setCleanedMessage('No se encontraron reservas con minutos solapadas pendientes.');
-      }
-      setTimeout(() => setCleanedMessage(null), 5000);
-    } catch (e) {
-      console.warn('Error cleaning minute conflicts:', e);
-    } finally {
-      setIsCleaning(false);
-    }
   };
 
   const getSpaceColor = (spaceName: string) => {
@@ -89,29 +70,13 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
               </span>
             </h2>
             <p className="text-xs text-rose-700/90 mt-1">
-              Se detectan reservas activas que comparten el mismo espacio físico y rango horario. Las reservas duplicadas con minutos se pueden depurar automáticamente manteniendo solo las horas cerradas.
+              Se detectan reservas activas que comparten el mismo espacio físico y rango horario. Cada topamiento requiere revisar sus reservas; un horario con minutos no demuestra que sea un duplicado.
             </p>
           </div>
         </div>
 
-        {conflicts.length > 0 && (
-          <button
-            onClick={handleCleanMinuteConflicts}
-            disabled={isCleaning}
-            className="flex items-center space-x-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition shadow-xs shrink-0 cursor-pointer"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>{isCleaning ? 'Depurando...' : 'Depurar Minutos (Dejar Horas Cerradas)'}</span>
-          </button>
-        )}
       </div>
-
-      {cleanedMessage && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center space-x-2 animate-fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{cleanedMessage}</span>
-        </div>
-      )}
+      <DuplicateReview reservations={reservations} onReview={onSelectReservation} />
 
       {/* Maintenance Collision Section if any exist */}
       {maintenanceCollisions.length > 0 && (

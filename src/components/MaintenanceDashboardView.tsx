@@ -41,11 +41,9 @@ export const MaintenanceDashboardView: React.FC<MaintenanceDashboardViewProps> =
   const [editingBlock, setEditingBlock] = useState<SpaceBlock | null>(null);
   const [blockToDelete, setBlockToDelete] = useState<SpaceBlock | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isDangerZoneOpen, setIsDangerZoneOpen] = useState(false);
-  const [isPurgingPast, setIsPurgingPast] = useState(false);
-  const [showPurgeModal, setShowPurgeModal] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Santiago', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
 
   const spacesList = useMemo(() => {
     return availableSpaces && availableSpaces.length > 0 ? availableSpaces : SPACES_LIST;
@@ -53,6 +51,7 @@ export const MaintenanceDashboardView: React.FC<MaintenanceDashboardViewProps> =
 
   // Filter and sort blocks
   const filteredBlocks = blocks.filter((b) => {
+    if (!showHistory && b.fechaFin < todayStr) return false;
     if (filterMotivo !== 'all' && b.motivo !== filterMotivo) return false;
     if (filterSpace !== 'all' && b.espacio !== filterSpace) return false;
     if (searchTerm) {
@@ -208,9 +207,9 @@ export const MaintenanceDashboardView: React.FC<MaintenanceDashboardViewProps> =
       {filteredBlocks.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-xs">
           <Wrench className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-sm font-bold text-slate-800">No hay bloqueos o mantenciones registradas</h3>
+          <h3 className="text-sm font-bold text-slate-800">No hay mantenciones que coincidan con esta vista</h3>
           <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-            Todos los espacios se encuentran completamente operativos y habilitados para reserva normal.
+            Ajusta los filtros o activa el historial para consultar mantenciones concluidas.
           </p>
           <button
             type="button"
@@ -328,70 +327,21 @@ export const MaintenanceDashboardView: React.FC<MaintenanceDashboardViewProps> =
         </div>
       )}
 
-      {/* Collapsible Safe Maintenance Management & Purge Zone */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-        <button
-          type="button"
-          onClick={() => setIsDangerZoneOpen(!isDangerZoneOpen)}
-          className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition cursor-pointer"
-        >
-          <div className="flex items-center space-x-2.5">
-            <ShieldAlert className="w-4 h-4 text-amber-600" />
-            <div>
-              <h4 className="text-xs font-bold text-slate-800">
-                Gestión Avanzada y Depuración de Bloqueos
-              </h4>
-              <p className="text-[11px] text-slate-500">
-                Limpieza segura de registros históricos y mantenciones concluidas
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2 text-slate-400">
-            <span className="text-[11px] font-semibold text-slate-500">
-              {pastBlocks.length} concluidos
-            </span>
-            {isDangerZoneOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </div>
-        </button>
+      <label className="flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+        <input type="checkbox" checked={showHistory} onChange={event => setShowHistory(event.target.checked)} />
+        Mostrar historial de mantenciones concluidas ({pastBlocks.length})
+      </label>
 
-        {isDangerZoneOpen && (
-          <div className="p-4 pt-2 border-t border-slate-100 bg-slate-50/50 space-y-3">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-white border border-slate-200 rounded-xl">
-              <div>
-                <p className="text-xs font-bold text-slate-800">Depurar bloqueos concluidos anteriores a hoy</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Elimina en lote los registros de mantención pasados para optimizar el historial. Requiere confirmación secundaria explícita.
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={pastBlocks.length === 0 || isPurgingPast}
-                onClick={() => setShowPurgeModal(true)}
-                className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0 flex items-center space-x-1.5"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                <span>Depurar {pastBlocks.length} Bloqueos Antiguos</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Create / Edit Modal */}
       {isModalOpen && (
         <SpaceBlockModal
           isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setEditingBlock(null);
-          }}
+          onClose={() => { setIsModalOpen(false); setEditingBlock(null); }}
           onSave={onSaveBlock}
           editingBlock={editingBlock}
           availableSpaces={spacesList}
         />
       )}
 
-      {/* Delete Single Confirmation Dialog */}
       {blockToDelete && (
         <ModalOverlay onClose={() => { if (!isDeleting) setBlockToDelete(null); }} className="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl p-5 max-w-sm w-full border border-slate-200 shadow-2xl space-y-4">
@@ -423,49 +373,7 @@ export const MaintenanceDashboardView: React.FC<MaintenanceDashboardViewProps> =
         </ModalOverlay>
       )}
 
-      {/* Purge Secondary Confirmation Dialog */}
-      {showPurgeModal && (
-        <ModalOverlay onClose={() => { if (!isPurgingPast) setShowPurgeModal(false); }} className="fixed inset-0 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl p-5 max-w-sm w-full border border-rose-200 shadow-2xl space-y-4">
-            <div className="flex items-center space-x-3 text-rose-600">
-              <AlertTriangle className="w-6 h-6 shrink-0" />
-              <h3 className="font-bold text-base text-slate-900">¿Confirmar depuración de {pastBlocks.length} registros?</h3>
-            </div>
-            <p className="text-xs text-slate-600">
-              Esta acción eliminará de forma irreversible los registros históricos concluidos anteriores a la fecha actual ({formatDateDDMMYYYY(todayStr)}).
-            </p>
-            <div className="flex items-center justify-end space-x-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowPurgeModal(false)}
-                className="px-3 py-1.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={isPurgingPast}
-                onClick={async () => {
-                  setIsPurgingPast(true);
-                  try {
-                    for (const block of pastBlocks) {
-                      await onDeleteBlock(block.id);
-                    }
-                    setShowPurgeModal(false);
-                  } catch (err) {
-                    console.error(err);
-                  } finally {
-                    setIsPurgingPast(false);
-                  }
-                }}
-                className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition cursor-pointer"
-              >
-                {isPurgingPast ? 'Depurando...' : 'Sí, Depurar Historial'}
-              </button>
-            </div>
-          </div>
-        </ModalOverlay>
-      )}
+
     </div>
   );
 };

@@ -8,10 +8,6 @@ import {
   loadHistoricalReservationsMonth,
   loadHistoricalReservationsRange
 } from '../services/reservationService';
-import {
-  executeMinuteConflictCleanupMigration,
-  hasMinuteConflictMigrationRun
-} from '../services/migrations/cleanMinuteConflictsMigration';
 import { triggerSonnerToast } from '../services/toastNotificationService';
 import type { ReservationDateRange } from '../utils/reservationReadScope';
 
@@ -75,15 +71,6 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
     },
     []
   );
-
-  // One-time automatic idempotent cleanup migration for obsolete minute conflict IDs
-  useEffect(() => {
-    if (enabled && allowMaintenance && !hasMinuteConflictMigrationRun()) {
-      executeMinuteConflictCleanupMigration().catch((err) => {
-        console.warn('Background minute conflict migration notice:', err);
-      });
-    }
-  }, [enabled, allowMaintenance]);
 
   // On-demand historical partition loaders
   const loadHistoricalMonth = useCallback(async (year: number, month: number): Promise<Reservation[]> => {

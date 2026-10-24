@@ -47,7 +47,7 @@ export async function dataRequest(
   const result = await response.json();
   if (!response.ok || result.success === false)
     throw responseFailure(response, result);
-  if (!["/api/data/read", "/api/data/listen", "/api/data/listen-batch"].includes(path))
+  if (!["/api/data/read", "/api/data/listen", "/api/data/listen-batch", "/api/maintenance/status"].includes(path))
     announceDataChange();
   return result;
 }

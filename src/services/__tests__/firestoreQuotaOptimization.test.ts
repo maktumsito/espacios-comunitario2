@@ -39,7 +39,7 @@ describe('Firestore Quota Optimization & Conflict Purge Suite', () => {
       expect(isPurgedMinuteConflictId('RSV_C16DD34DB5B7')).toBe(false);
     });
 
-    it('executes cleanup migration, purges local cache, and sets migration flag', async () => {
+    it('leaves retired cleanup migrations and historical local reservations untouched', async () => {
       expect(hasMinuteConflictMigrationRun()).toBe(false);
 
       // Seed localStorage with mixed reservations (valid + obsolete)
@@ -52,14 +52,14 @@ describe('Firestore Quota Optimization & Conflict Purge Suite', () => {
 
       const result = await executeMinuteConflictCleanupMigration();
       expect(result.success).toBe(true);
-      expect(result.deletedFromLocal).toBe(1);
-      expect(hasMinuteConflictMigrationRun()).toBe(true);
+      expect(result.deletedFromLocal).toBe(0);
+      expect(hasMinuteConflictMigrationRun()).toBe(false);
 
       // Verify localStorage was purged
       const afterRaw = localStorage.getItem('reservas_comunitarias_cache_v6');
       const afterParsed: Reservation[] = JSON.parse(afterRaw || '[]');
-      expect(afterParsed.length).toBe(2);
-      expect(afterParsed.some((r) => r.id === 'RSV_C16DD34DB5B7')).toBe(false);
+      expect(afterParsed.length).toBe(3);
+      expect(afterParsed.some((r) => r.id === 'RSV_C16DD34DB5B7')).toBe(true);
       expect(afterParsed.some((r) => r.id === 'RSV_VALID_01')).toBe(true);
 
       // Second run without force is skipped (idempotent)
@@ -115,7 +115,7 @@ describe('Firestore Quota Optimization & Conflict Purge Suite', () => {
         }
       ];
 
-      await expect(cleanConflictingMinuteReservations(candidates)).rejects.toThrow(/conexión|recarga/i);
+      await expect(cleanConflictingMinuteReservations(candidates)).rejects.toThrow(/deshabilitada/);
     });
 
     it('preserves non-conflicting reservations on separate spaces or non-overlapping hours', async () => {

@@ -42,7 +42,8 @@ import {
   getStoredActivityTypes,
 } from "./adminConfigService";
 import { getStoredEquipment } from "./equipmentService";
-import { getAllAuthorizedUsers, UserAccount, AuthUser } from "./authService";
+import { getAllAuthorizedUsers, getStoredAuthUser, isCristianShute, UserAccount, AuthUser } from "./authService";
+import { automaticBackupsToRotate } from '../utils/maintenanceDiagnostics';
 import { getLocalRatingsCache } from "./ratingService";
 import { recordAuditEntry } from "./auditLogService";
 
@@ -61,6 +62,7 @@ export const MS_PER_DAY = 24 * 60 * 60 * 1000;
 // ============================================================================
 
 export interface DatabaseBackupMetadata {
+  protected?: boolean;
   id: string;
   fecha: string; // YYYY-MM-DD
   timestamp: string; // ISO string
@@ -582,7 +584,7 @@ export async function createDatabaseBackup(
         );
       }
 
-      // 7. Automated FIFO Rotation: keep only the latest 5 backups to prevent storage bloat
+      // 7. Automatic rotation retains five unprotected automatic copies; manual and protected copies are preserved
       rotateOldBackups(5).catch((rotErr) => {
         console.warn(
           "[BackupService] Background backup rotation warning:",
@@ -764,6 +766,7 @@ export async function getDatabaseBackupsList(): Promise<
         totalPartes: data.totalPartes,
         esChunked: data.esChunked,
         storageStatus: "firestore_confirmed",
+        protected: data.protected === true,
       });
     });
   } catch (err) {
@@ -781,7 +784,7 @@ export async function getDatabaseBackupsList(): Promise<
   const signatureMap = new Map<string, DatabaseBackupMetadata>();
 
   for (const item of list) {
-    const signature = `${getBackupIdentitySignature(item)}:${item.checksum || item.id}`;
+    const signature = `${getBackupIdentitySignature(item)}:${item.checksum || item.id}:${item.protected ? item.id : ""}`;
 
     const existing = signatureMap.get(signature);
     if (!existing) {
@@ -1014,8 +1017,15 @@ export async function restoreDatabaseFromBackup(
  * Permanently deletes a backup record and its partitioned chunks.
  */
 export async function deleteDatabaseBackup(backupId: string): Promise<boolean> {
+  if (usesDataApi()) {
+    await dataRequest('/api/maintenance/backups/delete', { backupId });
+    saveLocalBackupHistory(getLocalBackupHistory().filter(backup => backup.id !== backupId));
+    return true;
+  }
   try {
     const db = getDb();
+    const metadata = await getDoc(doc(db, BACKUP_COLLECTION, backupId));
+    if (metadata.exists() && metadata.get('protected') === true) throw new Error('La copia está protegida y no puede eliminarse.');
     // 1. Delete all chunk documents from subcollection 'partes'
     const partesRef = collection(db, BACKUP_COLLECTION, backupId, "partes");
     const partesSnap = await getDocs(partesRef);
@@ -1039,13 +1049,14 @@ export async function deleteDatabaseBackup(backupId: string): Promise<boolean> {
 }
 
 /**
- * Automatically rotates backups, keeping only the latest `maxBackupsToKeep` (default: 5)
- * in Firestore and localStorage, permanently deleting older backups to prevent storage bloat.
+ * Rotates only unprotected automatic copies, keeping the latest five.
+ * Manual and protected backups are never selected by automatic retention.
  */
 export async function rotateOldBackups(
   maxBackupsToKeep: number = 5,
 ): Promise<number> {
   try {
+    if (usesDataApi() && !isCristianShute(getStoredAuthUser())) return 0;
     const list = await getDatabaseBackupsList();
     if (!list || list.length <= maxBackupsToKeep) {
       return 0;
@@ -1057,14 +1068,17 @@ export async function rotateOldBackups(
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     );
 
-    const backupsToDelete = sorted.slice(maxBackupsToKeep);
+    const backupsToDelete = automaticBackupsToRotate(sorted, maxBackupsToKeep);
     let deletedCount = 0;
 
     for (const b of backupsToDelete) {
       console.log(
         `[BackupService] Rotación FIFO: eliminando copia antigua ${b.id} (${b.fecha})`,
       );
-      await deleteDatabaseBackup(b.id);
+      if (usesDataApi()) {
+        await dataRequest('/api/maintenance/backups/delete', { backupId: b.id, mode: 'rotation' });
+        saveLocalBackupHistory(getLocalBackupHistory().filter(backup => backup.id !== b.id));
+      } else await deleteDatabaseBackup(b.id);
       deletedCount++;
     }
 
@@ -1076,6 +1090,11 @@ export async function rotateOldBackups(
     );
     return 0;
   }
+}
+
+export async function setBackupProtection(backupId: string, protectedCopy: boolean): Promise<void> {
+  await dataRequest('/api/maintenance/backups/protect', { backupId, protected: protectedCopy });
+  saveLocalBackupHistory(getLocalBackupHistory().map(backup => backup.id === backupId ? { ...backup, protected: protectedCopy } : backup));
 }
 
 async function restoreBackupEntitiesLocally(data: DatabaseBackupData) {

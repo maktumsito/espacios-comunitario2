@@ -1,4 +1,5 @@
 import { registerBackupApi } from './server/backupApi';
+import { registerBackupMaintenanceApi } from './server/backupMaintenanceApi';
 import { APP_BUILD_INFO } from './src/buildInfo';
 import { claimDelivery,startDelivery,finishDelivery } from './server/deliveryLease';
 import { registerReservationApi } from './server/reservationApi';
@@ -790,6 +791,7 @@ async function startServer() {
   registerDataApi(app, getServerDatabase(), appSessions);
   registerReservationApi(app,getServerDatabase(),appSessions);
   registerBackupApi(app,getServerDatabase(),appSessions);
+  registerBackupMaintenanceApi(app,getServerDatabase(),appSessions, () => purgeExpiredSlotsServer.status());
   const requireAuth = appSessions.requireAuth;
   if (!localTestMode) gmailConnection.register(app, (req, res, next) => {
     void requireAuth(req, res, () => requireReservationWriter(req, res, next));

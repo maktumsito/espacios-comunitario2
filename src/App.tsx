@@ -127,7 +127,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>(() => getInitialViewMode());
   const [isSidebarHidden, setIsSidebarHidden] = useState(true);
   const toggleSidebar = useCallback(() => setIsSidebarHidden(hidden => !hidden), []);
-  const [adminSubTab, setAdminSubTab] = useState<'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring'>('spaces');
+  const [adminSubTab, setAdminSubTab] = useState<'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring' | 'health'>('spaces');
   const [selectedDailyDate, setSelectedDailyDate] = useState<Date>(() => new Date());
   const [isDeleteDayModalOpen, setIsDeleteDayModalOpen] = useState(false);
   const [comparisonSpaces, setComparisonSpaces] = useState<string[] | null>(null);
@@ -1288,6 +1288,7 @@ export default function App() {
               activityTypes={activityTypes}
               equipmentList={equipment}
               users={userAccounts}
+              lastSyncTime={lastSyncTime}
               currentUser={currentUser}
               reservations={reservations}
               spaceBlocks={spaceBlocks}
@@ -1315,12 +1316,12 @@ export default function App() {
               onOpenChangePassword={(usr) => handleOpenChangePassword(usr)}
               onOpenImportExport={() => setIsImportExportModalOpen(true)}
               onSaveBlock={async (block) => {
-                requireAuth(async () => {
+                await requireAuth(async () => {
                   await handleSaveBlock(block);
                 }, 'guardar bloqueo de espacio');
               }}
               onDeleteBlock={async (id) => {
-                requireAuth(async () => {
+                await requireAuth(async () => {
                   await handleDeleteBlock(id);
                 }, 'eliminar bloqueo de espacio');
               }}

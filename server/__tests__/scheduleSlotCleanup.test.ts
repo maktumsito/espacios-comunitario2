@@ -19,4 +19,5 @@ it('shares cleanup between editors and timer, skips repeated scans and retries f
   const retry = guardedSlotCleanup(failing);
   await expect(retry()).rejects.toThrow('offline');
   await retry(); expect(failing).toHaveBeenCalledTimes(2);
+  expect(retry.status()).toMatchObject({ok:true,purgedCount:0,daysOld:30});
 });

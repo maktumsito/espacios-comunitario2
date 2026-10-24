@@ -39,7 +39,7 @@ const AdminRecurringView = lazyWithRetry(
   () => import('./AdminRecurringView').then(m => ({ default: m.AdminRecurringView })),
   'AdminRecurringView'
 );
-import { executeMinuteConflictCleanupMigration } from '../services/migrations/cleanMinuteConflictsMigration';
+const SystemMaintenanceView = lazyWithRetry(() => import('./SystemMaintenanceView').then(m => ({ default: m.SystemMaintenanceView })), 'SystemMaintenanceView');
 import {
   Building2,
   Sparkles,
@@ -75,7 +75,7 @@ import {
   CalendarPlus
 } from 'lucide-react';
 
-export type AdminTab = 'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring';
+export type AdminTab = 'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring' | 'health';
 
 interface AdminViewProps {
   spaces: SpaceInfo[];
@@ -85,6 +85,7 @@ interface AdminViewProps {
   users?: UserAccount[];
   currentUser?: AuthUser | null;
   reservations?: Reservation[];
+  lastSyncTime?: number | null;
   spaceBlocks?: SpaceBlock[];
   ratings?: SpaceRating[];
   initialTab?: AdminTab;
@@ -213,6 +214,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   users: propUsers,
   currentUser,
   reservations = [],
+  lastSyncTime,
   spaceBlocks = [],
   ratings = [],
   initialTab = 'spaces',
@@ -293,29 +295,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   const [activityFormError, setActivityFormError] = useState('');
 
-  // ----------------------------------------------------
-  // FIRESTORE QUOTA & MINUTE CONFLICTS MIGRATION
-  // ----------------------------------------------------
-  const [isMigratingConflicts, setIsMigratingConflicts] = useState(false);
-  const [conflictMigrationResult, setConflictMigrationResult] = useState<string | null>(null);
-
-  const handleRunConflictMigration = async () => {
-    setIsMigratingConflicts(true);
-    try {
-      const res = await executeMinuteConflictCleanupMigration({ force: true });
-      if (res.success) {
-        setConflictMigrationResult(
-          `✓ Depuración completada: ${res.deletedFromFirestore} IDs verificados/eliminados en Firestore, ${res.deletedFromLocal} registros eliminados en cachés locales.`
-        );
-      } else {
-        setConflictMigrationResult(`⚠️ Error en depuración: ${res.error || 'Error de conexión'}`);
-      }
-    } catch (err: any) {
-      setConflictMigrationResult(`⚠️ Error ejecutando depuración: ${err?.message || err}`);
-    } finally {
-      setIsMigratingConflicts(false);
-    }
-  };
 
   // ----------------------------------------------------
   // EQUIPMENT MANAGEMENT STATE
@@ -1060,7 +1039,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
           <optgroup label="Catálogos"><option value="spaces">Espacios y salas</option><option value="activities">Tipos de actividad</option><option value="equipment">Equipamiento y recursos</option></optgroup>
           <optgroup label="Operación"><option value="maintenance">Mantención y bloqueos</option><option value="recurring">Actividades recurrentes</option></optgroup>
           <optgroup label="Personas"><option value="applicants">Registro de solicitantes</option><option value="users">Usuarios y accesos</option></optgroup>
-          <optgroup label="Sistema"><option value="gmail">Despacho Gmail</option></optgroup>
+          <optgroup label="Sistema"><option value="gmail">Despacho Gmail</option>{showCategories && <option value="health">Salud y mantención del sistema</option>}</optgroup>
         </select>
       </label>
       <nav aria-label="Secciones de administración" className="hidden sm:grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -1078,12 +1057,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
             { tab: 'applicants', label: 'Registro de solicitantes' },
             { tab: 'users', label: `Usuarios y accesos (${effectiveUsers.length})` },
           ] },
-          { label: 'Sistema', items: [{ tab: 'gmail', label: 'Despacho Gmail' }] },
+          { label: 'Sistema', items: [{ tab: 'gmail', label: 'Despacho Gmail' }, ...(showCategories ? [{ tab: 'health' as AdminTab, label: 'Salud y mantención del sistema' }] : [])] },
         ] as { label: string; items: { tab: AdminTab; label: string }[] }[]).map(group => <div key={group.label} className="min-w-0">
           <h2 className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{group.label}</h2>
           <div className="space-y-1">{group.items.map(item => <button key={item.tab} id={`admin-tab-${item.tab}`} type="button" onClick={() => handleTabChange(item.tab)} aria-current={activeTab === item.tab ? 'page' : undefined} className={`flex min-h-11 w-full items-center rounded-lg px-2 py-2 text-left text-sm ${activeTab === item.tab ? 'bg-blue-50 font-semibold text-blue-800' : 'text-slate-600 hover:bg-slate-50'}`}>{item.label}</button>)}</div>
         </div>)}
       </nav>
+
+      {activeTab === 'health' && showCategories && <Suspense fallback={<p role="status" className="p-6 text-sm text-slate-500">Cargando herramientas de mantención…</p>}>
+        <SystemMaintenanceView currentUser={currentUser} reservations={reservations} lastSyncTime={lastSyncTime} onReviewReservation={onSelectReservation || onEditReservation} onOpenBackups={onOpenImportExport} />
+      </Suspense>}
 
       {/* TAB 1: SPACES MANAGEMENT */}
       {activeTab === 'spaces' && (
@@ -2072,34 +2055,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             />
           </Suspense>
 
-          {/* Card de Optimización de Base de Datos y Cuotas Firestore */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="max-w-xl">
-                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <Database className="w-4 h-4 text-blue-600" />
-                  <span>Depuración Definitiva de Conflictos y Cuotas de Firestore</span>
-                </h4>
-                <p className="text-xs text-slate-500 mt-1">
-                  Elimina registros obsoletos de desfase de minutos en Firestore y limpia la caché local para preservar la cuota diaria del Spark Plan y evitar transacciones duplicadas.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleRunConflictMigration}
-                disabled={isMigratingConflicts}
-                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-2 cursor-pointer shrink-0"
-              >
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <span>{isMigratingConflicts ? 'Depurando en Firestore...' : 'Ejecutar Limpieza Definitiva'}</span>
-              </button>
-            </div>
-            {conflictMigrationResult && (
-              <div className="text-xs font-semibold px-3 py-2 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl animate-fadeIn">
-                {conflictMigrationResult}
-              </div>
-            )}
-          </div>
+
         </div>
       )}
 

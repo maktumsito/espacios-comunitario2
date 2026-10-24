@@ -23,7 +23,7 @@ import { INITIAL_RESERVATIONS } from '../data/initialData';
 import { isChileanHoliday, verifyHolidayOverrideKey } from '../utils/holidayUtils';
 import { normalizeSpaceName } from '../data/spacesData';
 import { getChileLocalDateString } from '../utils/dateUtils';
-import { checkSingleConflict, isReservationActiveForAvailability } from '../utils/conflictDetector';
+import { checkSingleConflict, isReservationActiveForAvailability, detectAllConflicts } from '../utils/conflictDetector';
 import {
   getIndexedDbReservations,
   setIndexedDbReservations
@@ -1213,96 +1213,13 @@ export async function deleteAllHolidayReservations(): Promise<{
   };
 }
 
-function timeToMinutes(timeStr: string): number {
-  if (!timeStr) return 0;
-  const parts = timeStr.trim().split(':');
-  if (parts.length < 2) return 0;
-  const h = parseInt(parts[0], 10) || 0;
-  const m = parseInt(parts[1], 10) || 0;
-  return h * 60 + m;
-}
-
-function isClosedHourTime(timeStr: string): boolean {
-  if (!timeStr) return true;
-  const m = timeToMinutes(timeStr) % 60;
-  return m === 0;
-}
-
-function isClosedHourReservation(r: Reservation): boolean {
-  return isClosedHourTime(r.horaInicio) && isClosedHourTime(r.horaFin);
-}
-
-/**
- * Permanently deletes all reservations that have time conflicts/copamientos with round-hour reservations,
- * ensuring closed-hour reservations (e.g. 10:00-11:00, 18:00-19:00) are preserved and minute-offset duplicates are removed.
- */
+/** Legacy entry point retained for callers; automatic deletion by time rounding is disabled. */
 export async function cleanConflictingMinuteReservations(currentReservations?: Reservation[]): Promise<{
-  deletedCount: number;
-  deletedReservations: Reservation[];
-  remainingReservations: Reservation[];
+  deletedCount: number; deletedReservations: Reservation[]; remainingReservations: Reservation[];
 }> {
-  const current = currentReservations && currentReservations.length > 0 ? currentReservations : getLocalCache();
-  
-  // Group by space and date
-  const groups = new Map<string, Reservation[]>();
-  current.forEach((r) => {
-    const key = `${r.espacio.trim().toUpperCase()}___${r.fecha.trim()}`;
-    const list = groups.get(key) || [];
-    list.push(r);
-    groups.set(key, list);
-  });
-
-  const idsToDelete = new Set<string>();
-
-  // Detect conflicting pairs and identify minute-offset ones to delete
-  groups.forEach((items) => {
-    if (items.length < 2) return;
-
-    for (let i = 0; i < items.length; i++) {
-      for (let j = i + 1; j < items.length; j++) {
-        const a = items[i];
-        const b = items[j];
-
-        const sA = timeToMinutes(a.horaInicio);
-        const eA = timeToMinutes(a.horaFin);
-        const sB = timeToMinutes(b.horaInicio);
-        const eB = timeToMinutes(b.horaFin);
-
-        // Check if there is an overlap
-        if (sA < eB && sB < eA) {
-          const aClosed = isClosedHourReservation(a);
-          const bClosed = isClosedHourReservation(b);
-
-          if (aClosed && !bClosed) {
-            idsToDelete.add(b.id);
-          } else if (!aClosed && bClosed) {
-            idsToDelete.add(a.id);
-          } else if (!aClosed && !bClosed) {
-            const devA = (sA % 60) + (eA % 60);
-            const devB = (sB % 60) + (eB % 60);
-            if (devB >= devA) {
-              idsToDelete.add(b.id);
-            } else {
-              idsToDelete.add(a.id);
-            }
-          }
-        }
-      }
-    }
-  });
-
-  const toDelete = current.filter((r) => idsToDelete.has(r.id));
-  const remaining = current.filter((r) => !idsToDelete.has(r.id));
-
-  if (toDelete.length > 0) {
-    await deleteReservationsBatch(toDelete.map(r => r.id),Object.fromEntries(toDelete.map(r=>[r.id,r.version||0])));
-  }
-
-  return {
-    deletedCount: toDelete.length,
-    deletedReservations: toDelete,
-    remainingReservations: remaining
-  };
+  const current = currentReservations ?? getLocalCache();
+  if (detectAllConflicts(current).length) throw new Error('Revisa los conflictos individualmente. La limpieza automática por minutos está deshabilitada.');
+  return { deletedCount: 0, deletedReservations: [], remainingReservations: current };
 }
 
 /**
@@ -1338,8 +1255,7 @@ export async function purgeExpiredScheduleSlots(daysOld: number = 30): Promise<n
       return data.purgedCount || 0;
     }
     
-    // Throttled update to avoid spamming
-    localStorage.setItem(PURGE_KEY, String(now));
+    // A failed check remains retryable; the server applies its own daily guard.
     return 0;
   } catch {
     return 0;

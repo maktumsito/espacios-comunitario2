@@ -25,6 +25,7 @@ import { hashPassword } from "../passwords";
 import { accountId, registerDataApi } from "../dataApi";
 import { registerReservationApi, readAudit, commitTrusted } from "../reservationApi";
 import { registerBackupApi } from "../backupApi";
+import { registerBackupMaintenanceApi } from '../backupMaintenanceApi';
 import { claimDelivery, startDelivery, finishDelivery } from "../deliveryLease";
 import { backupChecksum } from "../../src/utils/backupIntegrity";
 
@@ -53,6 +54,7 @@ describe.skipIf(!enabled)(
     const stop = registerDataApi(api, db, accounts);
     registerReservationApi(api, db, accounts);
     registerBackupApi(api, db, accounts);
+    registerBackupMaintenanceApi(api, db, accounts);
     let server: ReturnType<typeof api.listen>,
       base: string,
       editor: string,
@@ -282,6 +284,43 @@ describe.skipIf(!enabled)(
       expect((await post('/api/auth/session/refresh', {}, reader)).status).toBe(401);
       expect((await post('/api/auth/session', { username: 'reader', password: 'Synthetic-only-123!' }, '')).status).toBe(401);
       expect((await post('/api/auth/session', { username: 'reader', password: 'Reassigned-123!' }, '')).status).toBe(200);
+    });
+    it('protects backup conservation on the server, blocks old write paths and deletes parts atomically with an audit record', async () => {
+      await db.doc(`usuarios_sistema/${accountId('cristian shute')}`).set({username:'cristian shute',name:'Titular',role:'Administrador',passwordHash:await hashPassword('Fixture-owner-123!')});
+      const owner = await post('/api/auth/session',{username:'cristian shute',password:'Fixture-owner-123!'},'');
+      await db.doc('copias_seguridad/backup-first').set({tipo:'manual',timestamp:'2026-10-23T12:00:00Z'});
+      await db.doc('copias_seguridad/backup-keep').set({tipo:'manual',timestamp:'2026-10-24T12:00:00Z'});
+      await db.doc('copias_seguridad/backup-first/partes/part-0').set({index:0,payload:'fixture'});
+      expect((await post('/api/maintenance/backups/protect',{backupId:'backup-first',protected:true},editor)).status).toBe(403);
+      expect((await post('/api/maintenance/backups/protect',{backupId:'backup-first',protected:true},owner.token)).status).toBe(200);
+      expect((await post('/api/maintenance/backups/delete',{backupId:'backup-first'},owner.token)).status).toBe(409);
+      for (const type of ['update','delete']) expect((await post('/api/data/write',{writes:[{path:'copias_seguridad/backup-first',type,data:{protected:false}}]},owner.token)).status).toBe(403);
+      expect((await post('/api/data/write',{writes:[{path:'copias_seguridad/backup-first',type:'set',data:{tipo:'manual'}}]},owner.token)).status).toBe(409);
+      expect((await post('/api/data/write',{writes:[{path:'copias_seguridad/backup-first/partes/new-part',type:'set',data:{payload:'forged'}}]},owner.token)).status).toBe(409);
+      expect((await post('/api/maintenance/backups/protect',{backupId:'backup-first',protected:false},owner.token)).status).toBe(200);
+      expect((await post('/api/maintenance/backups/delete',{backupId:'backup-first',mode:'rotation'},owner.token)).status).toBe(409);
+      expect((await post('/api/maintenance/backups/delete',{backupId:'backup-first'},owner.token)).status).toBe(200);
+      expect((await db.doc('copias_seguridad/backup-first').get()).exists).toBe(false);
+      expect((await db.collection('copias_seguridad/backup-first/partes').get()).empty).toBe(true);
+      expect((await post('/api/maintenance/backups/delete',{backupId:'backup-keep'},owner.token)).status).toBe(409);
+      const status = await post('/api/maintenance/status',{},owner.token);
+      expect(status.status).toBe(200);
+      expect(status.backups.map((b:any)=>b.id)).toEqual(['backup-keep']);
+      expect(status.logs.map((log:any)=>log.action).sort()).toEqual(['backup_deleted','backup_protected','backup_unprotected']);
+      expect((await post('/api/maintenance/status',{},reader)).status).toBe(403);
+    });
+
+    it('creates immutable backup parts before publishing their metadata and enforces automatic retention on the server', async () => {
+      await db.doc(`usuarios_sistema/${accountId('cristian shute')}`).set({username:'cristian shute',name:'Titular',role:'Administrador',passwordHash:await hashPassword('Fixture-owner-123!')});
+      const owner = await post('/api/auth/session',{username:'cristian shute',password:'Fixture-owner-123!'},'');
+      expect((await post('/api/data/write',{writes:[{path:'copias_seguridad/new-copy/partes/part-0',type:'set',data:{index:0,payload:'content'}}]})).status).toBe(200);
+      expect((await post('/api/data/write',{writes:[{path:'copias_seguridad/new-copy',type:'set',data:{timestamp:'2026-10-24T12:00:00Z',tipo:'manual'}}]})).status).toBe(200);
+      expect((await post('/api/data/write',{writes:[{path:'copias_seguridad/new-copy',type:'set',data:{timestamp:'2026-10-24T12:00:00Z',tipo:'manual'}}]})).status).toBe(200);
+      for(let index=0;index<7;index++) await db.doc(`copias_seguridad/auto-${index}`).set({tipo:'automatica_15_dias',timestamp:`2026-10-2${index}T12:00:00Z`});
+      expect((await post('/api/maintenance/backups/delete',{backupId:'auto-6',mode:'rotation'},owner.token)).status).toBe(409);
+      expect((await post('/api/maintenance/backups/delete',{backupId:'auto-0',mode:'rotation'},owner.token)).status).toBe(200);
+      expect((await db.doc('copias_seguridad/auto-0').get()).exists).toBe(false);
+      expect((await db.doc('copias_seguridad/new-copy').get()).exists).toBe(true);
     });
     it("rejects stale edits and deletions, captures authoritative audit and retries after later edits safely", async () => {
       const request = {

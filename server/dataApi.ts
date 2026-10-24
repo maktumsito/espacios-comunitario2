@@ -317,6 +317,35 @@ export function registerDataApi(
         writes = req.body.writes;
       if (!Array.isArray(writes) || !writes.length || writes.length > 450)
         throw new ApiFailure(400, "Lote no válido.");
+      if (writes.some(w => typeof w.path === 'string' && w.path.startsWith('copias_seguridad/'))) {
+        requireManager(user);
+        for (const write of writes) {
+          const path = validatePath(write.path);
+          if (path[0] !== 'copias_seguridad' || ![2, 4].includes(path.length) || write.type !== 'set' || write.options?.merge ||
+            !write.data || typeof write.data !== 'object' || Array.isArray(write.data) ||
+            ['protected', 'protectedAt', 'protectedBy'].some(key => write.data[key] !== undefined))
+            throw new ApiFailure(403, 'Las copias son inmutables. Usa las herramientas de conservación de respaldos.');
+          if (Buffer.byteLength(JSON.stringify(write.data)) > 900000) throw new ApiFailure(400, 'Parte de respaldo demasiado grande.');
+        }
+        await db.runTransaction(async tx => {
+          const paths = [...new Set(writes.flatMap(w => [w.path, w.path.split('/').slice(0, 2).join('/')]))] as string[];
+          const snapshots = await Promise.all(paths.map(path => tx.get(db.doc(path))));
+          const existing = new Map(paths.map((path, index) => [path, snapshots[index]]));
+          const additions = writes.filter(write => {
+            const target = existing.get(write.path)!;
+            if (target.exists) {
+              if (isDeepStrictEqual(target.data(), write.data)) return false;
+              throw new ApiFailure(409, 'La copia ya existe y no puede sobrescribirse.');
+            }
+            if (write.path.split('/').length === 4 && existing.get(write.path.split('/').slice(0, 2).join('/'))!.exists)
+              throw new ApiFailure(409, 'No pueden añadirse partes a una copia publicada.');
+            return true;
+          });
+          additions.forEach(write => tx.create(db.doc(write.path), write.data));
+        });
+        res.json({ success: true });
+        return;
+      }
       const batch = db.batch();
       for (const w of writes) {
         const p = validatePath(w.path);

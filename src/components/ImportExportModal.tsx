@@ -3,7 +3,7 @@ import { Reservation } from '../types';
 import { exportToCsv } from '../utils/csvExportImport';
 import { parseCsvRows } from '../utils/csvParser';
 import { INITIAL_RESERVATIONS } from '../data/initialData';
-import { AuthUser, canPerformMassDataSync, getRoleDisplayName } from '../services/authService';
+import { AuthUser, canPerformMassDataSync, getRoleDisplayName, isCristianShute } from '../services/authService';
 import { BaseModal } from './common/BaseModal';
 import { ConfirmationModal } from './common/ConfirmationModal';
 import {
@@ -192,6 +192,14 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   };
 
   const handleDeleteBackup = async (backupId: string) => {
+    if (!isCristianShute(currentUser)) {
+      setBackupMessage({ type: 'error', text: 'Solo Cristian Shute puede eliminar respaldos.' });
+      return;
+    }
+    if (backupList.find(backup => backup.id === backupId)?.protected) {
+      setBackupMessage({ type: 'error', text: 'Esta copia está protegida. Revisa su conservación en Salud y mantención del sistema.' });
+      return;
+    }
     if (!canManageSync) {
       setBackupMessage({
         type: 'error',
@@ -649,7 +657,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                 // Deduplicación reactiva garantizada: evita mostrar respaldos idénticos (misma fecha, hora, tamaño y cantidad de reservas)
                 const seenKeys = new Set<string>();
                 const deduplicatedBackups = backupList.filter((b) => {
-                  const sig = getBackupIdentitySignature(b);
+                  const sig = `${getBackupIdentitySignature(b)}:${b.checksum || b.id}:${b.protected ? b.id : ""}`;
                   if (seenKeys.has(sig)) return false;
                   seenKeys.add(sig);
                   return true;
@@ -739,11 +747,12 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                           </button>
                         )}
 
-                        {canManageSync && (
+                        {isCristianShute(currentUser) && (
                           <button
                             id={`btn-delete-${backup.id}`}
                             onClick={() => handleDeleteBackup(backup.id)}
-                            title="Eliminar registro de copia de seguridad"
+                            disabled={backup.protected}
+                            title={backup.protected ? 'Copia protegida contra eliminación' : 'Eliminar registro de copia de seguridad'}
                             className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 transition cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
