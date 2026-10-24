@@ -2,9 +2,12 @@ import type { AuthUser } from '../services/authService';
 
 export const reservationPermissionKeys = ['canCreateReservations', 'canEditReservations', 'canDeleteReservations'] as const;
 export type ReservationPermission = typeof reservationPermissionKeys[number];
+export const RESERVATION_PERMISSION_ADMIN_USERNAME = 'cristian shute';
 
 export function isReservationPermissionAdmin(user?: Partial<AuthUser> | null): boolean {
-  return user?.isMasterAdmin === true && user.username?.trim().toLowerCase() === 'cristian shute';
+  // Existing registered administrator accounts can predate the optional master flag.
+  return user?.username?.trim().toLowerCase() === RESERVATION_PERMISSION_ADMIN_USERNAME &&
+    (user.isMasterAdmin === true || user.role?.trim().toLowerCase() === 'administrador');
 }
 
 export function reservationPermission(user: Partial<AuthUser> | null | undefined, key: ReservationPermission): boolean {

@@ -238,9 +238,9 @@ describe.skipIf(!enabled)(
         ).status,
       ).toBe(200);
     });
-    it('enforces assigned user permissions on real reservation transactions and active sessions', async () => {
+    it('enforces permissions assigned by the legacy Cristian administrator on real reservation transactions and active sessions', async () => {
       await db.doc(`usuarios_sistema/${accountId('cristian shute')}`).set({
-        username: 'cristian shute', name: 'Titular de prueba', role: 'Administrador', isMasterAdmin: true,
+        username: 'cristian shute', name: 'Titular de prueba', role: 'Administrador',
         passwordHash: await hashPassword('Fixture-master-123!'),
       });
       const master = await post('/api/auth/session', { username: 'cristian shute', password: 'Fixture-master-123!' }, '');

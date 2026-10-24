@@ -313,6 +313,23 @@ it('shows Cristian\'s actual reservation permissions to other administrators', (
   expect(screen.queryByTitle('Haz clic para activar o desactivar este permiso')).toBeNull();
 });
 
+it('lets the registered Cristian administrator without a master flag enable and disable another user editing permission', async () => {
+  const currentUser = { ...props().currentUser!, username: 'cristian shute', name: 'Cristian Shute' };
+  let user = { ...operator, canEditReservations: false };
+  const save = vi.fn().mockResolvedValue(undefined);
+  const view = () => <AdminView {...props({ initialTab: 'users', currentUser, users: [user], onSaveUser: save })} />;
+  const { rerender } = render(view());
+  expect(screen.getByRole('button', { name: 'Activar todos los permisos' })).toBeTruthy();
+  for (const [index, enabled] of [true, false].entries()) {
+    fireEvent.click(screen.getAllByTitle('Haz clic para activar o desactivar este permiso')[1]);
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(index + 1));
+    expect(save.mock.calls[index]).toEqual([expect.objectContaining({ username: 'operator', canEditReservations: enabled }), 'operator']);
+    user = save.mock.calls[index][0];
+    rerender(view());
+    expect(screen.getAllByTitle('Haz clic para activar o desactivar este permiso')[1].textContent).toContain(enabled ? 'Activado' : 'Bloqueado');
+  }
+});
+
 it('retains the equipment-service fallback when no save callback is supplied', async () => {
   const pending = deferred();
   vi.mocked(saveEquipmentItem).mockImplementationOnce(async item => { await pending.promise; return [item]; });

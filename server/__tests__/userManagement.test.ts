@@ -215,3 +215,29 @@ it('lets Cristian deactivate and reactivate reservation permissions for every ac
     }
   });
 });
+
+it.each([undefined, false])('authorizes the registered Cristian administrator with legacy master flag %s and protects that account from impersonation', async flag => {
+  await withUsers(async ({ post, login, rows }) => {
+    const path = `usuarios_sistema/${accountId('cristian shute')}`;
+    const legacy = { ...rows.get(path) };
+    if (flag === undefined) delete legacy.isMasterAdmin;
+    else legacy.isMasterAdmin = flag;
+    rows.set(path, legacy);
+    const cristian = await login('cristian shute');
+    expect(cristian.status).toBe(200);
+    const reader = await login('reader');
+    for (const enabled of [true, false]) {
+      const user = { username: 'reader', name: 'Reader', role: 'Auxiliar', canEditReservations: enabled };
+      expect((await post('/api/users/save', { user, originalUsername: 'reader' }, cristian.token)).status).toBe(200);
+      expect((await post('/check/canEditReservations', {}, reader.token)).status).toBe(enabled ? 200 : 403);
+    }
+    const coordinator = await login('coordinator');
+    const otherMaster = await login('master');
+    for (const actor of [coordinator, otherMaster]) {
+      expect((await post('/api/users/save', { user: { username: 'cristian shute', name: 'Impostor', role: 'Administrador' }, password: 'Impostor-123!' }, actor.token)).status).toBe(403);
+      expect((await post('/api/users/save', { originalUsername: 'cristian shute', user: { username: 'renamed-owner', name: 'Renombrado', role: 'Administrador' } }, actor.token)).status).toBe(403);
+      expect((await post('/api/users/delete', { username: 'cristian shute' }, actor.token)).status).toBe(403);
+    }
+    expect(rows.get(path)).toEqual(legacy);
+  });
+});

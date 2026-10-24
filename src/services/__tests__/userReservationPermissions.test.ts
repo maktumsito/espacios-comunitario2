@@ -53,11 +53,16 @@ describe('Cristian Shute User Reservation Permissions Suite', () => {
   };
 
   describe('isCristianShute identification', () => {
-    it('correctly identifies Cristian Shute by its registered master flag and username', () => {
+    it('identifies the registered Cristian administrator even when its legacy profile has no master flag', () => {
       expect(isCristianShute(cristianShuteUser)).toBe(true);
       expect(isCristianShute({ ...cristianShuteUser, username: 'CRISTIAN SHUTE' })).toBe(true);
       expect(isCristianShute({ ...cristianShuteUser, username: 'legacy-alias' })).toBe(false);
       expect(isCristianShute({ ...cristianShuteUser, email: 'cristianshute@gmail.com' })).toBe(true);
+      expect(isCristianShute({ ...cristianShuteUser, isMasterAdmin: undefined })).toBe(true);
+      expect(isCristianShute({ ...cristianShuteUser, isMasterAdmin: false })).toBe(true);
+      expect(isCristianShute({ ...cristianShuteUser, username: ' CRISTIAN SHUTE ', role: ' administrador ', isMasterAdmin: undefined })).toBe(true);
+      expect(isCristianShute({ ...cristianShuteUser, role: 'Auxiliar', isMasterAdmin: undefined })).toBe(false);
+      expect(isCristianShute({ ...auxiliarUser, name: 'Cristian Shute', email: 'cristianshute@gmail.com' })).toBe(false);
     });
 
     it('rejects other users including other master admins', () => {

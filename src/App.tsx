@@ -295,6 +295,7 @@ export default function App() {
         currentUser.canCreateReservations !== matchingAccount.canCreateReservations ||
         currentUser.canEditReservations !== matchingAccount.canEditReservations ||
         currentUser.canDeleteReservations !== matchingAccount.canDeleteReservations ||
+        currentUser.isMasterAdmin !== matchingAccount.isMasterAdmin ||
         currentUser.role !== matchingAccount.role ||
         currentUser.name !== matchingAccount.name;
 
@@ -303,6 +304,7 @@ export default function App() {
           ...currentUser,
           role: matchingAccount.role,
           name: matchingAccount.name,
+          isMasterAdmin: matchingAccount.isMasterAdmin,
           canCreateReservations: matchingAccount.canCreateReservations,
           canEditReservations: matchingAccount.canEditReservations,
           canDeleteReservations: matchingAccount.canDeleteReservations

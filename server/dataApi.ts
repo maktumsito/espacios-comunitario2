@@ -5,7 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import { gzipSync } from "node:zlib";
 import type { AppSessions } from "./appSession";
 import { hashPassword, publicProfile, verifyPassword } from "./passwords";
-import { defaultNewUserPermissions, isReservationPermissionAdmin, reservationPermission, reservationPermissionKeys } from '../src/utils/userPermissions';
+import { defaultNewUserPermissions, isReservationPermissionAdmin, reservationPermission, reservationPermissionKeys, RESERVATION_PERMISSION_ADMIN_USERNAME } from '../src/utils/userPermissions';
 export { reservationPermission } from '../src/utils/userPermissions';
 import {
   claimScheduledBackup,
@@ -388,6 +388,8 @@ export function registerDataApi(
         oldName = String(req.body.originalUsername || username)
           .trim()
           .toLowerCase();
+      if ([username, oldName].includes(RESERVATION_PERMISSION_ADMIN_USERNAME) && !isReservationPermissionAdmin(actor))
+        throw new ApiFailure(403, 'Solo Cristian Shute puede modificar su cuenta de administración de permisos.');
       if (
         !username ||
         username.length > 150 ||
@@ -501,7 +503,7 @@ export function registerDataApi(
         const all = await tx.get(db.collection("usuarios_sistema")),
           target = all.docs.find((d) => d.id === accountId(username));
         if (!target) return all.docs.map(d => publicProfile(d.data()));
-        if (target.get("isMasterAdmin"))
+        if (target.get("isMasterAdmin") || username === RESERVATION_PERMISSION_ADMIN_USERNAME)
           throw new ApiFailure(403, "El perfil maestro está protegido.");
         if (
           manager(target.data()) &&

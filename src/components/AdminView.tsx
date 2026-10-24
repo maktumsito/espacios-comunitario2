@@ -1554,7 +1554,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             {filteredUsers.map((usr) => {
               const roleBadge = getRoleBadge(usr.role);
               const RoleIcon = roleBadge.icon;
-              const isMaster = isMasterAdmin(usr);
+              const isMaster = isMasterAdmin(usr) || isCristianShute(usr);
 
               return (
                 <div

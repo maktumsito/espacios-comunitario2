@@ -10,6 +10,7 @@ import {
   validateUserPermissions,
 } from "./dataApi";
 import { validateBackupRecord } from "../src/utils/backupIntegrity";
+import { isReservationPermissionAdmin, RESERVATION_PERMISSION_ADMIN_USERNAME } from '../src/utils/userPermissions';
 
 /** Catalog/profile restoration is atomic and preserves credentials, private
  * configuration and append-only audit history. Large restores fail before the
@@ -43,6 +44,8 @@ async function prepareEntities(
         "El respaldo contiene perfiles que requieren alta y contraseña individual antes de restaurarlos.",
       );
     validateUserPermissions(actor, u, existing);
+    if (existing.username === RESERVATION_PERMISSION_ADMIN_USERNAME && !isReservationPermissionAdmin(actor) && u.role !== existing.role)
+      throw new ApiFailure(403, 'El respaldo intenta modificar la cuenta de administración de permisos.');
     if (
       existing.isMasterAdmin !== u.isMasterAdmin &&
       actor.isMasterAdmin !== true
@@ -65,7 +68,7 @@ async function prepareEntities(
   }
   for (const [id, u] of accounts)
     if (
-      u.isMasterAdmin &&
+      (u.isMasterAdmin || u.username === RESERVATION_PERMISSION_ADMIN_USERNAME) &&
       !d.usuarios.some((p: any) => accountId(p.username) === id)
     )
       throw new ApiFailure(
