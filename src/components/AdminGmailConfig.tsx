@@ -1,3 +1,4 @@
+import { CalendarDateInput } from './common/CalendarDateInput';
 import React, { useState, useEffect, useMemo } from 'react';
 import { getAuthSessionToken } from '../services/authService';
 import {
@@ -662,11 +663,10 @@ export const AdminGmailConfig: React.FC<AdminGmailConfigProps> = ({
               <label className="text-xs font-medium text-slate-600 mb-1 block">
                 Fecha de Inicio del ciclo:
               </label>
-              <input
-                type="date"
+              <CalendarDateInput
                 id="admin-schedule-start-date"
                 value={currentSchedule.fechaInicio}
-                onChange={e => handleScheduleChange('fechaInicio', e.target.value)}
+                onValueChange={dateValue => handleScheduleChange('fechaInicio', dateValue)}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 shadow-2xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
               />
             </div>
@@ -675,12 +675,11 @@ export const AdminGmailConfig: React.FC<AdminGmailConfigProps> = ({
                 <span className="font-bold text-blue-900">¿Hasta qué fecha se envía? (Término):</span>
                 <span className="text-[10px] text-blue-600 font-bold">Fecha Límite</span>
               </label>
-              <input
-                type="date"
+              <CalendarDateInput
                 id="admin-schedule-end-date"
                 min={currentSchedule.fechaInicio}
                 value={currentSchedule.fechaFin}
-                onChange={e => handleScheduleChange('fechaFin', e.target.value)}
+                onValueChange={dateValue => handleScheduleChange('fechaFin', dateValue)}
                 className="w-full px-3 py-2 bg-blue-50/50 border border-blue-300 rounded-xl text-xs font-bold text-slate-900 shadow-2xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
               />
             </div>

@@ -1,3 +1,4 @@
+import { CalendarDateInput } from './common/CalendarDateInput';
 import React, { useEffect, useState } from "react";
 import { FilterState, SpaceInfo, ActivityTypeItem } from "../types";
 import { SPACES_LIST, ACTIVITY_TYPES } from "../data/spacesData";
@@ -160,19 +161,18 @@ const FilterBarComponent: React.FC<FilterBarProps> = ({
           </label>
           <label className="text-sm font-medium text-slate-700">
             Desde
-            <input
+            <CalendarDateInput
               id="filter-date-from"
-              type="date"
               aria-invalid={invalidDates}
               aria-describedby={
                 invalidDates ? "filter-date-range-error" : undefined
               }
               value={filters.fechaDesde}
-              onChange={(event) =>
+              onValueChange={(dateValue) =>
                 change({
                   fechaDesde:
-                    clampAndFixCalendarDate(event.target.value).correctedIso ||
-                    event.target.value,
+                    clampAndFixCalendarDate(dateValue).correctedIso ||
+                    dateValue,
                 })
               }
               className={inputClass}
@@ -180,19 +180,18 @@ const FilterBarComponent: React.FC<FilterBarProps> = ({
           </label>
           <label className="text-sm font-medium text-slate-700">
             Hasta
-            <input
+            <CalendarDateInput
               id="filter-date-to"
-              type="date"
               aria-invalid={invalidDates}
               aria-describedby={
                 invalidDates ? "filter-date-range-error" : undefined
               }
               value={filters.fechaHasta}
-              onChange={(event) =>
+              onValueChange={(dateValue) =>
                 change({
                   fechaHasta:
-                    clampAndFixCalendarDate(event.target.value).correctedIso ||
-                    event.target.value,
+                    clampAndFixCalendarDate(dateValue).correctedIso ||
+                    dateValue,
                 })
               }
               className={inputClass}

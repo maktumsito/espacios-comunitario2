@@ -279,7 +279,7 @@ export function getDaysInMonth(year: number, month: number): number {
 
 /**
  * Strictly parses and validates a calendar date (preventing JS Date rollover like Feb 30 -> Mar 2 or year 2202).
- * Supported formats: YYYY-MM-DD or DD-MM-YYYY.
+ * Supported formats: YYYY-MM-DD, DD-MM-YYYY or DD/MM/YYYY.
  */
 export function validateStrictCalendarDate(
   dateInput: string,
@@ -300,8 +300,8 @@ export function validateStrictCalendarDate(
     year = parts[0];
     month = parts[1];
     day = parts[2];
-  } else if (/^\d{2}-\d{2}-\d{4}$/.test(clean)) {
-    const parts = clean.split('-').map(Number);
+  } else if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(clean)) {
+    const parts = clean.split(/[-/]/).map(Number);
     day = parts[0];
     month = parts[1];
     year = parts[2];
@@ -310,7 +310,7 @@ export function validateStrictCalendarDate(
       isValid: false,
       date: null,
       isoString: '',
-      error: 'Formato de fecha inválido. Utilice formato AAAA-MM-DD o DD-MM-AAAA.'
+      error: 'Formato de fecha inválido. Utilice formato DD/MM/AAAA o AAAA-MM-DD.'
     };
   }
 
@@ -347,9 +347,10 @@ export function validateStrictCalendarDate(
   }
 
   const d = new Date(year, month - 1, day, 12, 0, 0);
+  if (year < 100) d.setFullYear(year);
   const mm = String(month).padStart(2, '0');
   const dd = String(day).padStart(2, '0');
-  const iso = `${year}-${mm}-${dd}`;
+  const iso = `${String(year).padStart(4, '0')}-${mm}-${dd}`;
 
   return {
     isValid: true,
@@ -379,8 +380,8 @@ export function clampAndFixCalendarDate(
     year = parts[0];
     month = parts[1];
     day = parts[2];
-  } else if (/^\d{2}-\d{2}-\d{4}$/.test(clean)) {
-    const parts = clean.split('-').map(Number);
+  } else if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(clean)) {
+    const parts = clean.split(/[-/]/).map(Number);
     day = parts[0];
     month = parts[1];
     year = parts[2];
@@ -388,7 +389,7 @@ export function clampAndFixCalendarDate(
     return { correctedIso: clean, wasAdjusted: false };
   }
 
-  if (month < 1 || month > 12 || year < 1900 || year > 2100) {
+  if (month < 1 || month > 12 || year < 1 || year > 9999) {
     return { correctedIso: clean, wasAdjusted: false };
   }
 
@@ -401,7 +402,7 @@ export function clampAndFixCalendarDate(
     const mm = String(month).padStart(2, '0');
     const dd = String(maxDays).padStart(2, '0');
     return {
-      correctedIso: `${year}-${mm}-${dd}`,
+      correctedIso: `${String(year).padStart(4, '0')}-${mm}-${dd}`,
       wasAdjusted: true,
       message: `El mes de ${monthNames[month]} solo tiene ${maxDays} días. Se ajustó automáticamente al día ${maxDays}.`
     };
@@ -410,7 +411,7 @@ export function clampAndFixCalendarDate(
   const mm = String(month).padStart(2, '0');
   const dd = String(day).padStart(2, '0');
   return {
-    correctedIso: `${year}-${mm}-${dd}`,
+    correctedIso: `${String(year).padStart(4, '0')}-${mm}-${dd}`,
     wasAdjusted: false
   };
 }

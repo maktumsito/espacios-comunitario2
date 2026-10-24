@@ -1,3 +1,4 @@
+import { CalendarDateInput } from './common/CalendarDateInput';
 import { useEffect, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { Reservation } from '../types';
@@ -80,8 +81,8 @@ export function DeleteDayReservationsModal({ initialDate, onClose, onConfirm }: 
       </div>}
     >
       <label htmlFor="delete-day-date" className="block text-sm font-semibold mb-2">Fecha de las reservas</label>
-      <input id="delete-day-date" type="date" min="2020-01-01" max="2035-12-31" value={fecha} disabled={processing}
-        onChange={event => { setPreview(null); setFecha(event.target.value); }}
+      <CalendarDateInput id="delete-day-date" min="2020-01-01" max="2035-12-31" value={fecha} disabled={processing}
+        onValueChange={dateValue => { setPreview(null); setFecha(dateValue); }}
         className="w-full min-h-[44px] border border-slate-300 rounded-xl px-3 py-2 text-sm" />
       <p className="mt-3 text-sm text-slate-600">Se incluyen todos los espacios y todas las reservas registradas en esa fecha, aunque estén ocultas por los filtros.</p>
       <p className="mt-2 text-sm text-slate-600">Marca las reservas que deseas borrar y desmarca las que quieres conservar.</p>

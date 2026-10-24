@@ -1,3 +1,4 @@
+import { CalendarDateInput } from './common/CalendarDateInput';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
 import { showPrintBlob } from '../utils/printWindow';
@@ -808,10 +809,9 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
             </button>
             <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg shadow-2xs font-semibold">
               <Calendar className="w-4 h-4 text-blue-600" />
-              <input
-                type="date"
+              <CalendarDateInput
                 value={selectedDateStr}
-                onChange={(e) => setSelectedDateStr(e.target.value)}
+                onValueChange={(dateValue) => setSelectedDateStr(dateValue)}
                 className="font-mono text-xs focus:outline-none bg-transparent cursor-pointer"
               />
             </div>

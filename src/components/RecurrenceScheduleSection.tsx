@@ -1,3 +1,4 @@
+import { CalendarDateInput } from './common/CalendarDateInput';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useMemo } from 'react';
 import {
@@ -201,10 +202,9 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
               1. Agregar Fecha Individual:
             </label>
             <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="date"
+              <CalendarDateInput
                 value={dateInputToAdd}
-                onChange={(e) => setDateInputToAdd(e.target.value)}
+                onValueChange={(dateValue) => setDateInputToAdd(dateValue)}
                 className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none shadow-2xs"
               />
               <button
@@ -810,13 +810,12 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold text-slate-600 block">Fecha Inicio de la Serie:</span>
-                <input
-                  type="date"
+                <CalendarDateInput
                   required
                   value={recurrenceStartDate}
-                  onChange={(e) => {
-                    setRecurrenceStartDate(e.target.value);
-                    setFormData((prev) => ({ ...prev, fecha: e.target.value }));
+                  onValueChange={(dateValue) => {
+                    setRecurrenceStartDate(dateValue);
+                    setFormData((prev) => ({ ...prev, fecha: dateValue }));
                   }}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono shadow-2xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
@@ -832,13 +831,12 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
                     Fecha Término (Opción Admin)
                   </span>
                 </div>
-                <input
-                  type="date"
+                <CalendarDateInput
                   id="input-hasta-que-fecha-se-repite"
                   required
                   min={recurrenceStartDate}
                   value={recurrenceEndDate}
-                  onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                  onValueChange={(dateValue) => setRecurrenceEndDate(dateValue)}
                   className="w-full px-3 py-2 bg-white border-2 border-blue-400 rounded-xl text-blue-950 font-bold font-mono shadow-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
                 />
               </div>

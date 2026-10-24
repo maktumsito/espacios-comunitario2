@@ -1,3 +1,4 @@
+import { CalendarDateInput } from './common/CalendarDateInput';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -932,13 +933,12 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
                   <span className="text-[11px] font-normal text-emerald-700">Nueva Fecha Término</span>
                 </label>
 
-                <input
-                  type="date"
+                <CalendarDateInput
                   id="input-admin-new-until-date"
                   required
                   min={modifyingSeries.fechaInicio}
                   value={newEndDate}
-                  onChange={(e) => setNewEndDate(e.target.value)}
+                  onValueChange={(dateValue) => setNewEndDate(dateValue)}
                   className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono text-sm shadow-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
 
@@ -1230,11 +1230,10 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-700 block">Fecha Inicio:</label>
-                    <input
-                      type="date"
+                    <CalendarDateInput
                       required
                       value={newFechaInicio}
-                      onChange={(e) => setNewFechaInicio(e.target.value)}
+                      onValueChange={(dateValue) => setNewFechaInicio(dateValue)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     />
                   </div>
@@ -1245,12 +1244,11 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
                       <span>¿Hasta qué fecha se repite?</span>
                       <span className="text-[10px] text-blue-700 font-bold">Límite de la serie</span>
                     </label>
-                    <input
-                      type="date"
+                    <CalendarDateInput
                       required
                       min={newFechaInicio}
                       value={newFechaFin}
-                      onChange={(e) => setNewFechaFin(e.target.value)}
+                      onValueChange={(dateValue) => setNewFechaFin(dateValue)}
                       className="w-full px-3 py-2 bg-white border-2 border-blue-500 rounded-xl text-xs font-bold text-blue-950 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none shadow-2xs"
                     />
                   </div>

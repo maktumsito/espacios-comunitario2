@@ -1,3 +1,4 @@
+import { CalendarDateInput } from './common/CalendarDateInput';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import {
@@ -201,23 +202,21 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-[11px] font-semibold text-slate-700">Desde la fecha:</label>
-              <input
+              <CalendarDateInput
                 id="input-range-start-date"
-                type="date"
                 min={editingReservation.fecha}
                 value={rangeStartDate}
-                onChange={(e) => setRangeStartDate(e.target.value)}
+                onValueChange={(dateValue) => setRangeStartDate(dateValue)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500"
               />
             </div>
             <div className="space-y-1">
               <label className="text-[11px] font-semibold text-slate-700">Hasta la fecha:</label>
-              <input
+              <CalendarDateInput
                 id="input-range-end-date"
-                type="date"
                 min={editingReservation.fecha}
                 value={rangeEndDate}
-                onChange={(e) => setRangeEndDate(e.target.value)}
+                onValueChange={(dateValue) => setRangeEndDate(dateValue)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500"
               />
             </div>

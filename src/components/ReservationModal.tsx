@@ -807,6 +807,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     setFormData((prev) => ({ ...prev, fecha: newDate }));
     if (!editingReservation) {
       setRecurrenceStartDate(newDate);
+      if (!newDate) return;
       if (!specificDates.includes(newDate)) {
         setSpecificDates((prev) => Array.from(new Set([newDate, ...prev])).sort());
       }

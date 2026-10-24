@@ -1,3 +1,4 @@
+import { CalendarDateInput } from './common/CalendarDateInput';
 import { NotificationPortal } from './common/NotificationPortal';
 import { useTimelineViewport, intersectsViewport } from '../hooks/useTimelineViewport';
 import { useDragAutoScroll } from '../hooks/useDragAutoScroll';
@@ -1046,15 +1047,14 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
           {/* Ir a fecha Picker input pill */}
           <div className="flex items-center gap-1 px-2 py-0.5 min-h-11 sm:min-h-8 bg-white border border-slate-200 rounded-lg text-xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
             <span className="text-slate-500 font-semibold whitespace-nowrap text-[11px]">Ir a fecha:</span>
-            <input
+            <CalendarDateInput
               id="input-goto-date"
               aria-label="Seleccionar fecha para ver el horario"
-              type="date"
               min="2020-01-01"
               max="2035-12-31"
               value={dateStr}
-              onChange={(e) => {
-                const rawVal = e.target.value;
+              onValueChange={(dateValue) => {
+                const rawVal = dateValue;
                 if (rawVal) {
                   const { correctedIso, wasAdjusted, message } = clampAndFixCalendarDate(rawVal);
                   const targetVal = correctedIso || rawVal;

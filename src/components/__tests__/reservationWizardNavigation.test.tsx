@@ -129,6 +129,19 @@ function expectStep(step: number) {
 }
 
 describe('reservation wizard navigation', () => {
+  it('corrects impossible dates before review and blocks incomplete or invalid dates', () => {
+    openForm(); fillActivity(); selectStep(2);
+    let input = screen.getByRole('textbox', { name: 'Fecha de la reserva' }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '31/11/2026' } });
+    expect(input.value).toBe('30/11/2026');
+    selectStep(3); expectStep(3);
+    selectStep(2);
+    input = screen.getByRole('textbox', { name: 'Fecha de la reserva' }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '31/13/2026' } });
+    selectStep(3); expectStep(2);
+    fireEvent.change(input, { target: { value: '31/11/202' } });
+    selectStep(5); expectStep(2);
+  });
   it.each([2, 3, 4, 5])('requires an activity before selecting step %i and preserves the current step', step => {
     openForm({ initialEndTime: '09:00', initialResponsable: '' });
     selectStep(step);

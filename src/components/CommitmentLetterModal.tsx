@@ -1,3 +1,4 @@
+import { CalendarDateInput } from './common/CalendarDateInput';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Reservation, SpaceInfo } from '../types';
@@ -496,10 +497,9 @@ RUT: ${rutStr || '____________________________________'}
 
                 <div className="space-y-1">
                   <label className="font-semibold text-slate-700">Fecha del Préstamo:</label>
-                  <input
-                    type="date"
+                  <CalendarDateInput
                     value={localData.fecha}
-                    onChange={(e) => setLocalData({ ...localData, fecha: e.target.value })}
+                    onValueChange={(dateValue) => setLocalData({ ...localData, fecha: dateValue })}
                     className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900"
                   />
                 </div>

@@ -1,3 +1,4 @@
+import { CalendarDateInput } from './common/CalendarDateInput';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useMemo } from 'react';
 import { SpaceBlock, SpaceInfo } from '../types';
@@ -343,11 +344,10 @@ export const SpaceBlockModal: React.FC<SpaceBlockModalProps> = ({
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">
                         Fecha Inicio Serie *
                       </label>
-                      <input
-                        type="date"
+                      <CalendarDateInput
                         required
                         value={fechaInicio}
-                        onChange={(e) => setFechaInicio(e.target.value)}
+                        onValueChange={(dateValue) => setFechaInicio(dateValue)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
                       />
                     </div>
@@ -359,13 +359,12 @@ export const SpaceBlockModal: React.FC<SpaceBlockModalProps> = ({
                         </label>
                         <span className="text-[9.5px] font-bold text-amber-800">Fecha Término</span>
                       </div>
-                      <input
-                        type="date"
+                      <CalendarDateInput
                         required
                         id="input-block-until-date"
                         min={fechaInicio}
                         value={fechaFinRecurrencia}
-                        onChange={(e) => setFechaFinRecurrencia(e.target.value)}
+                        onValueChange={(dateValue) => setFechaFinRecurrencia(dateValue)}
                         className="w-full px-3 py-2 bg-white border-2 border-amber-500 rounded-xl text-xs font-bold text-amber-950 font-mono focus:ring-2 focus:ring-amber-600 focus:outline-hidden shadow-2xs"
                       />
                     </div>
@@ -436,10 +435,9 @@ export const SpaceBlockModal: React.FC<SpaceBlockModalProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Fecha Desde *
                   </label>
-                  <input
-                    type="date"
+                  <CalendarDateInput
                     value={fechaInicio}
-                    onChange={(e) => setFechaInicio(e.target.value)}
+                    onValueChange={(dateValue) => setFechaInicio(dateValue)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
                   />
                 </div>
@@ -447,10 +445,9 @@ export const SpaceBlockModal: React.FC<SpaceBlockModalProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Fecha Hasta *
                   </label>
-                  <input
-                    type="date"
+                  <CalendarDateInput
                     value={fechaFin}
-                    onChange={(e) => setFechaFin(e.target.value)}
+                    onValueChange={(dateValue) => setFechaFin(dateValue)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
                   />
                 </div>

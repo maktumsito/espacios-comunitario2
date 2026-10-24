@@ -1,3 +1,4 @@
+import { CalendarDateInput } from './common/CalendarDateInput';
 import { ReservationSectionHeader } from './ReservationSectionHeader';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
@@ -295,14 +296,13 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
               </span>
             )}
           </label>
-          <input
+          <CalendarDateInput
             id="input-reserva-fecha"
             aria-label="Fecha de la reserva"
-            type="date"
             required
             disabled={isEditingRecurring && updateScope !== 'single'}
             value={formData.fecha || ''}
-            onChange={(e) => handlePrimaryDateChange(e.target.value)}
+            onValueChange={(dateValue) => handlePrimaryDateChange(dateValue)}
             className={`w-full px-3.5 py-2.5 rounded-xl font-mono focus:outline-none focus:ring-2 shadow-xs ${
               isEditingRecurring && updateScope !== 'single'
                 ? 'bg-slate-100 text-slate-700 cursor-not-allowed border border-slate-300 font-bold'
