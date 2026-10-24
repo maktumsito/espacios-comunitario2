@@ -242,20 +242,41 @@ it('keeps individual permission changes pending, reports rejection and allows re
   await waitFor(() => expect(screen.getByText(/Registro de nuevas reservas DESACTIVADO/)).toBeTruthy());
 });
 
-it('preserves bulk permission changes, excludes protected accounts and prevents duplicate requests', async () => {
+it.each([
+  { button: 'Activar todos los permisos', create: true, edit: true, remove: true },
+  { button: 'Solo Crear Reservas', create: true, edit: false, remove: false },
+  { button: 'Desactivar todos los permisos', create: false, edit: false, remove: false },
+])('applies $button to every user including master accounts and prevents duplicate requests', async ({ button, create, edit, remove }) => {
   const pending = deferred();
   const save = vi.fn().mockReturnValue(pending.promise);
   const currentUser = { ...props().currentUser!, username: 'cristian shute', isMasterAdmin:true, name: 'Titular de prueba' };
-  const users = [operator, { ...operator, username: 'administrator', role: 'Administrador', isMasterAdmin:true }, { ...operator, username: 'cristian shute', isMasterAdmin:true }];
+  const users = [operator, { ...operator, username: 'administrator', role: 'Administrador', isMasterAdmin:true },
+    { ...operator, username: 'cristian shute', isMasterAdmin:true }, { ...operator, username: 'reader', role: 'Auxiliar' }];
   render(<AdminView {...props({ initialTab: 'users', currentUser, users, onSaveUser: save })} />);
-  const button = screen.getByTitle('Bloquea creación, edición y eliminación para operadores');
-  fireEvent.click(button);
-  fireEvent.click(button);
+  const action = screen.getByRole('button', { name: button });
+  fireEvent.click(action);
+  fireEvent.click(action);
   expect(save).toHaveBeenCalledTimes(1);
-  expect(save.mock.calls[0]).toEqual([expect.objectContaining({ username: 'operator', canCreateReservations: false, canEditReservations: false, canDeleteReservations: false }), 'operator']);
+  expect(screen.queryByText(/aplicado exitosamente/)).toBeNull();
   await act(async () => pending.resolve());
-  expect(screen.getByText(/aplicado exitosamente a 1 usuarios/)).toBeTruthy();
-  expect(save).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(screen.getByText(/aplicado exitosamente a 4 usuarios/)).toBeTruthy());
+  expect(save).toHaveBeenCalledTimes(users.length);
+  users.forEach((user, index) => expect(save.mock.calls[index]).toEqual([expect.objectContaining({
+    ...user, canCreateReservations: create, canEditReservations: edit, canDeleteReservations: remove,
+  }), user.username]));
+});
+
+it('reports a failed bulk permission change without claiming that all users were updated, and allows retry', async () => {
+  const save = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('Permisos no guardados')).mockResolvedValue(undefined);
+  const currentUser = { ...props().currentUser!, username: 'cristian shute', isMasterAdmin: true };
+  const users = [operator, { ...operator, username: 'master', isMasterAdmin: true }];
+  render(<AdminView {...props({ initialTab: 'users', currentUser, users, onSaveUser: save })} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Desactivar todos los permisos' }));
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Permisos no guardados'));
+  expect(screen.queryByText(/aplicado exitosamente/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Desactivar todos los permisos' }));
+  await waitFor(() => expect(screen.getByText(/aplicado exitosamente a 2 usuarios/)).toBeTruthy());
+  expect(save).toHaveBeenCalledTimes(4);
 });
 
 it('lets Cristian disable and restore each of his own reservation permissions', async () => {

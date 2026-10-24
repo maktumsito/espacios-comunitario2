@@ -198,3 +198,20 @@ it('lets Cristian revoke and restore his own reservation permissions while keepi
     }
   });
 });
+
+it('lets Cristian deactivate and reactivate reservation permissions for every account, including all masters', async () => {
+  await withUsers(async ({ post, login, rows }) => {
+    const usernames = ['coordinator', 'reader', 'master', 'cristian shute'];
+    const sessions = new Map<string, string>();
+    for (const username of usernames) sessions.set(username, (await login(username)).token);
+    for (const enabled of [false, true]) {
+      for (const username of usernames) {
+        const { passwordHash: _password, ...profile } = rows.get(`usuarios_sistema/${accountId(username)}`);
+        const user = { ...profile, canCreateReservations: enabled, canEditReservations: enabled, canDeleteReservations: enabled };
+        expect((await post('/api/users/save', { user, originalUsername: username }, sessions.get('cristian shute'))).status).toBe(200);
+        for (const key of ['canCreateReservations', 'canEditReservations', 'canDeleteReservations'])
+          expect((await post(`/check/${key}`, {}, sessions.get(username))).status).toBe(enabled ? 200 : 403);
+      }
+    }
+  });
+});

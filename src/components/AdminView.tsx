@@ -870,8 +870,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
       let targetCount = 0;
       for (const usr of effectiveUsers) {
-        if (isMasterAdmin(usr) || isCristianShute(usr)) continue;
-
         const newPerms = {
           canCreateReservations: mode === 'all_enabled' || mode === 'create_only',
           canEditReservations: mode === 'all_enabled',
@@ -883,10 +881,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
           ...newPerms
         };
 
-        targetCount++;
         if (onSaveUser) {
           await onSaveUser(updated, usr.username);
+        } else {
+          setLocalUsers(prev => prev.map(user => user.username === usr.username ? updated : user));
         }
+        targetCount++;
       }
 
       const modeLabels = {
@@ -1436,7 +1436,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     <span>Control Maestro de Permisos de Reservas por Usuario</span>
                   </h3>
                   <p className="text-xs text-blue-100/80 leading-relaxed">
-                    Como titular de la cuenta, puedes <strong>activar o desactivar</strong> en cada usuario la facultad de <strong>registrar nuevas reservas</strong> o <strong>editar, cambiar y eliminar</strong> las reservas existentes. Los cambios se guardan y sincronizan de forma inmediata en Firestore hacia todos los dispositivos.
+                    Puedes <strong>activar o desactivar</strong> los permisos para <strong>crear, editar y eliminar reservas</strong> de cualquier usuario, incluidas las cuentas maestras. Usa los controles de cada usuario o aplica una acción a todos a la vez.
                   </p>
                 </div>
 
@@ -1451,16 +1451,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       type="button"
                       onClick={() => handleBulkSetPermissions('all_enabled')}
                       className="px-3 py-1.5 rounded-xl bg-emerald-500/90 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                      title="Permite a todos los operadores crear, editar y eliminar reservas"
+                      title="Activa la creación, edición y eliminación de reservas para todos los usuarios, incluidas las cuentas maestras"
                     >
                       <Check className="w-3.5 h-3.5" />
-                      <span>Habilitar Todo a Todos</span>
+                      <span>Activar todos los permisos</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleBulkSetPermissions('create_only')}
                       className="px-3 py-1.5 rounded-xl bg-amber-500/90 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                      title="Permite a los usuarios registrar nuevas reservas pero bloquea editar o eliminar existentes"
+                      title="Permite a todos los usuarios crear reservas y bloquea la edición y eliminación"
                     >
                       <CalendarPlus className="w-3.5 h-3.5" />
                       <span>Solo Crear Reservas</span>
@@ -1469,10 +1469,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       type="button"
                       onClick={() => handleBulkSetPermissions('view_only')}
                       className="px-3 py-1.5 rounded-xl bg-slate-700/90 hover:bg-slate-700 active:scale-95 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                      title="Bloquea creación, edición y eliminación para operadores"
+                      title="Desactiva la creación, edición y eliminación de reservas para todos los usuarios, incluidas las cuentas maestras"
                     >
                       <Lock className="w-3.5 h-3.5" />
-                      <span>Modo Solo Consulta</span>
+                      <span>Desactivar todos los permisos</span>
                     </button>
                   </div>
                 </div>
