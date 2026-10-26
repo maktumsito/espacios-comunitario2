@@ -1,3 +1,4 @@
+import { useReservationVisuals } from '../contexts/ReservationVisualsContext';
 import { VirtualCardGrid } from './common/VirtualCardGrid';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Reservation, SpaceInfo, SpaceBlock, SpaceRating } from '../types';
@@ -12,7 +13,7 @@ import { normalizeSpaceName } from '../data/spacesData';
 import { formatDateYYYYMMDD, parseDateToNoon } from '../utils/dateUtils';
 import { getFuzzyMatchIds } from '../utils/fuzzySearch';
 import { validateAndFormatChileanPhone } from '../utils/validationUtils';
-import { getReservationTypeVisual, RESERVATION_TYPE_LEGEND, formatDisplayTitle } from '../utils/reservationVisuals';
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -91,6 +92,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
   currentUser,
   onSwitchToDesktopView
 }) => {
+  const { getReservationTypeVisual, legend } = useReservationVisuals();
   const [selectedSpaceFilter, setSelectedSpaceFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState<boolean>(false);
@@ -856,8 +858,8 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
           })}
           </div>
           <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1" aria-label="Colores por tipo de reserva">
-            {RESERVATION_TYPE_LEGEND.map((item) => (
-              <span key={item.key} className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-1 text-xs font-semibold ${item.bgClass} ${item.borderClass} ${item.softTextClass}`}>
+            {legend.map((item) => (
+              <span key={item.key} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-1 text-xs font-semibold text-slate-900" style={{ backgroundColor: item.background, borderColor: item.border }}>
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.accent }} />
                 {item.label}
               </span>

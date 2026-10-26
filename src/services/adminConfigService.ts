@@ -1,8 +1,12 @@
 import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import { SpaceInfo, LoanType, ActivityTypeItem } from '../types';
+import { DEFAULT_ACTIVITY_ITEMS } from '../data/activityTypes';
+import { assignUniqueActivityColors, getAvailableActivityColor } from '../utils/reservationVisuals';
 import { SPACES_LIST } from '../data/spacesData';
 import { collection, doc, setDoc, writeBatch, query, where, documentId } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
+
+export { DEFAULT_ACTIVITY_ITEMS } from '../data/activityTypes';
 
 const SPACES_STORAGE_KEY = 'espacios_comunitarios_spaces_v2';
 const LOANS_STORAGE_KEY = 'espacios_comunitarios_loans_v2';
@@ -77,81 +81,6 @@ export const DEFAULT_LOAN_TYPES: LoanType[] = [
   }
 ];
 
-export const DEFAULT_ACTIVITY_ITEMS: ActivityTypeItem[] = [
-  {
-    id: 'ACT_TALLER_CCD',
-    name: 'TALLER CCD',
-    category: 'Formación y Desarrollo',
-    color: '#0284c7',
-    description: 'Talleres formativos regulares del Centro Comunitario',
-    isCustom: false
-  },
-  {
-    id: 'ACT_TALLER_MUNI',
-    name: 'TALLER MUNICIPAL',
-    category: 'Municipal',
-    color: '#059669',
-    description: 'Programas municipales de capacitación y deportes',
-    isCustom: false
-  },
-  {
-    id: 'ACT_TALLER_JJV',
-    name: 'TALLER JJV',
-    category: 'Vecinal',
-    color: '#7c3aed',
-    description: 'Talleres autogestionados por Juntas de Vecinos',
-    isCustom: false
-  },
-  {
-    id: 'ACT_ENSAYO',
-    name: 'ENSAYO',
-    category: 'Cultura y Artes',
-    color: '#ea580c',
-    description: 'Ensayos de danza, música, teatro y folklore',
-    isCustom: false
-  },
-  {
-    id: 'ACT_CHARLA',
-    name: 'CHARLA',
-    category: 'Educación y Salud',
-    color: '#4f46e5',
-    description: 'Exposiciones informativas, asambleas y conversatorios',
-    isCustom: false
-  },
-  {
-    id: 'ACT_MUNICIPAL',
-    name: 'ACTIVIDAD MUNICIPAL',
-    category: 'Institucional',
-    color: '#0891b2',
-    description: 'Atenciones ciudadanas, operativos de salud y ceremonias',
-    isCustom: false
-  },
-  {
-    id: 'ACT_PRESTAMO',
-    name: 'PRÉSTAMO',
-    category: 'Uso Comunitario',
-    color: '#2563eb',
-    description: 'Uso temporal otorgado para reuniones o actividades grupales',
-    isCustom: false
-  },
-  {
-    id: 'ACT_CUMPLE',
-    name: 'CUMPLEAÑOS',
-    category: 'Social y Familiar',
-    color: '#d97706',
-    description: 'Celebraciones familiares o comunitarias autorizadas',
-    isCustom: false
-  },
-  {
-    id: 'ACT_OTROS',
-    name: 'OTROS',
-    category: 'General',
-    color: '#64748b',
-    description: 'Otras actividades y usos diversos',
-    isCustom: false
-  }
-];
-
 // Helper to push config to Firestore
 async function saveConfigDocToFirestore(docId: string, data: any): Promise<void> {
   try {
@@ -209,8 +138,9 @@ export function subscribeToAdminConfig(
             if (isBrowser) localStorage.setItem(LOANS_STORAGE_KEY, JSON.stringify(payload.data));
             onUpdate({ loanTypes: payload.data });
           } else if (docId === 'tipos_actividad' && Array.isArray(payload.data)) {
-            if (isBrowser) localStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(payload.data));
-            onUpdate({ activityTypes: payload.data });
+            const activityTypes = assignUniqueActivityColors(payload.data);
+            if (isBrowser) localStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(activityTypes));
+            onUpdate({ activityTypes });
           }
         });
       },
@@ -338,7 +268,7 @@ export function getStoredActivityTypes(): ActivityTypeItem[] {
     if (!raw) return DEFAULT_ACTIVITY_ITEMS;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
+      return assignUniqueActivityColors(parsed);
     }
   } catch (e) {
     console.warn('Error reading activity types from localStorage:', e);
@@ -349,12 +279,16 @@ export function getStoredActivityTypes(): ActivityTypeItem[] {
 export async function saveActivityTypeItem(act: ActivityTypeItem ): Promise<ActivityTypeItem[]> {
   const current = getStoredActivityTypes();
   const index = current.findIndex(a => a.id === act.id || a.name.toUpperCase() === act.name.toUpperCase());
+  const color = getAvailableActivityColor(
+    current.filter((_, i) => i !== index).map(item => item.color), act.color, act.name
+  );
+  const activity = { ...act, color, isCustom: true };
   let updated: ActivityTypeItem[];
   if (index >= 0) {
     updated = [...current];
-    updated[index] = { ...act, isCustom: true };
+    updated[index] = activity;
   } else {
-    updated = [...current, { ...act, isCustom: true }];
+    updated = [...current, activity];
   }
   await saveConfigDocToFirestore('tipos_actividad', updated);
   try {

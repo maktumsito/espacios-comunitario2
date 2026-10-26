@@ -1,3 +1,4 @@
+import { ReservationVisualsProvider } from './contexts/ReservationVisualsContext';
 import { NotificationPortal } from './components/common/NotificationPortal';
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { Reservation, ViewMode, FilterState, SpaceRating } from './types';
@@ -692,6 +693,7 @@ export default function App() {
   }
 
   return (
+    <ReservationVisualsProvider activityTypes={activityTypes} reservations={reservations}>
     <div className={`app-shell min-h-[100dvh] bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white pb-20 lg:pb-0 ${isSidebarHidden ? '' : 'lg:pl-56'}`}>
       {/* Network Status Banner (Hallazgo 8) */}
       {!isOnline && (
@@ -1784,6 +1786,7 @@ export default function App() {
         </div></NotificationPortal>
       )}
     </div>
+    </ReservationVisualsProvider>
   );
 }
 

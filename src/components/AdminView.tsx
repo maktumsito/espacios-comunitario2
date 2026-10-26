@@ -1,3 +1,4 @@
+import { getAvailableActivityColor } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { SpaceInfo, LoanType, ActivityTypeItem, EquipmentItem, Reservation, SpaceBlock, SpaceRating, ApplicantSummary } from '../types';
@@ -178,14 +179,20 @@ function AdminFormActions({ onCancel, submitLabel }: { onCancel: () => void; sub
   );
 }
 
-function AdminColorPicker({ label, color, onChange }: { label: string; color?: string; onChange: (color: string) => void }) {
+function AdminColorPicker({ label, color, onChange, unavailableColors = [] }: {
+  label: string; color?: string; onChange: (color: string) => void; unavailableColors?: string[];
+}) {
+  const colors = [...new Set([...PRESET_COLORS, ...(color ? [color] : [])])];
   return (
     <div>
       <label className="block text-xs font-bold text-slate-700 mb-1.5">{label}</label>
       <div className="flex flex-wrap items-center gap-2">
-        {PRESET_COLORS.map(c => (
+        {colors.map(c => (
           <button key={c} type="button" onClick={() => onChange(c)}
-            className={`w-6 h-6 rounded-full border transition-all flex items-center justify-center cursor-pointer ${color === c ? 'ring-2 ring-blue-600 ring-offset-2 scale-110' : 'border-slate-300'}`}
+            disabled={unavailableColors.includes(c)}
+            title={unavailableColors.includes(c) ? 'Color en uso por otro tipo' : `Seleccionar color ${c}`}
+            aria-label={unavailableColors.includes(c) ? `Color ${c} en uso por otro tipo` : `Seleccionar color ${c}`}
+            className={`w-6 h-6 rounded-full border transition-all flex items-center justify-center cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed ${color === c ? 'ring-2 ring-blue-600 ring-offset-2 scale-110' : 'border-slate-300'}`}
             style={{ backgroundColor: c }}>
             {color === c && <Check className="w-3 h-3 text-white" />}
           </button>
@@ -606,7 +613,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         id: `ACT_${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
         name: '',
         category: 'Formación y Desarrollo',
-        color: PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)],
+        color: getAvailableActivityColor(activityTypes.map(item => item.color)),
         description: ''
       });
     }
@@ -624,6 +631,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
       }
       const finalActivity: ActivityTypeItem = {
         ...activityForm,
+        color: getAvailableActivityColor(
+          activityTypes.filter(item => item.id !== editingActivityId && item.name.trim().toUpperCase() !== activityForm.name.trim().toUpperCase()).map(item => item.color),
+          activityForm.color, activityForm.name
+        ),
         id: activityForm.id || `ACT_${activityForm.name.trim().toUpperCase().replace(/\s+/g, '_')}`,
         name: activityForm.name.trim().toUpperCase(),
         isCustom: true
@@ -2612,7 +2623,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
 
               {/* Color */}
-              <AdminColorPicker label="Color de Etiqueta" color={activityForm.color} onChange={(color) => setActivityForm({ ...activityForm, color })} />
+              <AdminColorPicker label="Color de Etiqueta" color={activityForm.color} onChange={(color) => setActivityForm({ ...activityForm, color })}
+                unavailableColors={activityTypes.filter(item => item.id !== editingActivityId).map(item => item.color)} />
+              <p className="text-xs text-slate-500">Se asigna un color disponible automáticamente. Los colores en uso por otro tipo están deshabilitados.</p>
 
               {/* Descripción */}
               <div>

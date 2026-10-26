@@ -1,3 +1,4 @@
+import { useReservationVisuals } from '../contexts/ReservationVisualsContext';
 import { CalendarDateInput } from './common/CalendarDateInput';
 import { NotificationPortal } from './common/NotificationPortal';
 import { useTimelineViewport, intersectsViewport } from '../hooks/useTimelineViewport';
@@ -48,7 +49,7 @@ import { es } from 'date-fns/locale';
 import { validateStrictCalendarDate, clampAndFixCalendarDate } from '../utils/validationUtils';
 import { useReservationDateIndex } from '../utils/reservationIndex';
 import { formatActivitiesCount } from '../utils/pluralUtils';
-import { getReservationTypeVisual, formatDisplayTitle } from '../utils/reservationVisuals';
+import { formatDisplayTitle } from '../utils/reservationVisuals';
 
 const PrintScheduleModal = React.lazy(() =>
   import('./PrintScheduleModal').then((m) => ({ default: m.PrintScheduleModal }))
@@ -123,6 +124,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   onNavigateToMaintenance,
   onDateChange
 }) => {
+  const { getReservationTypeVisual } = useReservationVisuals();
   // Single controlled source of truth for the active date rendering the agenda.
   // Supports both controlled mode (via propSelectedDate) and uncontrolled mode (via initialDate).
   const [currentDate, setCurrentDate] = useState<Date>(() => propSelectedDate || initialDate || new Date());
@@ -516,14 +518,18 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
         border: 'border-rose-400 ring-2 ring-rose-300',
         shadow: 'shadow-[0_3px_0_rgba(244,63,94,0.6),0_4px_6px_rgba(0,0,0,0.08)]',
         text: 'text-rose-950',
-        accent: '#e11d48'
+        accent: '#e11d48',
+        background: '#fff1f2',
+        borderColor: '#fb7185'
       };
     }
 
     const visual = getReservationTypeVisual(res);
     return {
-      bg: visual.bgClass,
-      border: visual.borderClass,
+      bg: '',
+      border: '',
+      background: visual.background,
+      borderColor: visual.border,
       shadow: 'shadow-xs',
       text: 'text-slate-900',
       accent: visual.accent
@@ -1713,6 +1719,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                               height: `${cardHeight - 2}px`,
                               left: cardLeftStyle,
                               width: cardWidthStyle,
+                              backgroundColor: styling.background,
+                              borderColor: styling.borderColor,
                               borderLeftColor: styling.accent,
                               borderLeftWidth: '3.5px'
                             }}
@@ -1957,7 +1965,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
               {/* Tipo de Reserva */}
               <div className="flex items-center justify-between gap-1.5">
                 <span className="text-slate-500 font-medium">Tipo de reserva:</span>
-                <span className={`font-semibold px-2 py-0.5 rounded-full text-[10px] border ${hoverVisual.bgClass} ${hoverVisual.borderClass} ${hoverVisual.softTextClass}`}>
+                <span className="font-semibold px-2 py-0.5 rounded-full text-[10px] border text-slate-900" style={{ backgroundColor: hoverVisual.background, borderColor: hoverVisual.border }}>
                   {formatDisplayTitle(hoverRes.tipoActividad || hoverVisual.label)}
                 </span>
               </div>

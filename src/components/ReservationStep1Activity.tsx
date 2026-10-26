@@ -1,3 +1,4 @@
+import { useReservationVisuals } from '../contexts/ReservationVisualsContext';
 import { ReservationSectionHeader } from './ReservationSectionHeader';
 import React from 'react';
 import {
@@ -30,6 +31,8 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
   effectiveActivityNames,
   availableActivityTypes
 }) => {
+  const { getReservationTypeVisual } = useReservationVisuals();
+  const typeVisual = getReservationTypeVisual({ tipoActividad: formData.tipoActividad || effectiveActivityNames[0] });
   const requiresLetter = isCommitmentLetterEligible(formData.tipoActividad, formData.tipoPrestamo);
 
   return (
@@ -112,6 +115,10 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
             </option>
           ))}
         </select>
+        <p className="flex items-center gap-2 text-sm text-slate-600">
+          <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: typeVisual.accent }} aria-hidden="true" />
+          Color automático para {typeVisual.label}. Cada tipo tiene un color diferente.
+        </p>
 
       </div>
 

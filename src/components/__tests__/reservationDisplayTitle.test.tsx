@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CalendarView } from '../CalendarView';
 import { ReservationDetailModal } from '../ReservationDetailModal';
@@ -21,7 +21,7 @@ it('formats calendar titles, tooltips and accessible labels while selecting the 
   const booking = screen.getByRole('button', { name: 'Actividad: Taller De Danza Árabe a las 10:00 en Sala 2' });
   fireEvent.mouseEnter(booking);
   expect(screen.getByText('María De Los Ángeles')).toBeTruthy();
-  expect(screen.getByText('Taller Ccd')).toBeTruthy();
+  expect(within(booking).getByText('Taller Ccd')).toBeTruthy();
   fireEvent.click(booking);
   expect(select).toHaveBeenCalledExactlyOnceWith(reservation);
   expect(reservation.descripcion).toBe('tALLER de DANZA áRABE');

@@ -1,3 +1,4 @@
+import { useReservationVisuals } from '../contexts/ReservationVisualsContext';
 import { VirtualCardGrid } from './common/VirtualCardGrid';
 import React, { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
 import { Reservation, SpaceInfo, isSingleDayMultiSpaceReservation, SpaceBlock } from '../types';
@@ -5,7 +6,7 @@ import { SPACES_LIST } from '../data/spacesData';
 import { getChileanHolidayInfo, ChileanHoliday } from '../utils/holidayUtils';
 import { useReservationDateIndex } from '../utils/reservationIndex';
 import { getActiveWindowStartDate } from '../services/reservationService';
-import { getReservationTypeVisual, RESERVATION_TYPE_LEGEND, formatDisplayTitle } from '../utils/reservationVisuals';
+import { RESERVATION_TYPE_LEGEND, getActivityColorText, formatDisplayTitle } from '../utils/reservationVisuals';
 import {
   ChevronLeft,
   ChevronRight,
@@ -40,14 +41,18 @@ export const COLOR_LEGEND_ITEMS = [
   ...RESERVATION_TYPE_LEGEND.map((item) => ({
     label: item.label,
     color: item.accent,
-    bg: item.bgClass,
-    border: item.borderClass,
-    text: item.textClass
+    bg: item.background,
+    border: item.border
   })),
-  { label: 'Topamiento / Conflicto', color: '#e11d48', bg: 'bg-rose-50', border: 'border-rose-400', text: 'text-rose-950' }
+  { label: 'Topamiento / Conflicto', color: '#e11d48', bg: '#fff1f2', border: '#fb7185' }
 ];
 
 export const ColorLegendBar: React.FC = () => {
+  const { legend } = useReservationVisuals();
+  const items = [
+    ...legend.map(item => ({ label: item.label, color: item.accent, bg: item.background, border: item.border })),
+    COLOR_LEGEND_ITEMS[COLOR_LEGEND_ITEMS.length - 1],
+  ];
   return (
     <details className="bg-white border border-slate-200 rounded-xl p-2 shadow-2xs">
       <summary className="min-h-9 cursor-pointer py-2 text-sm font-medium text-slate-600">Colores por tipo de actividad</summary>
@@ -57,10 +62,11 @@ export const ColorLegendBar: React.FC = () => {
           <span>Código de Colores:</span>
         </div>
         <div className="flex items-center flex-wrap gap-1.5">
-          {COLOR_LEGEND_ITEMS.map((item) => (
+          {items.map((item) => (
             <div
               key={item.label}
-              className={`flex items-center space-x-1 px-2 py-0.5 rounded-md border text-xs font-semibold ${item.bg} ${item.border} ${item.text}`}
+              className="flex items-center space-x-1 px-2 py-0.5 rounded-md border text-xs font-semibold text-slate-900"
+              style={{ backgroundColor: item.bg, borderColor: item.border }}
             >
               <span
                 className="w-2 h-2 rounded-full shrink-0"
@@ -209,7 +215,7 @@ const CalendarEventTag = memo<CalendarEventTagProps>(({
       className={`w-full text-left relative text-xs px-1.5 py-0.5 rounded truncate font-medium text-white flex items-center space-x-1 shadow-xs transition hover:opacity-90 hover:scale-[1.02] cursor-pointer border-0 ${
         isCancelled ? 'opacity-50 line-through grayscale-[50%]' : ''
       }`}
-      style={{ backgroundColor: isCancelled ? '#64748b' : color }}
+      style={{ backgroundColor: isCancelled ? '#64748b' : color, color: getActivityColorText(isCancelled ? '#64748b' : color) }}
     >
       <span className="font-mono tabular-nums text-xs opacity-90 shrink-0">{reservation.horaInicio}</span>
       {isCancelled && (
@@ -294,6 +300,7 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
   onSelectReservation,
   getSpaceColor
 }) => {
+  const { getReservationTypeVisual } = useReservationVisuals();
   const handleCellClick = useCallback(() => {
     onSelectDay(day);
   }, [onSelectDay, day]);
@@ -426,6 +433,7 @@ const AgendaReservationCard = memo<AgendaReservationCardProps>(({
     onSelectReservation(reservation);
   }, [onSelectReservation, reservation]);
 
+  const { getReservationTypeVisual } = useReservationVisuals();
   const isImportant = reservation.importante === 'Sí';
   const isCancelled = reservation.estado === 'cancelada';
   const typeVisual = getReservationTypeVisual(reservation);
