@@ -1,5 +1,5 @@
 import type { ActivityTypeItem, Reservation } from '../types';
-import { DEFAULT_ACTIVITY_ITEMS } from '../data/activityTypes';
+import { ACTIVITY_COLOR_PALETTE, DEFAULT_ACTIVITY_ITEMS, LEGACY_ACTIVITY_COLORS } from '../data/activityTypes';
 
 export interface ReservationTypeVisual {
   key: string;
@@ -13,11 +13,6 @@ export const normalizeActivityType = (value?: string): string =>
   (value || 'OTROS').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .trim().replace(/\s+/g, ' ').toUpperCase() || 'OTROS';
 
-const COLOR_PALETTE = [
-  '#0284c7', '#059669', '#7c3aed', '#ea580c', '#4f46e5', '#0891b2',
-  '#2563eb', '#d97706', '#64748b', '#be185d', '#4d7c0f', '#a21caf',
-  '#0f766e', '#b91c1c', '#854d0e', '#4338ca', '#0369a1', '#15803d',
-];
 // Keep the conflict indicator distinct from activity types.
 const CONFLICT_COLOR = '#e11d48';
 
@@ -35,8 +30,17 @@ function colorFromName(name: string, attempt = 0): string {
   for (const char of `${normalizeActivityType(name)}:${attempt}`) {
     hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
   }
-  // Dark channels keep generated colors readable with white text.
-  return '#' + [0, 8, 16].map(shift => (32 + ((hash >>> shift) & 127)).toString(16).padStart(2, '0')).join('');
+  // Saturated HSL keeps generated types as vivid as the built-in palette.
+  const hue = (hash % 3600) / 600;
+  const saturation = 0.76 + ((hash >>> 12) % 20) / 100;
+  const lightness = 0.44 + ((hash >>> 24) % 12) / 100;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const secondary = chroma * (1 - Math.abs(hue % 2 - 1));
+  const channels = hue < 1 ? [chroma, secondary, 0] : hue < 2 ? [secondary, chroma, 0]
+    : hue < 3 ? [0, chroma, secondary] : hue < 4 ? [0, secondary, chroma]
+    : hue < 5 ? [secondary, 0, chroma] : [chroma, 0, secondary];
+  return '#' + channels.map(channel => Math.round((channel + lightness - chroma / 2) * 255)
+    .toString(16).padStart(2, '0')).join('');
 }
 
 export function getAvailableActivityColor(
@@ -46,7 +50,7 @@ export function getAvailableActivityColor(
   used.add(CONFLICT_COLOR);
   const requested = normalizeColor(preferred);
   if (requested && !used.has(requested)) return requested;
-  const available = COLOR_PALETTE.find(color => !used.has(color));
+  const available = ACTIVITY_COLOR_PALETTE.find(color => !used.has(color));
   if (available) return available;
   for (let attempt = 0; ; attempt++) {
     const generated = colorFromName(name, attempt);
@@ -56,14 +60,20 @@ export function getAvailableActivityColor(
 
 /** Repair duplicate/invalid colors while preserving every other configured color. */
 export function assignUniqueActivityColors(items: readonly ActivityTypeItem[]): ActivityTypeItem[] {
+  const refreshed = items.map(item => {
+    const defaultType = DEFAULT_ACTIVITY_ITEMS.find(type => type.id === item.id
+      && normalizeActivityType(type.name) === normalizeActivityType(item.name));
+    return defaultType && normalizeColor(item.color) === LEGACY_ACTIVITY_COLORS[item.id]
+      ? { ...item, color: defaultType.color } : item;
+  });
   const used = new Set([CONFLICT_COLOR]);
-  const colors = items.map(item => {
+  const colors = refreshed.map(item => {
     const color = normalizeColor(item.color);
     if (!color || used.has(color)) return undefined;
     used.add(color);
     return color;
   });
-  return items.map((item, index) => {
+  return refreshed.map((item, index) => {
     const color = colors[index] ?? getAvailableActivityColor(used, undefined, item.name);
     used.add(color);
     return { ...item, color };
@@ -80,7 +90,7 @@ function tint(color: string, white: number): string {
 function visualForType(name: string, color: string): ReservationTypeVisual {
   return {
     key: normalizeActivityType(name), label: formatDisplayTitle(name), accent: color,
-    background: tint(color, 0.94), border: tint(color, 0.7),
+    background: tint(color, 0.82), border: tint(color, 0.35),
   };
 }
 
@@ -88,7 +98,9 @@ export function getActivityColorText(color: string): string {
   const rgb = [1, 3, 5].map(offset => parseInt(color.slice(offset, offset + 2), 16) / 255)
     .map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
   const luminance = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
-  return luminance > 0.179 ? '#0f172a' : '#ffffff';
+  const darkLuminance = 0.0088; // Slate 900 text.
+  return (luminance + 0.05) / (darkLuminance + 0.05) > 1.05 / (luminance + 0.05)
+    ? '#0f172a' : '#ffffff';
 }
 
 export function createReservationVisualRegistry(

@@ -10,7 +10,7 @@ vi.mock('../../firebase/gateway', () => ({
 import { DEFAULT_ACTIVITY_ITEMS, getStoredActivityTypes, saveActivityTypeItem } from '../adminConfigService';
 
 const key = 'espacios_comunitarios_activities_v2';
-const custom: ActivityTypeItem = { id: 'CUSTOM', name: 'CONVENIO', category: 'General', color: '#0284c7' };
+const custom: ActivityTypeItem = { id: 'CUSTOM', name: 'CONVENIO', category: 'General', color: DEFAULT_ACTIVITY_ITEMS[0].color };
 beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); sdk.write.mockResolvedValue(undefined); });
 
 it('automatically assigns and saves an unused color without changing existing type colors', async () => {

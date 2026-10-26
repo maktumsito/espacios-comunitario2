@@ -69,7 +69,7 @@ export const ColorLegendBar: React.FC = () => {
               style={{ backgroundColor: item.bg, borderColor: item.border }}
             >
               <span
-                className="w-2 h-2 rounded-full shrink-0"
+                className="w-3 h-3 rounded-sm shrink-0"
                 style={{ backgroundColor: item.color }}
               />
               <span>{item.label}</span>
@@ -212,12 +212,12 @@ const CalendarEventTag = memo<CalendarEventTagProps>(({
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
       aria-label={`Actividad: ${displayTitle} a las ${reservation.horaInicio} en ${formatDisplayTitle(reservation.espacio)}`}
-      className={`w-full text-left relative text-xs px-1.5 py-0.5 rounded truncate font-medium text-white flex items-center space-x-1 shadow-xs transition hover:opacity-90 hover:scale-[1.02] cursor-pointer border-0 ${
+      className={`w-full text-left relative min-h-7 text-xs px-2 py-1 rounded-md truncate font-bold text-white flex items-center gap-1.5 shadow-sm transition-[filter,transform,box-shadow] hover:brightness-105 hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 cursor-pointer border border-black/10 ${
         isCancelled ? 'opacity-50 line-through grayscale-[50%]' : ''
       }`}
       style={{ backgroundColor: isCancelled ? '#64748b' : color, color: getActivityColorText(isCancelled ? '#64748b' : color) }}
     >
-      <span className="font-mono tabular-nums text-xs opacity-90 shrink-0">{reservation.horaInicio}</span>
+      <span className="font-mono tabular-nums text-xs font-bold shrink-0">{reservation.horaInicio}</span>
       {isCancelled && (
         <span className="shrink-0 text-xs font-bold text-rose-200" title="Reserva Cancelada">🚫</span>
       )}
@@ -379,7 +379,7 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
 
       <div className="mt-2 space-y-1 sm:hidden">
         <span className="block whitespace-nowrap text-xs font-medium text-slate-600">{dayReservations.length > 0 ? `${dayReservations.length} act.` : dayBlocks.length ? 'Bloq.' : '—'}</span>
-        <div className="flex gap-1" aria-hidden="true">{dayReservations.slice(0, 3).map(reservation => <span key={reservation.id} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: getReservationTypeVisual(reservation).accent }} />)}</div>
+        <div className="flex gap-1" aria-hidden="true">{dayReservations.slice(0, 3).map(reservation => <span key={reservation.id} className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: getReservationTypeVisual(reservation).accent }} />)}</div>
       </div>
       {/* Detailed tags have space to remain legible from the tablet breakpoint. */}
       <div className="hidden sm:block mt-1 space-y-1 flex-1 overflow-hidden animate-in fade-in duration-200">
@@ -445,12 +445,13 @@ const AgendaReservationCard = memo<AgendaReservationCardProps>(({
       onClick={handleClick}
       aria-label={`Ver detalles de reserva: ${displayTitle}, ${reservation.horaInicio} a ${reservation.horaFin} en ${formatDisplayTitle(reservation.espacio)}, solicitante ${formatDisplayTitle(reservation.responsable)}`}
       title={`${displayTitle}\nTipo de actividad: ${formatDisplayTitle(reservation.tipoActividad || typeVisual.label)}\nResponsable: ${formatDisplayTitle(reservation.responsable || 'No especificado')}\nHorario: ${reservation.horaInicio} – ${reservation.horaFin}\nEspacio: ${formatDisplayTitle(reservation.espacio)}${reservation.telefonoContacto ? `\nTeléfono: ${reservation.telefonoContacto}` : ''}\n\n(Haz clic para abrir detalles completos)`}
-      className={`w-full text-left bg-slate-50 hover:bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-2.5 sm:p-3 space-y-1.5 transition-all shadow-xs cursor-pointer relative overflow-hidden group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:z-10 ${
+      style={isCancelled ? undefined : { backgroundColor: typeVisual.background, borderColor: typeVisual.border }}
+      className={`w-full text-left border rounded-xl p-2.5 sm:p-3 space-y-1.5 transition-all shadow-xs cursor-pointer relative overflow-hidden group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:z-10 ${
         isCancelled ? 'opacity-60 bg-slate-100/80' : ''
       }`}
     >
       <div
-        className="absolute top-0 left-0 bottom-0 w-1.5"
+        className="absolute top-0 left-0 bottom-0 w-2"
         style={{ backgroundColor: isCancelled ? '#94a3b8' : typeVisual.accent }}
       />
 

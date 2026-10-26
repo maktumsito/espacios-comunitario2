@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ActivityTypeItem } from '../../types';
-import { DEFAULT_ACTIVITY_ITEMS } from '../../data/activityTypes';
+import { DEFAULT_ACTIVITY_ITEMS, LEGACY_ACTIVITY_COLORS } from '../../data/activityTypes';
 import {
   assignUniqueActivityColors, createReservationVisualRegistry, getActivityColorText,
   getAvailableActivityColor, getReservationTypeVisual,
@@ -13,6 +13,23 @@ describe('automatic reservation colors by exact activity type', () => {
     const colors = DEFAULT_ACTIVITY_ITEMS.map(item => getReservationTypeVisual({ tipoActividad: item.name, descripcion: '' }).accent);
     expect(new Set(colors).size).toBe(DEFAULT_ACTIVITY_ITEMS.length);
     expect(colors).toEqual(DEFAULT_ACTIVITY_ITEMS.map(item => item.color));
+  });
+
+  it('upgrades the previous built-in palette for existing reservations without duplicate colors', () => {
+    const legacy = DEFAULT_ACTIVITY_ITEMS.map(item => ({ ...item, color: LEGACY_ACTIVITY_COLORS[item.id] }));
+    expect(assignUniqueActivityColors(legacy)).toEqual(DEFAULT_ACTIVITY_ITEMS);
+    const registry = createReservationVisualRegistry(legacy);
+    for (const item of DEFAULT_ACTIVITY_ITEMS) {
+      expect(registry.getReservationTypeVisual({ tipoActividad: item.name }).accent).toBe(item.color);
+    }
+    expect(new Set(registry.legend.map(item => item.accent)).size).toBe(registry.legend.length);
+    expect(assignUniqueActivityColors(assignUniqueActivityColors(legacy))).toEqual(DEFAULT_ACTIVITY_ITEMS);
+  });
+
+  it('preserves a customized built-in color and a custom type using a previous default color', () => {
+    const customized = { ...DEFAULT_ACTIVITY_ITEMS[0], color: '#123456' };
+    const custom = activity('CONVENIO', LEGACY_ACTIVITY_COLORS.ACT_TALLER_CCD);
+    expect(assignUniqueActivityColors([customized, custom])).toEqual([customized, custom]);
   });
 
   it('keeps the same type color regardless of description, accents, spaces or casing', () => {

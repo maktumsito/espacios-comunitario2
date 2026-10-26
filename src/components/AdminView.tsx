@@ -1,3 +1,4 @@
+import { ACTIVITY_COLOR_PALETTE } from '../data/activityTypes';
 import { getAvailableActivityColor } from '../utils/reservationVisuals';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react';
@@ -179,10 +180,10 @@ function AdminFormActions({ onCancel, submitLabel }: { onCancel: () => void; sub
   );
 }
 
-function AdminColorPicker({ label, color, onChange, unavailableColors = [] }: {
-  label: string; color?: string; onChange: (color: string) => void; unavailableColors?: string[];
+function AdminColorPicker({ label, color, onChange, unavailableColors = [], palette = PRESET_COLORS }: {
+  label: string; color?: string; onChange: (color: string) => void; unavailableColors?: string[]; palette?: readonly string[];
 }) {
-  const colors = [...new Set([...PRESET_COLORS, ...(color ? [color] : [])])];
+  const colors = [...new Set([...palette, ...(color ? [color] : [])])];
   return (
     <div>
       <label className="block text-xs font-bold text-slate-700 mb-1.5">{label}</label>
@@ -2623,7 +2624,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
 
               {/* Color */}
-              <AdminColorPicker label="Color de Etiqueta" color={activityForm.color} onChange={(color) => setActivityForm({ ...activityForm, color })}
+              <AdminColorPicker palette={ACTIVITY_COLOR_PALETTE} label="Color de Etiqueta" color={activityForm.color} onChange={(color) => setActivityForm({ ...activityForm, color })}
                 unavailableColors={activityTypes.filter(item => item.id !== editingActivityId).map(item => item.color)} />
               <p className="text-xs text-slate-500">Se asigna un color disponible automáticamente. Los colores en uso por otro tipo están deshabilitados.</p>
 
