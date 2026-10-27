@@ -1,4 +1,5 @@
 import { formatDisplayTitle } from '../utils/reservationVisuals';
+import { getEnabledSpaces } from '../utils/spaceAvailability';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Reservation, SpaceInfo, LoanType, ActivityTypeItem, SpaceRating, EquipmentItem, isSingleDayMultiSpaceReservation, SpaceBlock } from '../types';
@@ -97,7 +98,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   isDuplicating = false,
   onDuplicateReservation,
   allReservations,
-  availableSpaces = SPACES_LIST,
+  availableSpaces: spaceCatalog = SPACES_LIST,
   availableLoanTypes = DEFAULT_LOAN_TYPES,
   availableActivityTypes,
   availableEquipment,
@@ -113,6 +114,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   initialEmail,
   currentUser
 }) => {
+  const availableSpaces = useMemo(() => getEnabledSpaces(spaceCatalog), [spaceCatalog]);
   const [reloadedReservation,setReloadedReservation]=useState<Reservation|null>(null);
   const editingReservation = reloadedReservation && reloadedReservation.id===suppliedEditingReservation?.id &&
     (reloadedReservation.version||0)>=(suppliedEditingReservation.version||0) ? reloadedReservation : suppliedEditingReservation;
@@ -148,7 +150,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     horaInicio: replacementSource?.horaInicio || getSafeEarlyStartTime(initialStartTime),
     horaFin: replacementSource?.horaFin || getSafeEarlyEndTime(initialStartTime, initialEndTime),
     terminaDiaSiguiente: Boolean(replacementSource?.terminaDiaSiguiente),
-    espacio: initialSpace || (availableSpaces[0]?.name || 'TATAMI'),
+    espacio: initialSpace || availableSpaces[0]?.name || '',
     responsable: initialResponsable || '',
     telefonoContacto: initialPhone || '',
     emailContacto: initialEmail || '',
@@ -711,7 +713,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     } else {
       const defAct = effectiveActivityNames[0] || 'TALLER CCD';
       const defLoan = availableLoanTypes[0]?.name || 'TALLER FORMATIVO CCD';
-      let defaultSpace = initialSpace || (availableSpaces[0]?.name || 'TATAMI');
+      let defaultSpace = initialSpace || availableSpaces[0]?.name || '';
 
       const initD = initialDate || format(new Date(), 'yyyy-MM-dd');
       let initDayNum = 1;
@@ -1439,7 +1441,10 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
         />
 
         {/* Form Body */}
-        <form id="reservation-modal-form" onSubmit={handleSubmit} noValidate className="reservation-form flex min-h-0 flex-1 flex-col overflow-hidden text-sm">
+        <form id="reservation-modal-form" onSubmit={event => {
+          if (!availableSpaces.length && !isEditingExisting) { event.preventDefault(); return; }
+          handleSubmit(event);
+        }} noValidate className="reservation-form flex min-h-0 flex-1 flex-col overflow-hidden text-sm">
           <fieldset disabled={isSubmitting} className="contents">
           {isWizardMode && <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 sm:px-7">
               <WizardStepsBar
@@ -1467,6 +1472,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               />
           </div>}
           <div id="reservation-modal-form-body" className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-5 sm:px-7 sm:py-6">
+          {!availableSpaces.length && !isEditingExisting && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">No hay espacios activos. Activa o crea un espacio en Administración antes de reservar.</p>}
           {/* Notification & Context Alerts */}
           <ReservationModalAlerts
             hasDraft={hasDraft}
@@ -1785,7 +1791,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
             validateStep2={validateStep2DateTime}
             validateStep3={validateStep3Applicant}
             validateStep4={validateStep4Resources}
-            isFormSubmitDisabled={isFormSubmitDisabled || isEditingLoading}
+            isFormSubmitDisabled={isFormSubmitDisabled || isEditingLoading || (!availableSpaces.length && !isEditingExisting)}
             isEditingExisting={isEditingExisting}
             conflicts={conflicts}
             candidateConflictDates={candidateConflictDates}

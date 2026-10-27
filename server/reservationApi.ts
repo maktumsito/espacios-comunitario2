@@ -33,6 +33,8 @@ import { prepareEquipmentAllocation } from './equipmentAllocation';
 import { registerDistributionPlanningApi, validateDistributionDate } from './distributionPlanning';
 import { SPACES_LIST } from '../src/data/spacesData';
 import { REGULAR_LOAN_START_MINUTES, REGULAR_LOAN_END_MINUTES } from '../src/utils/validationUtils';
+import { getDisabledSpaceNames } from '../src/utils/spaceAvailability';
+import { getConstituentSpaces } from '../src/utils/conflictDetector';
 
 const clean = (value: any): any => JSON.parse(JSON.stringify(value));
 const hash = (value: any) =>
@@ -193,6 +195,18 @@ export async function commitTrusted(
         const active = saved.filter((r) =>
           isReservationActiveForAvailability(r, new Set()),
         );
+        const spaceConfig = active.length ? await tx.get(db.doc('configuracion_sistema/espacios')) : undefined;
+        const configuredSpaces = Array.isArray(spaceConfig?.data()?.data) ? spaceConfig!.data()!.data : SPACES_LIST;
+        const disabledSpaces = getDisabledSpaceNames(configuredSpaces);
+        for (const row of active) {
+          const original = current.get(row.id);
+          const changesOccupancy = !original || !isReservationActiveForAvailability(original, new Set()) ||
+            getConstituentSpaces(original.espacio).sort().join('|') !== getConstituentSpaces(row.espacio).sort().join('|') ||
+            Boolean(original.terminaDiaSiguiente) !== Boolean(row.terminaDiaSiguiente) ||
+            ['fecha', 'horaInicio', 'horaFin'].some(key => (original as any)[key] !== (row as any)[key]);
+          if (changesOccupancy && (disabledSpaces.has(normalizeSpace(row.espacio)) || getConstituentSpaces(row.espacio).some(name => disabledSpaces.has(name))))
+            throw new ApiFailure(409, 'El espacio está desactivado. Elige un espacio activo para reservar o cambiar el horario.');
+        }
         if (
           active.some(
             (r) => isChileanHoliday(r.fecha) || r.horarioExtendidoAutorizado,
@@ -215,8 +229,7 @@ export async function commitTrusted(
             "El espacio tiene un bloqueo de mantenimiento. No se guardó este grupo.",
           );
         if (options.distributionDate) {
-          const config = await tx.get(db.doc('configuracion_sistema/espacios'));
-          const spaces = Array.isArray(config.data()?.data) ? config.data()!.data : SPACES_LIST;
+          const spaces = configuredSpaces;
           for (const row of active) {
             const space = spaces.find((s: any) => normalizeSpace(s.name) === normalizeSpace(row.espacio));
             if (!space || !Number.isInteger(row.cantidadParticipantes) || row.cantidadParticipantes! < 1 ||

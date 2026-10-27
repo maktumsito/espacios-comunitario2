@@ -48,6 +48,23 @@ it.each([' / ', ' + '])('renders a shared booking only in its constituent rooms 
   expect(onSelectReservation).toHaveBeenCalledExactlyOnceWith(reservation);
 });
 
+it('does not rediscover disabled columns from shared bookings and restores them on activation', () => {
+  const disabled = configured.map(space => space.name === 'SALA 5' ? { ...space, activo: false } : space);
+  const { container, rerender } = renderDay([shared, patchwork], disabled);
+  expect(screen.queryByTitle('SALA 5 (orden fijo)')).toBeNull();
+  expect(container.querySelectorAll('[data-reservation-id="shared"]')).toHaveLength(3);
+  expect(container.querySelectorAll('[data-reservation-id="patchwork"]')).toHaveLength(0);
+  rerender(<DailyUsageView reservations={[shared, patchwork]} spaces={configured} selectedDate={new Date(2026, 9, 15)} conflictReservationIds={new Set()} onSelectReservation={vi.fn()} onNewReservationWithSlot={vi.fn()} />);
+  expect(screen.getByTitle('SALA 5 (orden fijo)')).toBeTruthy();
+  expect(container.querySelectorAll('[data-reservation-id="shared"]')).toHaveLength(4);
+});
+
+it('does not restore the default room list when all configured spaces are inactive', () => {
+  const { container } = renderDay([shared, patchwork], configured.map(space => ({ ...space, activo: false })));
+  expect(container.querySelectorAll('[title$="(orden fijo)"]')).toHaveLength(0);
+  expect(container.querySelectorAll('[data-reservation-id]')).toHaveLength(0);
+});
+
 it('discovers missing individual rooms and preserves existing custom rooms without duplicate columns', () => {
   const customRoom = { ...configured[0], id: 'custom', name: 'SALÓN ÁRBOL' };
   const reservation = { ...shared, espacio: 'SALA2 / SALA 6 / SALÓN ÁRBOL / SALA 6' };

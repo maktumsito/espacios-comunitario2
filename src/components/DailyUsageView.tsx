@@ -8,6 +8,7 @@ import { getDragTiming, getTimelineDropSlot } from '../utils/timelineDrag';
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from 'react';
 import { Reservation, SpaceInfo, FilterState, SpaceBlock } from '../types';
 import { SPACES_LIST, normalizeSpaceName } from '../data/spacesData';
+import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from '../utils/spaceAvailability';
 import { timeToMinutes, formatMinutesToTime, getConflictReservationIds, doSpacesConflict, getConstituentSpaces, normalizeSpace, isReservationActiveForAvailability, getTimeIntervalsForReservation, findMaintenanceBlockConflicts } from '../utils/conflictDetector';
 import { getChileanHolidayInfo } from '../utils/holidayUtils';
 import {
@@ -101,14 +102,14 @@ const DEFAULT_ORDERED_SPACES: string[] = [
 const EMPTY_BLOCKS: readonly SpaceBlock[] = [];
 
 const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
-  reservations,
+  reservations: suppliedReservations,
   allReservations,
   conflictReservationIds,
   spaceBlocks = EMPTY_BLOCKS,
   globalFilters,
   onFilterChange,
   onClearGlobalFilters,
-  spaces = SPACES_LIST,
+  spaces: spaceCatalog = SPACES_LIST,
   selectedDate: propSelectedDate,
   initialDate,
   onSelectReservation,
@@ -124,6 +125,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   onNavigateToMaintenance,
   onDateChange
 }) => {
+  const spaces = useMemo(() => getEnabledSpaces(spaceCatalog), [spaceCatalog]);
+  const reservations = useMemo(() => filterEnabledSpaceReservations(suppliedReservations, spaceCatalog), [suppliedReservations, spaceCatalog]);
   const { getReservationTypeVisual } = useReservationVisuals();
   // Single controlled source of truth for the active date rendering the agenda.
   // Supports both controlled mode (via propSelectedDate) and uncontrolled mode (via initialDate).
@@ -237,12 +240,10 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   }, []);
 
   // Local state for spaces columns to allow 0ms instantaneous ("altiro") reordering
-  const [localSpaces, setLocalSpaces] = useState<SpaceInfo[]>(() => (spaces && spaces.length > 0 ? spaces : SPACES_LIST));
+  const [localSpaces, setLocalSpaces] = useState<SpaceInfo[]>(() => spaces);
 
   useEffect(() => {
-    if (spaces && spaces.length > 0) {
-      setLocalSpaces(spaces);
-    }
+    setLocalSpaces(spaces);
   }, [spaces]);
 
   // Notification feedback banner
@@ -463,7 +464,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
   // Normalize, map and assemble spaces preserving user's customized column order (respecting active space filters)
   const availableScheduleSpaces = useMemo(() => {
-    const configuredSpaces = localSpaces && localSpaces.length > 0 ? localSpaces : (spaces && spaces.length > 0 ? spaces : SPACES_LIST);
+    const configuredSpaces = localSpaces.filter(space => hasEnabledSpace(space.name, spaceCatalog));
     // Compound names can also have been saved by a previous column reorder.
     let list = configuredSpaces.filter((space) => getConstituentSpaces(space.name).length === 1);
     const knownSpaces = new Set(list.map((space) => normalizeSpace(space.name)));
@@ -472,6 +473,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     // Discover individual rooms without creating an extra column for their combination.
     spaceNames.forEach((name) => {
       getConstituentSpaces(name).forEach((room) => {
+        if (!hasEnabledSpace(room, spaceCatalog)) return;
         if (knownSpaces.has(room)) return;
         knownSpaces.add(room);
         list.push(SPACES_LIST.find((space) => normalizeSpace(space.name) === room) ?? {
@@ -487,7 +489,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     });
 
     return list;
-  }, [localSpaces, spaces, dayReservations]);
+  }, [localSpaces, spaceCatalog, dayReservations]);
 
   const activeSpaces = useMemo(() => {
     let list = availableScheduleSpaces;

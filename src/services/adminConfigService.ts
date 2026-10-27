@@ -5,6 +5,8 @@ import { assignUniqueActivityColors, getAvailableActivityColor } from '../utils/
 import { SPACES_LIST } from '../data/spacesData';
 import { collection, doc, setDoc, writeBatch, query, where, documentId } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
+import { normalizeSpace } from '../utils/conflictDetector';
+import { mergeSpaceOrder } from '../utils/spaceAvailability';
 
 export { DEFAULT_ACTIVITY_ITEMS } from '../data/activityTypes';
 
@@ -163,7 +165,7 @@ export function getStoredSpaces(): SpaceInfo[] {
     const raw = localStorage.getItem(SPACES_STORAGE_KEY);
     if (!raw) return SPACES_LIST;
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
+    if (Array.isArray(parsed)) {
       return parsed;
     }
   } catch (e) {
@@ -174,7 +176,8 @@ export function getStoredSpaces(): SpaceInfo[] {
 
 export async function saveSpaceItem(space: SpaceInfo ): Promise<SpaceInfo[]> {
   const current = getStoredSpaces();
-  const index = current.findIndex(s => s.id === space.id || s.name.toUpperCase() === space.name.toUpperCase());
+  if (current.some(s => s.id !== space.id && normalizeSpace(s.name) === normalizeSpace(space.name))) throw new Error('Ya existe un espacio con ese nombre. Edítalo o reactívalo desde Administración.');
+  const index = current.findIndex(s => s.id === space.id);
   let updated: SpaceInfo[];
   if (index >= 0) {
     updated = [...current];
@@ -204,13 +207,14 @@ export async function deleteSpaceItem(id: string ): Promise<SpaceInfo[]> {
 }
 
 export async function reorderSpaces(newSpaces: SpaceInfo[] ): Promise<SpaceInfo[]> {
-  await saveConfigDocToFirestore('espacios', newSpaces);
+  const updated = mergeSpaceOrder(getStoredSpaces(), newSpaces);
+  await saveConfigDocToFirestore('espacios', updated);
   try {
-    if (isBrowser) localStorage.setItem(SPACES_STORAGE_KEY, JSON.stringify(newSpaces));
+    if (isBrowser) localStorage.setItem(SPACES_STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
     console.error('Error reordering spaces in localStorage:', e);
   }
-  return newSpaces;
+  return updated;
 }
 
 // --- LOAN TYPES MANAGEMENT ---

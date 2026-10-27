@@ -1,4 +1,5 @@
 import { formatDisplayTitle } from '../utils/reservationVisuals';
+import { getEnabledSpaces } from '../utils/spaceAvailability';
 import React, { useState, Suspense } from 'react';
 import type { AuthUser } from '../services/authService';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
@@ -87,7 +88,7 @@ export const SpaceDashboard: React.FC<SpaceDashboardProps> = ({
 
       {/* Grid of Spaces */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {spaces.map((space) => {
+        {getEnabledSpaces(spaces).map((space) => {
           const spaceReservations = reservations.filter(
             r => r.espacio.toUpperCase() === space.name.toUpperCase()
           );

@@ -1,4 +1,5 @@
 import { CalendarDateInput } from './common/CalendarDateInput';
+import { getEnabledSpaces } from '../utils/spaceAvailability';
 import React, { useEffect, useState } from "react";
 import { FilterState, SpaceInfo, ActivityTypeItem } from "../types";
 import { SPACES_LIST, ACTIVITY_TYPES } from "../data/spacesData";
@@ -27,9 +28,10 @@ const FilterBarComponent: React.FC<FilterBarProps> = ({
   totalAll,
   periodLabel = "datos cargados",
   conflictsCount = 0,
-  availableSpaces = SPACES_LIST,
+  availableSpaces: spaceCatalog = SPACES_LIST,
   availableActivityTypes,
 }) => {
+  const availableSpaces = getEnabledSpaces(spaceCatalog);
   const [localSearch, setLocalSearch] = useState(filters.search || "");
   useEffect(() => {
     setLocalSearch(filters.search || "");

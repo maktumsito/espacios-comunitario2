@@ -6,6 +6,7 @@ import { DateStringSchema } from '../src/schemas/reservationSchema';
 import { getChileLocalDateString } from '../src/utils/dateUtils';
 import { SPACES_LIST } from '../src/data/spacesData';
 import { DEFAULT_EQUIPMENT_ITEMS } from '../src/data/equipmentData';
+import { getEnabledSpaces } from '../src/utils/spaceAvailability';
 
 export function validateDistributionDate(date: unknown): asserts date is string {
   if (!DateStringSchema.safeParse(date).success || (date as string) < getChileLocalDateString()) throw new ApiFailure(400, 'Elige una fecha válida desde hoy.');
@@ -28,7 +29,7 @@ export function registerDistributionPlanningApi(app: Express, db: Firestore, ses
         fecha: date, loadedAt: new Date().toISOString(),
         reservations: reservations.docs.map(doc => ({ ...doc.data(), id: doc.id })),
         blocks: blocks.docs.map(doc => ({ ...doc.data(), id: doc.id })).filter((b: any) => b.fechaInicio <= date),
-        spaces: spaces.exists && Array.isArray(spaces.get('data')) ? spaces.get('data') : SPACES_LIST,
+        spaces: getEnabledSpaces(spaces.exists && Array.isArray(spaces.get('data')) ? spaces.get('data') : SPACES_LIST),
         equipment: equipment.exists && Array.isArray(equipment.get('items')) ? equipment.get('items') : DEFAULT_EQUIPMENT_ITEMS,
       } });
     } catch (error) { apiError(res, error); }

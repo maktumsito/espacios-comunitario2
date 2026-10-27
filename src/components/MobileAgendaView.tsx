@@ -1,4 +1,5 @@
 import { useReservationVisuals } from '../contexts/ReservationVisualsContext';
+import { filterEnabledSpaceReservations, getEnabledSpaces } from '../utils/spaceAvailability';
 import { VirtualCardGrid } from './common/VirtualCardGrid';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Reservation, SpaceInfo, SpaceBlock, SpaceRating } from '../types';
@@ -73,10 +74,10 @@ const MONTH_NAMES = [
 ];
 
 const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
-  reservations,
+  reservations: suppliedReservations,
   allReservations,
   conflictReservationIds,
-  spaces,
+  spaces: spaceCatalog,
   spaceBlocks = [],
   selectedDate,
   onDateChange,
@@ -92,8 +93,13 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
   currentUser,
   onSwitchToDesktopView
 }) => {
+  const spaces = useMemo(() => getEnabledSpaces(spaceCatalog), [spaceCatalog]);
+  const reservations = useMemo(() => filterEnabledSpaceReservations(suppliedReservations, spaceCatalog), [suppliedReservations, spaceCatalog]);
   const { getReservationTypeVisual, legend } = useReservationVisuals();
   const [selectedSpaceFilter, setSelectedSpaceFilter] = useState<string>('ALL');
+  useEffect(() => {
+    if (selectedSpaceFilter !== 'ALL' && !spaces.some(space => space.name === selectedSpaceFilter || space.id === selectedSpaceFilter)) setSelectedSpaceFilter('ALL');
+  }, [spaces, selectedSpaceFilter]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState<boolean>(false);
   const [onlyImportant, setOnlyImportant] = useState<boolean>(false);

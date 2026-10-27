@@ -3,6 +3,7 @@ import { VirtualCardGrid } from './common/VirtualCardGrid';
 import React, { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
 import { Reservation, SpaceInfo, isSingleDayMultiSpaceReservation, SpaceBlock } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
+import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from '../utils/spaceAvailability';
 import { getChileanHolidayInfo, ChileanHoliday } from '../utils/holidayUtils';
 import { useReservationDateIndex } from '../utils/reservationIndex';
 import { getActiveWindowStartDate } from '../services/reservationService';
@@ -677,10 +678,10 @@ interface CalendarViewProps {
 }
 
 const CalendarViewComponent: React.FC<CalendarViewProps> = ({
-  reservations,
-  spaces = SPACES_LIST,
+  reservations: suppliedReservations,
+  spaces: spaceCatalog = SPACES_LIST,
   selectedDate: propSelectedDate,
-  spaceBlocks = [],
+  spaceBlocks: suppliedBlocks = [],
   onNavigateToDay,
   onSelectReservation,
   onNewReservationForDate,
@@ -689,6 +690,9 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   onSelectedDateChange,
   isHistoricalLoading = false
 }) => {
+  const spaces = useMemo(() => getEnabledSpaces(spaceCatalog), [spaceCatalog]);
+  const reservations = useMemo(() => filterEnabledSpaceReservations(suppliedReservations, spaceCatalog), [suppliedReservations, spaceCatalog]);
+  const spaceBlocks = useMemo(() => suppliedBlocks.filter(block => hasEnabledSpace(block.espacio, spaceCatalog)), [suppliedBlocks, spaceCatalog]);
   const [currentDate, setCurrentDate] = useState<Date>(() => propSelectedDate || new Date());
   const [selectedDay, setSelectedDay] = useState<Date>(() => propSelectedDate || new Date());
 

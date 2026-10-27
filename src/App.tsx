@@ -10,6 +10,7 @@ import {
 import { fetchReservationById } from './services/reservationService';
 import { queryReservationsBySeries } from './services/reservationService';
 import { getChileLocalDateString } from './utils/dateUtils';
+import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from './utils/spaceAvailability';
 import { canReplaceOccurrence } from './utils/reservationReplacement';
 import { useReplacementReminders } from './hooks/useReplacementReminders';
 import { isRecurringSeriesReservation } from './utils/recurringEdits';
@@ -343,12 +344,18 @@ export default function App() {
     filteredReservations
   } = useFilteredReservations(reservations, { filters: reservationFilters, setFilters: setReservationFilters });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const enabledSpaces = useMemo(() => getEnabledSpaces(spaces), [spaces]);
+  const agendaReservations = useMemo(() => filterEnabledSpaceReservations(filteredReservations, spaces), [filteredReservations, spaces]);
+  const allAgendaReservations = useMemo(() => filterEnabledSpaceReservations(reservations, spaces), [reservations, spaces]);
+  useEffect(() => {
+    if (filters.espacio && !hasEnabledSpace(filters.espacio, spaces)) setFilters(previous => ({ ...previous, espacio: '' }));
+  }, [filters.espacio, spaces, setFilters]);
 
   // Global Keyboard Shortcuts (Ctrl+K, Cmd+K, '/', Alt+N)
   const visiblePeriodCounts = useMemo(() => ({
-    filtered: getAgendaPeriodCount(filteredReservations, currentView, selectedDailyDate),
-    all: getAgendaPeriodCount(reservations, currentView, selectedDailyDate),
-  }), [filteredReservations, reservations, currentView, selectedDailyDate]);
+    filtered: getAgendaPeriodCount(isAgendaView(currentView) ? agendaReservations : filteredReservations, currentView, selectedDailyDate),
+    all: getAgendaPeriodCount(isAgendaView(currentView) ? allAgendaReservations : reservations, currentView, selectedDailyDate),
+  }), [filteredReservations, reservations, agendaReservations, allAgendaReservations, currentView, selectedDailyDate]);
   const visiblePeriodLabel = getAgendaPeriodLabel(currentView, selectedDailyDate);
 
   useKeyboardShortcuts({
@@ -667,12 +674,12 @@ export default function App() {
       setEditingReservation(null);
       setIsDuplicating(false);
       setPrefillDate(dateStr);
-      setPrefillSpace(filters.espacio || spaces[0]?.name || 'TATAMI');
+      setPrefillSpace(enabledSpaces.some(space => space.name === filters.espacio) ? filters.espacio : enabledSpaces[0]?.name || '');
       setPrefillStartTime('08:30');
       setPrefillEndTime('09:30');
       setIsReservationModalOpen(true);
     }, 'crear una reserva en esta fecha');
-  }, [filters.espacio, spaces, currentUser]);
+  }, [filters.espacio, enabledSpaces, currentUser]);
 
   const { reminder: replacementReminder, pendingCount: replacementReminderCount, acknowledge: acknowledgeReplacementReminder } = useReplacementReminders(
     reservations, currentUser?.username,
@@ -756,7 +763,11 @@ export default function App() {
             setEditingReservation(null);
             setIsDuplicating(false);
             setPrefillDate(format(selectedDailyDate || new Date(), 'yyyy-MM-dd'));
-            const initialSpace = filters.espacio || spaces[0]?.name || 'TATAMI';
+            if (!enabledSpaces.length) {
+              triggerSyncToast('No hay espacios activos. Activa o crea un espacio en Administración.', 'warning');
+              return;
+            }
+            const initialSpace = enabledSpaces.some(space => space.name === filters.espacio) ? filters.espacio : enabledSpaces[0].name;
             setPrefillSpace(initialSpace);
             setPrefillStartTime('10:00');
             setPrefillEndTime('11:00');

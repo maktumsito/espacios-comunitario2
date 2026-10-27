@@ -31,6 +31,45 @@ function deferred() {
   const promise = new Promise<void>((ok, fail) => { resolve = ok; reject = fail; });
   return { promise, resolve, reject };
 }
+
+it('deactivates and reactivates a space without deleting its catalog entry', async () => {
+  const save = vi.fn().mockResolvedValue(undefined), remove = vi.fn();
+  const initial = props({ onSaveSpace: save, onDeleteSpace: remove });
+  const { rerender } = render(<AdminView {...initial} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Desactivar SALA A' }));
+  await waitFor(() => expect(save).toHaveBeenCalledWith({ ...initial.spaces[0], activo: false }));
+  expect(remove).not.toHaveBeenCalled();
+  rerender(<AdminView {...initial} spaces={[{ ...initial.spaces[0], activo: false }, initial.spaces[1]]} />);
+  expect(screen.getByText('Inactivo · Oculto en agenda')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Activar SALA A' }));
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith({ ...initial.spaces[0], activo: true }));
+});
+
+it('creates an active space with optional capacity and prevents replacing another room with a duplicate name', async () => {
+  const save = vi.fn().mockResolvedValue(undefined);
+  render(<AdminView {...props({ onSaveSpace: save })} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Crear Nuevo Espacio' }));
+  const name = screen.getByPlaceholderText('Ej: SALA 7, SALA MULTIUSO COMUNITARIA');
+  fireEvent.change(name, { target: { value: 'SALA A' } });
+  fireEvent.submit(name.closest('form')!);
+  expect(save).not.toHaveBeenCalled();
+  expect(screen.getByText(/Ya existe un espacio con ese nombre/)).toBeTruthy();
+  fireEvent.change(name, { target: { value: 'SALA NUEVA' } });
+  fireEvent.change(screen.getByLabelText('Aforo orientativo (opcional)'), { target: { value: '24' } });
+  fireEvent.submit(name.closest('form')!);
+  await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ name: 'SALA NUEVA', activo: true, capacity: 24 })));
+});
+
+it('keeps a space active when its deactivation is rejected and prevents concurrent toggles', async () => {
+  const pending = deferred(), save = vi.fn().mockReturnValueOnce(pending.promise);
+  render(<AdminView {...props({ onSaveSpace: save })} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Desactivar SALA A' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Desactivar SALA A' }));
+  expect(save).toHaveBeenCalledTimes(1);
+  await act(async () => pending.reject(new Error('Cambio rechazado')));
+  expect(screen.getByRole('alert').textContent).toBe('Cambio rechazado');
+  expect(screen.getByRole('button', { name: 'Desactivar SALA A' })).toBeTruthy();
+});
 function form() { return screen.getByRole('dialog').querySelector('form')!; }
 beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); });
 afterEach(cleanup);

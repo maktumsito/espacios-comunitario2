@@ -553,6 +553,30 @@ describe.skipIf(!enabled)(
       expect((await post('/api/reservations/planning-snapshot', { fecha: '2099-02-30' })).status).toBe(400);
       expect((await post('/api/reservations/planning-snapshot', { fecha: date }, '')).status).toBe(401);
     });
+    it('inactive spaces reject new occupancy but retain historical edits, cancellation and reactivation of the catalog', async () => {
+      const date = '2099-10-06';
+      await post('/api/reservations/commit', { reservations: [row('inactive-existing', date)], options: { operationId: 'inactive-seed' } });
+      const source = (await db.doc('reservas/inactive-existing').get()).data();
+      const catalog = [{ id: 'SALA 2', name: 'SALA 2', activo: false, capacity: 20 }, { id: 'SALA 3', name: 'SALA 3', activo: true, capacity: 30 }];
+      await db.doc('configuracion_sistema/espacios').set({ data: catalog });
+      const rejected = await post('/api/reservations/commit', { reservations: [{ ...row('inactive-new', date), horaInicio: '12:00', horaFin: '13:00' }], options: { operationId: 'inactive-new' } });
+      expect(rejected.error).toMatch(/desactivado/);
+      expect((await db.doc('reservas/inactive-new').get()).exists).toBe(false);
+      const shifted = await post('/api/reservations/commit', { reservations: [{ ...source, horaInicio: '12:00', horaFin: '13:00' }], options: { operationId: 'inactive-shift' } });
+      expect(shifted.error).toMatch(/desactivado/);
+      const corrected = await post('/api/reservations/commit', { reservations: [{ ...source, descripcion: 'Datos corregidos' }], options: { operationId: 'inactive-correct' } });
+      expect(corrected.error).toBeUndefined();
+      const cancelled = await post('/api/reservations/commit', { reservations: [{ ...corrected.result.reservations[0], estado: 'cancelada' }], options: { operationId: 'inactive-cancel' } });
+      expect(cancelled.error).toBeUndefined();
+      const restored = await post('/api/reservations/commit', { reservations: [{ ...cancelled.result.reservations[0], estado: 'activa' }], options: { operationId: 'inactive-reactivate-reservation' } });
+      expect(restored.error).toMatch(/desactivado/);
+      const snapshot = await post('/api/reservations/planning-snapshot', { fecha: date });
+      expect(snapshot.snapshot.spaces.map((s: any) => s.name)).toEqual(['SALA 3']);
+      expect(snapshot.snapshot.reservations).toHaveLength(1);
+      await db.doc('configuracion_sistema/espacios').set({ data: catalog.map(space => ({ ...space, activo: true })) });
+      const activated = await post('/api/reservations/commit', { reservations: [{ ...row('inactive-new', date), horaInicio: '12:00', horaFin: '13:00' }], options: { operationId: 'inactive-after-reactivation' } });
+      expect(activated.error).toBeUndefined();
+    });
     it('distribution swaps selected recurring occurrences and creates a new activity in one idempotent commit', async () => {
       const date = '2099-10-06';
       const sourceA = { ...row('dist-a', date), serieRecurrente: 'dist-series', recurrenteId: 'dist-series', indiceEnSerie: 1, emailContacto: 'equipo@example.cl', montaje: { tipo: 'circulo', instrucciones: 'Conservar circulación.' } };

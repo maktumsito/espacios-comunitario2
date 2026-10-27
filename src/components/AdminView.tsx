@@ -589,8 +589,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
         return;
       }
       const cleanName = spaceForm.name.trim().toUpperCase();
+      if (spaces.some(space => space.id !== spaceForm.id && space.name.trim().toUpperCase() === cleanName)) {
+        setSpaceFormError('Ya existe un espacio con ese nombre. Puedes editarlo o reactivarlo.');
+        return;
+      }
+      if (spaceForm.capacity !== undefined && (!Number.isInteger(spaceForm.capacity) || spaceForm.capacity < 1)) {
+        setSpaceFormError('El aforo debe ser un número entero mayor que cero.');
+        return;
+      }
       const finalSpace: SpaceInfo = {
         ...spaceForm,
+        activo: spaceForm.activo !== false,
         id: spaceForm.id || cleanName,
         name: cleanName,
         description: spaceForm.description || `Espacio asignado para actividades de ${spaceForm.category.toLowerCase()}.`,
@@ -1089,7 +1098,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 Gestión de Espacios Comunitarios
               </h2>
               <p className="text-xs text-slate-500">
-                Crea nuevas salas, recintos exteriores, talleres y áreas deportivas con color e ícono personalizado.
+                Crea espacios y desactívalos para ocultarlos de la agenda. Sus reservas se conservan y puedes reactivarlos.
               </p>
             </div>
 
@@ -1212,6 +1221,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         <div>
                           <h3 className="font-extrabold text-sm text-slate-900">{space.name}</h3>
                           <span className="text-[11px] font-semibold text-slate-500">{space.category}</span>
+                          <span className={`ml-2 text-xs font-medium ${space.activo === false ? 'text-slate-500' : 'text-emerald-700'}`}>{space.activo === false ? 'Inactivo · Oculto en agenda' : 'Activo'}</span>
                         </div>
                       </div>
 
@@ -1245,7 +1255,19 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <div className={`flex flex-wrap items-center justify-between gap-3 ${compactSpaces ? '' : 'pt-3 border-t border-slate-100'}`}>
                     <details className="text-sm text-slate-500"><summary className="min-h-11 cursor-pointer py-3">Detalles</summary><p className="max-w-sm break-words py-2">{space.description || 'Sin descripción.'}</p><p className="break-all text-xs">ID: {space.id}</p></details>
                     {canManage && (
-                      <div className="flex items-center space-x-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {isCoordinatorOrAdmin(currentUser) && <button
+                          type="button"
+                          disabled={adminSaving}
+                          aria-label={`${space.activo === false ? 'Activar' : 'Desactivar'} ${space.name}`}
+                          onClick={async () => {
+                            if (!isCoordinatorOrAdmin(currentUser) || !beginAdminOperation()) return;
+                            try { await onSaveSpace({ ...space, activo: space.activo === false }); }
+                            catch (err: any) { reportAdminError(err); }
+                            finally { finishAdminOperation(); }
+                          }}
+                          className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                        >{space.activo === false ? 'Activar' : 'Desactivar'}</button>}
                         <button
                           onClick={() => handleOpenSpaceForm(space)}
                           className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition cursor-pointer flex items-center gap-1.5"
@@ -2536,6 +2558,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
 
               {/* Color */}
+              <label className="block text-xs font-bold text-slate-700">Aforo orientativo (opcional)
+                <input type="number" min={1} step={1} value={spaceForm.capacity ?? ''} onChange={event => setSpaceForm({ ...spaceForm, capacity: event.target.value === '' ? undefined : Number(event.target.value) })} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" />
+              </label>
+              <label className="flex min-h-11 items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" checked={spaceForm.activo !== false} onChange={event => setSpaceForm({ ...spaceForm, activo: event.target.checked })} className="h-4 w-4" />
+                Espacio activo: mostrar en agenda y permitir nuevas reservas
+              </label>
               <AdminColorPicker label="Color Identificador" color={spaceForm.color} onChange={(color) => setSpaceForm({ ...spaceForm, color })} />
 
               {/* Descripción */}

@@ -3,6 +3,7 @@ import { doSpacesConflict, findMaintenanceBlockConflicts, getTimeIntervalsForRes
 import { findEquipmentShortage, normalizeEquipmentName } from './equipmentAllocation';
 import { REGULAR_LOAN_START_MINUTES, REGULAR_LOAN_END_MINUTES } from './validationUtils';
 import { DateStringSchema } from '../schemas/reservationSchema';
+import { getEnabledSpaces } from './spaceAvailability';
 
 export const MAX_DISTRIBUTION_ACTIVITIES = 12;
 export const SETUP_LABELS: Record<RoomSetupType, string> = {
@@ -111,7 +112,7 @@ export function buildVacateSpacesPlan(
   const priorityOrder = (options.prioritySpaces || [])
     .filter(s => !vacated.some(v => doSpacesConflict(s, v)));
 
-  const allCompatibleCatalogSpaces = snapshot.spaces
+  const allCompatibleCatalogSpaces = getEnabledSpaces(snapshot.spaces)
     .map(s => s.name)
     .filter(name => !vacated.some(v => doSpacesConflict(name, v)));
 
@@ -254,9 +255,10 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
       reasons.set(request.id, inputError);
       return { request, candidates };
     }
+    const enabledSpaces = getEnabledSpaces(snapshot.spaces);
     const allowedSpaces = request.allowedSpaces.length
-      ? snapshot.spaces.filter(space => request.allowedSpaces.some(name => normalizeSpace(name) === normalizeSpace(space.name)))
-      : snapshot.spaces;
+      ? enabledSpaces.filter(space => request.allowedSpaces.some(name => normalizeSpace(name) === normalizeSpace(space.name)))
+      : enabledSpaces;
     if (!allowedSpaces.length) {
       reasons.set(request.id, 'Las salas permitidas no existen en el catálogo actual.');
       return { request, candidates };

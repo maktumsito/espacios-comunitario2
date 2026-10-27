@@ -13,6 +13,11 @@ const booking = (id: string, extra: Partial<Reservation> = {}): Reservation => (
 const resource = [{ equipmentId: 'projector', equipmentName: 'Proyector', quantity: 1 }];
 
 describe('room distribution', () => {
+  it('never proposes deactivated rooms', () => {
+    const result = planRoomDistribution([request('a')], snapshot({ spaces: spaces.map(space => ({ ...space, activo: false })) }));
+    expect(result.proposals).toEqual([]);
+    expect(result.unresolved).toHaveLength(1);
+  });
   it('places simultaneous activities in separate rooms and prefers a suitable smaller capacity', () => {
     const single = planRoomDistribution([request('a')], snapshot());
     expect(single.proposals[0].reservation.espacio).toBe('SALA 2');

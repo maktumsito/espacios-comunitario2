@@ -222,6 +222,7 @@ export interface AuditChangeLogEntry {
 }
 
 export interface SpaceInfo {
+  activo?: boolean;
   id: string;
   name: string;
   capacity?: number;
