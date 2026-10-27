@@ -540,6 +540,96 @@ describe.skipIf(!enabled)(
       const next = await claimDelivery(db, "2026-10-09");
       expect(next).not.toBeNull();
     });
+    it('distribution snapshot reads the authoritative date range and configurable catalogs', async () => {
+      const date = '2099-10-06';
+      await db.doc('reservas/previous-night').set({ ...row('previous-night', '2099-10-05'), horaInicio: '23:00', horaFin: '09:00', terminaDiaSiguiente: true });
+      await db.doc('reservas/next-day').set(row('next-day', '2099-10-07'));
+      await db.doc('configuracion_sistema/espacios').set({ data: [{ id: 'custom', name: 'SALA NUEVA', capacity: 18 }] });
+      await db.doc('configuracion_sistema/equipamiento').set({ items: [] });
+      const result = await post('/api/reservations/planning-snapshot', { fecha: date }, reader);
+      expect(result.snapshot.reservations.map((r: any) => r.id)).toEqual(['previous-night']);
+      expect(result.snapshot.spaces[0].name).toBe('SALA NUEVA');
+      expect(result.snapshot.equipment).toEqual([]);
+      expect((await post('/api/reservations/planning-snapshot', { fecha: '2099-02-30' })).status).toBe(400);
+      expect((await post('/api/reservations/planning-snapshot', { fecha: date }, '')).status).toBe(401);
+    });
+    it('distribution swaps selected recurring occurrences and creates a new activity in one idempotent commit', async () => {
+      const date = '2099-10-06';
+      const sourceA = { ...row('dist-a', date), serieRecurrente: 'dist-series', recurrenteId: 'dist-series', indiceEnSerie: 1, emailContacto: 'equipo@example.cl', montaje: { tipo: 'circulo', instrucciones: 'Conservar circulación.' } };
+      const sourceB = { ...row('dist-b', date), espacio: 'SALA 3' };
+      await post('/api/reservations/commit', { reservations: [sourceA, sourceB, { ...sourceA, id: 'dist-next', fecha: '2099-10-13', indiceEnSerie: 2 }], options: { operationId: 'dist-seed' } });
+      const a = (await db.doc('reservas/dist-a').get()).data(), b = (await db.doc('reservas/dist-b').get()).data();
+      const body = { reservations: [{ ...a, espacio: 'SALA 3', cantidadParticipantes: 15 }, { ...b, espacio: 'SALA 2', cantidadParticipantes: 15 }, { ...row('dist-new', date), espacio: 'SALA 4', cantidadParticipantes: 10 }], options: { distributionDate: date, requireAtomic: true, expectedVersions: { 'dist-a': 1, 'dist-b': 1, 'dist-new': -1 }, operationId: 'dist-apply' } };
+      const applied = await post('/api/reservations/commit', body);
+      expect(applied.error).toBeUndefined();
+      expect(applied.result.confirmedIds).toHaveLength(3);
+      expect((await db.doc('reservas/dist-a').get()).data()).toMatchObject({ espacio: 'SALA 3', serieRecurrente: 'dist-series', emailContacto: 'equipo@example.cl', montaje: sourceA.montaje, version: 2 });
+      expect((await db.doc('reservas/dist-next').get()).get('espacio')).toBe('SALA 2');
+      const retry = await post('/api/reservations/commit', body);
+      expect(retry.result.confirmedIds).toHaveLength(3);
+      expect((await db.doc('reservas/dist-a').get()).get('version')).toBe(2);
+      const audit = await readAudit(db, 'AUDIT_OP_dist-apply');
+      expect(audit.affectedCount).toBe(3);
+      expect(audit.description).toMatch(/Distribución/);
+    });
+    it('distribution rejects stale versions, insufficient capacity and legacy bookings without partial writes', async () => {
+      const date = '2099-10-06';
+      await post('/api/reservations/commit', { reservations: [row('dist-stale', date)], options: { operationId: 'dist-stale-seed' } });
+      const stale = (await db.doc('reservas/dist-stale').get()).data();
+      await post('/api/reservations/commit', { reservations: [{ ...stale, descripcion: 'Otra edición' }], options: { operationId: 'dist-foreign' } });
+      const result = await post('/api/reservations/commit', { reservations: [{ ...stale, espacio: 'SALA 3', cantidadParticipantes: 15 }, { ...row('dist-blocked-new', date), espacio: 'SALA 4', cantidadParticipantes: 10 }], options: { operationId: 'dist-stale-apply', requireAtomic: true, distributionDate: date, expectedVersions: { 'dist-stale': 1, 'dist-blocked-new': -1 } } });
+      expect(result.error).toMatch(/otro usuario/);
+      expect((await db.doc('reservas/dist-blocked-new').get()).exists).toBe(false);
+      const overCapacity = await post('/api/reservations/commit', { reservations: [{ ...row('dist-large', date), espacio: 'SALA 4', cantidadParticipantes: 100 }], options: { operationId: 'dist-large', requireAtomic: true, distributionDate: date, expectedVersions: { 'dist-large': -1 } } });
+      expect(overCapacity.error).toMatch(/capacidad/);
+      await db.doc('reservas/dist-legacy').set({ ...row('dist-legacy', date), espacio: 'SALA 5' });
+      const legacy = await post('/api/reservations/commit', { reservations: [{ ...row('dist-legacy-conflict', date), espacio: 'SALA 5', cantidadParticipantes: 10 }], options: { operationId: 'dist-legacy-conflict', requireAtomic: true, distributionDate: date, expectedVersions: { 'dist-legacy-conflict': -1 } } });
+      expect(legacy.error).toMatch(/Conflicto/);
+      expect((await db.doc('reservas/dist-legacy-conflict').get()).exists).toBe(false);
+    });
+    it('distribution enforces mixed creation and edit permissions inside the transaction', async () => {
+      const date = '2099-10-06';
+      await post('/api/reservations/commit', { reservations: [row('dist-permissions', date)], options: { operationId: 'dist-permissions-seed' } });
+      const source = (await db.doc('reservas/dist-permissions').get()).data();
+      await db.doc('usuarios_sistema/editor').update({ canCreateReservations: false, canEditReservations: true });
+      const result = await post('/api/reservations/commit', { reservations: [{ ...source, espacio: 'SALA 3', cantidadParticipantes: 15 }, { ...row('dist-no-permission', date), espacio: 'SALA 4', cantidadParticipantes: 10 }], options: { operationId: 'dist-permissions-apply', requireAtomic: true, distributionDate: date, expectedVersions: { 'dist-permissions': 1, 'dist-no-permission': -1 } } });
+      expect(result.error).toMatch(/permiso/);
+      expect(result.discardPending).toBe(true);
+      expect((await db.doc('reservas/dist-permissions').get()).get('espacio')).toBe('SALA 2');
+      expect((await db.doc('reservas/dist-no-permission').get()).exists).toBe(false);
+    });
+    it('inventory serializes concurrent requests for the same resource in different rooms and releases cancelled bookings', async () => {
+      const date = '2099-10-06';
+      const equipment = { id: 'shared-projector', name: 'Proyector compartido', category: 'Audiovisual', totalQuantity: 1 };
+      const requested = [{ equipmentId: equipment.id, equipmentName: equipment.name, quantity: 1 }];
+      await db.doc('configuracion_sistema/equipamiento').set({ items: [equipment] });
+      const results = await Promise.all(['a', 'b'].map((id, i) => post('/api/reservations/commit', { reservations: [{ ...row(`inventory-${id}`, date), espacio: i ? 'SALA 3' : 'SALA 2', equipamientoSolicitado: requested }], options: { operationId: `inventory-${id}` } })));
+      expect(results.filter(r => !r.error)).toHaveLength(1);
+      expect(results.find(r => r.error).error).toMatch(/Equipamiento insuficiente/);
+      const winner = results.find(r => !r.error).result.reservations[0];
+      await post('/api/reservations/commit', { reservations: [{ ...winner, estado: 'cancelada' }], options: { operationId: 'inventory-cancel' } });
+      const retry = await post('/api/reservations/commit', { reservations: [{ ...row('inventory-released', date), equipamientoSolicitado: requested }], options: { operationId: 'inventory-released' } });
+      expect(retry.error).toBeUndefined();
+      expect((await db.collection('equipment_day_guards').get()).size).toBe(1);
+    });
+    it('distribution lets only one of two computers claim a room and rejects the entire losing plan', async () => {
+      const date = '2099-10-06';
+      const results = await Promise.all(['a', 'b'].map(id => post('/api/reservations/commit', {
+        reservations: [{ ...row(`race-${id}`, date), cantidadParticipantes: 12 }, { ...row(`race-extra-${id}`, date), espacio: id === 'a' ? 'SALA 3' : 'SALA 4', cantidadParticipantes: 12 }],
+        options: { operationId: `race-${id}`, distributionDate: date, requireAtomic: true, expectedVersions: { [`race-${id}`]: -1, [`race-extra-${id}`]: -1 } },
+      })));
+      expect(results.filter(r => !r.error)).toHaveLength(1);
+      expect((await db.collection('reservas').get()).size).toBe(2);
+      expect((await db.collection('audit_logs').get()).size).toBe(1);
+    });
+    it('inventory includes legacy overnight bookings even before resource guards exist', async () => {
+      const date = '2099-10-06';
+      const requested = [{ equipmentId: 'EQ_PROYECTOR_HD', equipmentName: 'Proyector / Data Show HD', quantity: 3 }];
+      await db.doc('reservas/inventory-night').set({ ...row('inventory-night', '2099-10-05'), horaInicio: '23:00', horaFin: '11:00', terminaDiaSiguiente: true, equipamientoSolicitado: requested });
+      const result = await post('/api/reservations/commit', { reservations: [{ ...row('inventory-next', date), espacio: 'SALA 3', equipamientoSolicitado: requested }], options: { operationId: 'inventory-next' } });
+      expect(result.error).toMatch(/insuficiente/);
+      expect((await db.doc('reservas/inventory-next').get()).exists).toBe(false);
+    });
     it("restores every exported catalog/entity and refuses tampered content before any write", async () => {
       const profile = {
         username: "editor",

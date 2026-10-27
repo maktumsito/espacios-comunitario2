@@ -1217,6 +1217,15 @@ export default function App() {
         {currentView === 'spaces' && (
           <Suspense fallback={<div className="p-12 text-center text-slate-500 font-medium">Cargando panel de espacios...</div>}>
             <SpaceDashboard
+              currentUser={currentUser}
+              onDistributionCommitted={rows => {
+                setReservations(previous => {
+                  const merged = new Map(previous.map(row => [row.id, row]));
+                  rows.forEach(row => merged.set(row.id, row));
+                  return [...merged.values()];
+                });
+                triggerSyncToast(`Distribución confirmada: ${rows.length} actividades guardadas.`, 'success');
+              }}
               reservations={reservations}
               spaces={spaces}
               onSelectSpace={(spaceName) => {

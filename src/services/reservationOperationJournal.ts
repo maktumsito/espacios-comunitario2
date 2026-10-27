@@ -16,6 +16,7 @@ export interface PendingOperation {
   allowConflictOverride: boolean;
   intent?: "create" | "update";
   requireAtomic?: boolean;
+  distributionDate?: string;
   expectedVersions?: Record<string, number>;
   auditRestore?: AuditRestoreContext;
 }

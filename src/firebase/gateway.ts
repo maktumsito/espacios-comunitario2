@@ -47,7 +47,7 @@ export async function dataRequest(
   const result = await response.json();
   if (!response.ok || result.success === false)
     throw responseFailure(response, result);
-  if (!["/api/data/read", "/api/data/listen", "/api/data/listen-batch", "/api/maintenance/status"].includes(path))
+  if (!["/api/data/read", "/api/data/listen", "/api/data/listen-batch", "/api/maintenance/status", "/api/reservations/planning-snapshot"].includes(path))
     announceDataChange();
   return result;
 }
@@ -100,6 +100,7 @@ export async function reservationRequest(
       throw new DataApiError(
         final?.error ||
           "Se perdió la confirmación del servidor. Reanuda el guardado.",
+        final?.status || 500,
       );
     announceDataChange();
     return final;

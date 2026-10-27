@@ -38,6 +38,20 @@ it('retains payload and operation ID when the HTTP acknowledgement is lost', asy
   expect(await readPendingOperations()).toMatchObject([operation()]);
 });
 
+it('releases an atomic distribution retry after a definitive HTTP permission rejection', async () => {
+  api.request.mockRejectedValue(new DataApiError('No tienes permiso para esta operación.', 403));
+  await expect(writeReservations({} as any, [row], r => r, { actor: 'test', operationId: 'distribution-rejected', requireAtomic: true, distributionDate: row.fecha, expectedVersions: { [row.id]: -1 } })).rejects.toMatchObject({ discardPending: true });
+  expect(await readPendingOperations()).toEqual([]);
+});
+
+it('retains previously confirmed groups if a later HTTP request loses permission', async () => {
+  const other = { ...row, id: 'two', espacio: 'SALA 3' };
+  await updateOperationJournal({ ...operation(), reservations: [row, other], confirmedIds: ['one'] });
+  api.request.mockRejectedValue(new DataApiError('No tienes permiso para esta operación.', 403));
+  await expect(writeReservations({} as any, [other], r => r, { actor: 'test', operationId: 'pending' })).rejects.toMatchObject({ discardPending: false });
+  expect((await readPendingOperations())[0].confirmedIds).toEqual(['one']);
+});
+
 it('retains all eight pending deletions and their version guards when Firestore cannot verify access due to quota', async () => {
   const deletedIds = Array.from({ length: 8 }, (_, index) => `yoga-${index}`);
   const expectedVersions = Object.fromEntries(deletedIds.map(id => [id, 3]));

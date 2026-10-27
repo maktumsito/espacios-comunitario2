@@ -1,5 +1,8 @@
 import { formatDisplayTitle } from '../utils/reservationVisuals';
-import React from 'react';
+import React, { useState, Suspense } from 'react';
+import type { AuthUser } from '../services/authService';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
+const DistributionPlannerModal = lazyWithRetry(() => import('./DistributionPlannerModal').then(m => ({ default: m.DistributionPlannerModal })), 'DistributionPlannerModal');
 import { Reservation, SpaceInfo } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
 import {
@@ -24,6 +27,8 @@ import { format } from 'date-fns';
 import { isReservationActiveForAvailability } from '../utils/conflictDetector';
 
 interface SpaceDashboardProps {
+  currentUser?: AuthUser | null;
+  onDistributionCommitted?: (rows: Reservation[]) => void;
   reservations: Reservation[];
   spaces?: SpaceInfo[];
   onSelectSpace: (spaceName: string) => void;
@@ -32,12 +37,15 @@ interface SpaceDashboardProps {
 }
 
 export const SpaceDashboard: React.FC<SpaceDashboardProps> = ({
+  currentUser,
+  onDistributionCommitted,
   reservations,
   spaces = SPACES_LIST,
   onSelectSpace,
   onNewReservationForSpace,
   onSelectReservation
 }) => {
+  const [showDistributionPlanner, setShowDistributionPlanner] = useState(false);
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
   const getIcon = (iconName: string) => {
@@ -71,7 +79,11 @@ export const SpaceDashboard: React.FC<SpaceDashboardProps> = ({
             Explora las categorías, detalles y el estado de ocupación actual para cada recinto, sala de talleres y multicancha.
           </p>
         </div>
+        {currentUser && <button type="button" onClick={() => setShowDistributionPlanner(true)} className="min-h-11 shrink-0 rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">Planificar distribución</button>}
       </div>
+      {showDistributionPlanner && currentUser && <Suspense fallback={<p role="status" className="p-4 text-sm text-slate-500">Cargando asistente de distribución…</p>}>
+        <DistributionPlannerModal key={currentUser.username} user={currentUser} onClose={() => setShowDistributionPlanner(false)} onCommitted={rows => onDistributionCommitted?.(rows)} />
+      </Suspense>}
 
       {/* Grid of Spaces */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -4,6 +4,7 @@ import {
   reservationRequest,
   doc,
   getDoc,
+  DataApiError,
   runTransaction,
   type DocumentSnapshot,
   type Firestore,
@@ -48,6 +49,7 @@ export interface WriteResult {
   reservations: Reservation[];
 }
 export interface WriteOptions {
+  distributionDate?: string;
   requireAtomic?: boolean;
   expectedVersions?: Record<string, number>;
   intent?: "create" | "update";
@@ -82,6 +84,11 @@ export class ReservationVersionError extends Error {
       "La reserva cambió por otro usuario. Recarga la versión actual antes de guardar; tus datos se conservaron.",
     );
   }
+}
+/** Deterministic validation before the first transaction: safe to discard the
+ * retry payload, unlike a transport failure after an uncertain acknowledgement. */
+class ReservationInputError extends Error {
+  readonly status = 400;
 }
 class ReplacementValidationError extends Error {}
 export type SlotBooking = {
@@ -142,6 +149,7 @@ export function prepareReservation(r: Reservation): Reservation {
     horaInicio: r.horaInicio?.trim(),
     horaFin: r.horaFin?.trim(),
     espacio: getConstituentSpaces(r.espacio).join(" / "),
+    ...(r.equipamientoSolicitado ? { equipamientoSolicitado: r.equipamientoSolicitado.map(item => ({ ...item, quantity: Number(item.quantity) })) } : {}),
     responsable: r.responsable?.trim(),
     descripcion: r.descripcion?.trim(),
     tipoActividad: r.tipoActividad?.trim(),
@@ -259,23 +267,23 @@ export async function writeReservations(
   options: WriteOptions = {},
 ): Promise<WriteResult> {
   if (options.auditRestore && !options.requireAtomic)
-    throw new Error("La restauración requiere una transacción atómica.");
+    throw new ReservationInputError("La restauración requiere una transacción atómica.");
   const items = input.map((r) => {
     try {
       return prepareReservation(r);
     } catch (error: any) {
-      throw new Error(
+      throw new ReservationInputError(
         `Reserva ${r.id} (${r.fecha}): ${error?.message || "Datos inválidos"}`,
       );
     }
   });
   for (const r of items)
     if (new TextEncoder().encode(JSON.stringify(clean(r))).byteLength > 900_000)
-      throw new Error(
+      throw new ReservationInputError(
         `El adjunto de la reserva ${r.id} es demasiado grande para guardar.`,
       );
   if (new Set(items.map((r) => r.id)).size !== items.length)
-    throw new Error("La operación contiene IDs de reserva duplicados.");
+    throw new ReservationInputError("La operación contiene IDs de reserva duplicados.");
   const deletedIds = [...new Set(options.deletedIds || [])].filter(
     (id) => !items.some((r) => r.id === id),
   );
@@ -311,7 +319,7 @@ export async function writeReservations(
     findReservationConflicts(items, [], { allowCandidateSelfConflicts: false })
       .length
   )
-    throw new Error("Conflicto entre las reservas de la operación.");
+    throw new ReservationInputError("Conflicto entre las reservas de la operación.");
   const previous = new Map<string, Reservation>();
   if (usesDataApi()) {
     const operation: PendingOperation = {
@@ -325,6 +333,7 @@ export async function writeReservations(
       requireAtomic: options.requireAtomic,
       expectedVersions: options.expectedVersions,
       auditRestore: options.auditRestore,
+      distributionDate: options.distributionDate,
     };
     const original =
       pendingOperations.find((o) => o.id === operationId) || operation;
@@ -341,6 +350,7 @@ export async function writeReservations(
             allowConflictOverride: original.allowConflictOverride,
             requireAtomic: original.requireAtomic,
             restoreLogId: original.auditRestore?.logId,
+            distributionDate: original.distributionDate,
           },
         },
         async (progress) => {
@@ -365,6 +375,10 @@ export async function writeReservations(
       return confirmed;
     } catch (error) {
       if (error instanceof ReservationWriteError) throw error;
+      if (error instanceof DataApiError && !original.confirmedIds.length && [400, 401, 403, 404, 409, 413].includes(error.status)) {
+        await journalUpdate(original, true);
+        throw new ReservationWriteError(error.message, result, error, true);
+      }
       throw new ReservationWriteError((error as Error).message, result, error);
     }
   }
@@ -382,14 +396,12 @@ export async function writeReservations(
       });
     }
   }
-  const chunks = planWriteChunks(
-    items,
-    previous,
-    deletedIds,
-    options.serverHooks ? 32 : options.auditRestore ? 2 : 0,
-  );
+  let chunks: string[][];
+  try {
+    chunks = planWriteChunks(items, previous, deletedIds, options.serverHooks ? 32 : options.auditRestore ? 2 : 0);
+  } catch (error) { throw new ReservationInputError((error as Error).message); }
   if (options.requireAtomic && chunks.length > 1)
-    throw new Error(
+    throw new ReservationInputError(
       "La serie excede el límite de un movimiento atómico. Usa un alcance más pequeño. No se modificó ninguna reserva.",
     );
   const tracked = pendingOperations.find((o) => o.id === operationId);
@@ -406,6 +418,7 @@ export async function writeReservations(
       ? { expectedVersions: options.expectedVersions }
       : {}),
     ...(options.auditRestore ? { auditRestore: options.auditRestore } : {}),
+    ...(options.distributionDate ? { distributionDate: options.distributionDate } : {}),
   };
   await journalUpdate(operation);
   const byId = new Map(items.map((r) => [r.id, r]));
@@ -809,7 +822,8 @@ export async function writeReservations(
     const discardPending = !operation.confirmedIds.length &&
       (cause instanceof ReplacementValidationError ||
         cause instanceof ReservationVersionError ||
-        /conflicto|límite|ya fue restaurado|bloqueo de mantenimiento/i.test(cause?.message || ""));
+        [400, 401, 403, 404, 409, 413].includes(cause?.status) ||
+        /conflicto|límite|ya fue restaurado|bloqueo de mantenimiento|equipamiento insuficiente|cantidad inválida|ya no existe en el inventario/i.test(cause?.message || ""));
     if (discardPending) {
       try {
         await journalUpdate(operation, true);

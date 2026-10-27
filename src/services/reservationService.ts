@@ -990,7 +990,7 @@ export async function resumeReservationOperation(id: string): Promise<WriteResul
   }
   return commitReservationChanges(operation.reservations.filter(r=>!operation.confirmedIds.includes(r.id)), {
     operationId: operation.id, deletedIds: operation.deletedIds.filter(id => !operation.confirmedIds.includes(id)),
-    allowConflictOverride: operation.allowConflictOverride, intent: operation.intent, requireAtomic: operation.requireAtomic, expectedVersions: operation.expectedVersions, auditRestore: operation.auditRestore
+    allowConflictOverride: operation.allowConflictOverride, intent: operation.intent, requireAtomic: operation.requireAtomic, expectedVersions: operation.expectedVersions, auditRestore: operation.auditRestore, distributionDate: operation.distributionDate
   });
 }
 

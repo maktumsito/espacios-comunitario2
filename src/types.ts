@@ -9,6 +9,7 @@ export interface CommitmentLetterAttachment {
 }
 
 export interface Reservation {
+  montaje?: RoomSetup;
   id: string;
   reemplazaReservaId?: string;
   reemplazadaPorReservaId?: string;
@@ -63,6 +64,52 @@ export interface Reservation {
   createdBy?: string;
   version?: number;
   restoredStateVersion?: number;
+}
+
+export type RoomSetupType = 'auditorio' | 'aula' | 'u' | 'circulo' | 'mesas' | 'despejado';
+export interface RoomSetup {
+  tipo: RoomSetupType;
+  instrucciones: string;
+}
+
+export interface DistributionRequest {
+  holidayAuthorization?: string;
+  id: string;
+  source?: Reservation;
+  descripcion: string;
+  responsable: string;
+  tipoActividad: string;
+  cantidadParticipantes: number;
+  durationMinutes: number;
+  fixedTime: boolean;
+  startTime: string;
+  endTime: string;
+  allowedSpaces: string[];
+  preferredSpace?: string;
+  montaje: RoomSetupType;
+  equipment: ReservationEquipmentRequest[];
+}
+
+export interface DistributionSnapshot {
+  fecha: string;
+  loadedAt: string;
+  reservations: Reservation[];
+  spaces: SpaceInfo[];
+  equipment: EquipmentItem[];
+  blocks: SpaceBlock[];
+}
+
+export interface DistributionProposal {
+  requestId: string;
+  reservation: Reservation;
+  reasons: string[];
+}
+
+export interface DistributionResult {
+  proposals: DistributionProposal[];
+  unresolved: { requestId: string; reason: string }[];
+  searchLimitReached: boolean;
+  exploredStates: number;
 }
 
 export type UpdateScope = 'single' | 'future' | 'series' | 'dateRange' | 'selected';

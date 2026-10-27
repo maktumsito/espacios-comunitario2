@@ -1,4 +1,5 @@
 import { ReservationSectionHeader } from './ReservationSectionHeader';
+import { SETUP_LABELS } from '../utils/roomDistribution';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import {
@@ -234,6 +235,7 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
                 Notas: {formData.comentarios}
               </div>
             )}
+            {formData.montaje && <p className="text-slate-600 whitespace-pre-wrap">Montaje: {SETUP_LABELS[formData.montaje.tipo]}. {formData.montaje.instrucciones}</p>}
           </div>
         </div>
       </div>

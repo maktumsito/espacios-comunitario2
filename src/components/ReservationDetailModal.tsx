@@ -1,4 +1,6 @@
 import { formatDisplayTitle } from '../utils/reservationVisuals';
+import { RoomSetupPreview } from './RoomSetupPreview';
+import { SETUP_LABELS } from '../utils/roomDistribution';
 import React from 'react';
 import { Reservation, SpaceRating, CommitmentLetterAttachment, isSingleDayMultiSpaceReservation } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
@@ -374,6 +376,11 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         )}
 
         {/* Info Cards Grid */}
+        {reservation.montaje && <section className="rounded-xl border border-slate-200 p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-slate-900">Montaje: {SETUP_LABELS[reservation.montaje.tipo]}</h4>
+          <RoomSetupPreview tipo={reservation.montaje.tipo} />
+          <p className="text-xs text-slate-600 whitespace-pre-wrap">{reservation.montaje.instrucciones}</p>
+        </section>}
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
             <div className="text-[10px] text-slate-500 uppercase font-semibold flex items-center space-x-1">

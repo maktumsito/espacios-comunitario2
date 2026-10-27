@@ -1,0 +1,113 @@
+import { useEffect, useRef, useState } from 'react';
+import type { DistributionProposal, DistributionRequest, DistributionResult, DistributionSnapshot, Reservation } from '../types';
+import { getChileLocalDateString } from '../utils/dateUtils';
+import { newDistributionRequest, planRoomDistribution } from '../utils/roomDistribution';
+import { commitDistribution, loadDistributionSnapshot, validateDistributionProposals } from '../services/distributionService';
+import { ReservationWriteError } from '../services/reservationWriter';
+import { userCanCreateReservations, userCanEditReservations, type AuthUser } from '../services/authService';
+import { isReservationActiveForAvailability } from '../utils/conflictDetector';
+
+interface PendingDistribution { operationId: string; fecha: string; proposals: DistributionProposal[]; expectedVersions: Record<string, number> }
+interface Draft { fecha: string; requests: DistributionRequest[]; pending: PendingDistribution | null }
+function readDraft(key: string): Draft {
+  try {
+    const draft = JSON.parse(localStorage.getItem(key) || 'null');
+    if (draft && Array.isArray(draft.requests) && draft.requests.length <= 12 && /^\d{4}-\d{2}-\d{2}$/.test(draft.fecha) && (draft.fecha >= getChileLocalDateString() || draft.pending)) return draft;
+  } catch { /* Storage can be disabled; the in-memory draft remains usable. */ }
+  return { fecha: getChileLocalDateString(), requests: [], pending: null };
+}
+
+export function useDistributionPlanner(user: AuthUser, onCommitted: (rows: Reservation[]) => void) {
+  const key = `ccd_distribution_v1_${user.username}`;
+  const [initial] = useState(() => readDraft(key));
+  const [fecha, setFecha] = useState(initial.fecha);
+  const [requests, setRequests] = useState<DistributionRequest[]>(initial.requests);
+  const [pending, setPending] = useState<PendingDistribution | null>(initial.pending);
+  const [snapshot, setSnapshot] = useState<DistributionSnapshot | null>(null);
+  const [result, setResult] = useState<DistributionResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [storageWarning, setStorageWarning] = useState('');
+  const sequence = useRef(0);
+  const canCreate = userCanCreateReservations(user), canEdit = userCanEditReservations(user);
+  const canApply = requests.every(r => r.source ? canEdit : canCreate);
+
+  useEffect(() => {
+    try { localStorage.setItem(key, JSON.stringify({ fecha, requests, pending })); setStorageWarning(''); }
+    catch { setStorageWarning('El navegador no pudo guardar el borrador. Mantén esta ventana abierta para conservarlo.'); }
+  }, [key, fecha, requests, pending]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const run = ++sequence.current;
+    setLoading(true); setSnapshot(null); setResult(null);
+    loadDistributionSnapshot(fecha, controller.signal).then(data => {
+      if (sequence.current === run) { setSnapshot(data); setError(''); }
+    }).catch(error => {
+      if (!controller.signal.aborted && sequence.current === run) setError(error.message);
+    }).finally(() => { if (sequence.current === run) setLoading(false); });
+    return () => { controller.abort(); sequence.current++; };
+  }, [fecha]);
+
+  const updateRequests = (next: DistributionRequest[]) => {
+    if (busy || pending) return;
+    setRequests(next); setResult(null); setError(''); setSuccess('');
+  };
+  const changeDate = (date: string) => {
+    if (busy || pending || !date) return;
+    setRequests(rows => rows.filter(r => !r.source)); setFecha(date); setResult(null); setError(''); setSuccess('');
+  };
+  async function calculate() {
+    if (busy || pending) return;
+    setBusy(true); setError(''); setResult(null); setSuccess('');
+    try {
+      const fresh = await loadDistributionSnapshot(fecha);
+      setSnapshot(fresh);
+      const refreshed = requests.map(request => {
+        if (!request.source) return request;
+        const source = fresh.reservations.find(row => row.id === request.source!.id);
+        if (!source || !isReservationActiveForAvailability(source, new Set())) throw new Error(`La reserva «${request.descripcion}» ya no está activa. Retírala del plan.`);
+        return { ...request, source };
+      });
+      setRequests(refreshed);
+      // Allow the loading state to paint before the bounded synchronous calculation.
+      await new Promise(resolve => setTimeout(resolve, 0));
+      setResult(planRoomDistribution(refreshed, fresh));
+    } catch (error) { setError((error as Error).message); }
+    finally { setBusy(false); }
+  }
+  async function apply() {
+    if (busy || !canApply || (!pending && (!result || result.unresolved.length || !result.proposals.length))) return;
+    setBusy(true); setError('');
+    let operation = pending;
+    try {
+      if (!operation) {
+        validateDistributionProposals(result!.proposals);
+        operation = { operationId: crypto.randomUUID(), fecha, proposals: result!.proposals,
+          expectedVersions: Object.fromEntries(requests.map(r => [r.source?.id || r.id, r.source ? r.source.version || 0 : -1])) };
+        // Persist the immutable payload before contacting the server. The reservation
+        // operation journal also protects retries when this small draft cannot persist.
+        setPending(operation);
+        try { localStorage.setItem(key, JSON.stringify({ fecha, requests, pending: operation })); } catch { /* Journal handles recovery. */ }
+      }
+      const receipt = await commitDistribution(operation.fecha, operation.proposals, operation.expectedVersions, operation.operationId);
+      if (receipt.pendingIds.length) throw new Error('La confirmación sigue pendiente. Reintenta sin modificar la propuesta.');
+      setPending(null); setResult(null); setRequests([]);
+      setSuccess(`Distribución confirmada: ${receipt.confirmedIds.length} actividades guardadas. Los demás equipos recibirán la actualización.`);
+      onCommitted(receipt.reservations);
+      loadDistributionSnapshot(fecha).then(setSnapshot).catch(() => setSnapshot(null));
+    } catch (error) {
+      if (!operation || error instanceof ReservationWriteError && error.discardPending) { setPending(null); setResult(null); }
+      setError((error as Error).message);
+    } finally { setBusy(false); }
+  }
+  const addNew = () => { if (canCreate && requests.length < 12) updateRequests([...requests, newDistributionRequest(`DIST_${crypto.randomUUID()}`)]); };
+  const addExisting = (id: string) => {
+    const source = snapshot?.reservations.find(row => row.id === id);
+    if (source && canEdit && requests.length < 12 && !requests.some(r => r.source?.id === id)) updateRequests([...requests, newDistributionRequest(id, source)]);
+  };
+  return { fecha, requests, snapshot, result, pending, busy, loading, error, success, storageWarning, canCreate, canEdit, canApply,
+    changeDate, updateRequests, calculate, apply, addNew, addExisting };
+}

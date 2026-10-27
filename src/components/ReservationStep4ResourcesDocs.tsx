@@ -19,6 +19,9 @@ import { Reservation, EquipmentItem } from '../types';
 import { EquipmentSelector } from './EquipmentSelector';
 import { isCommitmentLetterEligible } from '../utils/commitmentLetterPdf';
 import { CommitmentLetterCard } from './CommitmentLetterCard';
+import { RoomSetupPreview } from './RoomSetupPreview';
+import { SETUP_LABELS, SETUP_INSTRUCTIONS } from '../utils/roomDistribution';
+import type { RoomSetupType } from '../types';
 
 export interface ReservationStep4ResourcesDocsProps {
   isWizardMode: boolean;
@@ -176,6 +179,18 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
       </div>
 
       {/* 3. Carta de Compromiso */}
+      {formData.montaje && <section className="rounded-xl border border-slate-200 p-4 space-y-3">
+        <label className="block text-xs font-semibold text-slate-700">Montaje de sala
+          <select className="mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={formData.montaje.tipo} onChange={event => {
+            const tipo = event.target.value as RoomSetupType;
+            setFormData(prev => ({ ...prev, montaje: { tipo, instrucciones: SETUP_INSTRUCTIONS[tipo] } }));
+          }}>{Object.entries(SETUP_LABELS).map(([tipo, label]) => <option key={tipo} value={tipo}>{label}</option>)}</select>
+        </label>
+        <RoomSetupPreview tipo={formData.montaje.tipo} />
+        <label className="block text-xs font-semibold text-slate-700">Instrucciones de montaje
+          <textarea rows={3} maxLength={2000} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" value={formData.montaje.instrucciones} onChange={event => setFormData(prev => ({ ...prev, montaje: { ...prev.montaje!, instrucciones: event.target.value } }))} />
+        </label>
+      </section>}
       <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3.5 space-y-2.5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center space-x-2">

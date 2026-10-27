@@ -95,6 +95,16 @@ export const ReservationSchema = z
     terminaDiaSiguiente: z.boolean().optional(),
     estado: z.enum(['activa', 'cancelada', 'rechazada', 'eliminada']).or(z.string()).default('activa'),
     comentarios: z.string().optional(),
+    montaje: z.object({
+      tipo: z.enum(['auditorio', 'aula', 'u', 'circulo', 'mesas', 'despejado']),
+      instrucciones: z.string().max(2000),
+    }).optional(),
+    equipamientoSolicitado: z.array(z.object({
+      equipmentId: z.string().min(1).max(200),
+      equipmentName: z.string().max(200),
+      quantity: z.number().int().positive(),
+      notes: z.string().optional(),
+    })).max(100).optional(),
     serieRecurrente: z.string().optional(),
     recurrenteId: z.string().optional(),
     reemplazaReservaId: z.string().min(1).optional(),

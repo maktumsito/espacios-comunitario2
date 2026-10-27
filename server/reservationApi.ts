@@ -24,8 +24,15 @@ import { splitBackupPayload } from "../src/utils/backupChunks";
 import {
   findMaintenanceBlockConflicts,
   isReservationActiveForAvailability,
+  findReservationConflicts,
+  normalizeSpace,
+  timeToMinutes,
 } from "../src/utils/conflictDetector";
 import { isChileanHoliday } from "../src/utils/holidayUtils";
+import { prepareEquipmentAllocation } from './equipmentAllocation';
+import { registerDistributionPlanningApi, validateDistributionDate } from './distributionPlanning';
+import { SPACES_LIST } from '../src/data/spacesData';
+import { REGULAR_LOAN_START_MINUTES, REGULAR_LOAN_END_MINUTES } from '../src/utils/validationUtils';
 
 const clean = (value: any): any => JSON.parse(JSON.stringify(value));
 const hash = (value: any) =>
@@ -82,6 +89,11 @@ export async function commitTrusted(
   options: WriteOptions,
 ) {
   const operationId = options.operationId!;
+  if (options.distributionDate) {
+    if (!options.requireAtomic || options.allowConflictOverride || options.deletedIds?.length || !rows.length || rows.length > 12 ||
+      rows.some(r => r.fecha !== options.distributionDate || !Number.isInteger(options.expectedVersions?.[r.id])))
+      throw new ApiFailure(400, 'La distribución requiere de 1 a 12 actividades de la jornada, versiones y guardado atómico sin forzar conflictos.');
+  }
   if (!/^[\w-]{1,180}$/.test(operationId))
     throw new ApiFailure(400, "Identificador de operación no válido.");
   if (options.allowConflictOverride || options.auditRestore)
@@ -94,9 +106,11 @@ export async function commitTrusted(
     intent: options.intent,
     override: !!options.allowConflictOverride,
     restore: options.auditRestore?.logId,
+    ...(options.distributionDate ? { distributionDate: options.distributionDate } : {}),
   });
   const receipt = await auditRef.get(),
     old = receipt.data();
+  if (options.distributionDate && !old) validateDistributionDate(options.distributionDate);
   let confirmedAudit = old;
   if (
     old &&
@@ -200,6 +214,27 @@ export async function commitTrusted(
             409,
             "El espacio tiene un bloqueo de mantenimiento. No se guardó este grupo.",
           );
+        if (options.distributionDate) {
+          const config = await tx.get(db.doc('configuracion_sistema/espacios'));
+          const spaces = Array.isArray(config.data()?.data) ? config.data()!.data : SPACES_LIST;
+          for (const row of active) {
+            const space = spaces.find((s: any) => normalizeSpace(s.name) === normalizeSpace(row.espacio));
+            if (!space || !Number.isInteger(row.cantidadParticipantes) || row.cantidadParticipantes! < 1 ||
+              space.capacity !== undefined && row.cantidadParticipantes! > space.capacity)
+              throw new ApiFailure(409, 'La sala o su capacidad cambió. Recalcula la distribución.');
+            if (row.terminaDiaSiguiente || timeToMinutes(row.horaInicio) < REGULAR_LOAN_START_MINUTES || timeToMinutes(row.horaFin) > REGULAR_LOAN_END_MINUTES)
+              throw new ApiFailure(400, 'La distribución debe quedar entre 08:30 y 22:00 de la misma jornada.');
+            const original = current.get(row.id);
+            if (original && original.fecha !== row.fecha) throw new ApiFailure(409, 'La reserva cambió de jornada. Recalcula la distribución.');
+            if (original && ['serieRecurrente', 'recurrenteId', 'indiceEnSerie', 'totalEnSerie', 'tipoRecurrencia', 'fechaInicioRecurrencia', 'fechaFinRecurrencia', 'diasSemana'].some(key => (original as any)[key] !== (row as any)[key]))
+              throw new ApiFailure(400, 'La distribución solo puede modificar las ocurrencias seleccionadas, conservando la serie.');
+          }
+          const previousDay = new Date(Date.parse(`${options.distributionDate}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+          const agenda = await tx.get(db.collection('reservas').where('fecha', '>=', previousDay).where('fecha', '<=', options.distributionDate));
+          if (findReservationConflicts(active, agenda.docs.map((doc: any) => ({ ...doc.data(), id: doc.id })), { excludeReservationIds: new Set(chunk), allowCandidateSelfConflicts: false }).length)
+            throw new ApiFailure(409, 'Conflicto en la agenda actual. Recalcula la distribución.');
+        }
+        const commitEquipment = await prepareEquipmentAllocation(db, tx.__native || tx, current, saved, chunk);
         saved.forEach((r) => {
           r.createdBy =
             current.get(r.id)?.createdBy || actor.name || actor.username;
@@ -231,6 +266,7 @@ export async function commitTrusted(
           confirmedIds = [...known, ...chunk];
         const description =
           metadata?.description ||
+          (options.distributionDate ? `Distribución de salas y montaje para ${options.distributionDate}` : '') ||
           (options.auditRestore
             ? "Restauración confirmada"
             : deletions.length
@@ -283,6 +319,7 @@ export async function commitTrusted(
             "La operación contiene demasiados registros. Divide la importación.",
           );
         return () => {
+          commitEquipment();
           pieces.forEach((payload, i) =>
             tx.set(db.doc(`audit_logs/${auditRef.id}/partes/${key}_${i}`), {
               payload,
@@ -325,6 +362,7 @@ export function registerReservationApi(
   db: Firestore,
   sessions: AppSessions,
 ) {
+  registerDistributionPlanningApi(app, db, sessions);
   app.post(
     "/api/reservations/group",
     sessions.requireAuth,
@@ -400,6 +438,7 @@ export function registerReservationApi(
           intent: input.intent,
           requireAtomic: !!input.requireAtomic,
           allowConflictOverride: !!input.allowConflictOverride,
+          distributionDate: input.distributionDate,
         };
         let targets = rows;
         if (input.restoreLogId) {
@@ -487,7 +526,7 @@ export function registerReservationApi(
         if (error instanceof ReservationWriteError) {
           reply({ success: true, error: error.message, result: error.result, discardPending: error.discardPending });
         } else if (streaming && res.headersSent)
-          reply({ success: false, error: (error as Error).message });
+          reply({ success: false, error: (error as Error).message, status: (error as any).status || 500 });
         else apiError(res, error);
       }
     },
