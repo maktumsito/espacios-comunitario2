@@ -38,8 +38,8 @@ const normalizeText = (value: string) => value.toLowerCase().normalize('NFD').re
 function searchFields(r: Reservation): string[] {
   const source = [r.rut || '', r.id || '', r.responsable || '', r.tipoActividad || '', r.espacio || '', r.descripcion || '', r.fecha || ''];
   const cached = normalizedRows.get(r);
-  if (cached && source.every((value,i)=>value===cached.source[i])) return cached.normalized;
-  const normalized = [source[0].replace(/[^0-9kK]/g,'').toLowerCase(), source[1].toLowerCase(), ...source.slice(2,6).map(normalizeText), source[6].trim().toLowerCase()];
+  if (cached && source.every((value, i) => value === cached.source[i])) return cached.normalized;
+  const normalized = [source[0].replace(/[^0-9kK]/g, '').toLowerCase(), source[1].toLowerCase(), ...source.slice(2, 6).map(normalizeText), source[6].trim().toLowerCase()];
   normalizedRows.set(r, { source, normalized });
   return normalized;
 }
@@ -138,6 +138,30 @@ export function getFuzzyMatchIds(
   return new Set(matches.map((r) => r.id));
 }
 
+const genericFuseCache = new WeakMap<readonly any[], Map<string, Fuse<any>>>();
+
+function getGenericFuse<T>(items: readonly T[], keys: string[], threshold: number): Fuse<T> {
+  const sig = `${keys.join(',')}|${threshold}`;
+  let bySig = genericFuseCache.get(items);
+  if (!bySig) {
+    bySig = new Map();
+    genericFuseCache.set(items, bySig);
+  }
+  let fuse = bySig.get(sig);
+  if (!fuse) {
+    fuse = new Fuse(items as T[], {
+      keys,
+      threshold,
+      distance: 100,
+      ignoreLocation: true,
+      minMatchCharLength: 2,
+      shouldSort: true
+    });
+    bySig.set(sig, fuse);
+  }
+  return fuse;
+}
+
 /**
  * Generic fuzzy search helper for any array of objects using Fuse.js
  * with exact and prefix match prioritization.
@@ -182,15 +206,7 @@ export function fuzzySearchItems<T>(
   exactMatches.sort((a, b) => a.priority - b.priority);
   const result: T[] = exactMatches.map((m) => m.item);
 
-  const fuse = new Fuse(items as T[], {
-    keys,
-    threshold,
-    distance: 100,
-    ignoreLocation: true,
-    minMatchCharLength: 2,
-    shouldSort: true
-  });
-
+  const fuse = getGenericFuse(items, keys, threshold);
   const fuseResults = fuse.search(trimmed);
   for (const res of fuseResults) {
     if (!exactMatchedSet.has(res.item)) {
@@ -200,4 +216,3 @@ export function fuzzySearchItems<T>(
 
   return result;
 }
-

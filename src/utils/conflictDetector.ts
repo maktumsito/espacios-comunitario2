@@ -293,13 +293,18 @@ export interface TimeIntervalSlot {
  * Extracts continuous time intervals for a reservation, properly handling overnight/midnight crossings.
  */
 export function getTimeIntervalsForReservation(reservation: Partial<Reservation>): TimeIntervalSlot[] {
-  const fecha = reservation.fecha?.trim();
-  const horaInicio = reservation.horaInicio?.trim();
-  const horaFin = reservation.horaFin?.trim();
+  const rawFecha = reservation.fecha;
+  const rawInicio = reservation.horaInicio;
+  const rawFin = reservation.horaFin;
+  if (!rawFecha || !rawInicio || !rawFin) return [];
+
+  const fecha = rawFecha.length === 10 ? rawFecha : rawFecha.trim();
+  const horaInicio = rawInicio.length === 5 ? rawInicio : rawInicio.trim();
+  const horaFin = rawFin.length === 5 ? rawFin : rawFin.trim();
   if (!fecha || !horaInicio || !horaFin) return [];
 
   const startMin = timeToMinutes(horaInicio);
-  let endMin = timeToMinutes(horaFin);
+  const endMin = timeToMinutes(horaFin);
 
   // If horaFin is '00:00' or '24:00' and startMin > 0, and not explicitly designated as next day,
   // it denotes the end of the day / midnight (1440 min). Do NOT return empty array!
@@ -519,116 +524,186 @@ export function findReservationConflicts(
   options?: FindConflictsOptions
 ): DetectedConflictDetail[] {
   const detectedConflicts: DetectedConflictDetail[] = [];
+  if (!candidates || candidates.length === 0) return detectedConflicts;
+
   const deletedSet = getDeletedIds();
+  const hasDeleted = deletedSet.size > 0;
   const excludeSet = options?.excludeReservationIds
     ? (options.excludeReservationIds instanceof Set ? options.excludeReservationIds : new Set(options.excludeReservationIds))
     : new Set<string>();
-
+  const hasExclude = excludeSet.size > 0;
   const targetExcludeSeriesId = options?.excludeSeriesId;
 
-  // Active, non-exempt reservations from database
-  const activeExisting = allReservations.filter((r) => {
-    if (!r || !r.id) return false;
-    if (excludeSet.has(r.id) || deletedSet.has(r.id)) return false;
-    if (targetExcludeSeriesId && (r.serieRecurrente === targetExcludeSeriesId || r.recurrenteId === targetExcludeSeriesId)) {
-      return false;
-    }
-    if (!r.fecha || isDateExemptFromConflicts(r.fecha)) return false;
-    if (!isReservationActiveForAvailability(r, deletedSet)) return false;
-    return true;
-  });
-
-  interface ExistingSlotEntry {
-    readonly reservation: Reservation;
-    readonly slot: TimeIntervalSlot;
+  // Pre-parse candidates once and collect the exact target dates they touch
+  interface PreparedCandidate {
+    readonly candidate: Reservation;
+    readonly index: number;
+    readonly intervals: TimeIntervalSlot[];
+    readonly normSpace: string;
+    readonly constituents: readonly string[];
   }
-  const existingByDate = new Map<string, ExistingSlotEntry[]>();
-  for (const ex of activeExisting) {
-    const intervals = getTimeIntervalsForReservation(ex);
-    for (const slot of intervals) {
-      let list = existingByDate.get(slot.date);
-      if (!list) {
-        list = [];
-        existingByDate.set(slot.date, list);
-      }
-      list.push({ reservation: ex, slot });
-    }
-  }
+  const preparedCandidates: PreparedCandidate[] = [];
+  const targetDates = new Set<string>();
 
-  // 1. Validate each candidate against existing database reservations (indexed by date)
   for (let cIdx = 0; cIdx < candidates.length; cIdx++) {
     const candidate = candidates[cIdx];
-    if (!candidate.fecha || isDateExemptFromConflicts(candidate.fecha) || !candidate.espacio) {
+    if (!candidate || !candidate.fecha || isDateExemptFromConflicts(candidate.fecha) || !candidate.espacio) {
       continue;
     }
-    if (candidate.id && deletedSet.has(candidate.id)) {
+    if (hasDeleted && candidate.id && deletedSet.has(candidate.id)) {
       continue;
     }
     if (!isReservationActiveForAvailability(candidate, deletedSet)) {
       continue;
     }
+    const intervals = getTimeIntervalsForReservation(candidate);
+    if (intervals.length === 0) continue;
+    for (let k = 0; k < intervals.length; k++) {
+      targetDates.add(intervals[k].date);
+    }
+    preparedCandidates.push({
+      candidate,
+      index: cIdx,
+      intervals,
+      normSpace: normalizeSpace(candidate.espacio),
+      constituents: getConstituentSpaces(candidate.espacio)
+    });
+  }
 
-    const candidateIntervals = getTimeIntervalsForReservation(candidate);
-    if (candidateIntervals.length === 0) {
+  if (preparedCandidates.length === 0) return detectedConflicts;
+
+  interface ExistingSlotEntry {
+    readonly reservation: Reservation;
+    readonly slot: TimeIntervalSlot;
+    readonly normSpace: string;
+    readonly constituents: readonly string[];
+  }
+  const existingByDate = new Map<string, ExistingSlotEntry[]>();
+
+  const allLen = allReservations.length;
+  for (let i = 0; i < allLen; i++) {
+    const r = allReservations[i];
+    if (!r || !r.id || !r.fecha || !r.espacio) continue;
+
+    // Fast date filter before expensive checks when reservation does not cross midnight
+    const rFecha = r.fecha.length === 10 ? r.fecha : r.fecha.trim();
+    const hIni = r.horaInicio;
+    const hFin = r.horaFin;
+    const definitelySameDay = !r.terminaDiaSiguiente && hIni?.length === 5 && hFin?.length === 5 && hFin > hIni;
+    if (definitelySameDay && !targetDates.has(rFecha)) continue;
+
+    if ((hasExclude && excludeSet.has(r.id)) || (hasDeleted && deletedSet.has(r.id))) continue;
+    if (targetExcludeSeriesId && (r.serieRecurrente === targetExcludeSeriesId || r.recurrenteId === targetExcludeSeriesId)) {
       continue;
     }
+    if (isDateExemptFromConflicts(rFecha)) continue;
+    if (!isReservationActiveForAvailability(r, deletedSet)) continue;
 
-    for (const cSlot of candidateIntervals) {
+    const intervals = getTimeIntervalsForReservation(r);
+    let normSpace: string | undefined;
+    let constituents: readonly string[] | undefined;
+    for (let k = 0; k < intervals.length; k++) {
+      const slot = intervals[k];
+      if (!targetDates.has(slot.date)) continue;
+      if (normSpace === undefined) {
+        normSpace = normalizeSpace(r.espacio);
+        constituents = getConstituentSpaces(r.espacio);
+      }
+      let list = existingByDate.get(slot.date);
+      if (!list) {
+        list = [];
+        existingByDate.set(slot.date, list);
+      }
+      list.push({ reservation: r, slot, normSpace, constituents: constituents! });
+    }
+  }
+
+  existingByDate.forEach((list) => {
+    if (list.length > 1) {
+      list.sort((a, b) => a.slot.startMin - b.slot.startMin);
+    }
+  });
+
+  // 1. Validate each candidate against existing database reservations (indexed by date + sweep-line)
+  for (let pIdx = 0; pIdx < preparedCandidates.length; pIdx++) {
+    const { candidate, intervals: candidateIntervals, normSpace: cNorm, constituents: cConstituents } = preparedCandidates[pIdx];
+
+    for (let k = 0; k < candidateIntervals.length; k++) {
+      const cSlot = candidateIntervals[k];
       const existingEntries = existingByDate.get(cSlot.date);
       if (!existingEntries || existingEntries.length === 0) continue;
 
-      for (const { reservation: existing, slot: eSlot } of existingEntries) {
+      const eLen = existingEntries.length;
+      for (let eIdx = 0; eIdx < eLen; eIdx++) {
+        const { reservation: existing, slot: eSlot, normSpace: eNorm, constituents: eConstituents } = existingEntries[eIdx];
+
+        // Sweep-line early exit: subsequent entries start at or after eSlot.startMin >= cSlot.endMin
+        if (eSlot.startMin >= cSlot.endMin) {
+          break;
+        }
+        if (eSlot.endMin <= cSlot.startMin) {
+          continue;
+        }
+
         // Avoid self-collision if candidate has same id as existing
         if (candidate.id && candidate.id === existing.id) {
           continue;
         }
 
-        // Check space conflict (handles compound and normalized matching)
-        if (!doSpacesConflict(candidate.espacio, existing.espacio)) {
-          continue;
+        // Fast precomputed space conflict check
+        let sharesSpace = cNorm === eNorm;
+        if (!sharesSpace) {
+          for (let a = 0; a < cConstituents.length; a++) {
+            const pA = cConstituents[a];
+            for (let b = 0; b < eConstituents.length; b++) {
+              if (pA === eConstituents[b]) {
+                sharesSpace = true;
+                break;
+              }
+            }
+            if (sharesSpace) break;
+          }
         }
+        if (!sharesSpace) continue;
 
-        // Check time intervals overlap
-        if (isTimeOverlapping(cSlot.startMin, cSlot.endMin, eSlot.startMin, eSlot.endMin)) {
-          const overlapStart = Math.max(cSlot.startMin, eSlot.startMin);
-          const overlapEnd = Math.min(cSlot.endMin, eSlot.endMin);
-          const overlapMin = overlapEnd - overlapStart;
+        const overlapStart = Math.max(cSlot.startMin, eSlot.startMin);
+        const overlapEnd = Math.min(cSlot.endMin, eSlot.endMin);
+        const overlapMin = overlapEnd - overlapStart;
 
-          detectedConflicts.push({
-            reserva: candidate,
-            conflictingWith: existing,
-            espacio: candidate.espacio,
-            fecha: cSlot.date,
-            horaInicio: formatMinutesToTime(cSlot.startMin),
-            horaFin: formatMinutesToTime(cSlot.endMin),
-            overlap: `${formatMinutesToTime(overlapStart)} - ${formatMinutesToTime(overlapEnd)} (${overlapMin} min)`,
-            reason: `Espacio '${candidate.espacio}' ya ocupado por '${existing.tipoActividad || 'Actividad'}' (${existing.responsable || 'Responsable'})`
-          });
-        }
+        detectedConflicts.push({
+          reserva: candidate,
+          conflictingWith: existing,
+          espacio: candidate.espacio,
+          fecha: cSlot.date,
+          horaInicio: formatMinutesToTime(cSlot.startMin),
+          horaFin: formatMinutesToTime(cSlot.endMin),
+          overlap: `${formatMinutesToTime(overlapStart)} - ${formatMinutesToTime(overlapEnd)} (${overlapMin} min)`,
+          reason: `Espacio '${candidate.espacio}' ya ocupado por '${existing.tipoActividad || 'Actividad'}' (${existing.responsable || 'Responsable'})`
+        });
       }
     }
   }
 
   // 2. Intra-batch validation: Validate candidates against other candidates in the same batch
-  if (!options?.allowCandidateSelfConflicts && candidates.length > 1) {
+  if (!options?.allowCandidateSelfConflicts && preparedCandidates.length > 1) {
     interface CandidateSlotEntry {
       readonly candidate: Reservation;
       readonly slot: TimeIntervalSlot;
       readonly index: number;
+      readonly normSpace: string;
+      readonly constituents: readonly string[];
     }
     const candidatesByDate = new Map<string, CandidateSlotEntry[]>();
-    for (let i = 0; i < candidates.length; i++) {
-      const cand = candidates[i];
-      if (!cand.fecha || isDateExemptFromConflicts(cand.fecha) || !cand.espacio) continue;
-      if (!isReservationActiveForAvailability(cand, deletedSet)) continue;
-      const intervals = getTimeIntervalsForReservation(cand);
-      for (const slot of intervals) {
+    for (let i = 0; i < preparedCandidates.length; i++) {
+      const prep = preparedCandidates[i];
+      for (let k = 0; k < prep.intervals.length; k++) {
+        const slot = prep.intervals[k];
         let list = candidatesByDate.get(slot.date);
         if (!list) {
           list = [];
           candidatesByDate.set(slot.date, list);
         }
-        list.push({ candidate: cand, slot, index: i });
+        list.push({ candidate: prep.candidate, slot, index: prep.index, normSpace: prep.normSpace, constituents: prep.constituents });
       }
     }
 
@@ -641,24 +716,36 @@ export function findReservationConflicts(
         for (let j = i + 1; j < len; j++) {
           const itemB = entries[j];
           if (itemA.index === itemB.index) continue; // Same candidate instance
-          if (!doSpacesConflict(itemA.candidate.espacio, itemB.candidate.espacio)) continue;
+          if (!isTimeOverlapping(itemA.slot.startMin, itemA.slot.endMin, itemB.slot.startMin, itemB.slot.endMin)) continue;
 
-          if (isTimeOverlapping(itemA.slot.startMin, itemA.slot.endMin, itemB.slot.startMin, itemB.slot.endMin)) {
-            const overlapStart = Math.max(itemA.slot.startMin, itemB.slot.startMin);
-            const overlapEnd = Math.min(itemA.slot.endMin, itemB.slot.endMin);
-            const overlapMin = overlapEnd - overlapStart;
-
-            detectedConflicts.push({
-              reserva: itemA.candidate,
-              conflictingWith: itemB.candidate,
-              espacio: itemA.candidate.espacio,
-              fecha: itemA.slot.date,
-              horaInicio: formatMinutesToTime(itemA.slot.startMin),
-              horaFin: formatMinutesToTime(itemA.slot.endMin),
-              overlap: `${formatMinutesToTime(overlapStart)} - ${formatMinutesToTime(overlapEnd)} (${overlapMin} min)`,
-              reason: `Conflicto interno entre reservas del mismo lote en '${itemA.candidate.espacio}'`
-            });
+          let sharesSpace = itemA.normSpace === itemB.normSpace;
+          if (!sharesSpace) {
+            for (let a = 0; a < itemA.constituents.length; a++) {
+              for (let b = 0; b < itemB.constituents.length; b++) {
+                if (itemA.constituents[a] === itemB.constituents[b]) {
+                  sharesSpace = true;
+                  break;
+                }
+              }
+              if (sharesSpace) break;
+            }
           }
+          if (!sharesSpace) continue;
+
+          const overlapStart = Math.max(itemA.slot.startMin, itemB.slot.startMin);
+          const overlapEnd = Math.min(itemA.slot.endMin, itemB.slot.endMin);
+          const overlapMin = overlapEnd - overlapStart;
+
+          detectedConflicts.push({
+            reserva: itemA.candidate,
+            conflictingWith: itemB.candidate,
+            espacio: itemA.candidate.espacio,
+            fecha: itemA.slot.date,
+            horaInicio: formatMinutesToTime(itemA.slot.startMin),
+            horaFin: formatMinutesToTime(itemA.slot.endMin),
+            overlap: `${formatMinutesToTime(overlapStart)} - ${formatMinutesToTime(overlapEnd)} (${overlapMin} min)`,
+            reason: `Conflicto interno entre reservas del mismo lote en '${itemA.candidate.espacio}'`
+          });
         }
       }
     });
@@ -909,50 +996,61 @@ export function detectEquipmentConflicts(
   equipmentStockMap: Record<string, number>
 ): EquipmentConflict[] {
   const conflicts: EquipmentConflict[] = [];
-  const dateMap = new Map<string, Reservation[]>();
+  interface TimedReservation {
+    readonly res: Reservation;
+    readonly startMin: number;
+    readonly endMin: number;
+  }
+  const dateMap = new Map<string, TimedReservation[]>();
+  const deletedSet = getDeletedIds();
 
-  // Group by non-exempt dates
-  for (const r of reservations) {
-    if (!r.fecha || isDateExemptFromConflicts(r.fecha) || !isReservationActiveForAvailability(r) || !r.equipamientoSolicitado || r.equipamientoSolicitado.length === 0) {
+  // Group by non-exempt dates with precomputed start/end minutes
+  for (let i = 0; i < reservations.length; i++) {
+    const r = reservations[i];
+    if (!r.fecha || isDateExemptFromConflicts(r.fecha) || !isReservationActiveForAvailability(r, deletedSet) || !r.equipamientoSolicitado || r.equipamientoSolicitado.length === 0) {
       continue;
     }
-    const current = dateMap.get(r.fecha) || [];
-    current.push(r);
-    dateMap.set(r.fecha, current);
+    let current = dateMap.get(r.fecha);
+    if (!current) {
+      current = [];
+      dateMap.set(r.fecha, current);
+    }
+    current.push({
+      res: r,
+      startMin: timeToMinutes(r.horaInicio),
+      endMin: timeToMinutes(r.horaFin),
+    });
   }
 
   dateMap.forEach((dayRes, fecha) => {
-    // Check each pair of overlapping reservations
-    for (let i = 0; i < dayRes.length; i++) {
-      const resA = dayRes[i];
-      const startA = timeToMinutes(resA.horaInicio);
-      const endA = timeToMinutes(resA.horaFin);
+    const len = dayRes.length;
+    for (let i = 0; i < len; i++) {
+      const { res: resA, startMin: startA, endMin: endA } = dayRes[i];
 
-      // Collect all concurrent reservations overlapping with resA
-      const concurrent = dayRes.filter((resB) => {
-        const startB = timeToMinutes(resB.horaInicio);
-        const endB = timeToMinutes(resB.horaFin);
-        return isTimeOverlapping(startA, endA, startB, endB);
-      });
-
-      // Sum quantities per equipment
+      // Sum quantities per equipment across concurrent reservations
       const eqMap = new Map<string, { name: string; totalReq: number; list: Array<{ reservation: Reservation; quantityRequested: number }> }>();
 
-      for (const res of concurrent) {
-        if (!res.equipamientoSolicitado) continue;
-        for (const eq of res.equipamientoSolicitado) {
+      for (let j = 0; j < len; j++) {
+        const { res: resB, startMin: startB, endMin: endB } = dayRes[j];
+        if (!isTimeOverlapping(startA, endA, startB, endB)) continue;
+        const eqList = resB.equipamientoSolicitado;
+        if (!eqList) continue;
+        for (let k = 0; k < eqList.length; k++) {
+          const eq = eqList[k];
           if (eq.quantity <= 0) continue;
-          const currentEq = eqMap.get(eq.equipmentId) || { name: eq.equipmentName, totalReq: 0, list: [] };
+          let currentEq = eqMap.get(eq.equipmentId);
+          if (!currentEq) {
+            currentEq = { name: eq.equipmentName, totalReq: 0, list: [] };
+            eqMap.set(eq.equipmentId, currentEq);
+          }
           currentEq.totalReq += eq.quantity;
-          currentEq.list.push({ reservation: res, quantityRequested: eq.quantity });
-          eqMap.set(eq.equipmentId, currentEq);
+          currentEq.list.push({ reservation: resB, quantityRequested: eq.quantity });
         }
       }
 
       eqMap.forEach((data, eqId) => {
         const stock = equipmentStockMap[eqId] ?? 999;
         if (data.totalReq > stock) {
-          const conflictId = `${fecha}_${eqId}_${resA.horaInicio}_${resA.horaFin}`;
           const alreadyAdded = conflicts.some(c => c.fecha === fecha && c.equipmentId === eqId && isTimeOverlapping(timeToMinutes(c.horaInicio), timeToMinutes(c.horaFin), startA, endA));
           if (!alreadyAdded) {
             conflicts.push({

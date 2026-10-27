@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useDeferredValue } from 'react';
-import { Reservation, FilterState, BookingConflict } from '../types';
-import { detectAllConflicts, getConflictReservationIds, isReservationActiveForAvailability, doSpacesConflict } from '../utils/conflictDetector';
+import { Reservation, FilterState } from '../types';
+import { isReservationActiveForAvailability, doSpacesConflict } from '../utils/conflictDetector';
 import { getFuzzyMatchIds } from '../utils/fuzzySearch';
 import { summarizeConflicts } from '../utils/conflictSummary';
 import { getDeletedIds } from '../services/reservationService';
@@ -38,6 +38,9 @@ export const normalizeFilterBoundary = (dateStr: string, boundary: 'start' | 'en
 
 export const normalizeReservationDate = (dateStr: string): string => {
   if (!dateStr) return '';
+  if (dateStr.length === 10 && dateStr.charCodeAt(4) === 45 && dateStr.charCodeAt(7) === 45) {
+    return dateStr;
+  }
   const trimmed = dateStr.trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
     return trimmed.slice(0, 10);
@@ -94,7 +97,7 @@ export function useFilteredReservations(reservations: Reservation[], controlled?
         !deletedSet.has(r.id) &&
         r.estado !== 'eliminada' &&
         (r as any).eliminada !== true &&
-        isReservationActiveForAvailability(r)
+        isReservationActiveForAvailability(r, deletedSet)
     );
   }, [reservations, deletedSet]);
 
@@ -104,11 +107,10 @@ export function useFilteredReservations(reservations: Reservation[], controlled?
   const conflictReservationIds = conflictSummary.ids;
   const deferredSearch = useDeferredValue(filters.search);
 
-  // Filtered reservations list (precomputing search query and filter constants outside loop)
+  // Filtered reservations list: apply cheap O(1) structural filters first, then run Fuse.js only on the surviving subset
   const filteredReservations = useMemo(() => {
     const rawSearch = deferredSearch ? deferredSearch.trim() : '';
     const hasSearch = Boolean(rawSearch);
-    const fuzzyMatchIds = hasSearch ? getFuzzyMatchIds(activeReservations, rawSearch) : null;
 
     const filterEspacio = filters.espacio ? filters.espacio.toUpperCase() : null;
     const filterTipo = filters.tipoActividad || null;
@@ -124,38 +126,32 @@ export function useFilteredReservations(reservations: Reservation[], controlled?
       return [];
     }
 
-    return activeReservations.filter((r) => {
-      // Topamientos filter
-      if (filterTopamiento && !conflictReservationIds.has(r.id)) {
-        return false;
-      }
+    const hasStructuralFilters = Boolean(
+      filterTopamiento || filterRecurrentes || filterImportantes || filterDesde || filterHasta || filterEspacio || filterTipo
+    );
 
-      // Quick Toggles
-      if (filterRecurrentes && r.actividadRecurrente !== 'Sí') return false;
-      if (filterImportantes && r.importante !== 'Sí') return false;
+    const candidates = hasStructuralFilters
+      ? activeReservations.filter((r) => {
+          if (filterTopamiento && !conflictReservationIds.has(r.id)) return false;
+          if (filterRecurrentes && r.actividadRecurrente !== 'Sí') return false;
+          if (filterImportantes && r.importante !== 'Sí') return false;
+          if (filterDesde || filterHasta) {
+            const rFecha = normalizeReservationDate(r.fecha);
+            if (filterDesde && rFecha < filterDesde) return false;
+            if (filterHasta && rFecha > filterHasta) return false;
+          }
+          if (filterEspacio && !doSpacesConflict(r.espacio, filterEspacio)) return false;
+          if (filterTipo && r.tipoActividad !== filterTipo) return false;
+          return true;
+        })
+      : activeReservations;
 
-      // Date Range (fast normalized ISO comparisons)
-      const rFecha = normalizeReservationDate(r.fecha);
-      if (filterDesde && rFecha < filterDesde) return false;
-      if (filterHasta && rFecha > filterHasta) return false;
+    if (!hasSearch || candidates.length === 0) {
+      return candidates;
+    }
 
-      // Espacio (matches exact or constituent space so compound reservations remain visible)
-      if (filterEspacio && !doSpacesConflict(r.espacio, filterEspacio)) {
-        return false;
-      }
-
-      // Tipo Actividad
-      if (filterTipo && r.tipoActividad !== filterTipo) {
-        return false;
-      }
-
-      // Fuzzy Search with typo tolerance, accent insensitivity & clean RUT support
-      if (hasSearch && fuzzyMatchIds && !fuzzyMatchIds.has(r.id)) {
-        return false;
-      }
-
-      return true;
-    });
+    const fuzzyMatchIds = getFuzzyMatchIds(candidates, rawSearch);
+    return candidates.filter((r) => fuzzyMatchIds.has(r.id));
   }, [activeReservations, filters, deferredSearch, conflictReservationIds]);
 
   return {

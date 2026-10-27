@@ -1,10 +1,10 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Reservation, ViewMode } from "../types";
-import { getNextDayIsoString } from "./reservationIndex";
+import { timeToMinutes } from "./conflictDetector";
 
 export const isAgendaView = (view: ViewMode) =>
-  ["calendar", "daily", "timeline", "mobile"].includes(view);
+  view === "calendar" || view === "daily" || view === "timeline" || view === "mobile";
 
 /** Count unique reservations intersecting the visible period, including overnight bookings. No I/O. */
 export function getAgendaPeriodCount(
@@ -13,24 +13,34 @@ export function getAgendaPeriodCount(
   date: Date,
 ): number {
   if (!isAgendaView(view)) return reservations.length;
-  const period = format(date, view === "calendar" ? "yyyy-MM" : "yyyy-MM-dd");
-  const matches = (value?: string | null) => Boolean(value?.startsWith(period));
+  const isMonth = view === "calendar";
+  const period = format(date, isMonth ? "yyyy-MM" : "yyyy-MM-dd");
+  const prevBoundaryDate = format(
+    isMonth
+      ? new Date(date.getFullYear(), date.getMonth(), 0)
+      : new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1),
+    "yyyy-MM-dd",
+  );
   const ids = new Set<string>();
-  const minutes = (time: string) => {
-    const [hours, mins] = time.split(":").map(Number);
-    return (hours || 0) * 60 + (mins || 0);
-  };
-  for (const reservation of reservations) {
-    if (!reservation?.fecha) continue;
-    const overnight =
-      reservation.terminaDiaSiguiente ||
-      (minutes(reservation.horaFin) > 0 &&
-        minutes(reservation.horaFin) <= minutes(reservation.horaInicio));
-    if (
-      matches(reservation.fecha) ||
-      (overnight && matches(getNextDayIsoString(reservation.fecha)))
-    )
+
+  for (let i = 0; i < reservations.length; i++) {
+    const reservation = reservations[i];
+    const rawFecha = reservation?.fecha;
+    if (!rawFecha) continue;
+    const fecha = rawFecha.length === 10 ? rawFecha : rawFecha.trim();
+    if (fecha.startsWith(period)) {
       ids.add(reservation.id);
+      continue;
+    }
+    if (fecha === prevBoundaryDate) {
+      const endMin = timeToMinutes(reservation.horaFin);
+      const overnight =
+        Boolean(reservation.terminaDiaSiguiente) ||
+        (endMin > 0 && endMin <= timeToMinutes(reservation.horaInicio));
+      if (overnight) {
+        ids.add(reservation.id);
+      }
+    }
   }
   return ids.size;
 }

@@ -1,5 +1,5 @@
 import type { DistributionRequest, DistributionSnapshot, DistributionResult, DistributionProposal, Reservation, RoomSetupType } from '../types';
-import { doSpacesConflict, findMaintenanceBlockConflicts, getTimeIntervalsForReservation, isReservationActiveForAvailability, isTimeOverlapping, timeToMinutes, formatMinutesToTime, normalizeSpace } from './conflictDetector';
+import { doSpacesConflict, getConstituentSpaces, getTimeIntervalsForReservation, isReservationActiveForAvailability, isTimeOverlapping, timeToMinutes, formatMinutesToTime, normalizeSpace } from './conflictDetector';
 import { findEquipmentShortage, normalizeEquipmentName } from './equipmentAllocation';
 import { REGULAR_LOAN_START_MINUTES, REGULAR_LOAN_END_MINUTES } from './validationUtils';
 import { DateStringSchema } from '../schemas/reservationSchema';
@@ -184,8 +184,6 @@ export function buildVacateSpacesPlan(
   let bestResult = planRoomDistribution(baseRequests, snapshot);
   let cascadeCount = 0;
 
-  // If some displaced activity could not be placed and cascade is allowed, include movable
-  // reservations from destination rooms in the same window so the solver can chain-relocate them.
   if (options.allowCascade !== false && bestResult.unresolved.length > 0 && baseRequests.length < MAX_DISTRIBUTION_ACTIVITIES) {
     const alreadyIncluded = new Set(baseRequests.flatMap(r => r.source ? [r.source.id] : []));
     const cascadeCandidates = activeDayRows
@@ -204,7 +202,6 @@ export function buildVacateSpacesPlan(
       if (expanded.length >= MAX_DISTRIBUTION_ACTIVITIES) break;
       expanded.push({
         ...toRelocationRequest(candidate),
-        // Allow cascade candidates to stay in their room or move to any non-vacated room
         allowedSpaces: allCompatibleCatalogSpaces,
         preferredSpace: candidate.espacio,
       });
@@ -246,8 +243,55 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
   if (new Set(sourceIds).size !== sourceIds.length) return fail('Una reserva solo puede seleccionarse una vez.');
   if (requests.some(r => r.source && (r.source.fecha !== snapshot.fecha || !snapshot.reservations.some(row => row.id === r.source!.id)))) return fail('Recarga las reservas seleccionadas de esta jornada.');
   const base = snapshot.reservations.filter(r => !sourceIds.includes(r.id) && isReservationActiveForAvailability(r, new Set()));
+
+  // Pre-index base occupancy intervals and maintenance block intervals on snapshot.fecha per catalog space
+  type NumericInterval = { startMin: number; endMin: number };
+  const baseRowsWithDateIntervals = base.flatMap(row => {
+    const slots = getTimeIntervalsForReservation(row).filter(s => s.date === snapshot.fecha);
+    return slots.length ? [{ row, slots }] : [];
+  });
+  const activeDateBlocks = snapshot.blocks.filter(
+    b => b.activo && snapshot.fecha >= b.fechaInicio && snapshot.fecha <= b.fechaFin
+  );
+
+  const baseIntervalsBySpace = new Map<string, NumericInterval[]>();
+  const blockIntervalsBySpace = new Map<string, NumericInterval[]>();
+  const spaceSearchTextCache = new Map<string, string>();
+
+  for (const space of snapshot.spaces) {
+    const normSpace = normalizeSpace(space.name);
+    const spaceConstituents = getConstituentSpaces(space.name);
+    spaceSearchTextCache.set(space.name, normalizeEquipmentName(`${space.name} ${space.category} ${space.description}`));
+
+    const occupied: NumericInterval[] = [];
+    for (const { row, slots } of baseRowsWithDateIntervals) {
+      if (doSpacesConflict(space.name, row.espacio)) {
+        for (const s of slots) occupied.push({ startMin: s.startMin, endMin: s.endMin });
+      }
+    }
+    baseIntervalsBySpace.set(normSpace, occupied);
+
+    const blocked: NumericInterval[] = [];
+    for (const block of activeDateBlocks) {
+      const blockSpaceNorm = normalizeSpace(block.espacio);
+      let matches = normSpace === blockSpaceNorm;
+      if (!matches && block.bloquearSubEspacios) {
+        matches = spaceConstituents.some(c => c === blockSpaceNorm || c.includes(blockSpaceNorm) || blockSpaceNorm.includes(c));
+      } else if (!matches) {
+        matches = spaceConstituents.includes(blockSpaceNorm);
+      }
+      if (matches) {
+        blocked.push({
+          startMin: block.todoElDia ? 0 : timeToMinutes(block.horaInicio || '08:00'),
+          endMin: block.todoElDia ? 1440 : timeToMinutes(block.horaFin || '22:30'),
+        });
+      }
+    }
+    blockIntervalsBySpace.set(normSpace, blocked);
+  }
+
   const reasons = new Map<string, string>();
-  type Candidate = { proposal: DistributionProposal; cost: number };
+  type Candidate = { proposal: DistributionProposal; cost: number; normSpace: string; isSingleRoom: boolean; startMin: number; endMin: number };
   const choices = requests.map(request => {
     const candidates: Candidate[] = [];
     const inputError = validateDistributionRequestInput(request);
@@ -278,30 +322,37 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
     const hasEquipment = request.equipment.length > 0;
     const priorityList = request.prioritySpaces?.filter(Boolean) || [];
     for (const space of capacitySpaces) {
-      const spaceText = normalizeEquipmentName(`${space.name} ${space.category} ${space.description}`);
+      const normSpace = normalizeSpace(space.name);
+      const isSingleRoom = getConstituentSpaces(space.name).length === 1;
+      const baseIntervals = baseIntervalsBySpace.get(normSpace) || [];
+      const blockIntervals = blockIntervalsBySpace.get(normSpace) || [];
+      const spaceText = spaceSearchTextCache.get(space.name) || '';
       const matchesActivity = Boolean(criteria.spacePattern?.test(spaceText));
-      const changedRoom = Boolean(request.source && normalizeSpace(space.name) !== normalizeSpace(request.source.espacio));
+      const changedRoom = Boolean(request.source && normSpace !== normalizeSpace(request.source.espacio));
       const priorityIndex = priorityList.length
-        ? priorityList.findIndex(name => normalizeSpace(name) === normalizeSpace(space.name))
+        ? priorityList.findIndex(name => normalizeSpace(name) === normSpace)
         : -1;
       for (const time of starts) {
+        const endSlot = time + duration;
+        if (baseIntervals.some(iv => time < iv.endMin && iv.startMin < endSlot)) { hadOverlap = true; continue; }
+        if (blockIntervals.some(iv => time < iv.endMin && iv.startMin < endSlot)) { hadMaintenance = true; continue; }
+        const horaInicio = formatMinutesToTime(time);
+        const horaFin = formatMinutesToTime(endSlot);
         const reservation: Reservation = {
           ...request.source, id: request.source?.id || request.id, fecha: snapshot.fecha,
           descripcion: request.descripcion.trim(), responsable: request.responsable.trim(), tipoActividad: request.tipoActividad,
           cantidadParticipantes: request.cantidadParticipantes, actividadRecurrente: request.source?.actividadRecurrente || 'No',
           estado: request.source?.estado || 'activa', espacio: space.name,
-          horaInicio: formatMinutesToTime(time), horaFin: formatMinutesToTime(time + duration), terminaDiaSiguiente: false,
+          horaInicio, horaFin, terminaDiaSiguiente: false,
           equipamientoSolicitado: request.equipment.map(item => ({ ...item })),
           montaje: { tipo: request.montaje, instrucciones: SETUP_INSTRUCTIONS[request.montaje] },
           ...(request.holidayAuthorization ? { claveAutorizacionFeriado: request.holidayAuthorization } : {}),
         };
-        if (base.some(row => overlaps(reservation, row))) { hadOverlap = true; continue; }
-        if (findMaintenanceBlockConflicts([reservation], snapshot.blocks).length) { hadMaintenance = true; continue; }
         if (hasEquipment) {
           const shortage = findEquipmentShortage([...base, reservation], snapshot.equipment, new Set([reservation.id]));
           if (shortage) { lastShortage = shortage; continue; }
         }
-        const changedTime = Boolean(request.source && (request.source.horaInicio !== reservation.horaInicio || request.source.horaFin !== reservation.horaFin));
+        const changedTime = Boolean(request.source && (request.source.horaInicio !== horaInicio || request.source.horaFin !== horaFin));
         const proposalReasons = [
           criteria.label,
           ...(priorityIndex >= 0 ? [`Prioridad #${priorityIndex + 1} en el orden de espacios elegido.`] : []),
@@ -311,13 +362,20 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
         ];
         const preferencePenalty = priorityList.length
           ? (priorityIndex >= 0 ? priorityIndex * 100_000_000_000 : 900_000_000_000)
-          : (request.preferredSpace && normalizeSpace(space.name) !== normalizeSpace(request.preferredSpace) ? 1_000_000_000_000 : 0);
+          : (request.preferredSpace && normSpace !== normalizeSpace(request.preferredSpace) ? 1_000_000_000_000 : 0);
         // Lexicographic totals: priority/preferences, then activity match, then existing moves, then unused capacity.
         const cost = preferencePenalty +
           (criteria.spacePattern && !matchesActivity ? 10_000_000_000 : 0) +
           (changedRoom || changedTime ? 10_000_000 : 0) +
           (space.capacity === undefined ? 100_000 : Math.min(1_000, space.capacity - request.cantidadParticipantes)) + (time - start) / 1440;
-        candidates.push({ proposal: { requestId: request.id, reservation, reasons: proposalReasons }, cost });
+        candidates.push({
+          proposal: { requestId: request.id, reservation, reasons: proposalReasons },
+          cost,
+          normSpace,
+          isSingleRoom,
+          startMin: time,
+          endMin: endSlot,
+        });
       }
     }
     candidates.sort((a, b) => a.cost - b.cost || a.proposal.reservation.espacio.localeCompare(b.proposal.reservation.espacio) || a.proposal.reservation.horaInicio.localeCompare(b.proposal.reservation.horaInicio));
@@ -340,8 +398,13 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
   }
 
   let states = 0, limit = false, best: DistributionProposal[] = [], bestCost = Infinity;
-  const picked: DistributionProposal[] = [];
+  const picked: Candidate[] = [];
   const retained: Reservation[] = [];
+  function candidatesConflict(a: Candidate, b: Candidate): boolean {
+    if (a.startMin >= b.endMin || b.startMin >= a.endMin) return false;
+    if (a.isSingleRoom && b.isSingleRoom) return a.normSpace === b.normSpace;
+    return doSpacesConflict(a.proposal.reservation.espacio, b.proposal.reservation.espacio);
+  }
   function visit(index: number, cost: number) {
     if (states++ >= maxStates) { limit = true; return; }
     const remaining = choices.length - index;
@@ -350,32 +413,36 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
       if (!allRemainingHaveCandidates[index] || cost + minRemainingCost[index] >= bestCost) return;
     }
     if (index === choices.length) {
-      if (picked.length > best.length || picked.length === best.length && cost < bestCost) { best = [...picked]; bestCost = cost; }
+      if (picked.length > best.length || picked.length === best.length && cost < bestCost) {
+        best = picked.map(c => c.proposal);
+        bestCost = cost;
+      }
       return;
     }
     const { request, candidates } = choices[index];
-    for (const { proposal, cost: candidateCost } of candidates) {
+    for (const cand of candidates) {
       if (limit) break;
-      if (picked.some(p => overlaps(proposal.reservation, p.reservation)) || retained.some(r => overlaps(proposal.reservation, r))) {
+      const { proposal, cost: candidateCost } = cand;
+      if (picked.some(p => candidatesConflict(cand, p)) || retained.some(r => overlaps(proposal.reservation, r))) {
         if (++states >= maxStates) limit = true;
         continue;
       }
       if (proposal.reservation.equipamientoSolicitado?.length) {
-        if (findEquipmentShortage([...base, ...retained, ...picked.map(p => p.reservation), proposal.reservation], snapshot.equipment, new Set([proposal.reservation.id]))) {
+        if (findEquipmentShortage([...base, ...retained, ...picked.map(p => p.proposal.reservation), proposal.reservation], snapshot.equipment, new Set([proposal.reservation.id]))) {
           if (++states >= maxStates) limit = true;
           continue;
         }
       }
-      picked.push(proposal);
+      picked.push(cand);
       visit(index + 1, cost + candidateCost);
       picked.pop();
     }
     if (!limit) {
       const source = request.source;
       if (source) {
-        if (picked.some(p => overlaps(p.reservation, source))) return;
-        if (source.equipamientoSolicitado?.length && picked.some(p => p.reservation.equipamientoSolicitado?.length)) {
-          if (findEquipmentShortage([...base, ...retained, source, ...picked.map(p => p.reservation)], snapshot.equipment, new Set(picked.map(p => p.reservation.id)))) return;
+        if (picked.some(p => overlaps(p.proposal.reservation, source))) return;
+        if (source.equipamientoSolicitado?.length && picked.some(p => p.proposal.reservation.equipamientoSolicitado?.length)) {
+          if (findEquipmentShortage([...base, ...retained, source, ...picked.map(p => p.proposal.reservation)], snapshot.equipment, new Set(picked.map(p => p.proposal.reservation.id)))) return;
         }
         retained.push(source);
         visit(index + 1, cost);
