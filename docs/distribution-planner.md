@@ -2,6 +2,8 @@
 
 En **Espacios → Planificar distribución**, elige una jornada desde la fecha actual y agrega hasta 12 actividades nuevas o reservas existentes. Define participantes, salas permitidas, preferencia de sala, horario fijo o franja flexible, montaje y equipamiento móvil.
 
+En PC, abre **Mostrar menú lateral** si el menú está oculto y selecciona **Espacios**. En móvil, entra por **Más → Espacios**. No requiere activar una clave de IA; el botón aparece en la versión publicada que incluya esta actualización.
+
 **Calcular distribución** consulta la agenda y los catálogos confirmados del servidor. Las reglas locales reconocen términos en español y buscan una combinación conjunta de salas y horarios. Los inicios flexibles se exploran cada 15 minutos desde el comienzo de la franja. El máximo es de 50.000 estados: si se alcanza, el panel lo indica y no afirma que las actividades pendientes sean imposibles de ubicar.
 
 Las reservas no seleccionadas continúan ocupando sus salas y recursos. Para fijar una sala, márcala como la única permitida. Los aforos desconocidos se señalan para revisión. Los montajes son esquemas orientativos, sin escala, dimensiones ni mobiliario fijo inferido; las cantidades solicitadas corresponden al inventario móvil registrado.

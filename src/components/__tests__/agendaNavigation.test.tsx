@@ -49,6 +49,24 @@ it("keeps mobile sections in a modal and closes it after choosing a section", ()
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 
+it("opens the space directory from the desktop menu and marks its active section", () => {
+  const change = vi.fn();
+  const { rerender } = render(<Navbar {...props} isSidebarHidden={false} onViewChange={change} />);
+  fireEvent.click(within(screen.getByLabelText("Navegación principal")).getByRole("button", { name: "Espacios" }));
+  expect(change).toHaveBeenCalledWith("spaces");
+  rerender(<Navbar {...props} currentView="spaces" isSidebarHidden={false} onViewChange={change} />);
+  expect(within(screen.getByLabelText("Navegación principal")).getByRole("button", { name: "Espacios" }).getAttribute("aria-current")).toBe("page");
+});
+
+it("opens the space directory from the mobile Más menu and closes the drawer", () => {
+  const change = vi.fn();
+  render(<Navbar {...props} onViewChange={change} />);
+  fireEvent.click(screen.getByRole("button", { name: "Más" }));
+  fireEvent.click(within(screen.getByRole("dialog", { name: "Navegación y herramientas" })).getByRole("button", { name: "Espacios" }));
+  expect(change).toHaveBeenCalledWith("spaces");
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
 it("exposes bulk deletion only inside tools and only when the parent authorizes it", () => {
   const remove = vi.fn();
   const { rerender } = render(<Navbar {...props} onDeleteDay={remove} />);

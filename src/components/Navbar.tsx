@@ -180,6 +180,13 @@ const NavbarComponent: React.FC<NavbarProps> = ({
       active: isAgenda,
     },
     {
+      view: "spaces" as ViewMode,
+      id: "nav-tab-spaces",
+      label: "Espacios",
+      Icon: Building2,
+      active: currentView === "spaces",
+    },
+    {
       view: "ratings" as ViewMode,
       id: "nav-tab-ratings",
       label: "Calificaciones",
