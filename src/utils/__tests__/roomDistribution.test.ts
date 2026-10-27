@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DistributionRequest, DistributionSnapshot, Reservation, SpaceInfo } from '../../types';
-import { detectDistributionCriteria, newDistributionRequest, planRoomDistribution } from '../roomDistribution';
+import { buildVacateSpacesPlan, detectDistributionCriteria, newDistributionRequest, planRoomDistribution, validateDistributionRequestInput } from '../roomDistribution';
 import { findEquipmentShortage } from '../equipmentAllocation';
 
 const fecha = '2099-10-06';
@@ -53,6 +53,48 @@ describe('room distribution', () => {
     const result = planRoomDistribution([request('a', { cantidadParticipantes: 40 })], snapshot({ spaces: [room('SALA NUEVA')] }));
     expect(result.proposals[0].reasons.join(' ')).toMatch(/Aforo sin registrar/);
   });
+  it('does not blame capacity when suitable rooms are occupied and a smaller room appears last in the catalog', () => {
+    const catalogWithSmallLast = [...spaces, room('BOX 1', 8)];
+    const occupied = [booking('occ-2', { espacio: 'SALA 2' }), booking('occ-3', { espacio: 'SALA 3' })];
+    const result = planRoomDistribution([request('a', { cantidadParticipantes: 15 })], snapshot({ spaces: catalogWithSmallLast, reservations: occupied }));
+    expect(result.unresolved).toHaveLength(1);
+    expect(result.unresolved[0].reason).toMatch(/ocupadas/);
+    expect(result.unresolved[0].reason).not.toMatch(/no tienen aforo suficiente/);
+  });
+  it('validates missing responsible and invalid flexible duration before proposing an uncommitable plan', () => {
+    const missingResponsible = planRoomDistribution([request('a', { responsable: ' ' })], snapshot());
+    expect(missingResponsible.proposals).toHaveLength(0);
+    expect(missingResponsible.unresolved[0].reason).toMatch(/responsable/i);
+    expect(validateDistributionRequestInput(request('flex', { fixedTime: false, startTime: '10:00', endTime: '11:00', durationMinutes: 90 }))).toMatch(/supera la franja/);
+  });
+  it('vacates selected rooms in a time window following the specified space order and cascade-relocates when needed', () => {
+    const multiSpaces = [room('SALA 2', 20), room('SALA 3', 30), room('SALA 4', 20), room('SALA 6', 50)];
+    const r1 = booking('r1', { espacio: 'SALA 2', horaInicio: '10:00', horaFin: '11:00', cantidadParticipantes: 18 });
+    const r2 = booking('r2', { espacio: 'SALA 2', horaInicio: '16:00', horaFin: '17:00', cantidadParticipantes: 15 });
+    // User wants to vacate SALA 2 between 09:00 and 12:00 and prefers SALA 6 over SALA 4/3
+    const orderedPlan = buildVacateSpacesPlan(
+      snapshot({ spaces: multiSpaces, reservations: [r1, r2] }),
+      { spacesToVacate: ['SALA 2'], startTime: '09:00', endTime: '12:00', prioritySpaces: ['SALA 6', 'SALA 3'] }
+    );
+    expect(orderedPlan.displacedCount).toBe(1);
+    expect(orderedPlan.result.unresolved).toEqual([]);
+    expect(orderedPlan.result.proposals[0].reservation.espacio).toBe('SALA 6');
+
+    // Cascade scenario: SALA 2 needs 25 people moved (only fits in SALA 3 cap 30),
+    // while SALA 3 currently has a 10-person booking that can move to SALA 4 (cap 20).
+    const bigInSala2 = booking('big', { espacio: 'SALA 2', horaInicio: '10:00', horaFin: '11:00', cantidadParticipantes: 25 });
+    const smallInSala3 = booking('small', { espacio: 'SALA 3', horaInicio: '10:00', horaFin: '11:00', cantidadParticipantes: 10 });
+    const cascadeSpaces = [room('SALA 2', 30), room('SALA 3', 30), room('SALA 4', 15)];
+    const cascadePlan = buildVacateSpacesPlan(
+      snapshot({ spaces: cascadeSpaces, reservations: [bigInSala2, smallInSala3] }),
+      { spacesToVacate: ['SALA 2'], startTime: '09:30', endTime: '11:30', allowCascade: true }
+    );
+    expect(cascadePlan.result.unresolved).toEqual([]);
+    expect(cascadePlan.cascadeCount).toBe(1);
+    const byId = Object.fromEntries(cascadePlan.result.proposals.map(p => [p.requestId, p.reservation.espacio]));
+    expect(byId.big).toBe('SALA 3');
+    expect(byId.small).toBe('SALA 4');
+  });
   it('checks resources across the final agenda and searches a later slot when necessary', () => {
     const result = planRoomDistribution([request('a', { equipment: resource }), request('b', { equipment: resource, fixedTime: false, startTime: '10:00', endTime: '12:00' })], snapshot());
     expect(result.unresolved).toEqual([]);
@@ -64,6 +106,8 @@ describe('room distribution', () => {
     expect(detectDistributionCriteria('Capacitación con presentación').setup).toBe('auditorio');
     expect(detectDistributionCriteria('Clases de inglés').setup).toBe('aula');
     expect(detectDistributionCriteria('DANZA').setup).toBe('despejado');
+    expect(detectDistributionCriteria('Ensayo de guitarra y coro').setup).toBe('circulo');
+    expect(detectDistributionCriteria('Reunión Club Adulto Mayor CAM').setup).toBe('mesas');
     for (const montaje of ['auditorio', 'aula', 'u', 'circulo', 'mesas', 'despejado'] as const) {
       expect(planRoomDistribution([request(montaje, { montaje })], snapshot()).proposals[0].reservation.montaje?.tipo).toBe(montaje);
     }

@@ -85,6 +85,7 @@ export interface DistributionRequest {
   startTime: string;
   endTime: string;
   allowedSpaces: string[];
+  prioritySpaces?: string[];
   preferredSpace?: string;
   montaje: RoomSetupType;
   equipment: ReservationEquipmentRequest[];

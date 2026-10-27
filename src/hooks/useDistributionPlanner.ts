@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DistributionProposal, DistributionRequest, DistributionResult, DistributionSnapshot, Reservation } from '../types';
 import { getChileLocalDateString } from '../utils/dateUtils';
-import { newDistributionRequest, planRoomDistribution } from '../utils/roomDistribution';
+import { MAX_DISTRIBUTION_ACTIVITIES, buildVacateSpacesPlan, newDistributionRequest, planRoomDistribution, type VacateSpacesOptions } from '../utils/roomDistribution';
 import { commitDistribution, loadDistributionSnapshot, validateDistributionProposals } from '../services/distributionService';
 import { ReservationWriteError } from '../services/reservationWriter';
 import { userCanCreateReservations, userCanEditReservations, type AuthUser } from '../services/authService';
@@ -12,7 +12,7 @@ interface Draft { fecha: string; requests: DistributionRequest[]; pending: Pendi
 function readDraft(key: string): Draft {
   try {
     const draft = JSON.parse(localStorage.getItem(key) || 'null');
-    if (draft && Array.isArray(draft.requests) && draft.requests.length <= 12 && /^\d{4}-\d{2}-\d{2}$/.test(draft.fecha) && (draft.fecha >= getChileLocalDateString() || draft.pending)) return draft;
+    if (draft && Array.isArray(draft.requests) && draft.requests.length <= MAX_DISTRIBUTION_ACTIVITIES && /^\d{4}-\d{2}-\d{2}$/.test(draft.fecha) && (draft.fecha >= getChileLocalDateString() || draft.pending)) return draft;
   } catch { /* Storage can be disabled; the in-memory draft remains usable. */ }
   return { fecha: getChileLocalDateString(), requests: [], pending: null };
 }
@@ -78,6 +78,32 @@ export function useDistributionPlanner(user: AuthUser, onCommitted: (rows: Reser
     } catch (error) { setError((error as Error).message); }
     finally { setBusy(false); }
   }
+  async function vacateSpaces(options: VacateSpacesOptions) {
+    if (busy || pending) return;
+    if (!options.spacesToVacate.length) {
+      setError('Selecciona al menos una sala que necesites desocupar.');
+      return;
+    }
+    setBusy(true); setError(''); setResult(null); setSuccess('');
+    try {
+      const fresh = await loadDistributionSnapshot(fecha);
+      setSnapshot(fresh);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      const plan = buildVacateSpacesPlan(fresh, options);
+      if (!plan.requests.length) {
+        setRequests([]);
+        setSuccess(`Las salas seleccionadas (${options.spacesToVacate.join(', ')}) ya están libres entre ${options.startTime} y ${options.endTime}.`);
+        return;
+      }
+      setRequests(plan.requests);
+      setResult(plan.result);
+      if (plan.result.unresolved.length === 0) {
+        const cascadeNote = plan.cascadeCount > 0 ? ` (incluyendo ${plan.cascadeCount} reacomodo${plan.cascadeCount === 1 ? '' : 's'} en cadena)` : '';
+        setSuccess(`Se calcularon automáticamente los nuevos espacios para liberar ${options.spacesToVacate.join(', ')}${cascadeNote}. Revisa la tabla y confirma con «Aplicar todo el plan».`);
+      }
+    } catch (error) { setError((error as Error).message); }
+    finally { setBusy(false); }
+  }
   async function apply() {
     if (busy || !canApply || (!pending && (!result || result.unresolved.length || !result.proposals.length))) return;
     setBusy(true); setError('');
@@ -103,11 +129,38 @@ export function useDistributionPlanner(user: AuthUser, onCommitted: (rows: Reser
       setError((error as Error).message);
     } finally { setBusy(false); }
   }
-  const addNew = () => { if (canCreate && requests.length < 12) updateRequests([...requests, newDistributionRequest(`DIST_${crypto.randomUUID()}`)]); };
+  const addNew = () => { if (canCreate && requests.length < MAX_DISTRIBUTION_ACTIVITIES) updateRequests([...requests, newDistributionRequest(`DIST_${crypto.randomUUID()}`)]); };
   const addExisting = (id: string) => {
     const source = snapshot?.reservations.find(row => row.id === id);
-    if (source && canEdit && requests.length < 12 && !requests.some(r => r.source?.id === id)) updateRequests([...requests, newDistributionRequest(id, source)]);
+    if (source && canEdit && requests.length < MAX_DISTRIBUTION_ACTIVITIES && !requests.some(r => r.source?.id === id)) updateRequests([...requests, newDistributionRequest(id, source)]);
+  };
+  const addAllExisting = (rows: Reservation[]) => {
+    if (!canEdit || requests.length >= MAX_DISTRIBUTION_ACTIVITIES) return;
+    const availableSlots = MAX_DISTRIBUTION_ACTIVITIES - requests.length;
+    const toAdd = rows
+      .filter(row => !requests.some(r => r.source?.id === row.id))
+      .slice(0, availableSlots)
+      .map(row => newDistributionRequest(row.id, row));
+    if (toAdd.length) updateRequests([...requests, ...toAdd]);
+  };
+  const duplicateRequest = (id: string) => {
+    if (!canCreate || requests.length >= MAX_DISTRIBUTION_ACTIVITIES) return;
+    const target = requests.find(r => r.id === id);
+    if (!target) return;
+    const copy: DistributionRequest = {
+      ...target,
+      id: `DIST_${crypto.randomUUID()}`,
+      source: undefined,
+      allowedSpaces: [...target.allowedSpaces],
+      prioritySpaces: target.prioritySpaces ? [...target.prioritySpaces] : [],
+      equipment: target.equipment.map(item => ({ ...item })),
+    };
+    updateRequests([...requests, copy]);
+  };
+  const clearDraft = () => {
+    if (busy || pending) return;
+    updateRequests([]);
   };
   return { fecha, requests, snapshot, result, pending, busy, loading, error, success, storageWarning, canCreate, canEdit, canApply,
-    changeDate, updateRequests, calculate, apply, addNew, addExisting };
+    changeDate, updateRequests, calculate, vacateSpaces, apply, addNew, addExisting, addAllExisting, duplicateRequest, clearDraft };
 }
