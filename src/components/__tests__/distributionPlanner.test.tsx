@@ -23,6 +23,7 @@ beforeEach(() => {
 afterEach(cleanup);
 async function addActivity(description = 'Taller de lectura') {
   await screen.findByRole('button', { name: 'Agregar actividad nueva' });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Agregar actividad nueva' }).closest('fieldset[disabled]')).toBeNull());
   fireEvent.click(screen.getByRole('button', { name: 'Agregar actividad nueva' }));
   const descriptions = screen.getAllByLabelText('Actividad o necesidad');
   fireEvent.change(descriptions.at(-1)!, { target: { value: description } });
@@ -91,4 +92,33 @@ it('honors revoked permissions and scopes persisted drafts to each account', asy
   render(<DistributionPlannerModal user={{ ...user, username: 'otro-equipo' }} onClose={vi.fn()} onCommitted={vi.fn()} />);
   await screen.findByRole('button', { name: 'Agregar actividad nueva' });
   expect(screen.queryByLabelText('Actividad o necesidad')).toBeNull();
+});
+
+it('requires explicit approval to activate recommended rooms and saves the approved IDs with the plan', async () => {
+  const data = { ...snapshot, spaces: [{ ...snapshot.spaces[0], capacity: 5 }, { ...snapshot.spaces[1], capacity: 40, activo: false }] };
+  api.load.mockResolvedValue(data);
+  render(<DistributionPlannerModal user={user} onClose={vi.fn()} onCommitted={vi.fn()} />);
+  await addActivity();
+  fireEvent.change(screen.getByLabelText('Participantes'), { target: { value: '30' } });
+  await calculate();
+  expect(screen.getByLabelText('Recomendaciones de activación')).toBeTruthy();
+  expect(api.commit).not.toHaveBeenCalled();
+  const apply = screen.getByRole('button', { name: 'Activar y aplicar todo el plan' }) as HTMLButtonElement;
+  expect(apply.disabled).toBe(true);
+  fireEvent.click(screen.getByRole('checkbox', { name: /Confirmo activar los espacios recomendados/ }));
+  fireEvent.click(apply);
+  await waitFor(() => expect(api.commit).toHaveBeenCalledOnce());
+  expect(api.commit.mock.calls[0][4]).toEqual(['SALA 3']);
+  expect(data.spaces[1].activo).toBe(false);
+});
+
+it('allows reception to review activation recommendations but reserves activation for managers', async () => {
+  api.load.mockResolvedValue({ ...snapshot, spaces: [{ ...snapshot.spaces[0], capacity: 5 }, { ...snapshot.spaces[1], capacity: 40, activo: false }] });
+  render(<DistributionPlannerModal user={{ ...user, role: 'Recepción' }} onClose={vi.fn()} onCommitted={vi.fn()} />);
+  await addActivity();
+  fireEvent.change(screen.getByLabelText('Participantes'), { target: { value: '30' } });
+  await calculate();
+  expect((screen.getByRole('checkbox', { name: /Confirmo activar los espacios recomendados/ }) as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByRole('button', { name: 'Activar y aplicar todo el plan' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(api.commit).not.toHaveBeenCalled();
 });

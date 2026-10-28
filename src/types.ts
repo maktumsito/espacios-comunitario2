@@ -101,12 +101,14 @@ export interface DistributionSnapshot {
 }
 
 export interface DistributionProposal {
+  requiresActivation?: boolean;
   requestId: string;
   reservation: Reservation;
   reasons: string[];
 }
 
 export interface DistributionResult {
+  activationRecommendations?: { spaceId: string; name: string; requestIds: string[] }[];
   proposals: DistributionProposal[];
   unresolved: { requestId: string; reason: string }[];
   searchLimitReached: boolean;
@@ -197,6 +199,7 @@ export interface AuditFieldDiff {
 }
 
 export interface AuditChangeLogEntry {
+  activatedSpaces?: { id: string; name: string }[];
   id: string;
   timestamp: string; // ISO string
   user: string; // Username / author name

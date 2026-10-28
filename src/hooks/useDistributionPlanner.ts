@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DistributionProposal, DistributionRequest, DistributionResult, DistributionSnapshot, Reservation } from '../types';
 import { getChileLocalDateString } from '../utils/dateUtils';
-import { MAX_DISTRIBUTION_ACTIVITIES, buildVacateSpacesPlan, newDistributionRequest, planRoomDistribution, type VacateSpacesOptions } from '../utils/roomDistribution';
+import { MAX_DISTRIBUTION_ACTIVITIES, analyzeRoomDistribution, buildVacateSpacesPlan, newDistributionRequest, type VacateSpacesOptions } from '../utils/roomDistribution';
 import { commitDistribution, loadDistributionSnapshot, validateDistributionProposals } from '../services/distributionService';
 import { ReservationWriteError } from '../services/reservationWriter';
-import { userCanCreateReservations, userCanEditReservations, type AuthUser } from '../services/authService';
+import { isCoordinatorOrAdmin, userCanCreateReservations, userCanEditReservations, type AuthUser } from '../services/authService';
 import { isReservationActiveForAvailability } from '../utils/conflictDetector';
 
-interface PendingDistribution { operationId: string; fecha: string; proposals: DistributionProposal[]; expectedVersions: Record<string, number> }
+interface PendingDistribution { operationId: string; fecha: string; proposals: DistributionProposal[]; expectedVersions: Record<string, number>; activateSpaceIds?: string[] }
 interface Draft { fecha: string; requests: DistributionRequest[]; pending: PendingDistribution | null }
 function readDraft(key: string): Draft {
   try {
@@ -32,7 +32,9 @@ export function useDistributionPlanner(user: AuthUser, onCommitted: (rows: Reser
   const [storageWarning, setStorageWarning] = useState('');
   const sequence = useRef(0);
   const canCreate = userCanCreateReservations(user), canEdit = userCanEditReservations(user);
-  const canApply = requests.every(r => r.source ? canEdit : canCreate);
+  const needsActivation = Boolean(pending?.activateSpaceIds?.length || result?.activationRecommendations?.length);
+  const canActivate = isCoordinatorOrAdmin(user);
+  const canApply = requests.every(r => r.source ? canEdit : canCreate) && (!needsActivation || canActivate);
 
   useEffect(() => {
     try { localStorage.setItem(key, JSON.stringify({ fecha, requests, pending })); setStorageWarning(''); }
@@ -74,7 +76,7 @@ export function useDistributionPlanner(user: AuthUser, onCommitted: (rows: Reser
       setRequests(refreshed);
       // Allow the loading state to paint before the bounded synchronous calculation.
       await new Promise(resolve => setTimeout(resolve, 0));
-      setResult(planRoomDistribution(refreshed, fresh));
+      setResult(analyzeRoomDistribution(refreshed, fresh));
     } catch (error) { setError((error as Error).message); }
     finally { setBusy(false); }
   }
@@ -104,21 +106,25 @@ export function useDistributionPlanner(user: AuthUser, onCommitted: (rows: Reser
     } catch (error) { setError((error as Error).message); }
     finally { setBusy(false); }
   }
-  async function apply() {
+  async function apply(approveActivation = false) {
     if (busy || !canApply || (!pending && (!result || result.unresolved.length || !result.proposals.length))) return;
+    if (!pending && needsActivation && approveActivation !== true) {
+      setError('Confirma la activación de los espacios recomendados antes de aplicar el plan.'); return;
+    }
     setBusy(true); setError('');
     let operation = pending;
     try {
       if (!operation) {
         validateDistributionProposals(result!.proposals);
         operation = { operationId: crypto.randomUUID(), fecha, proposals: result!.proposals,
-          expectedVersions: Object.fromEntries(requests.map(r => [r.source?.id || r.id, r.source ? r.source.version || 0 : -1])) };
+          expectedVersions: Object.fromEntries(requests.map(r => [r.source?.id || r.id, r.source ? r.source.version || 0 : -1])),
+          ...(result!.activationRecommendations?.length ? { activateSpaceIds: result!.activationRecommendations.map(space => space.spaceId) } : {}) };
         // Persist the immutable payload before contacting the server. The reservation
         // operation journal also protects retries when this small draft cannot persist.
         setPending(operation);
         try { localStorage.setItem(key, JSON.stringify({ fecha, requests, pending: operation })); } catch { /* Journal handles recovery. */ }
       }
-      const receipt = await commitDistribution(operation.fecha, operation.proposals, operation.expectedVersions, operation.operationId);
+      const receipt = await commitDistribution(operation.fecha, operation.proposals, operation.expectedVersions, operation.operationId, operation.activateSpaceIds || []);
       if (receipt.pendingIds.length) throw new Error('La confirmación sigue pendiente. Reintenta sin modificar la propuesta.');
       setPending(null); setResult(null); setRequests([]);
       setSuccess(`Distribución confirmada: ${receipt.confirmedIds.length} actividades guardadas. Los demás equipos recibirán la actualización.`);
@@ -161,6 +167,6 @@ export function useDistributionPlanner(user: AuthUser, onCommitted: (rows: Reser
     if (busy || pending) return;
     updateRequests([]);
   };
-  return { fecha, requests, snapshot, result, pending, busy, loading, error, success, storageWarning, canCreate, canEdit, canApply,
+  return { fecha, requests, snapshot, result, pending, busy, loading, error, success, storageWarning, canCreate, canEdit, canApply, canActivate, needsActivation,
     changeDate, updateRequests, calculate, vacateSpaces, apply, addNew, addExisting, addAllExisting, duplicateRequest, clearDraft };
 }

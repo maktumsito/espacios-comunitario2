@@ -49,6 +49,7 @@ export interface WriteResult {
   reservations: Reservation[];
 }
 export interface WriteOptions {
+  activateSpaceIds?: string[];
   distributionDate?: string;
   requireAtomic?: boolean;
   expectedVersions?: Record<string, number>;
@@ -268,6 +269,8 @@ export async function writeReservations(
 ): Promise<WriteResult> {
   if (options.auditRestore && !options.requireAtomic)
     throw new ReservationInputError("La restauración requiere una transacción atómica.");
+  if (options.activateSpaceIds?.length && !usesDataApi() && !options.serverHooks)
+    throw new ReservationInputError('La activación de espacios debe confirmarse mediante el servidor.');
   const items = input.map((r) => {
     try {
       return prepareReservation(r);
@@ -334,6 +337,7 @@ export async function writeReservations(
       expectedVersions: options.expectedVersions,
       auditRestore: options.auditRestore,
       distributionDate: options.distributionDate,
+      activateSpaceIds: options.activateSpaceIds,
     };
     const original =
       pendingOperations.find((o) => o.id === operationId) || operation;
@@ -351,6 +355,7 @@ export async function writeReservations(
             requireAtomic: original.requireAtomic,
             restoreLogId: original.auditRestore?.logId,
             distributionDate: original.distributionDate,
+            activateSpaceIds: original.activateSpaceIds,
           },
         },
         async (progress) => {
@@ -419,6 +424,7 @@ export async function writeReservations(
       : {}),
     ...(options.auditRestore ? { auditRestore: options.auditRestore } : {}),
     ...(options.distributionDate ? { distributionDate: options.distributionDate } : {}),
+    ...(options.activateSpaceIds?.length ? { activateSpaceIds: options.activateSpaceIds } : {}),
   };
   await journalUpdate(operation);
   const byId = new Map(items.map((r) => [r.id, r]));

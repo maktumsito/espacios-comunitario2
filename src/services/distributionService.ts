@@ -20,9 +20,10 @@ export function validateDistributionProposals(proposals: DistributionProposal[])
   }
 }
 
-export function commitDistribution(fecha: string, proposals: DistributionProposal[], expectedVersions: Record<string, number>, operationId: string) {
+export function commitDistribution(fecha: string, proposals: DistributionProposal[], expectedVersions: Record<string, number>, operationId: string, activateSpaceIds: string[] = []) {
   validateDistributionProposals(proposals);
   return commitReservationChanges(proposals.map(p => p.reservation), {
     requireAtomic: true, distributionDate: fecha, expectedVersions, operationId, allowConflictOverride: false,
+    ...(activateSpaceIds.length ? { activateSpaceIds } : {}),
   });
 }

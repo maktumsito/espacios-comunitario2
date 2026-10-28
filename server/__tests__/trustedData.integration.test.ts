@@ -571,7 +571,8 @@ describe.skipIf(!enabled)(
       const restored = await post('/api/reservations/commit', { reservations: [{ ...cancelled.result.reservations[0], estado: 'activa' }], options: { operationId: 'inactive-reactivate-reservation' } });
       expect(restored.error).toMatch(/desactivado/);
       const snapshot = await post('/api/reservations/planning-snapshot', { fecha: date });
-      expect(snapshot.snapshot.spaces.map((s: any) => s.name)).toEqual(['SALA 3']);
+      expect(snapshot.snapshot.spaces.map((s: any) => s.name)).toEqual(['SALA 2', 'SALA 3']);
+      expect(snapshot.snapshot.spaces[0].activo).toBe(false);
       expect(snapshot.snapshot.reservations).toHaveLength(1);
       await db.doc('configuracion_sistema/espacios').set({ data: catalog.map(space => ({ ...space, activo: true })) });
       const activated = await post('/api/reservations/commit', { reservations: [{ ...row('inactive-new', date), horaInicio: '12:00', horaFin: '13:00' }], options: { operationId: 'inactive-after-reactivation' } });
@@ -595,6 +596,65 @@ describe.skipIf(!enabled)(
       const audit = await readAudit(db, 'AUDIT_OP_dist-apply');
       expect(audit.affectedCount).toBe(3);
       expect(audit.description).toMatch(/Distribución/);
+    });
+    it('distribution activates explicitly approved rooms and books them in one audited, idempotent operation', async () => {
+      const date = '2099-10-06';
+      const catalog = [{ id: 'closed-room', name: 'SALA 2', capacity: 20, activo: false }];
+      await db.doc('configuracion_sistema/espacios').set({ data: catalog, preservedSetting: 'keep' });
+      const body = { reservations: [{ ...row('activation-new', date), cantidadParticipantes: 15 }], options: {
+        operationId: 'activation-confirm', distributionDate: date, requireAtomic: true, expectedVersions: { 'activation-new': -1 }, activateSpaceIds: ['closed-room'],
+      } };
+      const applied = await post('/api/reservations/commit', body);
+      expect(applied.error).toBeUndefined();
+      expect((await db.doc('configuracion_sistema/espacios').get()).get('data')[0].activo).toBe(true);
+      expect((await db.doc('configuracion_sistema/espacios').get()).get('preservedSetting')).toBe('keep');
+      expect((await db.doc('reservas/activation-new').get()).get('version')).toBe(1);
+      expect((await db.doc('audit_logs/AUDIT_OP_activation-confirm').get()).get('activatedSpaces')).toEqual([{ id: 'closed-room', name: 'SALA 2' }]);
+      // A later manual deactivation must survive retry of an already acknowledged plan.
+      await db.doc('configuracion_sistema/espacios').update({ data: catalog });
+      const retry = await post('/api/reservations/commit', body);
+      expect(retry.error).toBeUndefined();
+      expect(retry.result.confirmedIds).toEqual(['activation-new']);
+      expect((await db.doc('configuracion_sistema/espacios').get()).get('data')[0].activo).toBe(false);
+      expect((await db.collection('reservas').get()).size).toBe(1);
+    });
+    it('distribution leaves rooms inactive when maintenance or stale versions reject the plan', async () => {
+      const date = '2099-10-06';
+      const catalog = [{ id: 'closed-room', name: 'SALA 2', capacity: 20, activo: false }];
+      await db.doc('configuracion_sistema/espacios').set({ data: catalog });
+      await db.doc('bloqueos_espacios/activation-block').set({ espacio: 'SALA 2', fechaInicio: date, fechaFin: date, activo: true, todoElDia: true, motivo: 'Obras' });
+      const body = { reservations: [{ ...row('activation-blocked', date), cantidadParticipantes: 15 }], options: {
+        operationId: 'activation-blocked', distributionDate: date, requireAtomic: true, expectedVersions: { 'activation-blocked': -1 }, activateSpaceIds: ['closed-room'],
+      } };
+      const blocked = await post('/api/reservations/commit', body);
+      expect(blocked.error).toMatch(/mantenimiento/);
+      expect((await db.doc('configuracion_sistema/espacios').get()).get('data')[0].activo).toBe(false);
+      expect((await db.doc('reservas/activation-blocked').get()).exists).toBe(false);
+      expect((await db.doc('audit_logs/AUDIT_OP_activation-blocked').get()).exists).toBe(false);
+      await db.doc('bloqueos_espacios/activation-block').delete();
+      await db.doc('reservas/activation-existing').set({ ...row('activation-existing', date), version: 2 });
+      const stale = await post('/api/reservations/commit', { reservations: [{ ...row('activation-existing', date), cantidadParticipantes: 15, version: 1 }], options: {
+        operationId: 'activation-stale', distributionDate: date, requireAtomic: true, expectedVersions: { 'activation-existing': 1 }, activateSpaceIds: ['closed-room'],
+      } });
+      expect(stale.error).toMatch(/otro usuario/);
+      expect((await db.doc('configuracion_sistema/espacios').get()).get('data')[0].activo).toBe(false);
+    });
+    it('distribution rejects unapproved, unrelated or unauthorized activation requests', async () => {
+      const date = '2099-10-06';
+      const catalog = [{ id: 'closed-room', name: 'SALA 2', capacity: 20, activo: false }, { id: 'other-room', name: 'SALA 3', capacity: 30, activo: false }];
+      await db.doc('configuracion_sistema/espacios').set({ data: catalog });
+      const base = { reservations: [{ ...row('activation-denied', date), cantidadParticipantes: 15 }], options: {
+        operationId: 'activation-no-approval', distributionDate: date, requireAtomic: true, expectedVersions: { 'activation-denied': -1 },
+      } };
+      expect((await post('/api/reservations/commit', base)).error).toMatch(/desactivado/);
+      const unrelated = await post('/api/reservations/commit', { ...base, options: { ...base.options, operationId: 'activation-unrelated', activateSpaceIds: ['other-room'] } });
+      expect(unrelated.error).toMatch(/no forman parte/);
+      await db.doc('usuarios_sistema/editor').update({ role: 'Recepción', canCreateReservations: true });
+      const denied = await post('/api/reservations/commit', { ...base, options: { ...base.options, operationId: 'activation-role-denied', activateSpaceIds: ['closed-room'] } });
+      expect(denied.error).toBeTruthy();
+      expect(denied.discardPending).toBe(true);
+      expect((await db.doc('configuracion_sistema/espacios').get()).get('data').every((s: any) => s.activo === false)).toBe(true);
+      expect((await db.doc('reservas/activation-denied').get()).exists).toBe(false);
     });
     it('distribution rejects stale versions, insufficient capacity and legacy bookings without partial writes', async () => {
       const date = '2099-10-06';

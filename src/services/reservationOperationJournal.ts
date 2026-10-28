@@ -17,6 +17,7 @@ export interface PendingOperation {
   intent?: "create" | "update";
   requireAtomic?: boolean;
   distributionDate?: string;
+  activateSpaceIds?: string[];
   expectedVersions?: Record<string, number>;
   auditRestore?: AuditRestoreContext;
 }

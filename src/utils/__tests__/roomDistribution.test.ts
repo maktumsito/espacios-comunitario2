@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DistributionRequest, DistributionSnapshot, Reservation, SpaceInfo } from '../../types';
-import { buildVacateSpacesPlan, detectDistributionCriteria, newDistributionRequest, planRoomDistribution, validateDistributionRequestInput } from '../roomDistribution';
+import { analyzeRoomDistribution, buildVacateSpacesPlan, detectDistributionCriteria, newDistributionRequest, planRoomDistribution, validateDistributionRequestInput } from '../roomDistribution';
 import { findEquipmentShortage } from '../equipmentAllocation';
 
 const fecha = '2099-10-06';
@@ -13,6 +13,51 @@ const booking = (id: string, extra: Partial<Reservation> = {}): Reservation => (
 const resource = [{ equipmentId: 'projector', equipmentName: 'Proyector', quantity: 1 }];
 
 describe('room distribution', () => {
+  it('keeps a complete active-only plan even when an inactive room is preferred', () => {
+    const result = analyzeRoomDistribution([request('a', { preferredSpace: 'SALA 3' })], snapshot({ spaces: [spaces[0], { ...spaces[1], activo: false }] }));
+    expect(result.proposals[0].reservation.espacio).toBe('SALA 2');
+    expect(result.activationRecommendations).toEqual([]);
+  });
+  it('recommends activation only when it places additional activities and does not mutate the catalog', () => {
+    const inactive = { ...spaces[1], activo: false };
+    const data = snapshot({ spaces: [spaces[0], inactive] });
+    const result = analyzeRoomDistribution([request('a'), request('b')], data);
+    expect(result.unresolved).toEqual([]);
+    expect(result.activationRecommendations).toHaveLength(1);
+    expect(result.activationRecommendations![0]).toMatchObject({ spaceId: 'SALA 3', name: 'SALA 3' });
+    expect(result.proposals.filter(p => p.requiresActivation)).toHaveLength(1);
+    expect(inactive.activo).toBe(false);
+  });
+  it('excludes inactive rooms occupied or blocked for maintenance and still checks shared equipment', () => {
+    const data = snapshot({ spaces: [{ ...spaces[0], activo: false }], reservations: [booking('occupied')] });
+    expect(analyzeRoomDistribution([request('a')], data).proposals).toEqual([]);
+    expect(analyzeRoomDistribution([request('a')], { ...data, reservations: [], blocks: [{ id: 'closed', espacio: 'SALA 2', fechaInicio: fecha, fechaFin: fecha, activo: true, todoElDia: true } as any] }).proposals).toEqual([]);
+    const equipmentBusy = snapshot({ spaces: [{ ...spaces[0], activo: false }], reservations: [booking('resources', { espacio: 'OTRA SALA', equipamientoSolicitado: resource })] });
+    expect(analyzeRoomDistribution([request('a', { equipment: resource })], equipmentBusy).proposals).toEqual([]);
+  });
+  it('minimizes distinct reactivated rooms before satisfying preferences and honors capacity', () => {
+    const data = snapshot({ spaces: [{ ...spaces[0], capacity: 40, activo: false }, { ...spaces[1], capacity: 40, activo: false }] });
+    const result = analyzeRoomDistribution([
+      request('a', { cantidadParticipantes: 35, preferredSpace: 'SALA 2' }),
+      request('b', { cantidadParticipantes: 35, preferredSpace: 'SALA 3', startTime: '11:00', endTime: '12:00' }),
+    ], data);
+    expect(result.unresolved).toEqual([]);
+    expect(result.activationRecommendations).toHaveLength(1);
+    expect(result.activationRecommendations![0].requestIds).toHaveLength(2);
+    expect(analyzeRoomDistribution([request('large', { cantidadParticipantes: 50 })], data).proposals).toEqual([]);
+  });
+  it('shares the state budget between the active and expanded searches', () => {
+    const result = analyzeRoomDistribution([request('a'), request('b')], snapshot({ spaces: [spaces[0], { ...spaces[1], activo: false }] }), 7);
+    expect(result.exploredStates).toBeLessThanOrEqual(7);
+    expect(result.searchLimitReached).toBe(true);
+  });
+  it('can recommend activation when automatically vacating an occupied room', () => {
+    const data = snapshot({ spaces: [spaces[0], { ...spaces[1], activo: false }], reservations: [booking('move', { cantidadParticipantes: 15 })] });
+    const plan = buildVacateSpacesPlan(data, { spacesToVacate: ['SALA 2'], startTime: '09:00', endTime: '12:00' });
+    expect(plan.result.unresolved).toEqual([]);
+    expect(plan.result.proposals[0].reservation.espacio).toBe('SALA 3');
+    expect(plan.result.activationRecommendations![0].spaceId).toBe('SALA 3');
+  });
   it('never proposes deactivated rooms', () => {
     const result = planRoomDistribution([request('a')], snapshot({ spaces: spaces.map(space => ({ ...space, activo: false })) }));
     expect(result.proposals).toEqual([]);

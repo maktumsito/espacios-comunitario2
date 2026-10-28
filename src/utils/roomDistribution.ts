@@ -112,7 +112,7 @@ export function buildVacateSpacesPlan(
   const priorityOrder = (options.prioritySpaces || [])
     .filter(s => !vacated.some(v => doSpacesConflict(s, v)));
 
-  const allCompatibleCatalogSpaces = getEnabledSpaces(snapshot.spaces)
+  const allCompatibleCatalogSpaces = snapshot.spaces
     .map(s => s.name)
     .filter(name => !vacated.some(v => doSpacesConflict(name, v)));
 
@@ -181,7 +181,7 @@ export function buildVacateSpacesPlan(
   }
 
   let bestRequests = baseRequests;
-  let bestResult = planRoomDistribution(baseRequests, snapshot);
+  let bestResult = analyzeRoomDistribution(baseRequests, snapshot);
   let cascadeCount = 0;
 
   if (options.allowCascade !== false && bestResult.unresolved.length > 0 && baseRequests.length < MAX_DISTRIBUTION_ACTIVITIES) {
@@ -205,7 +205,7 @@ export function buildVacateSpacesPlan(
         allowedSpaces: allCompatibleCatalogSpaces,
         preferredSpace: candidate.espacio,
       });
-      const candidateResult = planRoomDistribution(expanded, snapshot);
+      const candidateResult = analyzeRoomDistribution(expanded, snapshot);
       const newlyResolved = candidateResult.unresolved.length < bestResult.unresolved.length ||
         (candidateResult.unresolved.length === 0 && bestResult.unresolved.length > 0);
       if (newlyResolved) {
@@ -232,7 +232,7 @@ function overlaps(a: Reservation, b: Reservation): boolean {
 
 /** Bounded, deterministic search. Unassigned existing activities retain their original
  * bookings, including when a partial solution is displayed. Never publish a partial plan. */
-export function planRoomDistribution(requests: readonly DistributionRequest[], snapshot: DistributionSnapshot, maxStates = 50_000): DistributionResult {
+export function planRoomDistribution(requests: readonly DistributionRequest[], snapshot: DistributionSnapshot, maxStates = 50_000, includeInactive = false): DistributionResult {
   const fail = (reason: string): DistributionResult => ({ proposals: [], unresolved: requests.map(r => ({ requestId: r.id, reason })), exploredStates: 0, searchLimitReached: false });
   if (!DateStringSchema.safeParse(snapshot.fecha).success) return fail('Fecha inválida.');
   if (!requests.length) return fail('Agrega actividades para planificar.');
@@ -299,7 +299,7 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
       reasons.set(request.id, inputError);
       return { request, candidates };
     }
-    const enabledSpaces = getEnabledSpaces(snapshot.spaces);
+    const enabledSpaces = includeInactive ? snapshot.spaces : getEnabledSpaces(snapshot.spaces);
     const allowedSpaces = request.allowedSpaces.length
       ? enabledSpaces.filter(space => request.allowedSpaces.some(name => normalizeSpace(name) === normalizeSpace(space.name)))
       : enabledSpaces;
@@ -355,6 +355,7 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
         const changedTime = Boolean(request.source && (request.source.horaInicio !== horaInicio || request.source.horaFin !== horaFin));
         const proposalReasons = [
           criteria.label,
+          ...(space.activo === false ? ['Requiere activar este espacio antes de ocuparlo.'] : []),
           ...(priorityIndex >= 0 ? [`Prioridad #${priorityIndex + 1} en el orden de espacios elegido.`] : []),
           matchesActivity ? 'Coincide con la descripción del espacio.' : 'Espacio disponible según los requisitos indicados.',
           space.capacity === undefined ? 'Aforo sin registrar: confirmar en terreno.' : `Capacidad registrada: ${space.capacity} personas.`,
@@ -369,7 +370,7 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
           (changedRoom || changedTime ? 10_000_000 : 0) +
           (space.capacity === undefined ? 100_000 : Math.min(1_000, space.capacity - request.cantidadParticipantes)) + (time - start) / 1440;
         candidates.push({
-          proposal: { requestId: request.id, reservation, reasons: proposalReasons },
+          proposal: { requestId: request.id, reservation, reasons: proposalReasons, ...(space.activo === false ? { requiresActivation: true } : {}) },
           cost,
           normSpace,
           isSingleRoom,
@@ -397,9 +398,10 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
     minRemainingCost[i] = (first ? first.cost : 0) + minRemainingCost[i + 1];
   }
 
-  let states = 0, limit = false, best: DistributionProposal[] = [], bestCost = Infinity;
+  let states = 0, limit = false, best: DistributionProposal[] = [], bestCost = Infinity, bestActivationCount = Infinity;
   const picked: Candidate[] = [];
   const retained: Reservation[] = [];
+  const activationCount = () => new Set(picked.filter(p => p.proposal.requiresActivation).map(p => p.normSpace)).size;
   function candidatesConflict(a: Candidate, b: Candidate): boolean {
     if (a.startMin >= b.endMin || b.startMin >= a.endMin) return false;
     if (a.isSingleRoom && b.isSingleRoom) return a.normSpace === b.normSpace;
@@ -408,14 +410,18 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
   function visit(index: number, cost: number) {
     if (states++ >= maxStates) { limit = true; return; }
     const remaining = choices.length - index;
+    const activations = activationCount();
     if (picked.length + remaining < best.length) return;
     if (picked.length + remaining === best.length) {
-      if (!allRemainingHaveCandidates[index] || cost + minRemainingCost[index] >= bestCost) return;
+      if (!allRemainingHaveCandidates[index] || activations > bestActivationCount ||
+        activations === bestActivationCount && cost + minRemainingCost[index] >= bestCost) return;
     }
     if (index === choices.length) {
-      if (picked.length > best.length || picked.length === best.length && cost < bestCost) {
+      if (picked.length > best.length || picked.length === best.length &&
+        (activations < bestActivationCount || activations === bestActivationCount && cost < bestCost)) {
         best = picked.map(c => c.proposal);
         bestCost = cost;
+        bestActivationCount = activations;
       }
       return;
     }
@@ -456,7 +462,24 @@ export function planRoomDistribution(requests: readonly DistributionRequest[], s
   best.sort((a, b) => requests.findIndex(r => r.id === a.requestId) - requests.findIndex(r => r.id === b.requestId));
   return {
     proposals: best, exploredStates: Math.min(states, maxStates), searchLimitReached: limit,
+    activationRecommendations: snapshot.spaces.filter(space => space.activo === false).flatMap(space => {
+      const requestIds = best.filter(p => p.requiresActivation && normalizeSpace(p.reservation.espacio) === normalizeSpace(space.name)).map(p => p.requestId);
+      return requestIds.length ? [{ spaceId: space.id, name: space.name, requestIds }] : [];
+    }),
     unresolved: requests.filter(r => !best.some(p => p.requestId === r.id)).map(r => ({ requestId: r.id,
       reason: limit ? 'Se alcanzó el límite de búsqueda. Ajusta requisitos o reduce actividades; puede existir otra solución.' : reasons.get(r.id) || 'No hay una combinación conjunta compatible.' })),
   };
+}
+
+/** Keep active-only solutions when complete. Spend at most one shared search budget
+ * across both passes and only recommend activation when it places more activities. */
+export function analyzeRoomDistribution(requests: readonly DistributionRequest[], snapshot: DistributionSnapshot, maxStates = 50_000): DistributionResult {
+  const hasInactive = snapshot.spaces.some(space => space.activo === false);
+  const activeBudget = hasInactive ? Math.max(1, Math.floor(maxStates / 2)) : maxStates;
+  const active = planRoomDistribution(requests, snapshot, activeBudget);
+  if (!hasInactive || !active.unresolved.length || active.exploredStates >= maxStates) return active;
+  const expanded = planRoomDistribution(requests, snapshot, maxStates - active.exploredStates, true);
+  const selected = expanded.proposals.length > active.proposals.length ? expanded : active;
+  return { ...selected, exploredStates: active.exploredStates + expanded.exploredStates,
+    searchLimitReached: active.searchLimitReached || expanded.searchLimitReached };
 }

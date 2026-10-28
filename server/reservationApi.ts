@@ -15,7 +15,7 @@ import {
   ReservationWriteError,
   type WriteOptions,
 } from "../src/services/reservationWriter";
-import type { Reservation, AuditChangeLogEntry } from "../src/types";
+import type { Reservation, AuditChangeLogEntry, SpaceInfo } from "../src/types";
 import {
   buildAuditRestorePlan,
   auditStateRows,
@@ -91,6 +91,11 @@ export async function commitTrusted(
   options: WriteOptions,
 ) {
   const operationId = options.operationId!;
+  if (!Array.isArray(options.activateSpaceIds || []) || (options.activateSpaceIds || []).some(id => typeof id !== 'string' || !id || id.length > 200))
+    throw new ApiFailure(400, 'La selección de espacios a activar no es válida.');
+  const activationIds = [...new Set(options.activateSpaceIds || [])];
+  if (activationIds.length && (!options.distributionDate || !options.requireAtomic || activationIds.length > 12))
+    throw new ApiFailure(400, 'La activación requiere una distribución confirmada y atómica.');
   if (options.distributionDate) {
     if (!options.requireAtomic || options.allowConflictOverride || options.deletedIds?.length || !rows.length || rows.length > 12 ||
       rows.some(r => r.fecha !== options.distributionDate || !Number.isInteger(options.expectedVersions?.[r.id])))
@@ -109,6 +114,7 @@ export async function commitTrusted(
     override: !!options.allowConflictOverride,
     restore: options.auditRestore?.logId,
     ...(options.distributionDate ? { distributionDate: options.distributionDate } : {}),
+    ...(activationIds.length ? { activateSpaceIds: activationIds } : {}),
   });
   const receipt = await auditRef.get(),
     old = receipt.data();
@@ -197,7 +203,16 @@ export async function commitTrusted(
         );
         const spaceConfig = active.length ? await tx.get(db.doc('configuracion_sistema/espacios')) : undefined;
         const configuredSpaces = Array.isArray(spaceConfig?.data()?.data) ? spaceConfig!.data()!.data : SPACES_LIST;
-        const disabledSpaces = getDisabledSpaceNames(configuredSpaces);
+        const activationSet = new Set(activationIds);
+        const selectedSpaces: SpaceInfo[] = configuredSpaces.filter((space: SpaceInfo) => activationSet.has(space.id));
+        if (activationIds.length) {
+          requireManager(fresh);
+          if (selectedSpaces.length !== activationIds.length || selectedSpaces.some(space => !active.some(row =>
+            getConstituentSpaces(row.espacio).includes(normalizeSpace(space.name)) || normalizeSpace(row.espacio) === normalizeSpace(space.name))))
+            throw new ApiFailure(409, 'Los espacios a activar cambiaron o no forman parte del plan. Recalcula la distribución.');
+        }
+        const activatedSpaces = selectedSpaces.filter(space => space.activo === false);
+        const disabledSpaces = getDisabledSpaceNames(configuredSpaces.filter((space: SpaceInfo) => !activationSet.has(space.id)));
         for (const row of active) {
           const original = current.get(row.id);
           const changesOccupancy = !original || !isReservationActiveForAvailability(original, new Set()) ||
@@ -279,7 +294,7 @@ export async function commitTrusted(
           confirmedIds = [...known, ...chunk];
         const description =
           metadata?.description ||
-          (options.distributionDate ? `Distribución de salas y montaje para ${options.distributionDate}` : '') ||
+          (options.distributionDate ? `Distribución de salas y montaje para ${options.distributionDate}${activatedSpaces.length ? `; activados: ${activatedSpaces.map(space => space.name).join(', ')}` : ''}` : '') ||
           (options.auditRestore
             ? "Restauración confirmada"
             : deletions.length
@@ -319,6 +334,7 @@ export async function commitTrusted(
           operationActor: actor.username,
           fingerprint,
           confirmedIds,
+          ...(activatedSpaces.length ? { activatedSpaces: activatedSpaces.map(({ id, name }) => ({ id, name })) } : {}),
           ...(inlineSnapshot ? JSON.parse(payload) : {
             operationParts: [
               ...(metadata?.operationParts || []),
@@ -333,6 +349,10 @@ export async function commitTrusted(
           );
         return () => {
           commitEquipment();
+          if (activatedSpaces.length) tx.set(db.doc('configuracion_sistema/espacios'), {
+            data: configuredSpaces.map((space: SpaceInfo) => activationSet.has(space.id) ? { ...space, activo: true } : space),
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
           pieces.forEach((payload, i) =>
             tx.set(db.doc(`audit_logs/${auditRef.id}/partes/${key}_${i}`), {
               payload,
@@ -452,6 +472,7 @@ export function registerReservationApi(
           requireAtomic: !!input.requireAtomic,
           allowConflictOverride: !!input.allowConflictOverride,
           distributionDate: input.distributionDate,
+          activateSpaceIds: input.activateSpaceIds,
         };
         let targets = rows;
         if (input.restoreLogId) {

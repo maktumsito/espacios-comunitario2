@@ -11,6 +11,11 @@ export function DistributionProposalTable({ result, requests }: { result: Distri
       <p className="mt-2 text-xs text-slate-500 sm:hidden">Desliza la tabla horizontalmente para ver montaje, recursos y criterios.</p>
     </div>
     {result.searchLimitReached && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Se alcanzó el límite de búsqueda. Se muestra la mejor combinación encontrada; puede haber otras soluciones.</p>}
+    {!!result.activationRecommendations?.length && <aside aria-label="Recomendaciones de activación" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 space-y-2">
+      <h5 className="font-semibold">Se recomienda activar espacios desactivados</h5>
+      <p>Estas salas permiten ubicar actividades que no pudieron resolverse usando solo las salas activas en el análisis.</p>
+      <ul className="space-y-1">{result.activationRecommendations.map(space => <li key={space.spaceId}><strong>{space.name}</strong>: permite ubicar {space.requestIds.length} {space.requestIds.length === 1 ? 'actividad' : 'actividades'}. Requiere confirmar su activación.</li>)}</ul>
+    </aside>}
     {result.unresolved.length > 0 && <ul className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
       {result.unresolved.map(item => <li key={item.requestId}><strong>{requests.find(r => r.id === item.requestId)?.descripcion || 'Actividad sin completar'}:</strong> {item.reason}</li>)}
     </ul>}
@@ -32,6 +37,7 @@ export function DistributionProposalTable({ result, requests }: { result: Distri
             <td className="p-3 min-w-40">
               <div className="flex flex-wrap items-center gap-1.5">
                 <strong>{row.espacio}</strong>
+                {proposal.requiresActivation && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-950">Requiere activación</span>}
                 {!source ? (
                   <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-800">Nueva</span>
                 ) : roomChanged || timeChanged ? (

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Reservation } from '../types';
 import type { AuthUser } from '../services/authService';
 import { BaseModal } from './common/BaseModal';
@@ -17,6 +17,8 @@ const smallChip = 'rounded-lg border px-2.5 py-1.5 text-xs font-medium transitio
 export function DistributionPlannerModal({ user, onClose, onCommitted }: { user: AuthUser; onClose: () => void; onCommitted: (rows: Reservation[]) => void }) {
   const planner = useDistributionPlanner(user, onCommitted);
   const locked = planner.busy || Boolean(planner.pending);
+  const [activationApproved, setActivationApproved] = useState(false);
+  useEffect(() => { setActivationApproved(false); }, [planner.result, planner.fecha]);
 
   const [spacesToVacate, setSpacesToVacate] = useState<string[]>([]);
   const [vacateStart, setVacateStart] = useState('08:30');
@@ -89,8 +91,8 @@ export function DistributionPlannerModal({ user, onClose, onCommitted }: { user:
       <div className="flex flex-wrap gap-2">
         <button type="button" className={button} disabled={planner.busy} onClick={onClose}>Cerrar</button>
         <button type="button" className={button} disabled={locked || planner.loading || !planner.requests.length} onClick={planner.calculate}>{planner.busy && !planner.pending ? 'Calculando…' : 'Calcular distribución'}</button>
-        <button type="button" className={`${button} !border-blue-700 !bg-blue-700 !text-white hover:!bg-blue-800`} disabled={planner.busy || !planner.canApply || (!planner.pending && (!planner.result || planner.result.unresolved.length > 0 || !planner.result.proposals.length))} onClick={planner.apply}>
-          {planner.busy && planner.pending ? 'Confirmando…' : planner.pending ? 'Reintentar confirmación' : 'Aplicar todo el plan'}
+        <button type="button" className={`${button} !border-blue-700 !bg-blue-700 !text-white hover:!bg-blue-800`} disabled={planner.busy || !planner.canApply || (!planner.pending && (!planner.result || planner.result.unresolved.length > 0 || !planner.result.proposals.length || planner.needsActivation && !activationApproved))} onClick={() => planner.apply(activationApproved)}>
+          {planner.busy && planner.pending ? 'Confirmando…' : planner.pending ? 'Reintentar confirmación' : planner.needsActivation ? 'Activar y aplicar todo el plan' : 'Aplicar todo el plan'}
         </button>
       </div>
     </div>}>
@@ -112,7 +114,7 @@ export function DistributionPlannerModal({ user, onClose, onCommitted }: { user:
           {planner.snapshot && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
-                <strong>{planner.snapshot.spaces.length}</strong> salas en catálogo
+                <strong>{planner.snapshot.spaces.filter(space => space.activo !== false).length}</strong> salas activas · <strong>{planner.snapshot.spaces.filter(space => space.activo === false).length}</strong> desactivadas en análisis
               </span>
               <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
                 <strong>{activeDayReservations.length}</strong> reservas activas en el día
@@ -169,7 +171,7 @@ export function DistributionPlannerModal({ user, onClose, onCommitted }: { user:
                         onClick={() => toggleSpaceToVacate(space.name)}
                         className={`${smallChip} ${selected ? 'border-red-600 bg-red-600 text-white' : count > 0 ? 'border-amber-300 bg-amber-50 text-slate-900 hover:bg-amber-100' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
                       >
-                        {space.name} {count > 0 ? `(${count} ocup.)` : '(libre)'}
+                        {space.name}{space.activo === false ? ' · Desactivado' : ''} {count > 0 ? `(${count} ocup.)` : '(libre)'}
                       </button>
                     );
                   })}
@@ -192,7 +194,7 @@ export function DistributionPlannerModal({ user, onClose, onCommitted }: { user:
                           onClick={() => togglePrioritySpace(space.name)}
                           className={`${smallChip} ${rank >= 0 ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
                         >
-                          {rank >= 0 ? `${rank + 1}° ` : ''}{space.name}{space.capacity !== undefined ? ` (${space.capacity})` : ''}
+                          {rank >= 0 ? `${rank + 1}° ` : ''}{space.name}{space.activo === false ? ' · Requiere activación' : ''}{space.capacity !== undefined ? ` (${space.capacity})` : ''}
                         </button>
                       );
                     })}
@@ -276,7 +278,7 @@ export function DistributionPlannerModal({ user, onClose, onCommitted }: { user:
             )}
           </div>
           {(!planner.canCreate || !planner.canEdit) && <p className="text-xs text-slate-500">Tu cuenta puede {planner.canCreate ? 'crear actividades nuevas' : planner.canEdit ? 'reorganizar reservas existentes' : 'consultar la jornada'}. Se respetan los permisos asignados.</p>}
-          {!planner.canApply && planner.requests.length > 0 && <p role="alert" className="text-sm text-red-700">Tus permisos cambiaron. No puedes aplicar todas las actividades de este borrador.</p>}
+          {!planner.canApply && planner.requests.length > 0 && <p role="alert" className="text-sm text-red-700">{planner.needsActivation && !planner.canActivate ? 'Esta propuesta requiere activar espacios. Solo administración o coordinación puede confirmarla.' : 'Tus permisos cambiaron. No puedes aplicar todas las actividades de este borrador.'}</p>}
           {!planner.requests.length && <div className="border-y border-slate-200 py-10 text-center"><h4 className="font-semibold text-slate-900">Comienza con las necesidades de tu jornada</h4><p className="mx-auto mt-2 max-w-md text-sm text-slate-500">Usa el asistente superior para desocupar salas en un horario o agrega actividades manualmente.</p></div>}
           {planner.requests.map((request, index) => (
             <DistributionActivityEditor
@@ -300,6 +302,13 @@ export function DistributionPlannerModal({ user, onClose, onCommitted }: { user:
         </>}
       </fieldset>
       {planner.result && !planner.pending && <DistributionProposalTable result={planner.result} requests={planner.requests} />}
+      {planner.result?.activationRecommendations?.length && !planner.pending ? <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+        <label className="flex items-start gap-3 text-sm text-amber-950">
+          <input type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={activationApproved} disabled={planner.busy || !planner.canActivate || planner.result.unresolved.length > 0} onChange={event => setActivationApproved(event.target.checked)} />
+          <span>Confirmo activar los espacios recomendados: {planner.result.activationRecommendations.map(space => space.name).join(', ')}.</span>
+        </label>
+        <p className="text-xs text-amber-900">Confirma que están operativos. Al aplicar, la activación y las reservas se guardarán juntas y estos espacios volverán a aparecer en la agenda de todos los PC.</p>
+      </section> : null}
     </div>
   </BaseModal>;
 }

@@ -8,6 +8,10 @@ import { saveAuthUser } from '../authService';
 import { DataApiError } from '../../firebase/gateway';
 
 const api = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock('../../firebase/config', () => ({
+  getDb: () => ({}), getFirebaseApp: () => undefined, getFirebaseAuth: () => undefined,
+  auth: undefined, testFirestoreConnection: async () => false,
+}));
 vi.mock('../../firebase/gateway', async original => ({
   ...await original<any>(), usesDataApi: () => true, reservationRequest: api.request,
 }));
@@ -36,6 +40,16 @@ it('retains payload and operation ID when the HTTP acknowledgement is lost', asy
   api.request.mockRejectedValue(new Error('Se perdió la conexión'));
   await expect(writeReservations({} as any, [row], r => r, { actor: 'test', operationId: 'pending' })).rejects.toThrow('conexión');
   expect(await readPendingOperations()).toMatchObject([operation()]);
+});
+
+it('persists the explicitly approved activation IDs and restores them when retrying a distribution', async () => {
+  api.request.mockRejectedValueOnce(new Error('Se perdió la conexión'));
+  await expect(writeReservations({} as any, [row], r => r, { actor: 'test', operationId: 'pending', requireAtomic: true, distributionDate: row.fecha, activateSpaceIds: ['SALA 2'] })).rejects.toThrow('conexión');
+  expect((await readPendingOperations())[0].activateSpaceIds).toEqual(['SALA 2']);
+  api.request.mockResolvedValueOnce({ result: result(['one']) });
+  await resumeReservationOperation('pending');
+  expect(api.request.mock.calls[1][0].options.activateSpaceIds).toEqual(['SALA 2']);
+  expect(await readPendingOperations()).toEqual([]);
 });
 
 it('releases an atomic distribution retry after a definitive HTTP permission rejection', async () => {

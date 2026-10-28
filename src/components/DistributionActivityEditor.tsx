@@ -198,7 +198,7 @@ export function DistributionActivityEditor({ request, snapshot, index, canDuplic
           )}
         </div>
       </div>
-      <p className="text-xs text-slate-500">Sin selección se consideran todas las salas con aforo suficiente. Marca una sola para fijar la sala.</p>
+      <p className="text-xs text-slate-500">Primero se consideran las salas activas con aforo suficiente. Si faltan opciones, se analizan las desactivadas y se recomienda activarlas. Marca una sola para fijar la sala.</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1">
         {snapshot.spaces.map(space => {
           const insufficient = space.capacity !== undefined && space.capacity < request.cantidadParticipantes;
@@ -207,7 +207,7 @@ export function DistributionActivityEditor({ request, snapshot, index, canDuplic
           return <div key={space.id} className={`flex min-h-11 items-center justify-between gap-2 text-xs ${insufficient ? 'text-slate-400' : 'text-slate-800'}`}>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" className="h-4 w-4" checked={checked} onChange={event => update({ allowedSpaces: event.target.checked ? [...request.allowedSpaces, space.name] : request.allowedSpaces.filter(name => name !== space.name) })} />
-              <span>{space.name}</span>
+              <span>{space.name}{space.activo === false ? ' · Desactivado' : ''}</span>
               <span className={insufficient ? 'text-amber-700' : 'text-slate-500'}>
                 ({space.capacity === undefined ? 'aforo sin registrar' : `${space.capacity} pers.`})
               </span>
@@ -239,7 +239,7 @@ export function DistributionActivityEditor({ request, snapshot, index, canDuplic
           <option value="">Sin preferencia</option>
           {snapshot.spaces.map(space => {
             const insufficient = space.capacity !== undefined && space.capacity < request.cantidadParticipantes;
-            return <option key={space.id} value={space.name}>{space.name}{space.capacity !== undefined ? ` (${space.capacity} pers.${insufficient ? ' - aforo menor' : ''})` : ''}</option>;
+            return <option key={space.id} value={space.name}>{space.name}{space.activo === false ? ' · Requiere activación' : ''}{space.capacity !== undefined ? ` (${space.capacity} pers.${insufficient ? ' - aforo menor' : ''})` : ''}</option>;
           })}
         </select>
       </label>
