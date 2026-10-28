@@ -7,9 +7,11 @@ export async function claimDelivery(
   db: Firestore,
   cycle: string,
   now = Date.now(),
+  immediateStart = false,
 ) {
   const owner = randomUUID(),
-    ref = db.doc(`_email_dispatches/${cycle}`);
+    ref = db.doc(`_email_dispatches/${cycle}`),
+    status = immediateStart ? "delivery_started" : "claimed";
   const claimed = await db.runTransaction(async (tx) => {
     const old = (await tx.get(ref)).data();
     if (
@@ -22,21 +24,23 @@ export async function claimDelivery(
       return false;
     tx.set(ref, {
       owner,
-      status: "claimed",
+      status,
       expiresAt: now + 30 * 60000,
       updatedAt: new Date(now).toISOString(),
     });
     return true;
   });
-  return claimed ? { owner, cycle } : null;
+  return claimed ? { owner, cycle, status } : null;
 }
 export async function startDelivery(
   db: Firestore,
-  claim: { owner: string; cycle: string },
+  claim: { owner: string; cycle: string; status?: string },
 ) {
+  if (claim.status === "delivery_started") return;
   const ref = db.doc(`_email_dispatches/${claim.cycle}`);
   await db.runTransaction(async (tx) => {
     const old = (await tx.get(ref)).data();
+    if (old?.owner === claim.owner && old.status === "delivery_started") return;
     if (
       old?.owner !== claim.owner ||
       old.status !== "claimed" ||
@@ -48,6 +52,7 @@ export async function startDelivery(
       updatedAt: new Date().toISOString(),
     });
   });
+  claim.status = "delivery_started";
 }
 export async function finishDelivery(
   db: Firestore,

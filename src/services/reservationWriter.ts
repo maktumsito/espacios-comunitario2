@@ -116,6 +116,77 @@ function slotContent(slot: ScheduleSlot): string {
   return JSON.stringify([slot.fecha, slot.espacio,
     bookings.map(booking => JSON.stringify(booking)).sort()]);
 }
+
+const IGNORED_RESERVATION_COMPARISON_KEYS = new Set([
+  "updatedAt",
+  "createdAt",
+  "fechaEdicion",
+  "editadoPor",
+  "createdBy",
+  "version",
+  "lastOperationId",
+]);
+
+function canonicalizeForComparison(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeForComparison);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => [k, canonicalizeForComparison(v)]),
+    );
+  }
+  return value;
+}
+
+export function reservationContent(
+  r: Reservation,
+  cleanFn: (r: Reservation) => Record<string, any> = (item) =>
+    JSON.parse(JSON.stringify(item)),
+): string {
+  const normalized: Reservation = {
+    ...r,
+    id: r.id?.trim(),
+    fecha: r.fecha?.trim().split("T")[0],
+    horaInicio: r.horaInicio?.trim(),
+    horaFin: r.horaFin?.trim(),
+    espacio: r.espacio ? getConstituentSpaces(r.espacio).join(" / ") : r.espacio,
+    ...(r.equipamientoSolicitado
+      ? {
+          equipamientoSolicitado: r.equipamientoSolicitado.map((item) => ({
+            ...item,
+            quantity: Number(item.quantity),
+          })),
+        }
+      : {}),
+    responsable: r.responsable?.trim(),
+    descripcion: r.descripcion?.trim(),
+    tipoActividad: r.tipoActividad?.trim(),
+    terminaDiaSiguiente: Boolean(r.terminaDiaSiguiente),
+  };
+  const cleaned = cleanFn(normalized);
+  const filtered: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(cleaned)) {
+    if (IGNORED_RESERVATION_COMPARISON_KEYS.has(key) || val === undefined)
+      continue;
+    filtered[key] = val;
+  }
+  return JSON.stringify(canonicalizeForComparison(filtered));
+}
+
+export function hasReservationMaterialChange(
+  existing: Reservation | undefined,
+  next: Reservation,
+  cleanFn?: (r: Reservation) => Record<string, any>,
+): boolean {
+  if (!existing) return true;
+  return (
+    reservationContent(existing, cleanFn) !== reservationContent(next, cleanFn)
+  );
+}
 export function reservationSlots(r: Reservation): Map<string, ScheduleSlot> {
   const slots = new Map<string, ScheduleSlot>();
   if (!isReservationActiveForAvailability(r, new Set())) return slots;
@@ -488,10 +559,27 @@ export async function writeReservations(
             guarded.set(s.id, { ...s.data(), id: s.id } as Reservation);
         });
         const survivingIds = chunk.filter((id) => byId.has(id));
+        const isUnchangedExisting = (id: string) => {
+          const existing = current.get(id);
+          const next = byId.get(id);
+          return Boolean(
+            existing &&
+              next &&
+              !options.auditRestore &&
+              existing.restoredStateVersion === undefined &&
+              (existing.version || 0) === (next.version || 0) &&
+              !hasReservationMaterialChange(existing, next, clean),
+          );
+        };
         const acknowledgedChunk =
           survivingIds.length > 0 &&
-          survivingIds.every(
+          survivingIds.some(
             (id) => (current.get(id) as any)?.lastOperationId === operationId,
+          ) &&
+          survivingIds.every(
+            (id) =>
+              (current.get(id) as any)?.lastOperationId === operationId ||
+              isUnchangedExisting(id),
           );
         for (const [id, version] of guards) {
           const row = guarded.get(id);
@@ -682,6 +770,7 @@ export async function writeReservations(
           });
         });
         const saved: Reservation[] = [];
+        const unchangedIds = new Set<string>();
         for (const id of chunk) {
           const next = byId.get(id);
           const existing = current.get(id);
@@ -709,16 +798,20 @@ export async function writeReservations(
             );
           if ((existing?.version || 0) !== (next.version || 0))
             throw new ReservationVersionError(existing!);
-          const confirmed = {
-            ...next,
-            version: (existing?.version || 0) + 1,
-            restoredStateVersion: options.auditRestore
-              ? next.restoredStateVersion
-              : undefined,
-            createdAt:
-              existing?.createdAt || next.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
+          const unchanged = isUnchangedExisting(id);
+          if (unchanged) unchangedIds.add(id);
+          const confirmed = unchanged
+            ? { ...existing! }
+            : {
+                ...next,
+                version: (existing?.version || 0) + 1,
+                restoredStateVersion: options.auditRestore
+                  ? next.restoredStateVersion
+                  : undefined,
+                createdAt:
+                  existing?.createdAt || next.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              };
           for (const [key, candidate] of reservationSlots(confirmed)) {
             const slot = slots.get(key)!;
             for (const booking of candidate.bookings) {
@@ -776,6 +869,7 @@ export async function writeReservations(
           });
         }
         for (const id of chunk) {
+          if (unchangedIds.has(id)) continue;
           const r = saved.find((r) => r.id === id);
           if (r && (r as any).lastOperationId !== operationId)
             tx.set(doc(db, "reservas", id), {

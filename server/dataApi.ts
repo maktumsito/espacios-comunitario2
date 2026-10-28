@@ -347,6 +347,7 @@ export function registerDataApi(
         return;
       }
       const batch = db.batch();
+      let batchOps = 0;
       for (const w of writes) {
         const p = validatePath(w.path);
         if (!["set", "update", "delete"].includes(w.type) || p.length % 2 !== 0)
@@ -364,6 +365,7 @@ export function registerDataApi(
             403,
             "Utiliza la operación autorizada específica.",
           );
+        let existingTokenDoc: any = null;
         if (
           [
             "configuracion_sistema",
@@ -373,8 +375,8 @@ export function registerDataApi(
         )
           requireManager(user);
         else if (p[0] === "fcm_tokens") {
-          const old = await db.doc(w.path).get();
-          if (old.exists && old.get("owner") !== user.username)
+          existingTokenDoc = await db.doc(w.path).get();
+          if (existingTokenDoc.exists && existingTokenDoc.get("owner") !== user.username)
             requireManager(user);
         } else if (
           !reservationPermission(user, "canCreateReservations") &&
@@ -392,15 +394,26 @@ export function registerDataApi(
         )
           throw new ApiFailure(400, "Documento no válido o demasiado grande.");
         const data =
-            p[0] === "fcm_tokens"
+            p[0] === "fcm_tokens" && w.type !== "delete"
               ? { ...w.data, owner: user.username }
               : w.data,
           ref = db.doc(w.path);
+        if (existingTokenDoc) {
+          if (w.type === "delete" && !existingTokenDoc.exists) continue;
+          if (w.type !== "delete" && existingTokenDoc.exists) {
+            const mergedCandidate =
+              w.type === "update" || w.options?.merge
+                ? { ...existingTokenDoc.data(), ...data }
+                : data;
+            if (isDeepStrictEqual(existingTokenDoc.data(), mergedCandidate)) continue;
+          }
+        }
         if (w.type === "delete") batch.delete(ref);
         else if (w.type === "update") batch.update(ref, data);
         else batch.set(ref, data, w.options?.merge ? { merge: true } : {});
+        batchOps++;
       }
-      await batch.commit();
+      if (batchOps > 0) await batch.commit();
       res.json({ success: true });
     }),
   );

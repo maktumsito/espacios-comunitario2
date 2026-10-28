@@ -376,6 +376,9 @@ async function registerFallbackDeviceRecord(): Promise<string> {
   return token;
 }
 
+const BROADCAST_DEDUP_WINDOW_MS = 60_000;
+const recentBroadcastFingerprints = new Map<string, { id: string; timestamp: number }>();
+
 /**
  * Broadcasts an FCM push notification document to Firestore so all registered
  * mobile devices and computers receive it in real-time.
@@ -383,14 +386,26 @@ async function registerFallbackDeviceRecord(): Promise<string> {
 export async function broadcastFcmNotification(
   payload: Omit<FcmNotificationPayload, 'id' | 'createdAt' | 'originDeviceId'>
 ): Promise<string> {
-  const notifId = `NOTIF_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = Date.now();
+  for (const [key, entry] of recentBroadcastFingerprints) {
+    if (now - entry.timestamp >= BROADCAST_DEDUP_WINDOW_MS) {
+      recentBroadcastFingerprints.delete(key);
+    }
+  }
+  const fingerprint = `${payload.type}|${payload.reservationId || ''}|${payload.title}|${payload.body}|${payload.targetDate || ''}`;
+  const recent = recentBroadcastFingerprints.get(fingerprint);
+  if (recent && now - recent.timestamp < BROADCAST_DEDUP_WINDOW_MS) {
+    return recent.id;
+  }
+
+  const notifId = `NOTIF_${now}_${Math.random().toString(36).substring(2, 7)}`;
   const currentUser = getCurrentUser();
   const deviceId = getOrCreateDeviceId();
 
   const fullPayload: FcmNotificationPayload = {
     ...payload,
     id: notifId,
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(now).toISOString(),
     createdBy: currentUser?.name || currentUser?.username || 'Sistema',
     originDeviceId: deviceId
   };
@@ -400,8 +415,9 @@ export async function broadcastFcmNotification(
     const docRef = doc(db, FCM_NOTIFICATIONS_COLLECTION, notifId);
     await setDoc(docRef, {
       ...fullPayload,
-      serverTimestamp: new Date().toISOString()
+      serverTimestamp: new Date(now).toISOString()
     });
+    recentBroadcastFingerprints.set(fingerprint, { id: notifId, timestamp: now });
     console.log('[FCM] Push Notification broadcasted to Firestore for registered devices:', notifId);
   } catch (err) {
     console.warn('[FCM] Error broadcasting notification to Firestore:', err);

@@ -5,7 +5,8 @@ const state = vi.hoisted(() => ({ write: vi.fn(), user: { username: 'admin' } as
 vi.mock('../../firebase/config', () => ({ getDb: () => ({}), getFirebaseApp: vi.fn() }));
 vi.mock('../../firebase/gateway', () => ({ doc: (...args: any[]) => args.slice(1).join('/'), setDoc: state.write }));
 vi.mock('../authService', () => ({ getCurrentUser: () => state.user }));
-import { saveDeviceTokenToFirestore } from '../fcmService';
+import { saveDeviceTokenToFirestore, broadcastFcmNotification } from '../fcmService';
+import { checkTodayImportantActivities } from '../notificationService';
 
 beforeEach(() => {
   localStorage.clear(); state.write.mockReset().mockResolvedValue(undefined);
@@ -44,4 +45,37 @@ it('retries rejected writes instead of marking them confirmed locally', async ()
   await saveDeviceTokenToFirestore('token');
   await saveDeviceTokenToFirestore('token');
   expect(state.write).toHaveBeenCalledTimes(2);
+});
+
+it('does not broadcast to Firestore when checking today important activities on client startup', async () => {
+  const today = '2026-10-16';
+  checkTodayImportantActivities([
+    {
+      id: 'imp-1',
+      fecha: today,
+      horaInicio: '10:00',
+      horaFin: '11:00',
+      espacio: 'SALA 1',
+      responsable: 'Coordinador',
+      tipoActividad: 'Ceremonia',
+      descripcion: 'Evento importante',
+      actividadRecurrente: 'No',
+      importante: 'Sí',
+    },
+  ]);
+  expect(state.write).not.toHaveBeenCalled();
+});
+
+it('deduplicates identical FCM broadcasts within the 60s cooldown window', async () => {
+  const payload = {
+    type: 'important' as const,
+    title: '⭐ Nueva Actividad Importante Agendada',
+    body: 'Detalle de actividad',
+    reservationId: 'rsv-1',
+    targetDate: '2026-10-16',
+  };
+  const firstId = await broadcastFcmNotification(payload);
+  const secondId = await broadcastFcmNotification(payload);
+  expect(firstId).toBe(secondId);
+  expect(state.write).toHaveBeenCalledTimes(1);
 });

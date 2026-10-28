@@ -172,6 +172,23 @@ describe('availability write quota', () => {
     await writeReservations({} as any, [], clean, { deletedIds: ['absent'] });
     expect(memory.writes).toEqual([]);
   });
+  it('skips writing unchanged reservations in a batch while committing modified ones', async () => {
+    const second: Reservation = { ...original, id: 'second', fecha: '2026-10-13', version: 1 };
+    seed(second);
+    memory.writes = [];
+    const result = await writeReservations(
+      {} as any,
+      [
+        { ...original, updatedAt: '2026-10-20T00:00:00Z', editadoPor: 'Admin', fechaEdicion: '20/10/2026 10:00:00' },
+        { ...second, descripcion: 'Modificada en serie' }
+      ],
+      clean
+    );
+    expect(memory.writes).toEqual(['reservas/second']);
+    expect(memory.rows.get('reservas/original').version).toBe(1);
+    expect(memory.rows.get('reservas/second').version).toBe(2);
+    expect(result.reservations).toHaveLength(2);
+  });
 });
 describe('single occurrence replacement transaction', () => {
   it('clears a stale zero-confirmation retry after a definitive version rejection', async () => {

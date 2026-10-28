@@ -2,6 +2,8 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import { expect, it, vi } from 'vitest';
 import { registerDataApi } from '../dataApi';
+import { prepareEquipmentAllocation } from '../equipmentAllocation';
+import { claimDelivery, startDelivery } from '../deliveryLease';
 
 async function withApi(run: (context: any) => Promise<void>) {
   const rows = new Map<string, any>([
@@ -87,4 +89,46 @@ it('deletes a profile with one collection read and handles already missing accou
     expect((await post('/api/users/delete', { username: 'reader' })).users).toHaveLength(1);
     expect(read).toHaveBeenCalledTimes(2);
   });
+});
+
+it('skips equipment_day_guards reads and writes when reservation edits do not alter equipment or schedule', async () => {
+  const base: any = {
+    id: 'r1',
+    fecha: '2026-10-15',
+    horaInicio: '10:00',
+    horaFin: '11:00',
+    espacio: 'SALA 2',
+    estado: 'activa',
+    equipamientoSolicitado: [{ equipmentId: 'EQ_PROYECTOR_HD', equipmentName: 'Proyector', quantity: 1 }],
+  };
+  const tx: any = { get: vi.fn(), getAll: vi.fn(), set: vi.fn() };
+  const db: any = { doc: vi.fn(), collection: vi.fn() };
+  const current = new Map([['r1', base]]);
+  const saved = [{ ...base, realizada: 'Sí', comentarios: 'Asistencia completa', descripcion: 'Cambio de título' }];
+  const commit = await prepareEquipmentAllocation(db, tx, current, saved, ['r1']);
+  commit();
+  expect(tx.get).not.toHaveBeenCalled();
+  expect(tx.getAll).not.toHaveBeenCalled();
+  expect(tx.set).not.toHaveBeenCalled();
+});
+
+it('acquires delivery_started in a single transaction when immediateStart is enabled', async () => {
+  let transactions = 0;
+  const store = new Map<string, any>();
+  const db: any = {
+    doc: (path: string) => ({ path }),
+    runTransaction: async (fn: any) => {
+      transactions++;
+      return fn({
+        get: async (ref: any) => ({ data: () => store.get(ref.path) }),
+        set: (ref: any, data: any) => store.set(ref.path, data),
+        update: (ref: any, data: any) => store.set(ref.path, { ...store.get(ref.path), ...data }),
+      });
+    },
+  };
+  const claim = await claimDelivery(db, '2026-10-28', Date.now(), true);
+  expect(claim).toBeTruthy();
+  await startDelivery(db, claim!);
+  expect(transactions).toBe(1);
+  expect(store.get('_email_dispatches/2026-10-28').status).toBe('delivery_started');
 });

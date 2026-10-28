@@ -463,7 +463,8 @@ export function notifyImportantActivity(
     reservationId: reserva.id,
     spaceName: reserva.espacio,
     targetDate: reserva.fecha,
-    view: 'calendar'
+    view: 'calendar',
+    isRemoteBroadcast: action === 'starting_today'
   });
 }
 
@@ -495,7 +496,8 @@ export function checkTodayImportantActivities(reservations: Reservation[]): void
         title: `⭐ ${todayImportant.length} Actividades Importantes HOY`,
         body: `Tienes ${todayImportant.length} actividades prioritarias programadas para hoy: ${todayImportant.map(t => `${t.espacio} (${t.horaInicio})`).join(', ')}.`,
         targetDate: todayStr,
-        view: 'daily'
+        view: 'daily',
+        isRemoteBroadcast: true
       });
     }
   }

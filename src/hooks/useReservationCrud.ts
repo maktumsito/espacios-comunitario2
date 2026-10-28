@@ -26,7 +26,8 @@ import {
   deleteAllHolidayReservations,
   getDeletedIds,
   recordDeletedId,
-  unrecordDeletedId
+  unrecordDeletedId,
+  hasReservationMaterialChange
 } from '../services/reservationService';
 import { recordAuditEntry, computeReservationDiff } from '../services/auditLogService';
 import { notifyTopamiento, notifyImportantActivity } from '../services/notificationService';
@@ -266,9 +267,8 @@ export function useReservationCrud({
           solicitudEliminacion: solicitudInfo
         }));
 
-
-
-        applyConfirmed(await saveReservationsBatch(updatedList));
+        const confirmedWrite = await saveReservationsBatch(updatedList);
+        applyConfirmed(confirmedWrite);
 
         void safeAudit({
           action: 'REQUEST_DELETE',
@@ -279,7 +279,10 @@ export function useReservationCrud({
           reservaFecha: reservation.fecha,
           reservaEspacio: reservation.espacio,
           reservaHorario: `${reservation.horaInicio} - ${reservation.horaFin}`,
-          reservaResponsable: reservation.responsable
+          reservaResponsable: reservation.responsable,
+          previousState: toUpdate,
+          newState: confirmedWrite.reservations,
+          newStateIsConfirmed: true
         });
       } else {
         const updatedReservation: Reservation = {
@@ -287,9 +290,8 @@ export function useReservationCrud({
           solicitudEliminacion: solicitudInfo
         };
 
-
-
-        applyConfirmed(await saveReservation(updatedReservation));
+        const confirmedWrite = await saveReservation(updatedReservation);
+        applyConfirmed(confirmedWrite);
 
         void safeAudit({
           action: 'REQUEST_DELETE',
@@ -300,7 +302,10 @@ export function useReservationCrud({
           reservaFecha: reservation.fecha,
           reservaEspacio: reservation.espacio,
           reservaHorario: `${reservation.horaInicio} - ${reservation.horaFin}`,
-          reservaResponsable: reservation.responsable
+          reservaResponsable: reservation.responsable,
+          previousState: reservation,
+          newState: confirmedWrite.reservations,
+          newStateIsConfirmed: true
         });
       }
 
@@ -396,9 +401,8 @@ export function useReservationCrud({
           return copy;
         });
 
-
-
-        applyConfirmed(await saveReservationsBatch(updatedList));
+        const confirmedWrite = await saveReservationsBatch(updatedList);
+        applyConfirmed(confirmedWrite);
 
         void safeAudit({
           action: 'REJECT_DELETE_REQUEST',
@@ -409,15 +413,17 @@ export function useReservationCrud({
           reservaFecha: reservation.fecha,
           reservaEspacio: reservation.espacio,
           reservaHorario: `${reservation.horaInicio} - ${reservation.horaFin}`,
-          reservaResponsable: reservation.responsable
+          reservaResponsable: reservation.responsable,
+          previousState: toUpdate,
+          newState: confirmedWrite.reservations,
+          newStateIsConfirmed: true
         });
       } else {
         const copy: Reservation = { ...reservation };
         delete copy.solicitudEliminacion;
 
-
-
-        applyConfirmed(await saveReservation(copy));
+        const confirmedWrite = await saveReservation(copy);
+        applyConfirmed(confirmedWrite);
 
         void safeAudit({
           action: 'REJECT_DELETE_REQUEST',
@@ -428,7 +434,10 @@ export function useReservationCrud({
           reservaFecha: reservation.fecha,
           reservaEspacio: reservation.espacio,
           reservaHorario: `${reservation.horaInicio} - ${reservation.horaFin}`,
-          reservaResponsable: reservation.responsable
+          reservaResponsable: reservation.responsable,
+          previousState: reservation,
+          newState: confirmedWrite.reservations,
+          newStateIsConfirmed: true
         });
       }
 
@@ -520,7 +529,9 @@ export function useReservationCrud({
 
   const handleImportReservations = useCallback(async (importedList: Reservation[]) => {
     const existing = new Map(reservations.map(r=>[r.id,r]));
-    const imported = [...new Map(importedList.map(r=>[r.id,{ ...r, version: existing.get(r.id)?.version || 0 }])).values()];
+    const deduplicated = [...new Map(importedList.map(r=>[r.id,{ ...r, version: existing.get(r.id)?.version || 0 }])).values()];
+    const imported = deduplicated.filter(r => hasReservationMaterialChange(existing.get(r.id), r));
+    if (!imported.length) return;
     if (imported.some(r=>existing.has(r.id)) && !userCanEditReservations(currentUser)) throw new Error('No tienes permiso para editar las reservas importadas.');
     if (imported.some(r=>!existing.has(r.id)) && !userCanCreateReservations(currentUser)) throw new Error('No tienes permiso para crear las reservas importadas.');
     const conflicts = detectBatchConflicts(imported, reservations, new Set(imported.map(r=>r.id)));
@@ -529,7 +540,7 @@ export function useReservationCrud({
     applyConfirmed(confirmedWrite);
     void safeAudit({
       action: 'BULK_IMPORT',
-      description: `Importadas / Sincronizadas ${importedList.length} reservas`,
+      description: `Importadas / Sincronizadas ${imported.length} reservas`,
       reservaId: 'BULK_IMPORT',
       user: currentUser,
       previousState: imported.filter(r => existing.has(r.id)).map(r => existing.get(r.id)!),

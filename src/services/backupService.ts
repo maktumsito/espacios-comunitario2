@@ -307,7 +307,7 @@ function saveLocalBackupHistory(items: DatabaseBackupMetadata[]): void {
 // BACKUP CREATION ENGINE
 // ============================================================================
 
-export const BACKUP_CHUNK_SIZE = 400_000; // 400KB characters to stay comfortably under Firestore's 1MB limit
+export const BACKUP_CHUNK_SIZE = 750_000; // 750KB characters (bounded to 800KB UTF-8 bytes) to stay comfortably under Firestore's 1MB and dataApi's 900KB limit
 
 // Concurrency lock to prevent duplicate simultaneous backup runs (e.g. from React Strict Mode mount)
 let backupInProgressPromise: Promise<DatabaseBackupRecord> | null = null;
@@ -317,6 +317,7 @@ export interface CreateBackupOptions {
   creadoPor?: string;
   customReservations?: Reservation[];
   descripcion?: string;
+  skipScheduleConfigWrite?: boolean;
 }
 
 /**
@@ -494,23 +495,28 @@ export async function createDatabaseBackup(
       try {
         const db = getDb();
 
-        // Save chunks to subcollection
-        for (let i = 0; i < chunks.length; i += 4) {
-          await Promise.all(
-            chunks
-              .slice(i, i + 4)
-              .map((chunk) =>
-                setDoc(
-                  doc(db, BACKUP_COLLECTION, id, "partes", chunk.id),
-                  chunk,
-                ),
-              ),
-          );
+        // Save chunks and metadata in bounded atomic writeBatches (up to 8 parts per batch)
+        const BATCH_PART_LIMIT = 8;
+        if (chunks.length === 0) {
+          const batch = writeBatch(db);
+          batch.set(doc(db, BACKUP_COLLECTION, id), metadata);
+          await batch.commit();
+        } else {
+          for (let i = 0; i < chunks.length; i += BATCH_PART_LIMIT) {
+            const batch = writeBatch(db);
+            const slice = chunks.slice(i, i + BATCH_PART_LIMIT);
+            for (const chunk of slice) {
+              batch.set(
+                doc(db, BACKUP_COLLECTION, id, "partes", chunk.id),
+                chunk,
+              );
+            }
+            if (i + BATCH_PART_LIMIT >= chunks.length) {
+              batch.set(doc(db, BACKUP_COLLECTION, id), metadata);
+            }
+            await batch.commit();
+          }
         }
-
-        // Save metadata to main document (size is < 2 KB, well below 1 MB)
-        const backupDocRef = doc(db, BACKUP_COLLECTION, id);
-        await setDoc(backupDocRef, metadata);
 
         console.log(
           `[BackupService] Copia de seguridad guardada exitosamente en Firestore (${id}, ${tamanoBytes} bytes en ${totalPartes} partes, ${reservations.length} reservas)`,
@@ -529,17 +535,32 @@ export async function createDatabaseBackup(
       );
       saveLocalBackupHistory([metadata, ...existingHistory]);
 
-      try {
-        await saveBackupScheduleConfig({
-          lastBackupDate: dateStr,
-          lastBackupTimestamp: now.getTime(),
-          lastBackupId: id,
-        });
-      } catch (err) {
-        console.warn(
-          "Respaldo confirmado; no se pudo actualizar su programación:",
-          err,
-        );
+      if (options.skipScheduleConfigWrite) {
+        if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+          const currentConfig = getBackupScheduleConfig();
+          localStorage.setItem(
+            BACKUP_CONFIG_STORAGE_KEY,
+            JSON.stringify({
+              ...currentConfig,
+              lastBackupDate: dateStr,
+              lastBackupTimestamp: now.getTime(),
+              lastBackupId: id,
+            }),
+          );
+        }
+      } else {
+        try {
+          await saveBackupScheduleConfig({
+            lastBackupDate: dateStr,
+            lastBackupTimestamp: now.getTime(),
+            lastBackupId: id,
+          });
+        } catch (err) {
+          console.warn(
+            "Respaldo confirmado; no se pudo actualizar su programación:",
+            err,
+          );
+        }
       }
 
       // 5. Audit Log Entry
@@ -679,6 +700,7 @@ export async function checkAndRunScheduledBackup(
         tipo: "automatica_15_dias",
         creadoPor: "Sistema (Automático cada 15 días)",
         customReservations,
+        skipScheduleConfigWrite: true,
       });
 
       await finishScheduledBackup(db, claim, backup).catch((error) => {

@@ -16,9 +16,9 @@ import {
 import { getDb } from '../firebase/config';
 import { Reservation } from '../types';
 import { getAuthSessionToken, getStoredAuthUser, isCoordinatorOrAdmin, userCanCreateReservations, userCanEditReservations, userCanDeleteReservations } from './authService';
-import { writeReservations, readPendingOperations, type WriteOptions, type WriteResult } from './reservationWriter';
+import { writeReservations, readPendingOperations, hasReservationMaterialChange, type WriteOptions, type WriteResult } from './reservationWriter';
 import { updateOperationJournal } from './reservationOperationJournal';
-export { getPendingOperations, readPendingOperations, ReservationWriteError, ReservationVersionError } from './reservationWriter';
+export { getPendingOperations, readPendingOperations, hasReservationMaterialChange, ReservationWriteError, ReservationVersionError } from './reservationWriter';
 import { INITIAL_RESERVATIONS } from '../data/initialData';
 import { isChileanHoliday, verifyHolidayOverrideKey } from '../utils/holidayUtils';
 import { normalizeSpaceName } from '../data/spacesData';
@@ -1040,8 +1040,14 @@ export async function seedAllToFirestore(
     const targets = reservations.map(r=>({ ...r, version: previous.get(r.id)?.version || 0 }));
     const targetIds = new Set(targets.map(r=>r.id));
     const deletedIds = force ? remote.docs.filter(d=>!targetIds.has(d.id)).map(d=>d.id) : [];
-    const result = await commitReservationChanges(targets, { deletedIds, expectedVersions:Object.fromEntries(remote.docs.map(d=>[d.id,d.data().version||0])), allowConflictOverride: force });
-    const confirmed = force ? result.reservations : getLocalCache();
+    const changedTargets = targets.filter(r => hasReservationMaterialChange(previous.get(r.id), r, cleanReservationForFirestore));
+    if (changedTargets.length === 0 && deletedIds.length === 0) {
+      setLocalCache(force ? [...targets] : getLocalCache(), { lastFirestoreHash: targetHash, lastSyncTime: Date.now() });
+      return { count: reservations.length, skipped: true };
+    }
+    const result = await commitReservationChanges(changedTargets, { deletedIds, expectedVersions:Object.fromEntries(remote.docs.map(d=>[d.id,d.data().version||0])), allowConflictOverride: force });
+    const unchangedExisting = targets.filter(r => !changedTargets.some(c => c.id === r.id)).map(r => previous.get(r.id) || r);
+    const confirmed = force ? [...unchangedExisting, ...result.reservations].sort(compareReservationsByDate) : getLocalCache();
     setLocalCache(confirmed, { lastFirestoreHash: calculateReservationsHash(confirmed), lastSyncTime: Date.now() });
 
     return { count: reservations.length, skipped: false };

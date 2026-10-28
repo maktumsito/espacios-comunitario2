@@ -119,14 +119,6 @@ export function subscribeToAdminConfig(
       colRef,
       (snapshot) => {
         if (snapshot.empty) {
-          if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
-          // Seed defaults to Firestore so all devices have shared configuration
-          const spaces = getStoredSpaces();
-          const loans = getStoredLoanTypes();
-          const activities = getStoredActivityTypes();
-          void saveConfigDocToFirestore('espacios', spaces).catch(console.error);
-          void saveConfigDocToFirestore('tipos_prestamo', loans).catch(console.error);
-          void saveConfigDocToFirestore('tipos_actividad', activities).catch(console.error);
           return;
         }
 

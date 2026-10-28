@@ -8,11 +8,32 @@ import { reservationSlots } from '../src/services/reservationWriter';
 
 const previousDate = (date: string) => new Date(Date.parse(`${date}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
 
+export function equipmentAllocationSignature(r?: Reservation): string {
+  if (!r || !isReservationActiveForAvailability(r, new Set()) || !r.equipamientoSolicitado?.length) return '';
+  const items = r.equipamientoSolicitado
+    .map(item => ({
+      id: (item.equipmentId || '').trim().toLowerCase(),
+      name: (item.equipmentName || '').trim().toLowerCase(),
+      quantity: Number(item.quantity) || 0,
+    }))
+    .filter(item => item.quantity > 0)
+    .sort((a, b) => (a.id || a.name).localeCompare(b.id || b.name));
+  if (!items.length) return '';
+  return JSON.stringify([r.fecha, r.horaInicio, r.horaFin, Boolean(r.terminaDiaSiguiente), items]);
+}
+
 /** Read before any transaction writes. Query canonical reservations so old bookings
  * need no index migration. Per-resource/day guards serialize competitors in different
  * rooms, including the first two users racing to create a previously missing guard. */
 export async function prepareEquipmentAllocation(db: Firestore, tx: Transaction, current: Map<string, Reservation>, saved: Reservation[], changedIds: string[]): Promise<() => void> {
-  const relevant = [...current.values(), ...saved].filter(r => isReservationActiveForAvailability(r, new Set()) && r.equipamientoSolicitado?.length);
+  const savedById = new Map(saved.map(r => [r.id, r]));
+  const equipmentChangedIds = changedIds.filter(
+    id => equipmentAllocationSignature(current.get(id)) !== equipmentAllocationSignature(savedById.get(id))
+  );
+  if (!equipmentChangedIds.length) return () => {};
+  const relevant = equipmentChangedIds
+    .flatMap(id => [current.get(id), savedById.get(id)])
+    .filter((r): r is Reservation => Boolean(r && isReservationActiveForAvailability(r, new Set()) && r.equipamientoSolicitado?.length));
   if (!relevant.length) return () => {};
   const config = await tx.get(db.doc('configuracion_sistema/equipamiento'));
   const catalog: EquipmentItem[] = config.exists && Array.isArray(config.get('items')) ? config.get('items') : DEFAULT_EQUIPMENT_ITEMS;

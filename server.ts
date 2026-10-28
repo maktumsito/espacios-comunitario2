@@ -528,7 +528,7 @@ async function executeScheduledDispatchInternal(force = false): Promise<{
 
     const textBody = `Centro Comunitario Diaguitas\nDespacho Oficial de Planillas de Actividades\n\nFechas: ${formattedDatesList}\nTotal actividades: ${totalActivities}\n\nAdjuntos para impresión (${attachments.length}):\n${attachments.map(a => `- ${a.filename}`).join('\n')}\n\nGenerado automáticamente por el Sistema de Gestión.`;
 
-    const delivery=await claimDelivery(getServerDatabase(),santiago.dateStr);
+    const delivery=await claimDelivery(getServerDatabase(),santiago.dateStr,Date.now(),true);
     if(!delivery)return {success:false,skipped:true,message:'El ciclo ya se envió, está en curso o requiere revisión de su resultado. No se repetirá automáticamente.'};
     await startDelivery(getServerDatabase(),delivery);
     // 9. Send through the free Gmail transport.
