@@ -53,7 +53,7 @@ export function scheduleSlotsForDate(date: string, options: ScheduleOptions): Sc
   return slots.map(slot=>({...slot,terminaDiaSiguiente:Boolean(base.terminaDiaSiguiente) && timeToMinutes(slot.horaFin)<=timeToMinutes(slot.horaInicio)}));
 }
 export function sameScheduleSlot(a: Partial<ScheduleSlot>, b: Partial<ScheduleSlot>): boolean {
-  return a.fecha === b.fecha && normalizeSpaceName(a.espacio || '') === normalizeSpaceName(b.espacio || '') && a.horaInicio === b.horaInicio && a.horaFin === b.horaFin;
+  return a.fecha === b.fecha && normalizeSpaceName(a.espacio || '') === normalizeSpaceName(b.espacio || '') && a.horaInicio === b.horaInicio && a.horaFin === b.horaFin && Boolean(a.terminaDiaSiguiente) === Boolean(b.terminaDiaSiguiente);
 }
 
 /** Keep session identity when editing the first/second schedule of the same day. */

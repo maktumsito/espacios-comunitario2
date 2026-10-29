@@ -112,6 +112,26 @@ it('skips equipment_day_guards reads and writes when reservation edits do not al
   expect(tx.set).not.toHaveBeenCalled();
 });
 
+it('skips equipment_day_guards reads and writes when deleting reservations that had equipment', async () => {
+  const base: any = {
+    id: 'r1',
+    fecha: '2026-10-15',
+    horaInicio: '10:00',
+    horaFin: '11:00',
+    espacio: 'SALA 2',
+    estado: 'activa',
+    equipamientoSolicitado: [{ equipmentId: 'EQ_PROYECTOR_HD', equipmentName: 'Proyector', quantity: 1 }],
+  };
+  const tx: any = { get: vi.fn(), getAll: vi.fn(), set: vi.fn() };
+  const db: any = { doc: vi.fn(), collection: vi.fn() };
+  const current = new Map([['r1', base]]);
+  const commit = await prepareEquipmentAllocation(db, tx, current, [], ['r1']);
+  commit();
+  expect(tx.get).not.toHaveBeenCalled();
+  expect(tx.getAll).not.toHaveBeenCalled();
+  expect(tx.set).not.toHaveBeenCalled();
+});
+
 it('acquires delivery_started in a single transaction when immediateStart is enabled', async () => {
   let transactions = 0;
   const store = new Map<string, any>();

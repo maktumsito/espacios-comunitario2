@@ -110,7 +110,7 @@ describe('atomic audit restoration', () => {
     expect(memory.rows.get('reservas/original').restoredStateVersion).toBeUndefined();
   });
 });
-import { getPendingOperations, reservationSlots, writeReservations } from '../reservationWriter';
+import { getPendingOperations, hasReservationMaterialChange, reservationSlots, writeReservations } from '../reservationWriter';
 
 const original: Reservation = { id: 'original', fecha: '2026-10-06', horaInicio: '10:00', horaFin: '11:00', espacio: 'SALA 2', responsable: 'Vecino', descripcion: 'Taller semanal', tipoActividad: 'Taller', actividadRecurrente: 'Sí', serieRecurrente: 'serie', estado: 'activa', version: 1 };
 const clean = (row: Reservation) => JSON.parse(JSON.stringify(row));
@@ -188,6 +188,51 @@ describe('availability write quota', () => {
     expect(memory.rows.get('reservas/original').version).toBe(1);
     expect(memory.rows.get('reservas/second').version).toBe(2);
     expect(result.reservations).toHaveLength(2);
+  });
+  it('treats missing optional strings, booleans and empty equipment arrays as canonically equal to defaults', () => {
+    const legacyStored: Reservation = {
+      id: 'legacy',
+      fecha: '2026-10-06',
+      horaInicio: '10:00',
+      horaFin: '11:00',
+      espacio: 'SALA 2',
+      responsable: 'Vecino',
+      descripcion: 'Taller',
+      tipoActividad: 'Taller',
+      actividadRecurrente: 'Sí',
+      serieRecurrente: 'SER_1',
+      estado: 'confirmada',
+      version: 1,
+    };
+    const formHydrated: Reservation = {
+      ...legacyStored,
+      telefonoContacto: '',
+      emailContacto: '',
+      tipoPrestamo: '',
+      comentarios: '',
+      rut: '',
+      domicilio: '',
+      realizada: 'No',
+      importante: 'No',
+      requiereCartaCompromiso: false,
+      cartaCompromisoDescargada: false,
+      terminaDiaSiguiente: false,
+      horarioExtendidoAutorizado: false,
+      equipamientoSolicitado: [],
+      recurrenteId: 'SER_1',
+      estado: 'activa',
+      updatedAt: '2026-10-29T12:00:00Z',
+    };
+    expect(hasReservationMaterialChange(legacyStored, formHydrated)).toBe(false);
+  });
+  it('does not read schedule_slots or fail conflict checks when editing metadata on a slot with historical overlap', async () => {
+    seed({ ...original, id: 'overlap', actividadRecurrente: 'No', responsable: 'Otro' });
+    memory.reads = [];
+    memory.writes = [];
+    await writeReservations({} as any, [{ ...original, descripcion: 'Descripción actualizada', comentarios: 'Nota' }], clean);
+    expect(memory.reads).toEqual(['reservas/original']);
+    expect(memory.writes).toEqual(['reservas/original']);
+    expect(memory.rows.get('reservas/original').descripcion).toBe('Descripción actualizada');
   });
 });
 describe('single occurrence replacement transaction', () => {

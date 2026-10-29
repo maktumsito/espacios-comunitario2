@@ -1,7 +1,7 @@
 import { buildAvailabilityIndex, getAvailabilityCandidates } from '../utils/availabilityIndex';
 import { useMemo } from 'react';
 import { Reservation, SpaceInfo, UpdateScope, CustomScheduleSlot } from '../types';
-import { checkSingleConflict, timeToMinutes, formatMinutesToTime, findReservationConflicts } from '../utils/conflictDetector';
+import { checkSingleConflict, timeToMinutes, formatMinutesToTime, findReservationConflicts, isReservationActiveForAvailability } from '../utils/conflictDetector';
 import {
   ConflictRecommendation,
   findAvailableTimeSlotsInSpace,
@@ -100,7 +100,17 @@ export function useReservationConflictResolution({
   const availabilityIndex = useMemo(()=>buildAvailabilityIndex(allReservations),[allReservations]);
   const checkIndexedConflict: typeof checkSingleConflict = (candidate, _all, excluded, series) => {
     if (conflictReviewFrom && candidate.fecha && candidate.fecha < conflictReviewFrom) return [];
-    if (isEditingRecurring && updateScope !== 'single' && !reviewSlots.some(slot=>sameScheduleSlot(slot,candidate))) return [];
+    if (editingReservation && !isDuplicating) {
+      if ((!isEditingRecurring || updateScope === 'single') && isReservationActiveForAvailability(editingReservation) && sameScheduleSlot(editingReservation, candidate)) return [];
+      if (isEditingRecurring && updateScope !== 'single') {
+        const matchedSlot = reviewSlots.find(slot => sameScheduleSlot(slot, candidate));
+        if (!matchedSlot) return [];
+        if (matchedSlot.sourceId) {
+          const orig = allReservations.find(r => r.id === matchedSlot.sourceId);
+          if (orig && isReservationActiveForAvailability(orig) && sameScheduleSlot(orig, candidate)) return [];
+        }
+      }
+    }
     return checkSingleConflict(candidate,getAvailabilityCandidates(availabilityIndex,candidate),excluded,series);
   };
   // Conflict calculation for individual date slots (primary slot 1 or secondary slot 2)
@@ -535,8 +545,17 @@ export function useReservationConflictResolution({
     const candidates=reviewSlots.map((slot,index)=>({...formData,...slot,id:slot.sourceId||`PREVIEW_${index}`,estado:'activa'} as Reservation));
     const existing=new Map<string,Reservation>();
     candidates.forEach(candidate=>getAvailabilityCandidates(availabilityIndex,candidate).forEach(r=>existing.set(r.id,r)));
-    return [...new Set(findReservationConflicts(candidates,[...existing.values()],{excludeReservationIds,excludeSeriesId,allowCandidateSelfConflicts:false}).map(conflict=>conflict.fecha))].sort();
-  },[reviewSlots,availabilityIndex,excludeReservationIds,excludeSeriesId]);
+    const changedCandidates = editingReservation && !isDuplicating
+      ? candidates.filter((candidate, index) => {
+          const sourceId = reviewSlots[index]?.sourceId;
+          const orig = sourceId ? allReservations.find(r => r.id === sourceId) : undefined;
+          return !orig || !isReservationActiveForAvailability(orig) || !sameScheduleSlot(orig, candidate);
+        })
+      : candidates;
+    if (changedCandidates.length === 0) return [];
+    const unchangedCandidates = candidates.filter(c => !changedCandidates.includes(c));
+    return [...new Set(findReservationConflicts(changedCandidates,[...existing.values(), ...unchangedCandidates],{excludeReservationIds,excludeSeriesId,allowCandidateSelfConflicts:false}).map(conflict=>conflict.fecha))].sort();
+  },[reviewSlots,availabilityIndex,excludeReservationIds,excludeSeriesId,editingReservation,isDuplicating,allReservations]);
 
   return {
     reviewSlots,

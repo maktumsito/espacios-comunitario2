@@ -27,7 +27,8 @@ import {
   getDeletedIds,
   recordDeletedId,
   unrecordDeletedId,
-  hasReservationMaterialChange
+  hasReservationMaterialChange,
+  hasReservationOccupancyChange
 } from '../services/reservationService';
 import { recordAuditEntry, computeReservationDiff } from '../services/auditLogService';
 import { notifyTopamiento, notifyImportantActivity } from '../services/notificationService';
@@ -80,7 +81,7 @@ export interface UseReservationCrudReturn {
   handleCreateOrUpdate: (
     reserva: Reservation,
     generateSeries?: boolean,
-    seriesDates?: (string | { fecha: string; horaInicio?: string; horaFin?: string; espacio?: string })[],
+    seriesDates?: (string | { fecha: string; horaInicio?: string; horaFin?: string; espacio?: string; terminaDiaSiguiente?: boolean })[],
     updateWholeSeries?: boolean,
     batchUpdateInfo?: BatchUpdateInfo,
     allowConflictOverride?: boolean
@@ -173,14 +174,19 @@ export function useReservationCrud({
     }
 
     const selected=selection||reservations.map(r=>selectedReservation?.id===r.id?selectedReservation:r);
+    const mergedPool = [...new Map([...getLocalCache(), ...selected].map(r => [r.id, r])).values()];
     const targets = isSeries && seriesId
-      ? selected.filter(r=>r.serieRecurrente===seriesId || r.recurrenteId===seriesId)
-      : selected.filter(r=>r.id===id);
+      ? mergedPool.filter(r=>r.serieRecurrente===seriesId || r.recurrenteId===seriesId)
+      : mergedPool.filter(r=>r.id===id);
+    const deleteIds = targets.length ? targets.map(r=>r.id) : [id];
+    const expectedVersions = targets.length
+      ? Object.fromEntries(targets.map(r=>[r.id,r.version||0]))
+      : { [id]: mergedPool.find(r=>r.id===id)?.version || 0 };
     try {
-      applyConfirmed(await commitReservationChanges([], { deletedIds: targets.length ? targets.map(r=>r.id) : [id], expectedVersions:Object.fromEntries(targets.map(r=>[r.id,r.version||0])) }));
-      if (selectedReservation && targets.some(r=>r.id===selectedReservation.id)) { setIsDetailModalOpen(false); setSelectedReservation(null); }
+      applyConfirmed(await commitReservationChanges([], { deletedIds: deleteIds, expectedVersions }));
+      if (selectedReservation && deleteIds.includes(selectedReservation.id)) { setIsDetailModalOpen(false); setSelectedReservation(null); }
       triggerSyncToast('Eliminación confirmada.', 'success');
-      void safeAudit({ action: isSeries ? 'DELETE_SERIES' : 'DELETE', description: `Eliminadas ${targets.length} reservas`, reservaId: seriesId || id, user: currentUser, previousState: isSeries ? targets : targets[0] });
+      void safeAudit({ action: isSeries ? 'DELETE_SERIES' : 'DELETE', description: `Eliminadas ${deleteIds.length} reservas`, reservaId: seriesId || id, user: currentUser, previousState: isSeries ? targets : targets[0] });
     } catch (err: any) { triggerSyncToast(err?.message || 'No se pudo eliminar.', 'error'); throw err; }
   }, [currentUser, reservations, selectedReservation, setReservations, setIsDetailModalOpen, setSelectedReservation, triggerSyncToast, handleRequestDelete]);
 
@@ -600,7 +606,7 @@ export function useReservationCrud({
   const handleCreateOrUpdate = useCallback(async (
     reserva: Reservation,
     generateSeries?: boolean,
-    seriesDates?: (string | { fecha: string; horaInicio?: string; horaFin?: string; espacio?: string })[],
+    seriesDates?: (string | { fecha: string; horaInicio?: string; horaFin?: string; espacio?: string; terminaDiaSiguiente?: boolean })[],
     updateWholeSeries?: boolean,
     batchUpdateInfo?: BatchUpdateInfo,
     allowConflictOverride?: boolean
@@ -658,23 +664,28 @@ export function useReservationCrud({
           return false;
         }
 
-        const existingIds = new Set([...reservations, ...exceptionHistory].map(r=>r.id));
+        const existingById = new Map([...reservations, ...exceptionHistory].map(r=>[r.id,r]));
+        const existingIds = new Set(existingById.keys());
         if (activeUpdated.some(r=>!existingIds.has(r.id)) && !userCanCreateReservations(currentUser)) throw new Error('No tienes permiso para agregar nuevas ocurrencias.');
         if (batchUpdateInfo.deletedIds?.length && !userCanDeleteReservations(currentUser)) throw new Error('No tienes permiso para eliminar ocurrencias.');
         const cleanAffectedIds = affectedIds.filter((id) => !deletedSet.has(id) && (scope === 'single' || !protectedIds.has(id)));
-        const cleanReservations = [...new Map([...reservations,...exceptionHistory].map(r=>[r.id,r])).values()].filter(
+        const cleanReservations = [...existingById.values()].filter(
           (r) => !deletedSet.has(r.id) && isReservationActiveForAvailability(r, deletedSet)
         );
 
         const seriesIdToExclude = undefined;
+        const occupancyChangedUpdated = activeUpdated.filter(r => hasReservationOccupancyChange(existingById.get(r.id), r));
+        const occupancyUnchangedUpdated = activeUpdated.filter(r => !occupancyChangedUpdated.includes(r));
 
         // Validate conflicts excluding affected reservations and current series
-        const conflictsFound = detectBatchConflicts(
-          activeUpdated,
-          cleanReservations,
-          new Set([...cleanAffectedIds, ...(batchUpdateInfo.deletedIds || [])]),
-          seriesIdToExclude
-        );
+        const conflictsFound = occupancyChangedUpdated.length > 0
+          ? detectBatchConflicts(
+              occupancyChangedUpdated,
+              [...cleanReservations, ...occupancyUnchangedUpdated],
+              new Set([...cleanAffectedIds, ...(batchUpdateInfo.deletedIds || [])]),
+              seriesIdToExclude
+            )
+          : [];
 
         if (conflictsFound.length > 0 && !allowConflictOverride) {
           const firstConflict = conflictsFound[0];
@@ -682,7 +693,7 @@ export function useReservationCrud({
           triggerSyncToast(`Operación bloqueada por conflicto de disponibilidad:\n\n${conflictMsg}\n\nNo se realizaron modificaciones.`, 'error');
           return false;
         }
-        const blocks = findMaintenanceBlockConflicts(activeUpdated.filter(r=>isReservationActiveForAvailability(r)),spaceBlocks);
+        const blocks = findMaintenanceBlockConflicts(occupancyChangedUpdated.filter(r=>isReservationActiveForAvailability(r)),spaceBlocks);
         if (blocks.length) throw new Error(formatBlockConflictMessage(blocks[0]));
         const changedIds = new Set([...cleanAffectedIds,...(batchUpdateInfo.deletedIds||[])]);
         const afterChanges = [...cleanReservations.filter(r=>!changedIds.has(r.id)),...activeUpdated.filter(r=>isReservationActiveForAvailability(r))];
@@ -702,6 +713,16 @@ export function useReservationCrud({
           }
         }
 
+        const materialUpdated = batchUpdateInfo.replacementOriginal
+          ? activeUpdated
+          : activeUpdated.filter(r => hasReservationMaterialChange(existingById.get(r.id), r));
+        if (materialUpdated.length === 0 && !(batchUpdateInfo.deletedIds?.length)) {
+          setIsReservationModalOpen(false);
+          setEditingReservation(null);
+          triggerSyncToast('✓ Sin cambios pendientes por guardar', 'info');
+          return true;
+        }
+
         const scopeNames: Record<string, string> = {
           single: 'Solo esta reserva',
           future: 'Esta y las siguientes',
@@ -709,16 +730,20 @@ export function useReservationCrud({
           dateRange: 'Rango de fechas',
           selected: 'Fechas seleccionadas'
         };
-        const firstRes = activeUpdated[0];
+        const firstRes = materialUpdated[0] || activeUpdated[0];
         const recurringEdit=Boolean(seriesIdForExceptions && !batchUpdateInfo.replacementOriginal);
-        const deletionGuards=Object.fromEntries((batchUpdateInfo.deletedIds||[]).map(id=>{const row=reservations.find(r=>r.id===id);if(!row)throw new Error('Recarga la reserva que quieres eliminar.');return [id,row.version||0];}));
-        const writeOptions = {...(Object.keys(deletionGuards).length?{expectedVersions:{...deletionGuards,...(batchUpdateInfo.expectedVersions||{})}}:{}),deletedIds: batchUpdateInfo.deletedIds,allowConflictOverride,
-          ...(recurringEdit ? {requireAtomic:true,...(batchUpdateInfo.expectedVersions?{expectedVersions:batchUpdateInfo.expectedVersions}:{}),
-            ...(!(batchUpdateInfo.addedIds||[]).length && activeUpdated.every(r=>existingIds.has(r.id)) ? {intent:'update' as const} : {})} : {})};
-        const confirmedWrite = await commitReservationChanges(activeUpdated,writeOptions);
+        const deletionGuards=Object.fromEntries((batchUpdateInfo.deletedIds||[]).map(id=>{const row=existingById.get(id);if(!row)throw new Error('Recarga la reserva que quieres eliminar.');return [id,row.version||0];}));
+        const relevantVersionIds = new Set([...materialUpdated.map(r => r.id), ...(batchUpdateInfo.deletedIds || []), ...(batchUpdateInfo.sourceReservationId ? [batchUpdateInfo.sourceReservationId] : [])]);
+        const scopedExpectedVersions = batchUpdateInfo.expectedVersions
+          ? Object.fromEntries(Object.entries(batchUpdateInfo.expectedVersions).filter(([id]) => relevantVersionIds.has(id)))
+          : undefined;
+        const writeOptions = {...(Object.keys(deletionGuards).length?{expectedVersions:{...deletionGuards,...(scopedExpectedVersions||{})}}:{}),deletedIds: batchUpdateInfo.deletedIds,allowConflictOverride,
+          ...(recurringEdit ? {requireAtomic:true,...(scopedExpectedVersions?{expectedVersions:{...deletionGuards,...scopedExpectedVersions}}:{}),
+            ...(!(batchUpdateInfo.addedIds||[]).length && materialUpdated.every(r=>existingIds.has(r.id)) ? {intent:'update' as const} : {})} : {})};
+        const confirmedWrite = await commitReservationChanges(materialUpdated,writeOptions);
             void safeAudit({
               action: 'UPDATE',
-              description: batchUpdateInfo.description || `Modificadas ${activeUpdated.length} reservas (${scopeNames[scope] || scope}) para '${firstRes.tipoActividad}' de ${firstRes.responsable}`,
+              description: batchUpdateInfo.description || `Modificadas ${materialUpdated.length} reservas (${scopeNames[scope] || scope}) para '${firstRes.tipoActividad}' de ${firstRes.responsable}`,
               reservaId: firstRes.id,
               user: currentUser,
               reservaTitle: firstRes.tipoActividad,
@@ -729,14 +754,14 @@ export function useReservationCrud({
               newState: confirmedWrite.reservations,
               newStateIsConfirmed: true,
               previousState: [...new Map([...reservations, ...exceptionHistory, ...(batchUpdateInfo.replacementOriginal ? [batchUpdateInfo.replacementOriginal] : [])].map(r => [r.id, r])).values()]
-                .filter(r => activeUpdated.some(next => next.id === r.id) || batchUpdateInfo!.deletedIds?.includes(r.id))
+                .filter(r => materialUpdated.some(next => next.id === r.id) || batchUpdateInfo!.deletedIds?.includes(r.id))
             });
         applyConfirmed(confirmedWrite);
 
         // Close only after the write confirms all requested changes.
         setIsReservationModalOpen(false);
         setEditingReservation(null);
-        triggerSyncToast(batchUpdateInfo.replacementOriginal ? '✓ Reemplazo confirmado. Las demás fechas continúan normalmente.' : `✓ ${activeUpdated.length} reservas actualizadas y confirmadas`, 'success');
+        triggerSyncToast(batchUpdateInfo.replacementOriginal ? '✓ Reemplazo confirmado. Las demás fechas continúan normalmente.' : `✓ ${materialUpdated.length || (batchUpdateInfo.deletedIds?.length ?? 0)} reservas actualizadas y confirmadas`, 'success');
 
 
 
@@ -759,20 +784,22 @@ export function useReservationCrud({
       }
 
       // Normalize incoming series dates / multi-space segments into explicit independent slots
-      const explicitSlots: Array<{ fecha: string; horaInicio: string; horaFin: string; espacio: string }> = (seriesDates || []).map((item) => {
+      const explicitSlots: Array<{ fecha: string; horaInicio: string; horaFin: string; espacio: string; terminaDiaSiguiente?: boolean }> = (seriesDates || []).map((item) => {
         if (typeof item === 'string') {
           return {
             fecha: item,
             horaInicio: reserva.horaInicio || '10:00',
             horaFin: reserva.horaFin || '11:00',
-            espacio: reserva.espacio || 'GIMNASIO'
+            espacio: reserva.espacio || 'GIMNASIO',
+            terminaDiaSiguiente: Boolean(reserva.terminaDiaSiguiente)
           };
         }
         return {
           fecha: item.fecha,
           horaInicio: item.horaInicio || reserva.horaInicio || '10:00',
           horaFin: item.horaFin || reserva.horaFin || '11:00',
-          espacio: item.espacio || reserva.espacio || 'GIMNASIO'
+          espacio: item.espacio || reserva.espacio || 'GIMNASIO',
+          terminaDiaSiguiente: item.terminaDiaSiguiente !== undefined ? Boolean(item.terminaDiaSiguiente) : Boolean(reserva.terminaDiaSiguiente)
         };
       });
 
@@ -923,13 +950,22 @@ export function useReservationCrud({
           const cleanReservations = reservations.filter(
             (r) => !deletedSet.has(r.id) && isReservationActiveForAvailability(r, deletedSet)
           );
-
-          // Detect any batch conflicts independently for every segment excluding current series
-          const conflictsFound = detectBatchConflicts(
-            updatedSeriesList,
-            cleanReservations,
-            new Set(seriesMatches.map((m) => m.id))
+          const seriesMatchById = new Map(seriesMatches.map((m) => [m.id, m]));
+          const occupancyChangedSeriesList = updatedSeriesList.filter((r) =>
+            hasReservationOccupancyChange(seriesMatchById.get(r.id), r)
           );
+          const occupancyUnchangedSeriesList = updatedSeriesList.filter(
+            (r) => !occupancyChangedSeriesList.includes(r)
+          );
+
+          // Detect any batch conflicts independently for every segment whose schedule changed
+          const conflictsFound = occupancyChangedSeriesList.length > 0
+            ? detectBatchConflicts(
+                occupancyChangedSeriesList,
+                [...cleanReservations, ...occupancyUnchangedSeriesList],
+                new Set(seriesMatches.map((m) => m.id))
+              )
+            : [];
 
           if (conflictsFound.length > 0 && !allowConflictOverride) {
             const firstConflict = conflictsFound[0];
@@ -938,13 +974,23 @@ export function useReservationCrud({
             return false;
           }
 
-          const blocks=findMaintenanceBlockConflicts(updatedSeriesList,spaceBlocks);
+          const blocks=findMaintenanceBlockConflicts(occupancyChangedSeriesList,spaceBlocks);
           if(blocks.length)throw new Error(formatBlockConflictMessage(blocks[0]));
-          const confirmedWrite = await commitReservationChanges(updatedSeriesList, { deletedIds: idsToDelete, allowConflictOverride,
-            requireAtomic:true,expectedVersions:{...Object.fromEntries(seriesMatches.map(r=>[r.id,r.version||0])),[reserva.id]:reserva.version||0} });
+          const materialSeriesList = updatedSeriesList.filter((r) =>
+            hasReservationMaterialChange(seriesMatchById.get(r.id), r)
+          );
+          if (materialSeriesList.length === 0 && idsToDelete.length === 0) {
+            setIsReservationModalOpen(false);
+            setEditingReservation(null);
+            triggerSyncToast('✓ Sin cambios pendientes por guardar', 'info');
+            return true;
+          }
+          const relevantSeriesVersionIds = new Set([...materialSeriesList.map(r => r.id), ...idsToDelete, reserva.id]);
+          const confirmedWrite = await commitReservationChanges(materialSeriesList, { deletedIds: idsToDelete, allowConflictOverride,
+            requireAtomic:true,expectedVersions:Object.fromEntries([...seriesMatches, reserva].filter(r => relevantSeriesVersionIds.has(r.id)).map(r=>[r.id,r.version||0])) });
             void safeAudit({
                 action: 'UPDATE',
-                description: `Actualizada serie recurrente de ${updatedSeriesList.length} reservas para '${reserva.tipoActividad || 'Actividad'}' (${reserva.responsable})`,
+                description: `Actualizada serie recurrente de ${materialSeriesList.length} reservas para '${reserva.tipoActividad || 'Actividad'}' (${reserva.responsable})`,
                 reservaId: finalSeriesId,
                 user: currentUser,
                 reservaTitle: reserva.tipoActividad,
@@ -952,7 +998,7 @@ export function useReservationCrud({
                 reservaEspacio: reserva.espacio,
                 reservaHorario: `${reserva.horaInicio} - ${reserva.horaFin}`,
                 reservaResponsable: reserva.responsable,
-                previousState: seriesMatches.filter(r => updatedSeriesList.some(next => next.id === r.id) || idsToDelete.includes(r.id)),
+                previousState: seriesMatches.filter(r => materialSeriesList.some(next => next.id === r.id) || idsToDelete.includes(r.id)),
                 newState: confirmedWrite.reservations,
                 newStateIsConfirmed: true
               });
@@ -961,7 +1007,7 @@ export function useReservationCrud({
         // Close only after the write confirms all requested changes.
           setIsReservationModalOpen(false);
           setEditingReservation(null);
-          triggerSyncToast(`✓ Serie actualizada y confirmada (${updatedSeriesList.length} sesiones)`, 'success');
+          triggerSyncToast(`✓ Serie actualizada y confirmada (${materialSeriesList.length || idsToDelete.length} sesiones)`, 'success');
 
 
 
@@ -1005,7 +1051,7 @@ export function useReservationCrud({
           ? (reserva.serieRecurrente || reserva.recurrenteId || `DBL_${reserva.id}`.slice(0,128))
           : (reserva.serieRecurrente || reserva.recurrenteId || `SER_${reserva.id}`.slice(0,128));
 
-        let itemsToGenerate: Array<{ fecha: string; horaInicio: string; horaFin: string; espacio: string }> = [];
+        let itemsToGenerate: Array<{ fecha: string; horaInicio: string; horaFin: string; espacio: string; terminaDiaSiguiente?: boolean }> = [];
         if (explicitSlots.length > 0) {
           itemsToGenerate = explicitSlots;
         } else {
@@ -1016,7 +1062,8 @@ export function useReservationCrud({
               fecha: format(addWeeks(baseDate, i), 'yyyy-MM-dd'),
               horaInicio: reserva.horaInicio || '10:00',
               horaFin: reserva.horaFin || '11:00',
-              espacio: reserva.espacio || 'GIMNASIO'
+              espacio: reserva.espacio || 'GIMNASIO',
+              terminaDiaSiguiente: Boolean(reserva.terminaDiaSiguiente)
             });
           }
         }
@@ -1030,7 +1077,7 @@ export function useReservationCrud({
             ? JSON.parse(JSON.stringify(reserva.equipamientoSolicitado))
             : [];
 
-          const uniqueId = i === 0 ? reserva.id : `RSV_${reserva.id}_${i + 1}`;
+          const uniqueId = i === 0 ? reserva.id : `RSV_${reserva.id.slice(0, 110)}_${i + 1}`;
           usedIds.add(uniqueId);
 
           return {
@@ -1040,6 +1087,7 @@ export function useReservationCrud({
             fecha: item.fecha.trim().split('T')[0],
             horaInicio: item.horaInicio.trim(),
             horaFin: item.horaFin.trim(),
+            terminaDiaSiguiente: item.terminaDiaSiguiente !== undefined ? Boolean(item.terminaDiaSiguiente) : Boolean(reserva.terminaDiaSiguiente),
             espacio: normalizeSpaceName(item.espacio || reserva.espacio || 'GIMNASIO'),
             responsable: (reserva.responsable || 'Responsable').trim(),
             tipoActividad: (reserva.tipoActividad || 'Actividad').trim(),
@@ -1072,6 +1120,10 @@ export function useReservationCrud({
           const conflictMsg = formatConflictMessage(firstConflict);
           triggerSyncToast(`Creación bloqueada por conflicto de disponibilidad:\n\n${conflictMsg}\n\nNo se crearon las reservas.`, 'error');
           return false;
+        }
+        const seriesBlocks = findMaintenanceBlockConflicts(seriesList, spaceBlocks);
+        if (seriesBlocks.length > 0) {
+          throw new Error(formatBlockConflictMessage(seriesBlocks[0]));
         }
 
         const confirmedWrite = await saveReservationsBatch(seriesList, { allowConflictOverride, intent:'create' });
@@ -1153,17 +1205,32 @@ export function useReservationCrud({
           triggerSyncToast('Permiso denegado: No tienes autorización para registrar nuevas reservas (gestión controlada por Cristian Shute).', 'error');
           return false;
         }
+        if (isEditing && existingRes && !hasReservationMaterialChange(existingRes, cleanReserva)) {
+          setIsReservationModalOpen(false);
+          setEditingReservation(null);
+          triggerSyncToast('✓ Sin cambios pendientes por guardar', 'info');
+          return true;
+        }
         const deletedSet = getDeletedIds();
         const cleanReservations = reservations.filter(
           (r) => !deletedSet.has(r.id) && isReservationActiveForAvailability(r, deletedSet)
         );
-        const conflictsFound = detectBatchConflicts([cleanReserva], cleanReservations, new Set([cleanReserva.id]));
+        const occupancyChanged = !isEditing || hasReservationOccupancyChange(existingRes, cleanReserva);
+        const conflictsFound = occupancyChanged
+          ? detectBatchConflicts([cleanReserva], cleanReservations, new Set([cleanReserva.id]))
+          : [];
 
         if (conflictsFound.length > 0 && !allowConflictOverride) {
           const firstConflict = conflictsFound[0];
           const conflictMsg = formatConflictMessage(firstConflict);
           triggerSyncToast(`Operación bloqueada por conflicto de disponibilidad:\n\n${conflictMsg}\n\nNo se guardó la reserva.`, 'error');
           return false;
+        }
+        if (occupancyChanged) {
+          const singleBlocks = findMaintenanceBlockConflicts([cleanReserva], spaceBlocks);
+          if (singleBlocks.length > 0) {
+            throw new Error(formatBlockConflictMessage(singleBlocks[0]));
+          }
         }
 
         const confirmedWrite = await saveReservation(cleanReserva, { allowConflictOverride, ...(isEditing ? {} : {intent:'create' as const}) });

@@ -10,7 +10,7 @@ import {
 } from '../types';
 import { normalizeSpaceName } from '../data/spacesData';
 import { isReservationActiveForAvailability, findMaintenanceBlockConflicts, formatBlockConflictMessage, findReservationConflicts } from '../utils/conflictDetector';
-import { getDeletedIds, getLocalCache, saveReservation } from '../services/reservationService';
+import { getDeletedIds } from '../services/reservationService';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import {
   isCommitmentLetterEligible,
@@ -39,6 +39,7 @@ export interface SeriesItemSlot {
   horaInicio?: string;
   horaFin?: string;
   espacio?: string;
+  terminaDiaSiguiente?: boolean;
 }
 
 interface UseReservationSaveHandlerProps {
@@ -487,9 +488,16 @@ export function useReservationSaveHandler({
       }
     }
     const validationCandidates: Reservation[] = plannedSlots.map((slot,index)=>({...effectiveFormData,...slot,id:slot.sourceId || `PREVIEW_${index}`,estado:'activa'} as Reservation));
-    const blocks = findMaintenanceBlockConflicts(validationCandidates,spaceBlocks);
+    const changedScheduleCandidates = validationCandidates.filter((candidate, index) => {
+      if (isDuplicating || !editingReservation) return true;
+      const sourceId = plannedSlots[index]?.sourceId;
+      const original = sourceId ? allReservations.find(r => r.id === sourceId) : undefined;
+      return !original || !isReservationActiveForAvailability(original) || !sameScheduleSlot(original, candidate);
+    });
+    const unchangedScheduleCandidates = validationCandidates.filter(c => !changedScheduleCandidates.includes(c));
+    const blocks = findMaintenanceBlockConflicts(changedScheduleCandidates,spaceBlocks);
     if (blocks.length) { abortWithFeedback(formatBlockConflictMessage(blocks[0])); return; }
-    if (!forceConflictOverride && !allowConflictOverride && findReservationConflicts(validationCandidates,allReservations,{
+    if (!forceConflictOverride && !allowConflictOverride && changedScheduleCandidates.length > 0 && findReservationConflicts(changedScheduleCandidates,[...allReservations, ...unchangedScheduleCandidates],{
       excludeReservationIds,excludeSeriesId,allowCandidateSelfConflicts:false,
     }).length) { setShowConflictDialog(true); return; }
 
@@ -589,7 +597,14 @@ export function useReservationSaveHandler({
         : isRecurring && finalDates.length > 0
         ? finalDates[finalDates.length - 1]
         : effectiveFormData.fecha,
-      cantidadParticipantes: Number.isFinite(Number(effectiveFormData.cantidadParticipantes)) ? Number(effectiveFormData.cantidadParticipantes) : 10,
+      cantidadParticipantes:
+        effectiveFormData.cantidadParticipantes !== undefined &&
+        effectiveFormData.cantidadParticipantes !== ('' as any) &&
+        Number.isFinite(Number(effectiveFormData.cantidadParticipantes))
+          ? Number(effectiveFormData.cantidadParticipantes)
+          : editingReservation && !isDuplicating && editingReservation.cantidadParticipantes !== undefined
+          ? editingReservation.cantidadParticipantes
+          : 10,
       realizada: effectiveFormData.realizada || 'No',
       rut: effectiveFormData.rut || '',
       domicilio: effectiveFormData.domicilio || '',
@@ -601,7 +616,12 @@ export function useReservationSaveHandler({
         (isCommitmentLetterEligible(effectiveFormData.tipoActividad, effectiveFormData.tipoPrestamo) ||
           Boolean(effectiveFormData.requiereCartaCompromiso)) &&
         descargarCartaAlCrear,
-      cartaCompromisoDescargada: effectiveFormData.cartaCompromisoDescargada || false,
+      cartaCompromisoDescargada: Boolean(
+        effectiveFormData.cartaCompromisoDescargada ||
+          ((isCommitmentLetterEligible(effectiveFormData.tipoActividad, effectiveFormData.tipoPrestamo) ||
+            Boolean(effectiveFormData.requiereCartaCompromiso)) &&
+            descargarCartaAlCrear)
+      ),
       cartaCompromisoAdjunta: effectiveFormData.cartaCompromisoAdjunta,
       equipamientoSolicitado: effectiveFormData.equipamientoSolicitado || [],
       terminaDiaSiguiente: Boolean(effectiveFormData.terminaDiaSiguiente),
@@ -807,7 +827,11 @@ export function useReservationSaveHandler({
                     : match.emailContacto,
                 tipoPrestamo: effectiveFormData.tipoPrestamo || match.tipoPrestamo,
                 cantidadParticipantes:
-                  Number.isFinite(Number(effectiveFormData.cantidadParticipantes)) ? Number(effectiveFormData.cantidadParticipantes) : match.cantidadParticipantes ?? 10,
+                  effectiveFormData.cantidadParticipantes !== undefined &&
+                  effectiveFormData.cantidadParticipantes !== ('' as any) &&
+                  Number.isFinite(Number(effectiveFormData.cantidadParticipantes))
+                    ? Number(effectiveFormData.cantidadParticipantes)
+                    : match.cantidadParticipantes ?? 10,
                 equipamientoSolicitado: slotEquip,
                 importante: effectiveFormData.importante || match.importante,
                 comentarios:
@@ -867,7 +891,11 @@ export function useReservationSaveHandler({
                     : (baseRef.emailContacto || ''),
                 tipoPrestamo: effectiveFormData.tipoPrestamo || baseRef.tipoPrestamo || '',
                 cantidadParticipantes:
-                  Number.isFinite(Number(effectiveFormData.cantidadParticipantes)) ? Number(effectiveFormData.cantidadParticipantes) : baseRef.cantidadParticipantes ?? 10,
+                  effectiveFormData.cantidadParticipantes !== undefined &&
+                  effectiveFormData.cantidadParticipantes !== ('' as any) &&
+                  Number.isFinite(Number(effectiveFormData.cantidadParticipantes))
+                    ? Number(effectiveFormData.cantidadParticipantes)
+                    : baseRef.cantidadParticipantes ?? 10,
                 equipamientoSolicitado: slotEquip,
                 importante: effectiveFormData.importante || baseRef.importante || 'No',
                 comentarios:
@@ -921,6 +949,7 @@ export function useReservationSaveHandler({
           const oldIndices = new Map(cleanAffected.map(r=>[r.id,r.indiceEnSerie]));
           let nextIndex = Math.max(0,...knownSeries.map(r=>r.indiceEnSerie||0));
           const totalSeriesCount = new Set([...knownSeries.filter(r=>!removedIds.has(r.id)).map(r=>r.id),...updatedList.map(r=>r.id)]).size;
+          const seriesMembershipUnchanged = !isConvertingToSeries && idsToDelete.length === 0 && updatedList.length === cleanAffected.length && updatedList.every(item => cleanAffected.some(old => old.id === item.id));
           updatedList.forEach(r=>{
             r.indiceEnSerie = oldIndices.get(r.id) || ++nextIndex;
             r.totalEnSerie = totalSeriesCount || updatedList.length;
@@ -934,7 +963,14 @@ export function useReservationSaveHandler({
               r.claveAutorizacion = existing.claveAutorizacion;
               r.autorizadoPor = existing.autorizadoPor;
               r.claveAutorizacionFeriado = existing.claveAutorizacionFeriado;
-              if (metadataOnly) {r.fechaInicioRecurrencia=existing.fechaInicioRecurrencia;r.fechaFinRecurrencia=existing.fechaFinRecurrencia;r.tipoRecurrencia=existing.tipoRecurrencia;r.diasSemana=existing.diasSemana;r.totalEnSerie=existing.totalEnSerie;}
+              if (metadataOnly || seriesMembershipUnchanged) {
+                r.fechaInicioRecurrencia = existing.fechaInicioRecurrencia;
+                r.fechaFinRecurrencia = existing.fechaFinRecurrencia;
+                r.tipoRecurrencia = existing.tipoRecurrencia;
+                r.diasSemana = existing.diasSemana;
+                r.totalEnSerie = existing.totalEnSerie;
+                r.indiceEnSerie = existing.indiceEnSerie;
+              }
             }
           });
 
@@ -1001,10 +1037,6 @@ export function useReservationSaveHandler({
             allReservations,
             seriesScheduleItems: effectiveSeriesSlotsForLetter
           });
-          try {
-            const current=getLocalCache().find(r=>r.id===finalReserva.id);
-            if(current)await saveReservation({...current,cartaCompromisoDescargada:true});
-          } catch(error) {console.warn('Carta descargada; metadatos pendientes:',error);toast.warning('La carta se descargó, pero no se pudo actualizar su indicador. La reserva sigue confirmada.');}
         } catch (err) {
           console.error('Error al descargar automáticamente la carta de compromiso:', err);
           toast.warning('Reserva confirmada. No se pudo generar la carta; puedes descargarla desde la reserva.');

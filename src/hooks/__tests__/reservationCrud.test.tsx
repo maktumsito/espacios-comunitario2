@@ -314,3 +314,27 @@ it.each(['2026-10-05', '2026-10-06'])('guards IDs before the selected date again
   })).toBe(true));
   expect(mocks.save).toHaveBeenCalledWith([{...future,descripcion:'Editado'}],{deletedIds:[],allowConflictOverride:undefined,requireAtomic:true,intent:'update'});
 });
+it('prunes unchanged occurrences in a batch update and skips conflict errors on untouched schedules', async () => {
+  const s1: Reservation = { ...row, id: 's1', fecha: '2026-10-13', actividadRecurrente: 'Sí', serieRecurrente: 'series', version: 2 };
+  const s2: Reservation = { ...s1, id: 's2', fecha: '2026-10-20', version: 3 };
+  const permittedOverlap: Reservation = { ...row, id: 'overlap', fecha: '2026-10-13', responsable: 'Autorizado' };
+  const p = props();
+  p.reservations = [s1, s2, permittedOverlap];
+  mocks.series.mockResolvedValue([s1, s2]);
+  mocks.save.mockImplementation(async (rows: Reservation[]) => ({ reservations: rows, deletedIds: [], confirmedIds: rows.map(r => r.id), pendingIds: [] }));
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => expect(await result.current.handleCreateOrUpdate(s1, false, undefined, false, {
+    scope: 'series',
+    sourceReservationId: s1.id,
+    updatedReservations: [
+      { ...s1, comentarios: '', telefonoContacto: '', updatedAt: '2026-10-29T00:00:00Z' },
+      { ...s2, descripcion: 'Solo cambia la segunda' },
+    ],
+    affectedIds: [s1.id, s2.id],
+    expectedVersions: { s1: 2, s2: 3 },
+  })).toBe(true));
+  expect(mocks.save).toHaveBeenCalledWith(
+    [expect.objectContaining({ id: 's2', descripcion: 'Solo cambia la segunda' })],
+    expect.objectContaining({ expectedVersions: { s1: 2, s2: 3 }, requireAtomic: true, intent: 'update' })
+  );
+});

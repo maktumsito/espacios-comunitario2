@@ -16,9 +16,9 @@ import {
 import { getDb } from '../firebase/config';
 import { Reservation } from '../types';
 import { getAuthSessionToken, getStoredAuthUser, isCoordinatorOrAdmin, userCanCreateReservations, userCanEditReservations, userCanDeleteReservations } from './authService';
-import { writeReservations, readPendingOperations, hasReservationMaterialChange, type WriteOptions, type WriteResult } from './reservationWriter';
+import { writeReservations, readPendingOperations, hasReservationMaterialChange, hasReservationOccupancyChange, type WriteOptions, type WriteResult } from './reservationWriter';
 import { updateOperationJournal } from './reservationOperationJournal';
-export { getPendingOperations, readPendingOperations, hasReservationMaterialChange, ReservationWriteError, ReservationVersionError } from './reservationWriter';
+export { getPendingOperations, readPendingOperations, hasReservationMaterialChange, hasReservationOccupancyChange, ReservationWriteError, ReservationVersionError } from './reservationWriter';
 import { INITIAL_RESERVATIONS } from '../data/initialData';
 import { isChileanHoliday, verifyHolidayOverrideKey } from '../utils/holidayUtils';
 import { normalizeSpaceName } from '../data/spacesData';
@@ -1016,8 +1016,14 @@ export async function deleteReservationsBatch(ids: string[],expectedVersions?:Re
 
 export async function deleteSeriesByRecurrenteId(recurrenteId: string, knownIds?: string[],expectedVersions?:Record<string,number>): Promise<number> {
   const ids = new Set(knownIds || []);
-  getLocalCache().forEach(r => { if (r.recurrenteId === recurrenteId || r.serieRecurrente === recurrenteId) ids.add(r.id); });
-  return deleteReservationsBatch([...ids],expectedVersions);
+  const versions: Record<string, number> = { ...(expectedVersions || {}) };
+  getLocalCache().forEach(r => {
+    if (r.recurrenteId === recurrenteId || r.serieRecurrente === recurrenteId) {
+      ids.add(r.id);
+      if (!Number.isInteger(versions[r.id])) versions[r.id] = r.version || 0;
+    }
+  });
+  return deleteReservationsBatch([...ids], versions);
 }
 
 export async function seedAllToFirestore(
@@ -1152,17 +1158,15 @@ export async function queryReservationsBySeries(
   if (!seriesId) return [];
   const db = getDb();
   const reservasCol = collection(db, COLLECTION_NAME);
-  const constraints = [
-    where('serieRecurrente', '==', seriesId),
-    ...(fromDate ? [where('fecha', '>=', fromDate)] : []),
-    orderBy('fecha')
-  ];
-  const snapshot = await getDocs(query(reservasCol, ...constraints));
+  const snapshot = await getDocs(query(reservasCol, where('serieRecurrente', '==', seriesId)));
   const results: Reservation[] = [];
   snapshot.forEach((docSnap) => {
-    results.push(normalizeReservationFromFirestore(docSnap.id, docSnap.data()));
+    const normalized = normalizeReservationFromFirestore(docSnap.id, docSnap.data());
+    if (!fromDate || normalized.fecha >= fromDate) {
+      results.push(normalized);
+    }
   });
-  return results;
+  return results.sort(compareReservationsByDate);
 }
 
 /**

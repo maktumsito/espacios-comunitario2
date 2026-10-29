@@ -142,11 +142,51 @@ function canonicalizeForComparison(value: unknown): unknown {
   return value;
 }
 
+const OPTIONAL_EMPTY_STRING_KEYS = new Set([
+  "telefonoContacto",
+  "emailContacto",
+  "tipoPrestamo",
+  "comentarios",
+  "rut",
+  "domicilio",
+  "claveAutorizacion",
+  "claveAutorizacionFeriado",
+  "autorizadoPor",
+  "diasSemana",
+  "tipoRecurrencia",
+  "motivoReemplazo",
+  "googleEventId",
+  "informeSemanal",
+  "actoAutorizaUso",
+  "normativaUsoAplicable",
+  "fundamentoGratuidad",
+  "delegacionFacultades",
+]);
+
+const OPTIONAL_BOOLEAN_KEYS = new Set([
+  "terminaDiaSiguiente",
+  "requiereCartaCompromiso",
+  "descargarCartaAlCrear",
+  "cartaCompromisoDescargada",
+  "horarioExtendidoAutorizado",
+]);
+
 export function reservationContent(
   r: Reservation,
   cleanFn: (r: Reservation) => Record<string, any> = (item) =>
     JSON.parse(JSON.stringify(item)),
 ): string {
+  const canonicalSeriesId = (r.serieRecurrente || r.recurrenteId || "").trim() || undefined;
+  const equip = (r.equipamientoSolicitado || [])
+    .map((item) => ({
+      equipmentId: (item.equipmentId || "").trim(),
+      equipmentName: (item.equipmentName || "").trim(),
+      quantity: Number(item.quantity),
+      ...(item.notes?.trim() ? { notes: item.notes.trim() } : {}),
+    }))
+    .filter((item) => item.quantity > 0)
+    .sort((a, b) => (a.equipmentId || a.equipmentName).localeCompare(b.equipmentId || b.equipmentName));
+  const rawEstado = (r.estado || "activa").trim();
   const normalized: Reservation = {
     ...r,
     id: r.id?.trim(),
@@ -154,24 +194,37 @@ export function reservationContent(
     horaInicio: r.horaInicio?.trim(),
     horaFin: r.horaFin?.trim(),
     espacio: r.espacio ? getConstituentSpaces(r.espacio).join(" / ") : r.espacio,
-    ...(r.equipamientoSolicitado
-      ? {
-          equipamientoSolicitado: r.equipamientoSolicitado.map((item) => ({
-            ...item,
-            quantity: Number(item.quantity),
-          })),
-        }
-      : {}),
+    equipamientoSolicitado: equip.length ? equip : undefined,
     responsable: r.responsable?.trim(),
     descripcion: r.descripcion?.trim(),
     tipoActividad: r.tipoActividad?.trim(),
+    actividadRecurrente: (r.actividadRecurrente || "No").trim(),
+    importante: (r.importante || "No").trim(),
+    realizada: (r.realizada || "No").trim(),
+    estado: rawEstado === "confirmada" ? "activa" : rawEstado,
+    serieRecurrente: canonicalSeriesId,
+    recurrenteId: canonicalSeriesId,
     terminaDiaSiguiente: Boolean(r.terminaDiaSiguiente),
   };
   const cleaned = cleanFn(normalized);
   const filtered: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(cleaned)) {
-    if (IGNORED_RESERVATION_COMPARISON_KEYS.has(key) || val === undefined)
+    if (IGNORED_RESERVATION_COMPARISON_KEYS.has(key) || val === undefined || val === null)
       continue;
+    if (OPTIONAL_EMPTY_STRING_KEYS.has(key)) {
+      const str = typeof val === "string" ? val.trim() : String(val);
+      if (!str) continue;
+      filtered[key] = str;
+      continue;
+    }
+    if (OPTIONAL_BOOLEAN_KEYS.has(key)) {
+      if (!val) continue;
+      filtered[key] = true;
+      continue;
+    }
+    if (key === "equipamientoSolicitado" && Array.isArray(val) && val.length === 0) {
+      continue;
+    }
     filtered[key] = val;
   }
   return JSON.stringify(canonicalizeForComparison(filtered));
@@ -185,6 +238,25 @@ export function hasReservationMaterialChange(
   if (!existing) return true;
   return (
     reservationContent(existing, cleanFn) !== reservationContent(next, cleanFn)
+  );
+}
+
+export function hasReservationOccupancyChange(
+  existing: Reservation | undefined,
+  next: Reservation,
+): boolean {
+  if (!existing) return true;
+  const wasActive = isReservationActiveForAvailability(existing, new Set());
+  const isActive = isReservationActiveForAvailability(next, new Set());
+  if (wasActive !== isActive) return true;
+  if (!wasActive && !isActive) return false;
+  return (
+    existing.fecha?.trim().split("T")[0] !== next.fecha?.trim().split("T")[0] ||
+    existing.horaInicio?.trim() !== next.horaInicio?.trim() ||
+    existing.horaFin?.trim() !== next.horaFin?.trim() ||
+    Boolean(existing.terminaDiaSiguiente) !== Boolean(next.terminaDiaSiguiente) ||
+    getConstituentSpaces(existing.espacio).sort().join("|") !==
+      getConstituentSpaces(next.espacio).sort().join("|")
   );
 }
 export function reservationSlots(r: Reservation): Map<string, ScheduleSlot> {
@@ -462,7 +534,7 @@ export async function writeReservations(
   if (options.intent === "create") {
     if (deletedIds.length || items.some((r) => r.version))
       throw new Error("La creación solo puede incluir reservas nuevas.");
-  } else if (ids.length > 1 || !items.length) {
+  } else if (ids.length > 35) {
     for (let i = 0; i < ids.length; i += 20) {
       const snapshots = await Promise.all(
         ids.slice(i, i + 20).map((id) => getDoc(doc(db, "reservas", id))),
@@ -530,29 +602,21 @@ export async function writeReservations(
               .map((s) => ({ ...s.data(), id: s.id }) as Reservation);
           }
         }
-        const incomingKeys = new Set(
-          chunk.flatMap((id) => allSlotKeys(byId.get(id))),
+        const guards = Object.entries(options.expectedVersions || {}).filter(
+          ([id]) => !operation.confirmedIds.includes(id),
         );
-        const [snapshots, incomingSlotSnapshots] = await Promise.all([
+        const [snapshots, guardSnapshots] = await Promise.all([
           Promise.all(chunk.map(readReservation)),
           Promise.all(
-            [...incomingKeys].map((key) =>
-              tx.get(doc(db, "schedule_slots", key)),
-            ),
+            guards
+              .filter(([id]) => !chunk.includes(id))
+              .map(([id]) => readReservation(id)),
           ),
         ]);
         const current = new Map<string, Reservation>();
         snapshots.forEach((s) => {
           if (s.exists()) current.set(s.id, {...s.data(),id:s.id} as Reservation);
         });
-        const guards = Object.entries(options.expectedVersions || {}).filter(
-          ([id]) => !operation.confirmedIds.includes(id),
-        );
-        const guardSnapshots = await Promise.all(
-          guards
-            .filter(([id]) => !chunk.includes(id))
-            .map(([id]) => readReservation(id)),
-        );
         const guarded = new Map(current);
         guardSnapshots.forEach((s) => {
           if (s.exists())
@@ -731,8 +795,22 @@ export async function writeReservations(
             }
           }
         }
+        const needsSlotSync = (id: string) => {
+          const existing = current.get(id);
+          const next = byId.get(id);
+          if (!existing || !next) return true;
+          if (options.auditRestore || (existing as any).lastOperationId === operationId)
+            return true;
+          if (isUnchangedExisting(id)) return false;
+          if (hasReservationOccupancyChange(existing, next)) return true;
+          if (getConstituentSpaces(existing.espacio).length > 1) return true;
+          return (
+            (existing.responsable || "").trim() !== (next.responsable || "").trim() ||
+            (existing.estado || "activa") !== (next.estado || "activa")
+          );
+        };
         const keys = new Set(
-          chunk.flatMap((id) => [
+          chunk.filter(needsSlotSync).flatMap((id) => [
             ...allSlotKeys(current.get(id), true),
             ...allSlotKeys(byId.get(id)),
           ]),
@@ -744,15 +822,9 @@ export async function writeReservations(
           throw new Error(
             "Los datos cambiaron y la operación excede el límite atómico. Reintenta con un grupo más pequeño.",
           );
-        const remainingSlotSnapshots = await Promise.all(
-          [...keys]
-            .filter((key) => !incomingKeys.has(key))
-            .map((key) => tx.get(doc(db, "schedule_slots", key))),
+        const slotSnapshots = await Promise.all(
+          [...keys].map((key) => tx.get(doc(db, "schedule_slots", key))),
         );
-        const slotSnapshots = [
-          ...incomingSlotSnapshots,
-          ...remainingSlotSnapshots,
-        ];
         const slots = new Map<string, ScheduleSlot>();
         const originalSlots = new Map<string, ScheduleSlot>();
         const affected = new Set(chunk);
@@ -776,7 +848,10 @@ export async function writeReservations(
           const existing = current.get(id);
           if (!next) {
             const expected =
-              options.expectedVersions?.[id] ?? previous.get(id)?.version ?? 0;
+              options.expectedVersions?.[id] ??
+              previous.get(id)?.version ??
+              existing?.version ??
+              0;
             if (existing && (existing.version || 0) !== expected)
               throw new ReservationVersionError(existing);
             continue;
@@ -812,11 +887,15 @@ export async function writeReservations(
                   existing?.createdAt || next.createdAt || new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               };
+          const checkSlotConflict =
+            !options.allowConflictOverride &&
+            hasReservationOccupancyChange(existing, confirmed);
           for (const [key, candidate] of reservationSlots(confirmed)) {
-            const slot = slots.get(key)!;
+            const slot = slots.get(key);
+            if (!slot) continue;
             for (const booking of candidate.bookings) {
               if (
-                !options.allowConflictOverride &&
+                checkSlotConflict &&
                 !booking.exempt &&
                 slot.bookings.some(
                   (b) =>
@@ -842,7 +921,7 @@ export async function writeReservations(
         for (const r of saved)
           if ((r as any).lastOperationId === operationId) {
             for (const [key, candidate] of reservationSlots(r))
-              slots.get(key)!.bookings.push(...candidate.bookings);
+              slots.get(key)?.bookings.push(...candidate.bookings);
           }
         const hook = await options.serverHooks?.before(
           tx,

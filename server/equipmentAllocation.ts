@@ -32,7 +32,7 @@ export async function prepareEquipmentAllocation(db: Firestore, tx: Transaction,
   );
   if (!equipmentChangedIds.length) return () => {};
   const relevant = equipmentChangedIds
-    .flatMap(id => [current.get(id), savedById.get(id)])
+    .map(id => savedById.get(id))
     .filter((r): r is Reservation => Boolean(r && isReservationActiveForAvailability(r, new Set()) && r.equipamientoSolicitado?.length));
   if (!relevant.length) return () => {};
   const config = await tx.get(db.doc('configuracion_sistema/equipamiento'));

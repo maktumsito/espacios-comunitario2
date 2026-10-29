@@ -13,6 +13,8 @@ import {
 import {
   writeReservations,
   ReservationWriteError,
+  hasReservationMaterialChange,
+  hasReservationOccupancyChange,
   type WriteOptions,
 } from "../src/services/reservationWriter";
 import type { Reservation, AuditChangeLogEntry, SpaceInfo } from "../src/types";
@@ -201,7 +203,15 @@ export async function commitTrusted(
         const active = saved.filter((r) =>
           isReservationActiveForAvailability(r, new Set()),
         );
-        const spaceConfig = active.length ? await tx.get(db.doc('configuracion_sistema/espacios')) : undefined;
+        const activeChangedOccupancy = active.filter((r) =>
+          hasReservationOccupancyChange(current.get(r.id), r),
+        );
+        const needsSpaceConfig = Boolean(
+          activationIds.length ||
+            options.distributionDate ||
+            activeChangedOccupancy.length,
+        );
+        const spaceConfig = needsSpaceConfig ? await tx.get(db.doc('configuracion_sistema/espacios')) : undefined;
         const configuredSpaces = Array.isArray(spaceConfig?.data()?.data) ? spaceConfig!.data()!.data : SPACES_LIST;
         const activationSet = new Set(activationIds);
         const selectedSpaces: SpaceInfo[] = configuredSpaces.filter((space: SpaceInfo) => activationSet.has(space.id));
@@ -213,29 +223,30 @@ export async function commitTrusted(
         }
         const activatedSpaces = selectedSpaces.filter(space => space.activo === false);
         const disabledSpaces = getDisabledSpaceNames(configuredSpaces.filter((space: SpaceInfo) => !activationSet.has(space.id)));
-        for (const row of active) {
-          const original = current.get(row.id);
-          const changesOccupancy = !original || !isReservationActiveForAvailability(original, new Set()) ||
-            getConstituentSpaces(original.espacio).sort().join('|') !== getConstituentSpaces(row.espacio).sort().join('|') ||
-            Boolean(original.terminaDiaSiguiente) !== Boolean(row.terminaDiaSiguiente) ||
-            ['fecha', 'horaInicio', 'horaFin'].some(key => (original as any)[key] !== (row as any)[key]);
-          if (changesOccupancy && (disabledSpaces.has(normalizeSpace(row.espacio)) || getConstituentSpaces(row.espacio).some(name => disabledSpaces.has(name))))
+        for (const row of activeChangedOccupancy) {
+          if (disabledSpaces.has(normalizeSpace(row.espacio)) || getConstituentSpaces(row.espacio).some(name => disabledSpaces.has(name)))
             throw new ApiFailure(409, 'El espacio está desactivado. Elige un espacio activo para reservar o cambiar el horario.');
         }
         if (
-          active.some(
-            (r) => isChileanHoliday(r.fecha) || r.horarioExtendidoAutorizado,
-          )
+          active.some((r) => {
+            const orig = current.get(r.id);
+            const changedSlot = hasReservationOccupancyChange(orig, r);
+            return (
+              (changedSlot && isChileanHoliday(r.fecha)) ||
+              (r.horarioExtendidoAutorizado &&
+                (changedSlot || !orig?.horarioExtendidoAutorizado))
+            );
+          })
         )
           requireManager(fresh);
         if (
-          active.length && !options.allowConflictOverride &&
+          activeChangedOccupancy.length && !options.allowConflictOverride &&
           findMaintenanceBlockConflicts(
-            active,
+            activeChangedOccupancy,
             // Long blocks starting before the reservation must still match.
             // A single range field avoids the extra index-range read category.
             (await tx.get(db.collection("bloqueos_espacios").where(
-              "fechaFin", ">=", active.reduce((date, r) => r.fecha < date ? r.fecha : date, active[0].fecha),
+              "fechaFin", ">=", activeChangedOccupancy.reduce((date, r) => r.fecha < date ? r.fecha : date, activeChangedOccupancy[0].fecha),
             ))).docs.map((d: any) => ({ ...d.data(), id: d.id })),
           ).length
         )
@@ -267,11 +278,26 @@ export async function commitTrusted(
           r.createdBy =
             current.get(r.id)?.createdBy || actor.name || actor.username;
         });
+        const changedSaved = saved.filter((r) => {
+          const orig = current.get(r.id);
+          return (
+            !orig ||
+            Boolean(options.auditRestore) ||
+            orig.restoredStateVersion !== undefined ||
+            hasReservationMaterialChange(orig, r, clean)
+          );
+        });
+        const auditSaved =
+          changedSaved.length || deletions.length ? changedSaved : saved;
+        const auditChangedIds = new Set([
+          ...auditSaved.map((r) => r.id),
+          ...deletions.filter((id) => chunk.includes(id)),
+        ]);
         const payload = JSON.stringify({
           previousState: chunk.flatMap((id) =>
-            current.has(id) ? [current.get(id)] : [],
+            auditChangedIds.has(id) && current.has(id) ? [current.get(id)] : [],
           ),
-          newState: saved,
+          newState: auditSaved,
         });
         // A small, single-transaction operation needs only the manifest write.
         // Keep large/multi-chunk snapshots in parts so audit listeners stay light.
