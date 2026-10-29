@@ -1,5 +1,5 @@
 import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
-import { collection, doc, deleteDoc, Unsubscribe, query, limit } from '../firebase/gateway';
+import { collection, doc, deleteDoc, Unsubscribe, query, orderBy, limit } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 import { SpaceRating, Reservation } from '../types';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
@@ -53,27 +53,39 @@ export function dequeuePendingRating(ratingId: string): void {
   }
 }
 
+let syncInFlightPromise: Promise<void> | null = null;
+
 export async function syncPendingRatingsQueue(): Promise<void> {
   if (typeof window === 'undefined' || !navigator.onLine) return;
-  const queue = getPendingRatingsQueue();
-  if (queue.length === 0) return;
+  if (syncInFlightPromise) return syncInFlightPromise;
 
-  const remaining: SpaceRating[] = [];
-
-  for (const rating of queue) {
+  syncInFlightPromise = (async () => {
     try {
-      await saveSpaceRating(rating);
-    } catch (err) {
-      console.warn(`Retry sync failed for rating ${rating.id}:`, err);
-      remaining.push(rating);
-    }
-  }
+      const queue = getPendingRatingsQueue();
+      if (queue.length === 0) return;
 
-  try {
-    localStorage.setItem(PENDING_RATINGS_QUEUE_KEY, JSON.stringify(remaining));
-  } catch {
-    // ignore
-  }
+      const remaining: SpaceRating[] = [];
+
+      for (const rating of queue) {
+        try {
+          await saveSpaceRating(rating);
+        } catch (err) {
+          console.warn(`Retry sync failed for rating ${rating.id}:`, err);
+          remaining.push(rating);
+        }
+      }
+
+      try {
+        localStorage.setItem(PENDING_RATINGS_QUEUE_KEY, JSON.stringify(remaining));
+      } catch {
+        // ignore
+      }
+    } finally {
+      syncInFlightPromise = null;
+    }
+  })();
+
+  return syncInFlightPromise;
 }
 
 if (typeof window !== 'undefined') {
@@ -310,7 +322,7 @@ export function subscribeToRatings(
 
   try {
     const db = getDb();
-    const ratingsQuery = query(collection(db, COLLECTION_NAME), limit(150));
+    const ratingsQuery = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'desc'), limit(150));
 
     return onSnapshot(
       ratingsQuery,
@@ -391,6 +403,7 @@ export async function deleteSpaceRating(ratingId: string): Promise<void> {
     const docRef = doc(db, COLLECTION_NAME, ratingId);
     await deleteDoc(docRef);
     setLocalRatingsCache(filtered);
+    dequeuePendingRating(ratingId);
   } catch (err) {
     throw err;
   }

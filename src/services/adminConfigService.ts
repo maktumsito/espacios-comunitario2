@@ -166,10 +166,50 @@ export function getStoredSpaces(): SpaceInfo[] {
   return SPACES_LIST;
 }
 
+export function hasSpaceMaterialChange(prev: SpaceInfo | undefined, next: SpaceInfo): boolean {
+  if (!prev) return true;
+  return (
+    prev.id !== next.id ||
+    prev.name !== next.name ||
+    (prev.capacity ?? null) !== (next.capacity ?? null) ||
+    (prev.category || '') !== (next.category || '') ||
+    (prev.iconName || '') !== (next.iconName || '') ||
+    (prev.color || '') !== (next.color || '') ||
+    (prev.description || '') !== (next.description || '') ||
+    (prev.activo !== false) !== (next.activo !== false)
+  );
+}
+
+export function hasLoanTypeMaterialChange(prev: LoanType | undefined, next: LoanType): boolean {
+  if (!prev) return true;
+  return (
+    prev.id !== next.id ||
+    prev.name !== next.name ||
+    (prev.category || '') !== (next.category || '') ||
+    (prev.description || '') !== (next.description || '') ||
+    (prev.color || '') !== (next.color || '') ||
+    (prev.defaultDurationMinutes ?? null) !== (next.defaultDurationMinutes ?? null)
+  );
+}
+
+export function hasActivityTypeMaterialChange(prev: ActivityTypeItem | undefined, next: ActivityTypeItem): boolean {
+  if (!prev) return true;
+  return (
+    prev.id !== next.id ||
+    prev.name !== next.name ||
+    (prev.category || '') !== (next.category || '') ||
+    (prev.color || '') !== (next.color || '') ||
+    (prev.description || '') !== (next.description || '')
+  );
+}
+
 export async function saveSpaceItem(space: SpaceInfo ): Promise<SpaceInfo[]> {
   const current = getStoredSpaces();
   if (current.some(s => s.id !== space.id && normalizeSpace(s.name) === normalizeSpace(space.name))) throw new Error('Ya existe un espacio con ese nombre. Edítalo o reactívalo desde Administración.');
   const index = current.findIndex(s => s.id === space.id);
+  if (index >= 0 && !hasSpaceMaterialChange(current[index], space)) {
+    return current;
+  }
   let updated: SpaceInfo[];
   if (index >= 0) {
     updated = [...current];
@@ -189,6 +229,7 @@ export async function saveSpaceItem(space: SpaceInfo ): Promise<SpaceInfo[]> {
 export async function deleteSpaceItem(id: string ): Promise<SpaceInfo[]> {
   const current = getStoredSpaces();
   const updated = current.filter(s => s.id !== id);
+  if (updated.length === current.length) return current;
   await saveConfigDocToFirestore('espacios', updated);
   try {
     if (isBrowser) localStorage.setItem(SPACES_STORAGE_KEY, JSON.stringify(updated));
@@ -199,7 +240,14 @@ export async function deleteSpaceItem(id: string ): Promise<SpaceInfo[]> {
 }
 
 export async function reorderSpaces(newSpaces: SpaceInfo[] ): Promise<SpaceInfo[]> {
-  const updated = mergeSpaceOrder(getStoredSpaces(), newSpaces);
+  const current = getStoredSpaces();
+  const updated = mergeSpaceOrder(current, newSpaces);
+  if (
+    updated.length === current.length &&
+    updated.every((s, idx) => !hasSpaceMaterialChange(current[idx], s))
+  ) {
+    return current;
+  }
   await saveConfigDocToFirestore('espacios', updated);
   try {
     if (isBrowser) localStorage.setItem(SPACES_STORAGE_KEY, JSON.stringify(updated));
@@ -228,6 +276,9 @@ export function getStoredLoanTypes(): LoanType[] {
 export async function saveLoanTypeItem(loan: LoanType ): Promise<LoanType[]> {
   const current = getStoredLoanTypes();
   const index = current.findIndex(l => l.id === loan.id || l.name.toUpperCase() === loan.name.toUpperCase());
+  if (index >= 0 && !hasLoanTypeMaterialChange(current[index], loan)) {
+    return current;
+  }
   let updated: LoanType[];
   if (index >= 0) {
     updated = [...current];
@@ -247,6 +298,7 @@ export async function saveLoanTypeItem(loan: LoanType ): Promise<LoanType[]> {
 export async function deleteLoanTypeItem(id: string ): Promise<LoanType[]> {
   const current = getStoredLoanTypes();
   const updated = current.filter(l => l.id !== id);
+  if (updated.length === current.length) return current;
   await saveConfigDocToFirestore('tipos_prestamo', updated);
   try {
     if (isBrowser) localStorage.setItem(LOANS_STORAGE_KEY, JSON.stringify(updated));
@@ -279,6 +331,9 @@ export async function saveActivityTypeItem(act: ActivityTypeItem ): Promise<Acti
     current.filter((_, i) => i !== index).map(item => item.color), act.color, act.name
   );
   const activity = { ...act, color, isCustom: true };
+  if (index >= 0 && !hasActivityTypeMaterialChange(current[index], activity)) {
+    return current;
+  }
   let updated: ActivityTypeItem[];
   if (index >= 0) {
     updated = [...current];
@@ -298,6 +353,7 @@ export async function saveActivityTypeItem(act: ActivityTypeItem ): Promise<Acti
 export async function deleteActivityTypeItem(id: string ): Promise<ActivityTypeItem[]> {
   const current = getStoredActivityTypes();
   const updated = current.filter(a => a.id !== id);
+  if (updated.length === current.length) return current;
   await saveConfigDocToFirestore('tipos_actividad', updated);
   try {
     if (isBrowser) localStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(updated));

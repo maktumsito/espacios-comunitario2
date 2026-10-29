@@ -129,10 +129,24 @@ export function buildApplicantSummaries(
     entry.reservas.push(r);
   }
 
-  // Pre-calculate ratings map by normalized applicant name
+  // Pre-calculate ratings map by normalized applicant name and reservationId for O(1) lookup
+  const normalizeApplicantName = (name?: string) =>
+    (name || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
   const ratingsByApplicant = new Map<string, SpaceRating[]>();
+  const ratingsByReservationId = new Map<string, SpaceRating[]>();
   for (const rat of ratings) {
-    const ratName = (rat.responsable || '').trim().toLowerCase();
+    if (rat.reservationId) {
+      const byRes = ratingsByReservationId.get(rat.reservationId) || [];
+      byRes.push(rat);
+      ratingsByReservationId.set(rat.reservationId, byRes);
+    }
+    const ratName = normalizeApplicantName(rat.responsable);
     if (!ratName) continue;
     const existing = ratingsByApplicant.get(ratName) || [];
     existing.push(rat);
@@ -202,12 +216,18 @@ export function buildApplicantSummaries(
       }
     }
 
-    // Match ratings
-    const cleanName = entry.responsable.toLowerCase();
-    const applicantRatings = ratings.filter((rat) => {
-      const rName = (rat.responsable || '').toLowerCase();
-      return rName === cleanName || rName.includes(cleanName) || cleanName.includes(rName);
-    });
+    // Match ratings in O(1) via pre-indexed reservation IDs and normalized applicant name
+    const cleanName = normalizeApplicantName(entry.responsable);
+    const matchedRatingsMap = new Map<string, SpaceRating>();
+    for (const r of entry.reservas) {
+      for (const rat of ratingsByReservationId.get(r.id) || []) {
+        matchedRatingsMap.set(rat.id || `${rat.reservationId}_${rat.createdAt}`, rat);
+      }
+    }
+    for (const rat of ratingsByApplicant.get(cleanName) || []) {
+      matchedRatingsMap.set(rat.id || `${rat.reservationId}_${rat.createdAt}`, rat);
+    }
+    const applicantRatings = Array.from(matchedRatingsMap.values());
 
     let ratingSum = 0;
     let incidentesCount = 0;

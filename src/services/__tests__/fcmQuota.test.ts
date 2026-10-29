@@ -66,7 +66,7 @@ it('does not broadcast to Firestore when checking today important activities on 
   expect(state.write).not.toHaveBeenCalled();
 });
 
-it('deduplicates identical FCM broadcasts within the 60s cooldown window', async () => {
+it('deduplicates identical FCM broadcasts within the 60s cooldown window and across concurrent calls', async () => {
   const payload = {
     type: 'important' as const,
     title: '⭐ Nueva Actividad Importante Agendada',
@@ -74,8 +74,12 @@ it('deduplicates identical FCM broadcasts within the 60s cooldown window', async
     reservationId: 'rsv-1',
     targetDate: '2026-10-16',
   };
-  const firstId = await broadcastFcmNotification(payload);
+  const [firstId, concurrentId] = await Promise.all([
+    broadcastFcmNotification(payload),
+    broadcastFcmNotification(payload),
+  ]);
   const secondId = await broadcastFcmNotification(payload);
+  expect(firstId).toBe(concurrentId);
   expect(firstId).toBe(secondId);
   expect(state.write).toHaveBeenCalledTimes(1);
 });

@@ -27,9 +27,24 @@ export function getStoredEquipment(): EquipmentItem[] {
   return DEFAULT_EQUIPMENT_ITEMS;
 }
 
+export function hasEquipmentMaterialChange(prev: EquipmentItem | undefined, next: EquipmentItem): boolean {
+  if (!prev) return true;
+  return (
+    prev.id !== next.id ||
+    prev.name !== next.name ||
+    (prev.category || '') !== (next.category || '') ||
+    Number(prev.totalQuantity || 0) !== Number(next.totalQuantity || 0) ||
+    (prev.iconName || '') !== (next.iconName || '') ||
+    (prev.description || '') !== (next.description || '')
+  );
+}
+
 export async function saveEquipmentItem(item: EquipmentItem): Promise<EquipmentItem[]> {
   const current = getStoredEquipment();
   const index = current.findIndex(e => e.id === item.id);
+  if (index >= 0 && !hasEquipmentMaterialChange(current[index], item)) {
+    return current;
+  }
   let updated: EquipmentItem[];
   if (index >= 0) {
     updated = [...current];
@@ -52,6 +67,7 @@ export async function saveEquipmentItem(item: EquipmentItem): Promise<EquipmentI
 export async function deleteEquipmentItem(id: string): Promise<EquipmentItem[]> {
   const current = getStoredEquipment();
   const updated = current.filter(e => e.id !== id);
+  if (updated.length === current.length) return current;
   await saveEquipmentDocToFirestore(updated);
   try {
     if (isBrowser) {

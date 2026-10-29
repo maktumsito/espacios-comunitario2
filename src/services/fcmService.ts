@@ -378,6 +378,8 @@ async function registerFallbackDeviceRecord(): Promise<string> {
 
 const BROADCAST_DEDUP_WINDOW_MS = 60_000;
 const recentBroadcastFingerprints = new Map<string, { id: string; timestamp: number }>();
+const inFlightBroadcasts = new Map<string, Promise<string>>();
+const processedBroadcastIds = new Set<string>();
 
 /**
  * Broadcasts an FCM push notification document to Firestore so all registered
@@ -397,6 +399,10 @@ export async function broadcastFcmNotification(
   if (recent && now - recent.timestamp < BROADCAST_DEDUP_WINDOW_MS) {
     return recent.id;
   }
+  const existingInFlight = inFlightBroadcasts.get(fingerprint);
+  if (existingInFlight) {
+    return existingInFlight;
+  }
 
   const notifId = `NOTIF_${now}_${Math.random().toString(36).substring(2, 7)}`;
   const currentUser = getCurrentUser();
@@ -410,20 +416,28 @@ export async function broadcastFcmNotification(
     originDeviceId: deviceId
   };
 
-  try {
-    const db = getDb();
-    const docRef = doc(db, FCM_NOTIFICATIONS_COLLECTION, notifId);
-    await setDoc(docRef, {
-      ...fullPayload,
-      serverTimestamp: new Date(now).toISOString()
-    });
-    recentBroadcastFingerprints.set(fingerprint, { id: notifId, timestamp: now });
-    console.log('[FCM] Push Notification broadcasted to Firestore for registered devices:', notifId);
-  } catch (err) {
-    console.warn('[FCM] Error broadcasting notification to Firestore:', err);
-  }
+  const request = (async () => {
+    try {
+      const db = getDb();
+      const docRef = doc(db, FCM_NOTIFICATIONS_COLLECTION, notifId);
+      await setDoc(docRef, {
+        ...fullPayload,
+        serverTimestamp: new Date(now).toISOString()
+      });
+      recentBroadcastFingerprints.set(fingerprint, { id: notifId, timestamp: now });
+      console.log('[FCM] Push Notification broadcasted to Firestore for registered devices:', notifId);
+    } catch (err) {
+      console.warn('[FCM] Error broadcasting notification to Firestore:', err);
+    } finally {
+      if (inFlightBroadcasts.get(fingerprint) === request) {
+        inFlightBroadcasts.delete(fingerprint);
+      }
+    }
+    return notifId;
+  })();
 
-  return notifId;
+  inFlightBroadcasts.set(fingerprint, request);
+  return request;
 }
 
 /**
@@ -447,13 +461,19 @@ export function subscribeToFcmBroadcasts(
         snapshot.docChanges().forEach((change) => {
           if (change.type === 'added') {
             const data = change.doc.data() as FcmNotificationPayload;
-            
+            const notifKey = data.id || change.doc.id;
+
             // Check if it was created by another device and is recent
             const notifTime = new Date(data.createdAt || 0).getTime();
             const isRecent = notifTime > sessionStartTime;
             const isFromOtherDevice = data.originDeviceId !== myDeviceId;
 
-            if (isRecent && isFromOtherDevice) {
+            if (isRecent && isFromOtherDevice && !processedBroadcastIds.has(notifKey)) {
+              if (processedBroadcastIds.size >= 200) {
+                const oldest = processedBroadcastIds.values().next().value;
+                if (oldest) processedBroadcastIds.delete(oldest);
+              }
+              processedBroadcastIds.add(notifKey);
               console.log('[FCM] Real-time push broadcast received from another device:', data);
               onReceive(data);
             }

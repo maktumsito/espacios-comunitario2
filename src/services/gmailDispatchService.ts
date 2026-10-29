@@ -573,10 +573,56 @@ async function fetchGmailDispatchConfig(generation: number): Promise<GmailDispat
   return DEFAULT_GMAIL_DISPATCH_CONFIG;
 }
 
+function normalizeGmailDispatchConfig(cfg: GmailDispatchConfig) {
+  return {
+    senderEmail: cfg.senderEmail || DEFAULT_GMAIL_SENDER,
+    defaultRecipients: [...(cfg.defaultRecipients || [])],
+    selectedActivityTypes: [...(cfg.selectedActivityTypes || [])],
+    dispatchFilterMode: cfg.dispatchFilterMode || 'solo_prestamos',
+    subjectTemplate: cfg.subjectTemplate || '',
+    customHeaderNote: cfg.customHeaderNote || '',
+    includeObservations: Boolean(cfg.includeObservations),
+    includeResponsibleContact: Boolean(cfg.includeResponsibleContact),
+    schedule: cfg.schedule ? {
+      enabled: Boolean(cfg.schedule.enabled),
+      diasSemana: [...(cfg.schedule.diasSemana || [])],
+      horaEnvio: cfg.schedule.horaEnvio || '08:30',
+      fechaInicio: cfg.schedule.fechaInicio || '',
+      fechaFin: cfg.schedule.fechaFin || '',
+      duracionMeses: cfg.schedule.duracionMeses ?? null,
+      alcanceActividades: cfg.schedule.alcanceActividades || 'fin_de_semana',
+      diasActividadesEspecificos: [...(cfg.schedule.diasActividadesEspecificos || [])],
+      attachDailyPdfs: cfg.schedule.attachDailyPdfs !== false,
+      ultimoEnvio: cfg.schedule.ultimoEnvio || '',
+    } : null,
+  };
+}
+
+export function hasGmailDispatchConfigMaterialChange(
+  prev: GmailDispatchConfig | undefined,
+  next: GmailDispatchConfig
+): boolean {
+  if (!prev) return true;
+  return JSON.stringify(normalizeGmailDispatchConfig(prev)) !== JSON.stringify(normalizeGmailDispatchConfig(next));
+}
+
 /**
  * Saves the dispatch configuration to Firestore and localStorage
  */
 export async function saveGmailDispatchConfig(config: GmailDispatchConfig, userIdentifier?: string): Promise<boolean> {
+  let existing: GmailDispatchConfig | undefined = dispatchConfigCache?.value;
+  if (!existing && typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('espacios_gmail_dispatch_cfg');
+      if (raw) existing = { ...DEFAULT_GMAIL_DISPATCH_CONFIG, ...JSON.parse(raw) };
+    } catch {
+      // ignore
+    }
+  }
+  if (existing && !hasGmailDispatchConfigMaterialChange(existing, config)) {
+    return true;
+  }
+
   const payloadToSave: GmailDispatchConfig = {
     ...config,
     updatedAt: new Date().toISOString(),

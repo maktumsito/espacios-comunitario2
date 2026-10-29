@@ -220,6 +220,21 @@ export function getBackupScheduleConfig(): BackupScheduleConfig {
   }
 }
 
+export function hasBackupScheduleMaterialChange(
+  prev: BackupScheduleConfig,
+  next: BackupScheduleConfig,
+): boolean {
+  return (
+    prev.enabled !== next.enabled ||
+    prev.intervalDays !== next.intervalDays ||
+    prev.lastBackupDate !== next.lastBackupDate ||
+    prev.lastBackupTimestamp !== next.lastBackupTimestamp ||
+    (prev.lastBackupId || "") !== (next.lastBackupId || "") ||
+    prev.autoDownloadJson !== next.autoDownloadJson ||
+    prev.notificarEnCampana !== next.notificarEnCampana
+  );
+}
+
 export async function saveBackupScheduleConfig(
   cfg: Partial<BackupScheduleConfig>,
 ): Promise<BackupScheduleConfig> {
@@ -233,6 +248,14 @@ export async function saveBackupScheduleConfig(
         ? cfg.intervalDays
         : current.intervalDays,
   };
+
+  const hasStoredCopy =
+    typeof window !== "undefined" &&
+    typeof localStorage !== "undefined" &&
+    localStorage.getItem(BACKUP_CONFIG_STORAGE_KEY) !== null;
+  if (hasStoredCopy && !hasBackupScheduleMaterialChange(current, updated)) {
+    return current;
+  }
 
   const patch = {
     ...cfg,

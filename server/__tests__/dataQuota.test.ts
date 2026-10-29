@@ -20,6 +20,15 @@ async function withApi(run: (context: any) => Promise<void>) {
   const db: any = {
     doc: (path: string) => ({ path, id: path.split('/').at(-1), get: () => read({ path }) }),
     collection: (path: string) => ({ path, get: () => read({ path }) }),
+    batch: () => {
+      const ops: (() => void)[] = [];
+      return {
+        set: (ref: any, data: any) => ops.push(() => { write(ref.path); rows.set(ref.path, data); }),
+        update: (ref: any, data: any) => ops.push(() => { write(ref.path); rows.set(ref.path, { ...rows.get(ref.path), ...data }); }),
+        delete: (ref: any) => ops.push(() => { write(ref.path); rows.delete(ref.path); }),
+        commit: async () => { ops.forEach(op => op()); },
+      };
+    },
     runTransaction: async (callback: any) => {
       const writes: (() => void)[] = [];
       const result = await callback({ get: read, set: (ref: any, data: any) => writes.push(() => { write(ref.path); rows.set(ref.path, data); }),
@@ -151,4 +160,54 @@ it('acquires delivery_started in a single transaction when immediateStart is ena
   await startDelivery(db, claim!);
   expect(transactions).toBe(1);
   expect(store.get('_email_dispatches/2026-10-28').status).toBe('delivery_started');
+});
+
+it('skips /api/data/write batch commits when configuracion_sistema or bloqueos_espacios have no material changes', async () => {
+  await withApi(async ({ post, rows, write }: any) => {
+    rows.set('configuracion_sistema/espacios', {
+      data: [{ id: 'SALA_1', name: 'SALA 1', activo: true }],
+      updatedAt: '2026-10-01T00:00:00Z',
+    });
+    rows.set('bloqueos_espacios/BLK_1', {
+      id: 'BLK_1',
+      espacio: 'SALA 1',
+      fechaInicio: '2026-10-10',
+      fechaFin: '2026-10-10',
+      motivo: 'Mantención',
+      todoElDia: true,
+      activo: true,
+      updatedAt: '2026-10-01T00:00:00Z',
+    });
+
+    const unchangedRes = await post('/api/data/write', {
+      writes: [
+        {
+          type: 'set',
+          path: 'configuracion_sistema/espacios',
+          data: {
+            data: [{ id: 'SALA_1', name: 'SALA 1', activo: true }],
+            updatedAt: '2026-10-29T12:00:00Z',
+          },
+          options: { merge: true },
+        },
+        {
+          type: 'set',
+          path: 'bloqueos_espacios/BLK_1',
+          data: {
+            id: 'BLK_1',
+            espacio: 'SALA 1',
+            fechaInicio: '2026-10-10',
+            fechaFin: '2026-10-10',
+            motivo: 'Mantención',
+            todoElDia: true,
+            activo: true,
+            updatedAt: '2026-10-29T12:00:00Z',
+          },
+          options: { merge: true },
+        },
+      ],
+    });
+    expect(unchangedRes.status).toBe(200);
+    expect(write).not.toHaveBeenCalled();
+  });
 });

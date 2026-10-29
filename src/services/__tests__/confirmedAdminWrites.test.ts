@@ -4,11 +4,12 @@ const sdk=vi.hoisted(()=>({write:vi.fn(),commit:vi.fn()}));
 vi.mock('../../firebase/gateway',async original=>({...await original<typeof import('../../firebase/gateway')>(),dataRequest:vi.fn(async()=>{throw new Error('write denied');})}));
 vi.mock('../../firebase/config',()=>({getDb:()=>({})}));
 vi.mock('firebase/firestore',()=>({doc:(_db:any,collection:string,id:string)=>({collection,id}),setDoc:sdk.write,deleteDoc:sdk.write,writeBatch:()=>({set:vi.fn(),delete:vi.fn(),commit:sdk.commit}),collection:vi.fn(),getDocs:vi.fn(),onSnapshot:vi.fn()}));
-import { saveSpaceItem, getStoredSpaces } from '../adminConfigService';
+import { saveSpaceItem, reorderSpaces, getStoredSpaces } from '../adminConfigService';
 import { saveEquipmentItem, getStoredEquipment } from '../equipmentService';
 import { saveUserAccount, getAllAuthorizedUsers } from '../authService';
 import { saveSpaceBlock, getLocalCachedBlocks } from '../spaceBlockService';
-import { createDatabaseBackup, saveBackupScheduleConfig, getBackupScheduleConfig } from '../backupService';
+import { createDatabaseBackup, saveBackupScheduleConfig, getBackupScheduleConfig, BACKUP_CONFIG_STORAGE_KEY } from '../backupService';
+import { saveGmailDispatchConfig, DEFAULT_GMAIL_DISPATCH_CONFIG } from '../gmailDispatchService';
 beforeEach(()=> {localStorage.clear();vi.clearAllMocks();sdk.write.mockRejectedValue(new Error('write denied'));sdk.commit.mockRejectedValue(new Error('write denied'));});
 it('does not confirm a rejected space in local storage',async()=> {
   const original=getStoredSpaces();await expect(saveSpaceItem({...original[0],id:'new-space',name:'NEW SPACE'})).rejects.toThrow('write denied');expect(getStoredSpaces()).toEqual(original);
@@ -30,4 +31,21 @@ it('keeps backup configuration unchanged after a rejected write', async()=> {
   const original=getBackupScheduleConfig();
   await expect(saveBackupScheduleConfig({intervalDays:31})).rejects.toThrow('write denied');
   expect(getBackupScheduleConfig()).toEqual(original);
+});
+it('skips Firestore writes when saving unchanged spaces, equipment, gmail config or backup schedule', async()=> {
+  const spaces = getStoredSpaces();
+  await expect(saveSpaceItem({ ...spaces[0] })).resolves.toEqual(spaces);
+  await expect(reorderSpaces([...spaces])).resolves.toEqual(spaces);
+
+  const equipment = getStoredEquipment();
+  await expect(saveEquipmentItem({ ...equipment[0] })).resolves.toEqual(equipment);
+
+  localStorage.setItem('espacios_gmail_dispatch_cfg', JSON.stringify(DEFAULT_GMAIL_DISPATCH_CONFIG));
+  await expect(saveGmailDispatchConfig({ ...DEFAULT_GMAIL_DISPATCH_CONFIG })).resolves.toBe(true);
+
+  const backupCfg = getBackupScheduleConfig();
+  localStorage.setItem(BACKUP_CONFIG_STORAGE_KEY, JSON.stringify(backupCfg));
+  await expect(saveBackupScheduleConfig({ intervalDays: backupCfg.intervalDays })).resolves.toEqual(backupCfg);
+
+  expect(sdk.write).not.toHaveBeenCalled();
 });

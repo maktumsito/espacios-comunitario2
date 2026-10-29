@@ -178,6 +178,17 @@ const wrap =
 
 /** Shared native listeners and short conditional responses: no permanent HTTP
  * connection, no read/poll of the reservation collection for each browser tick. */
+function stripVolatileTimestamps(val: any): any {
+  if (!val || typeof val !== "object") return val;
+  if (Array.isArray(val)) return val.map(stripVolatileTimestamps);
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(val)) {
+    if (k === "updatedAt") continue;
+    out[k] = stripVolatileTimestamps(v);
+  }
+  return out;
+}
+
 export function registerDataApi(
   app: Express,
   db: Firestore,
@@ -372,9 +383,14 @@ export function registerDataApi(
             "copias_seguridad",
             "bloqueos_espacios",
           ].includes(p[0])
-        )
+        ) {
           requireManager(user);
-        else if (p[0] === "fcm_tokens") {
+          if (p[0] === "configuracion_sistema" && !configs.includes(p[1]))
+            throw new ApiFailure(403, "Configuración privada.");
+          if (p[0] === "configuracion_sistema" || p[0] === "bloqueos_espacios") {
+            existingTokenDoc = await db.doc(w.path).get();
+          }
+        } else if (p[0] === "fcm_tokens") {
           existingTokenDoc = await db.doc(w.path).get();
           if (existingTokenDoc.exists && existingTokenDoc.get("owner") !== user.username)
             requireManager(user);
@@ -405,7 +421,10 @@ export function registerDataApi(
               w.type === "update" || w.options?.merge
                 ? { ...existingTokenDoc.data(), ...data }
                 : data;
-            if (isDeepStrictEqual(existingTokenDoc.data(), mergedCandidate)) continue;
+            const stripTs = p[0] === "configuracion_sistema" || p[0] === "bloqueos_espacios";
+            const lhs = stripTs ? stripVolatileTimestamps(existingTokenDoc.data()) : existingTokenDoc.data();
+            const rhs = stripTs ? stripVolatileTimestamps(mergedCandidate) : mergedCandidate;
+            if (isDeepStrictEqual(lhs, rhs)) continue;
           }
         }
         if (w.type === "delete") batch.delete(ref);
