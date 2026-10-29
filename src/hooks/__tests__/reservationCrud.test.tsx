@@ -61,6 +61,16 @@ it('rejects a merge that overlaps an unselected reservation', async () => {
   expect(p.triggerSyncToast).toHaveBeenCalledWith(expect.stringContaining('conflicto con otra actividad'), 'error');
 });
 
+it('rejects a merge when the expanded interval overlaps an active maintenance block', async () => {
+  const p = props();
+  p.reservations = [row, { ...row, id: 'early', horaInicio: '08:00', horaFin: '09:00' }, { ...row, id: 'late', horaInicio: '11:00', horaFin: '12:00' }];
+  p.spaceBlocks = [{ id: 'blk-1', espacio: 'SALA 2', fechaInicio: row.fecha, fechaFin: row.fecha, todoElDia: false, horaInicio: '09:00', horaFin: '10:00', motivo: 'Mantención', descripcion: 'Pintura', activo: true, createdAt: '' }];
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => expect(await result.current.handleMergeReservations(row.id, ['early', 'late'])).toBe(false));
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(p.triggerSyncToast).toHaveBeenCalledWith(expect.stringContaining('Mantención'), 'error');
+});
+
 it.each(['missing', 'different-day', 'cancelled', 'base', 'empty'])('rejects invalid merge selections (%s)', async scenario => {
   const p = props();
   p.reservations = [row, { ...row, id: 'source', fecha: scenario === 'different-day' ? '2026-10-07' : row.fecha, estado: scenario === 'cancelled' ? 'cancelada' : 'activa' }];

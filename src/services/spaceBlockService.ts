@@ -82,7 +82,14 @@ export function subscribeToSpaceBlocks(
           id: d.id
         });
       });
-      setLocalCachedBlocks(list);
+      if (startDate) {
+        const preservedEarlier = getLocalCachedBlocks().filter(
+          (b) => b.fechaFin < startDate && !list.some((next) => next.id === b.id)
+        );
+        setLocalCachedBlocks([...preservedEarlier, ...list]);
+      } else {
+        setLocalCachedBlocks(list);
+      }
       onUpdate(list);
     },
     (err) => {
@@ -92,16 +99,37 @@ export function subscribeToSpaceBlocks(
   );
 }
 
+export function hasSpaceBlockMaterialChange(existing: SpaceBlock | undefined, next: SpaceBlock): boolean {
+  if (!existing) return true;
+  return (
+    normalizeSpaceName(existing.espacio) !== normalizeSpaceName(next.espacio) ||
+    existing.fechaInicio !== next.fechaInicio ||
+    existing.fechaFin !== next.fechaFin ||
+    Boolean(existing.todoElDia) !== Boolean(next.todoElDia) ||
+    (existing.horaInicio || '') !== (next.horaInicio || '') ||
+    (existing.horaFin || '') !== (next.horaFin || '') ||
+    (existing.motivo || '').trim() !== (next.motivo || '').trim() ||
+    (existing.descripcion || '').trim() !== (next.descripcion || '').trim() ||
+    Boolean(existing.activo ?? true) !== Boolean(next.activo ?? true)
+  );
+}
+
 /**
  * Save or update a space block
  */
 export async function saveSpaceBlock(block: SpaceBlock): Promise<SpaceBlock> {
+  const current = getLocalCachedBlocks();
+  const existing = block.id ? current.find(b => b.id === block.id) : undefined;
   const finalBlock: SpaceBlock = {
     ...block,
     id: block.id || `block_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     activo: block.activo !== undefined ? block.activo : true,
-    createdAt: block.createdAt || new Date().toISOString()
+    createdAt: block.createdAt || existing?.createdAt || new Date().toISOString()
   };
+
+  if (existing && !hasSpaceBlockMaterialChange(existing, finalBlock)) {
+    return existing;
+  }
 
   const db = getDb();
   if (!db) throw new Error("No hay conexión con la base de datos. Conserva los datos y reintenta.");
@@ -115,7 +143,6 @@ export async function saveSpaceBlock(block: SpaceBlock): Promise<SpaceBlock> {
     }
   }
 
-  const current = getLocalCachedBlocks();
   setLocalCachedBlocks(current.some(b => b.id === finalBlock.id)
     ? current.map(b => b.id === finalBlock.id ? finalBlock : b)
     : [finalBlock, ...current]);

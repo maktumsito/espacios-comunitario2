@@ -3,9 +3,28 @@ import { normalizeSpaceName } from '../data/spacesData';
 
 const persistenceFields = new Set(['version', 'restoredStateVersion', 'createdAt', 'updatedAt', 'lastOperationId']);
 function comparableState(row: Reservation): string {
-  const series = row.serieRecurrente || row.recurrenteId;
-  const normalized = { ...row, espacio: normalizeSpaceName(row.espacio), estado: row.estado || 'activa',
-    terminaDiaSiguiente: Boolean(row.terminaDiaSiguiente), serieRecurrente: series, recurrenteId: series };
+  const series = (row.serieRecurrente || row.recurrenteId || '').trim() || undefined;
+  const rawStatus = String(row.estado || '').trim().toLowerCase();
+  const canonicalStatus = !rawStatus || rawStatus === 'confirmada' ? 'activa' : rawStatus;
+  const equip = Array.isArray(row.equipamientoSolicitado) && row.equipamientoSolicitado.length > 0
+    ? row.equipamientoSolicitado
+    : undefined;
+  const normalized = {
+    ...row,
+    espacio: normalizeSpaceName(row.espacio),
+    estado: canonicalStatus,
+    realizada: row.realizada || 'No',
+    importante: row.importante || 'No',
+    actividadRecurrente: row.actividadRecurrente || 'No',
+    terminaDiaSiguiente: Boolean(row.terminaDiaSiguiente),
+    requiereCartaCompromiso: Boolean(row.requiereCartaCompromiso) || undefined,
+    cartaCompromisoDescargada: Boolean(row.cartaCompromisoDescargada) || undefined,
+    descargarCartaAlCrear: Boolean(row.descargarCartaAlCrear) || undefined,
+    horarioExtendidoAutorizado: Boolean(row.horarioExtendidoAutorizado) || undefined,
+    equipamientoSolicitado: equip,
+    serieRecurrente: series,
+    recurrenteId: series,
+  };
   const stable = (value: any): any => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object'
     ? Object.fromEntries(Object.keys(value).sort().filter(key => value[key] !== undefined && value[key] !== null && value[key] !== '').map(key =>
       [key, key === 'dataUrl' && String(value[key]).startsWith('[ATTACHMENT_') ? '[LEGACY_ATTACHMENT]' : stable(value[key])])) : value;
@@ -16,7 +35,7 @@ export const isDeletionAction = (action: string) => action.startsWith('DELETE') 
 export const auditStateRows = (state?: Reservation | Reservation[]) => state ? (Array.isArray(state) ? state : [state]) : [];
 export function canRestoreAuditEntry(entry: AuditChangeLogEntry): boolean {
   return !entry.isReverted && entry.affectedCount !== 0 && !entry.id.startsWith('AUDIT_BASELINE_') &&
-    (isDeletionAction(entry.action) || ['UPDATE', 'CLEAR_PARTICIPANTS', 'TOGGLE_REALIZADA', 'CREATE', 'BULK_IMPORT'].includes(entry.action));
+    (isDeletionAction(entry.action) || ['UPDATE', 'CLEAR_PARTICIPANTS', 'TOGGLE_REALIZADA', 'CREATE', 'BULK_IMPORT', 'REQUEST_DELETE', 'REJECT_DELETE_REQUEST'].includes(entry.action));
 }
 
 export function buildAuditRestorePlan(entry: AuditChangeLogEntry, current: Map<string, Reservation>) {
@@ -25,7 +44,7 @@ export function buildAuditRestorePlan(entry: AuditChangeLogEntry, current: Map<s
   const after = auditStateRows(entry.newState);
   const deletion = isDeletionAction(entry.action);
   if (deletion && !before.length || !deletion && !after.length ||
-      ['UPDATE', 'CLEAR_PARTICIPANTS', 'TOGGLE_REALIZADA'].includes(entry.action) && !before.length) {
+      ['UPDATE', 'CLEAR_PARTICIPANTS', 'TOGGLE_REALIZADA', 'REQUEST_DELETE', 'REJECT_DELETE_REQUEST'].includes(entry.action) && !before.length) {
     throw new Error('El registro no contiene el respaldo completo necesario para restaurar.');
   }
   // Older versions truncated arrays and replaced attachment bytes irreversibly.

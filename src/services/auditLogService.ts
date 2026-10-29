@@ -108,16 +108,22 @@ export function computeReservationDiff(
     'rut',
     'domicilio',
     'comentarios',
-    'importante'
+    'importante',
+    'requiereCartaCompromiso'
   ];
 
   for (const key of keysToCheck) {
     const oldVal = oldRes[key];
     const newVal = newRes[key];
 
-    // Normalize empty strings / undefined
-    const normOld = oldVal === undefined || oldVal === null ? '' : oldVal;
-    const normNew = newVal === undefined || newVal === null ? '' : newVal;
+    // Normalize default values and empty strings / undefined
+    const normalizeVal = (val: any) => {
+      if (key === 'realizada' || key === 'importante') return val || 'No';
+      if (key === 'requiereCartaCompromiso') return Boolean(val);
+      return val === undefined || val === null ? '' : val;
+    };
+    const normOld = normalizeVal(oldVal);
+    const normNew = normalizeVal(newVal);
 
     if (String(normOld) !== String(normNew)) {
       diffs.push({
@@ -219,9 +225,28 @@ export async function recordAuditEntry(params: {
   newStateIsConfirmed?: boolean;
 }): Promise<AuditChangeLogEntry> {
   if(usesDataApi()){
-    const receipt=params.previousState||params.newState?getLastReservationAuditEntry():(await dataRequest('/api/audit/record',{action:params.action,description:params.description,reservaId:params.reservaId})).entry;
+    const isReservationOp = Boolean(
+      params.previousState ||
+      params.newState ||
+      isDeletionAction(params.action) ||
+      ['CREATE', 'UPDATE', 'CLEAR_PARTICIPANTS', 'TOGGLE_REALIZADA', 'REQUEST_DELETE', 'REJECT_DELETE_REQUEST', 'BULK_IMPORT'].includes(params.action)
+    );
+    const receipt = isReservationOp
+      ? getLastReservationAuditEntry()
+      : (await dataRequest('/api/audit/record',{action:params.action,description:params.description,reservaId:params.reservaId})).entry;
     if(!receipt)throw new Error('La evidencia se crea al confirmar la operación de reservas.');
-    saveAuditHistory(mergeAuditHistory(getAuditHistory(),[receipt]));return receipt;
+    const enrichedReceipt: AuditChangeLogEntry = {
+      ...receipt,
+      action: params.action || receipt.action,
+      description: params.description || receipt.description,
+      reservaTitle: params.reservaTitle ?? receipt.reservaTitle,
+      reservaFecha: params.reservaFecha ?? receipt.reservaFecha,
+      reservaEspacio: params.reservaEspacio ?? receipt.reservaEspacio,
+      reservaHorario: params.reservaHorario ?? receipt.reservaHorario,
+      reservaResponsable: params.reservaResponsable ?? receipt.reservaResponsable,
+      diffs: params.diffs ?? receipt.diffs,
+    };
+    saveAuditHistory(mergeAuditHistory(getAuditHistory(),[enrichedReceipt]));return enrichedReceipt;
   }
   await hydrateAuditHistory();
   const authorName =

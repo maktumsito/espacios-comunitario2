@@ -1134,7 +1134,6 @@ export async function queryReservationsByDateRange(
   const reservasCol = collection(db, COLLECTION_NAME);
   const canonSpace = espacio ? normalizeSpaceName(espacio) : null;
   const constraints = [
-    ...(canonSpace ? [where('espacio', '==', canonSpace)] : []),
     where('fecha', '>=', startDate),
     where('fecha', '<=', endDate),
     orderBy('fecha')
@@ -1142,7 +1141,9 @@ export async function queryReservationsByDateRange(
   const snapshot = await getDocs(query(reservasCol, ...constraints));
   const results: Reservation[] = [];
   snapshot.forEach((docSnap) => {
-    results.push(normalizeReservationFromFirestore(docSnap.id, docSnap.data()));
+    const normalized = normalizeReservationFromFirestore(docSnap.id, docSnap.data());
+    if (canonSpace && normalizeSpaceName(normalized.espacio) !== canonSpace) return;
+    results.push(normalized);
   });
   return results.sort(compareReservationsByDate);
 }

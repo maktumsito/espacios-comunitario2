@@ -18,6 +18,21 @@ it('does not broadcast a data change for a batch read and start a self-triggered
   window.removeEventListener('data-changed', changed);
 });
 
+it('does not trigger a same-tab data-changed refresh after reservationRequest completes', async () => {
+  const changed = vi.fn(); window.addEventListener('data-changed', changed);
+  const encoder = new TextEncoder();
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(JSON.stringify({ success: true, reservations: [], deletedIds: [], confirmedIds: [], pendingIds: [] }) + '\n'));
+      controller.close();
+    }
+  });
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, body }));
+  await reservationRequest({ reservations: [], options: {} }, async () => {});
+  expect(changed).not.toHaveBeenCalled();
+  window.removeEventListener('data-changed', changed);
+});
+
 it('keeps the quota error code and retry delay on protected data reads and deletion requests', async () => {
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => ({ ok: false, status: 503,
     headers: new Headers({ 'Retry-After': '60' }),

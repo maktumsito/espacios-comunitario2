@@ -863,7 +863,13 @@ export async function writeReservations(
           }
           if (options.intent === "create" && existing)
             throw new ReservationVersionError(existing);
-          if (options.intent === "update" && !existing)
+          if (
+            (options.intent === "update" ||
+              (options.requireAtomic &&
+                deletedIds.length > 0 &&
+                !options.auditRestore)) &&
+            !existing
+          )
             throw new Error(
               "La reserva fue eliminada por otro usuario. No se volverá a crear.",
             );

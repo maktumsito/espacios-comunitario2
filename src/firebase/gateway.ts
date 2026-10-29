@@ -51,9 +51,11 @@ export async function dataRequest(
     announceDataChange();
   return result;
 }
-export function announceDataChange() {
+export function announceDataChange(options?: { local?: boolean }) {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new Event("data-changed"));
+  if (options?.local !== false) {
+    window.dispatchEvent(new Event("data-changed"));
+  }
   if (typeof BroadcastChannel !== "undefined") {
     const channel = new BroadcastChannel("espacios-data-v1");
     channel.postMessage("changed");
@@ -102,7 +104,7 @@ export async function reservationRequest(
           "Se perdió la confirmación del servidor. Reanuda el guardado.",
         final?.status || 500,
       );
-    announceDataChange();
+    announceDataChange({ local: false });
     return final;
   } finally {
     await reader.cancel().catch(() => {});

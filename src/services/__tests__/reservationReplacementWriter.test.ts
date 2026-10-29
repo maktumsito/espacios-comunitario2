@@ -291,6 +291,18 @@ describe('single occurrence replacement transaction', () => {
     await expect(writeReservations({} as any,[removed],clean,{intent:'update',requireAtomic:true})).rejects.toThrow(/eliminada por otro usuario/);
     expect(memory.rows.has('reservas/removed')).toBe(false);
   });
+  it('does not recreate a deleted target reservation at version zero during an atomic merge', async () => {
+    const source = { ...original, id: 'source', horaInicio: '11:00', horaFin: '12:00', version: 1 };
+    seed(source);
+    memory.rows.delete('reservas/original');
+    await expect(writeReservations({} as any, [{ ...original, version: 0, horaFin: '12:00' }], clean, {
+      deletedIds: ['source'],
+      expectedVersions: { source: 1 },
+      requireAtomic: true,
+    })).rejects.toThrow(/eliminada por otro usuario/);
+    expect(memory.rows.has('reservas/original')).toBe(false);
+    expect(memory.rows.has('reservas/source')).toBe(true);
+  });
   it('rejects an oversized atomic movement before any chunk is written', async () => {
     const rows=Array.from({length:500},(_,i)=>({...original,id:`move-${i}`,version:0,espacio:`ROOM ${i}`}));
     await expect(writeReservations({} as any,rows,clean,{requireAtomic:true})).rejects.toThrow(/atómico/);

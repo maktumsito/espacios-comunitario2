@@ -339,6 +339,10 @@ export async function commitTrusted(
                   : options.intent === "create"
                     ? "Creación confirmada"
                     : "Guardado confirmado (incluye recuperación)");
+        const primaryRow =
+          auditSaved[0] ||
+          saved[0] ||
+          (deletions[0] ? current.get(deletions[0]) : undefined);
         const entry = {
           id: auditRef.id,
           timestamp: metadata?.timestamp || new Date().toISOString(),
@@ -354,6 +358,15 @@ export async function commitTrusted(
                   : "CREATE",
           description,
           reservaId: rows[0]?.id || deletions[0] || operationId,
+          ...(primaryRow
+            ? {
+                reservaTitle: primaryRow.tipoActividad || primaryRow.descripcion,
+                reservaFecha: primaryRow.fecha,
+                reservaEspacio: primaryRow.espacio,
+                reservaHorario: `${primaryRow.horaInicio} - ${primaryRow.horaFin}`,
+                reservaResponsable: primaryRow.responsable,
+              }
+            : {}),
           affectedCount: confirmedIds.length,
           isReverted: false,
           snapshotVersion: 2,

@@ -265,8 +265,9 @@ export function useReservationCrud({
       };
 
       if (isSeries && seriesId) {
-        const toUpdate = reservations.filter(
-          (r) => r.serieRecurrente === seriesId || r.recurrenteId === seriesId
+        const remoteSeries = (await queryReservationsBySeries(seriesId).catch(() => [])) || [];
+        const toUpdate = [...new Map([...getLocalCache(), ...reservations, ...remoteSeries].map(r => [r.id, r])).values()].filter(
+          (r) => (r.serieRecurrente === seriesId || r.recurrenteId === seriesId) && r.estado !== 'eliminada'
         );
         const updatedList = toUpdate.map((r) => ({
           ...r,
@@ -336,8 +337,9 @@ export function useReservationCrud({
       const seriesId = reservation.recurrenteId || reservation.serieRecurrente;
 
       if (isSeries && seriesId) {
-        const toDelete = reservations.filter(
-          (r) => r.serieRecurrente === seriesId || r.recurrenteId === seriesId
+        const remoteSeries = (await queryReservationsBySeries(seriesId).catch(() => [])) || [];
+        const toDelete = [...new Map([...getLocalCache(), ...reservations, ...remoteSeries].map(r => [r.id, r])).values()].filter(
+          (r) => (r.serieRecurrente === seriesId || r.recurrenteId === seriesId) && r.estado !== 'eliminada'
         );
 
         await deleteSeriesByRecurrenteId(seriesId,toDelete.map(r=>r.id),Object.fromEntries(toDelete.map(r=>[r.id,r.id===reservation.id?reservation.version||0:r.version||0])));
@@ -398,8 +400,9 @@ export function useReservationCrud({
       const seriesId = reservation.recurrenteId || reservation.serieRecurrente;
 
       if (isSeries && seriesId) {
-        const toUpdate = reservations.filter(
-          (r) => r.serieRecurrente === seriesId || r.recurrenteId === seriesId
+        const remoteSeries = (await queryReservationsBySeries(seriesId).catch(() => [])) || [];
+        const toUpdate = [...new Map([...getLocalCache(), ...reservations, ...remoteSeries].map(r => [r.id, r])).values()].filter(
+          (r) => (r.serieRecurrente === seriesId || r.recurrenteId === seriesId) && r.estado !== 'eliminada'
         );
         const updatedList = toUpdate.map((r) => {
           const copy = { ...r };
@@ -534,14 +537,21 @@ export function useReservationCrud({
   }, [reservations, setIsFirebaseSyncing, setIsFirebaseConnected, setLastSyncTime]);
 
   const handleImportReservations = useCallback(async (importedList: Reservation[]) => {
-    const existing = new Map(reservations.map(r=>[r.id,r]));
+    const allKnown = [...new Map([...getLocalCache(), ...reservations].map(r => [r.id, r])).values()];
+    const existing = new Map(allKnown.map(r=>[r.id,r]));
     const deduplicated = [...new Map(importedList.map(r=>[r.id,{ ...r, version: existing.get(r.id)?.version || 0 }])).values()];
     const imported = deduplicated.filter(r => hasReservationMaterialChange(existing.get(r.id), r));
     if (!imported.length) return;
     if (imported.some(r=>existing.has(r.id)) && !userCanEditReservations(currentUser)) throw new Error('No tienes permiso para editar las reservas importadas.');
     if (imported.some(r=>!existing.has(r.id)) && !userCanCreateReservations(currentUser)) throw new Error('No tienes permiso para crear las reservas importadas.');
-    const conflicts = detectBatchConflicts(imported, reservations, new Set(imported.map(r=>r.id)));
-    if (conflicts.length) throw new Error(formatConflictMessage(conflicts[0]));
+    const occupancyChanged = imported.filter(r => hasReservationOccupancyChange(existing.get(r.id), r));
+    const occupancyUnchanged = imported.filter(r => !occupancyChanged.includes(r));
+    if (occupancyChanged.length > 0) {
+      const conflicts = detectBatchConflicts(occupancyChanged, [...allKnown, ...occupancyUnchanged], new Set(imported.map(r=>r.id)));
+      if (conflicts.length) throw new Error(formatConflictMessage(conflicts[0]));
+      const blocks = findMaintenanceBlockConflicts(occupancyChanged.filter(r => isReservationActiveForAvailability(r)), spaceBlocks);
+      if (blocks.length) throw new Error(formatBlockConflictMessage(blocks[0]));
+    }
     const confirmedWrite = await saveReservationsBatch(imported);
     applyConfirmed(confirmedWrite);
     void safeAudit({
@@ -553,7 +563,7 @@ export function useReservationCrud({
       newState: confirmedWrite.reservations,
       newStateIsConfirmed: true
     });
-  }, [reservations, currentUser, setReservations]);
+  }, [reservations, spaceBlocks, currentUser, setReservations]);
 
   const handleDeleteAllHolidays = useCallback(async () => {
     const res = await deleteAllHolidayReservations();
@@ -1413,12 +1423,31 @@ export function useReservationCrud({
     const cleanReservations = reservations.filter(
       (r) => !deletedSet.has(r.id) && isReservationActiveForAvailability(r, deletedSet)
     );
-    const conflicts = detectBatchConflicts([mergedReserva], cleanReservations, new Set([target.id, ...sourceIds]));
+    const mergedIds = new Set([target.id, ...sourceIds]);
+    const conflicts = detectBatchConflicts([mergedReserva], cleanReservations, mergedIds);
     if (conflicts.length > 0) {
       const firstConflict = conflicts[0];
       const conflictMsg = formatConflictMessage(firstConflict);
       triggerSyncToast(`No se pueden juntar las reservas debido a un conflicto con otra actividad:\n\n${conflictMsg}`, 'error');
       return false;
+    }
+    const mergeBlocks = findMaintenanceBlockConflicts([mergedReserva], spaceBlocks);
+    if (mergeBlocks.length > 0) {
+      triggerSyncToast(formatBlockConflictMessage(mergeBlocks[0]), 'error');
+      return false;
+    }
+    if ((mergedReserva.equipamientoSolicitado || []).length > 0) {
+      const afterMerge = [...cleanReservations.filter(r => !mergedIds.has(r.id)), mergedReserva];
+      for (const interval of getTimeIntervalsForReservation(mergedReserva)) {
+        const availability = calculateEquipmentAvailability(interval.date, interval.startMin, interval.endMin, afterMerge, getStoredEquipment(), mergedReserva.id);
+        for (const request of mergedReserva.equipamientoSolicitado || []) {
+          const item = availability.find(a => a.item.id === request.equipmentId);
+          if (item && (request.quantity < 0 || request.quantity > item.availableQuantity)) {
+            triggerSyncToast(`Equipamiento no disponible el ${mergedReserva.fecha}: ${request.equipmentName || request.equipmentId}.`, 'error');
+            return false;
+          }
+        }
+      }
     }
 
     try {
@@ -1446,7 +1475,7 @@ export function useReservationCrud({
     } catch (err: any) { triggerSyncToast(err?.message || 'No se pudieron unificar las reservas.', 'error'); return false; }
 
     return true;
-  }, [reservations, currentUser, triggerSyncToast, setReservations]);
+  }, [reservations, spaceBlocks, currentUser, triggerSyncToast, setReservations]);
 
   return {
     handleMoveReservation,
