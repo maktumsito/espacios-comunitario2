@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
+import { isDeepStrictEqual } from "node:util";
 import type { AppSessions } from "./appSession";
 import {
   accountId,
@@ -77,7 +78,7 @@ async function prepareEntities(
       );
   if (!d.usuarios.some(manager))
     throw new ApiFailure(409, "Debe conservarse un administrador.");
-  const writes: any[] = [
+  const candidateWrites: [string, any][] = [
     ["configuracion_sistema/espacios", { data: d.espacios }],
     ["configuracion_sistema/tipos_prestamo", { data: d.tiposPrestamo }],
     ["configuracion_sistema/tipos_actividad", { data: d.tiposActividad }],
@@ -91,7 +92,7 @@ async function prepareEntities(
       sessionVersion: _version,
       ...profile
     } = u;
-    writes.push([
+    candidateWrites.push([
       `usuarios_sistema/${accountId(u.username)}`,
       {
         ...profile,
@@ -104,12 +105,21 @@ async function prepareEntities(
     ]);
   }
   for (const rating of d.calificaciones)
-    writes.push([`calificaciones_espacios/${rating.id}`, rating]);
+    candidateWrites.push([`calificaciones_espacios/${rating.id}`, rating]);
   for (const block of d.bloqueos || [])
-    writes.push([`bloqueos_espacios/${block.id}`, block]);
-  const paths = new Set(writes.map((w) => w[0]));
+    candidateWrites.push([`bloqueos_espacios/${block.id}`, block]);
+  const targetPaths = new Set(candidateWrites.map((w) => w[0]));
+  const existingByPath = new Map<string, any>();
+  for (const snap of snapshots) {
+    for (const docSnap of snap.docs) {
+      existingByPath.set(docSnap.ref.path, docSnap.data());
+    }
+  }
+  const writes = candidateWrites.filter(
+    ([path, data]) => !existingByPath.has(path) || !isDeepStrictEqual(existingByPath.get(path), data),
+  );
   const deletes = snapshots.flatMap((s) =>
-    s.docs.filter((doc) => !paths.has(doc.ref.path)).map((doc) => doc.ref),
+    s.docs.filter((doc) => !targetPaths.has(doc.ref.path)).map((doc) => doc.ref),
   );
   if (writes.length + deletes.length > 440)
     throw new ApiFailure(

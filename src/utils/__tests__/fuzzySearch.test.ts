@@ -79,4 +79,11 @@ describe('fuzzySearch', () => {
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].title).toBe('Ver Calendario Mensual');
   });
+
+  it('skips expensive fuzzy fallback for short prefix queries under 3 characters', () => {
+    const results = fuzzySearchReservations(sampleReservations, 'ca');
+    // Finds Carlos and Carla by prefix, but doesn't do expensive typo searches
+    expect(results.length).toBe(2);
+    expect(results.map(r => r.id).sort()).toEqual(['res-exact-1', 'res-fuzzy-2']);
+  });
 });

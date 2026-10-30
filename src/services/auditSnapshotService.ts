@@ -36,7 +36,18 @@ export async function fetchFullAuditEntry(id: string): Promise<AuditChangeLogEnt
   const entry = { ...snapshot.data(), id } as AuditChangeLogEntry;
   const groups=(entry as any).operationParts;
   if(groups){let previousState:any[]=[],newState:any[]=[];
-    for(const group of groups){let payload='';for(const key of group.keys||[group]){const part=await getDocFromServer(doc(db,'audit_logs',id,'partes',key));if(!part.exists()||typeof part.data().payload!=='string')throw new Error('El respaldo está incompleto.');payload+=part.data().payload;}const state=JSON.parse(payload);previousState.push(...state.previousState);newState.push(...state.newState);}
+    for(const group of groups){
+      const keys: string[] = group.keys || [group];
+      const partSnapshots = await Promise.all(keys.map(key => getDocFromServer(doc(db, 'audit_logs', id, 'partes', key))));
+      let payload = '';
+      for (const part of partSnapshots) {
+        if (!part.exists() || typeof part.data().payload !== 'string') throw new Error('El respaldo está incompleto.');
+        payload += part.data().payload;
+      }
+      const state = JSON.parse(payload);
+      previousState.push(...state.previousState);
+      newState.push(...state.newState);
+    }
     return {...entry,previousState,newState};
   }
   if (!entry.snapshotParts || entry.isReverted) return entry;

@@ -112,8 +112,8 @@ export function fuzzySearchReservations(
   exactMatches.sort((a, b) => a.priority - b.priority);
   const prioritizedResults: Reservation[] = exactMatches.map((m) => m.res);
 
-  // 2. Fallback to Fuse.js for typo tolerance (only for non-date/year textual queries)
-  if (!isYearOrDateQuery) {
+  // 2. Fallback to Fuse.js for typo tolerance when exact/substring matches are limited
+  if (!isYearOrDateQuery && exactMatches.length < 25 && trimmed.length >= 3) {
     const fuse = getReservationsFuse(reservations);
     const fuseResults = fuse.search(trimmed);
 
@@ -206,11 +206,13 @@ export function fuzzySearchItems<T>(
   exactMatches.sort((a, b) => a.priority - b.priority);
   const result: T[] = exactMatches.map((m) => m.item);
 
-  const fuse = getGenericFuse(items, keys, threshold);
-  const fuseResults = fuse.search(trimmed);
-  for (const res of fuseResults) {
-    if (!exactMatchedSet.has(res.item)) {
-      result.push(res.item);
+  if (exactMatches.length < 25 && trimmed.length >= 3) {
+    const fuse = getGenericFuse(items, keys, threshold);
+    const fuseResults = fuse.search(trimmed);
+    for (const res of fuseResults) {
+      if (!exactMatchedSet.has(res.item)) {
+        result.push(res.item);
+      }
     }
   }
 

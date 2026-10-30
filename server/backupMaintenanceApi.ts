@@ -42,8 +42,12 @@ export function registerBackupMaintenanceApi(app: Express, db: Firestore, sessio
             tx.update(ref, { protected: protection });
           } else {
             if (snapshot.get('protected') === true) throw new ApiFailure(409, 'La copia está protegida y no puede eliminarse.');
+            const backupsCol: any = db.collection('copias_seguridad');
+            const backupsQuery = typeof backupsCol.select === 'function'
+              ? backupsCol.select('timestamp', 'fecha', 'tipo', 'totalReservas', 'tamanoBytes', 'checksum', 'protected')
+              : backupsCol;
             const [backups, parts] = await Promise.all([
-              tx.get(db.collection('copias_seguridad')), tx.get(ref.collection('partes').limit(401)),
+              tx.get(backupsQuery), tx.get(ref.collection('partes').limit(401)),
             ]);
             if (backups.size <= 1) throw new ApiFailure(409, 'Se conserva la última copia disponible.');
             if (parts.size > 400) throw new ApiFailure(413, 'Esta copia requiere una eliminación supervisada por su tamaño.');
