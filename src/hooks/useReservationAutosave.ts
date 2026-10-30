@@ -1,3 +1,4 @@
+import type { AdditionalSpaceSlot } from '../types';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -40,6 +41,7 @@ export interface AutosavedReservationDraft {
   singleSecondSpace: string;
   singleSecondStartTime: string;
   singleSecondEndTime: string;
+  additionalSpaces?: AdditionalSpaceSlot[];
   descargarCartaAlCrear?: boolean;
   editScope?: DraftEditScope;
   settings?: DraftFormSettings;
@@ -193,6 +195,7 @@ interface UseReservationAutosaveOptions {
   singleSecondSpace: string;
   singleSecondStartTime: string;
   singleSecondEndTime: string;
+  additionalSpaces?: AdditionalSpaceSlot[];
   descargarCartaAlCrear?: boolean;
   onRestore: (draft: AutosavedReservationDraft) => void;
 }
@@ -227,6 +230,7 @@ export function useReservationAutosave({
   singleSecondSpace,
   singleSecondStartTime,
   singleSecondEndTime,
+  additionalSpaces,
   descargarCartaAlCrear,
   onRestore,
   editScope,
@@ -257,6 +261,7 @@ export function useReservationAutosave({
     singleSecondSpace,
     singleSecondStartTime,
     singleSecondEndTime,
+    additionalSpaces,
     descargarCartaAlCrear,
     storageKey,
     isEditing,
@@ -282,6 +287,7 @@ export function useReservationAutosave({
       singleSecondSpace,
       singleSecondStartTime,
       singleSecondEndTime,
+      additionalSpaces,
       descargarCartaAlCrear,
       storageKey,
       isEditing,
@@ -305,6 +311,7 @@ export function useReservationAutosave({
     singleSecondSpace,
     singleSecondStartTime,
     singleSecondEndTime,
+    additionalSpaces,
     descargarCartaAlCrear,
     storageKey,
     isEditing,
@@ -413,6 +420,7 @@ export function useReservationAutosave({
       singleSecondSpace: current.singleSecondSpace,
       singleSecondStartTime: current.singleSecondStartTime,
       singleSecondEndTime: current.singleSecondEndTime,
+      additionalSpaces: current.additionalSpaces,
       descargarCartaAlCrear: current.descargarCartaAlCrear,
       editScope: current.editScope,
       settings: current.settings
@@ -455,6 +463,7 @@ export function useReservationAutosave({
     singleSecondSpace,
     singleSecondStartTime,
     singleSecondEndTime,
+    additionalSpaces,
     descargarCartaAlCrear,
     persistDraftImmediately,
     editScope,

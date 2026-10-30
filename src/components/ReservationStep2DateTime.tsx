@@ -1,3 +1,6 @@
+import { AdditionalSpacesEditor } from './AdditionalSpacesEditor';
+import { additionalScheduleSlots } from '../utils/recurringSchedule';
+import type { AdditionalSpaceSlot } from '../types';
 import { CalendarDateInput } from './common/CalendarDateInput';
 import { ReservationSectionHeader } from './ReservationSectionHeader';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
@@ -11,7 +14,6 @@ import {
   KeyRound,
   CheckCircle2,
   Check,
-  Layers,
   ShieldCheck,
   Repeat,
   Building2,
@@ -72,6 +74,8 @@ interface ReservationStep2DateTimeProps {
   singleSecondStartTime: string;
   setSingleSecondStartTime: (time: string) => void;
   singleSecondEndTime: string;
+  additionalSpaces: AdditionalSpaceSlot[];
+  setAdditionalSpaces: (slots: AdditionalSpaceSlot[]) => void;
   setSingleSecondEndTime: (time: string) => void;
   singleSecondTimeValidation: { isValid: boolean; error?: string };
   singleSecondSpaceConflicts: Reservation[];
@@ -166,6 +170,8 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
   singleSecondStartTime,
   setSingleSecondStartTime,
   singleSecondEndTime,
+  additionalSpaces,
+  setAdditionalSpaces,
   setSingleSecondEndTime,
   singleSecondTimeValidation,
   singleSecondSpaceConflicts,
@@ -650,155 +656,34 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
         )}
       </div>
 
-      {/* MULTI-SPACE OPTION (2do espacio / tramo horario para la actividad) */}
-      {(!editingReservation || isDuplicating) && (
-        <div className="p-3.5 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 rounded-2xl border border-blue-200 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2.5">
-              <div className="p-1.5 bg-blue-600 text-white rounded-lg">
-                <Layers className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
-                  Registrar 2° espacio / tramo horario para esta actividad
-                  <span className="text-[10px] font-semibold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full">
-                    Opcional
-                  </span>
-                </span>
-                <p className="text-[11px] text-slate-600">
-                  {bookingMode === 'pattern'
-                    ? 'Permite agendar un segundo tramo/espacio (ej: SALA 2 de 20:00 a 20:30) para cada día del patrón semanal.'
-                    : bookingMode === 'specific'
-                    ? 'Permite agendar un segundo tramo o espacio complementario (ej: SALA 2 o GIMNASIO) para cada una de las fechas específicas.'
-                    : 'Permite agendar un segundo espacio (ej: SALA 2 o GIMNASIO) para el mismo día con su propio horario.'}
-                </p>
-              </div>
-            </div>
-
-            <label className="relative inline-flex items-center cursor-pointer shrink-0">
-              <input
-                id="toggle-single-second-space"
-                type="checkbox"
-                checked={enableSingleSecondSpace}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setEnableSingleSecondSpace(checked);
-                  if (checked) {
-                    if (!singleSecondSpace) {
-                      const defaultSec = availableSpaces.find((s) => s.name !== formData.espacio)?.name || availableSpaces[1]?.name || availableSpaces[0]?.name;
-                      setSingleSecondSpace(defaultSec);
-                    }
-                    const baseStart = formData.horaFin || '20:00';
-                    setSingleSecondStartTime(baseStart);
-                    try {
-                      const sMin = timeToMinutes(baseStart);
-                      const eMin = Math.min(1439, sMin + 30);
-                      setSingleSecondEndTime(formatMinutesToTime(eMin));
-                    } catch {
-                      setSingleSecondEndTime('20:30');
-                    }
-                  }
-                }}
-                className="sr-only peer"
-              />
-              <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
+      {(!editingReservation || isDuplicating) && !(bookingMode === 'specific' && useCustomSchedulesPerDate) && !(bookingMode === 'pattern' && useCustomSchedulesPerDay) && (
+        <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-200 space-y-3">
+          <div>
+            <h4 className="font-bold text-xs text-slate-800">Espacios y tramos adicionales</h4>
+            <p className="text-[11px] text-slate-600">Agrega todos los espacios o tramos que necesites, cada uno con su propio horario.{bookingMode !== 'single' && ' Se aplicarán a cada fecha seleccionada.'}</p>
           </div>
-
-          {enableSingleSecondSpace && (
-            <div className="pt-2.5 border-t border-blue-200/60 grid grid-cols-1 sm:grid-cols-4 gap-3 animate-fadeIn">
-              <div className="space-y-1 sm:col-span-2">
-                <label htmlFor="select-single-second-space" className="text-xs font-semibold text-slate-700 flex items-center space-x-1">
-                  <MapPin className="w-3 h-3 text-indigo-600" />
-                  <span>2° Espacio *</span>
-                </label>
-                <select
-                  id="select-single-second-space"
-                  aria-label="Segundo espacio requerido"
-                  value={singleSecondSpace}
-                  onChange={(e) => setSingleSecondSpace(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs font-bold text-xs"
-                >
-                  {availableSpaces.map((s) => (
-                    <option key={s.id} value={s.name}>
-                      {s.name} {s.name === formData.espacio ? '(Mismo que 1er espacio)' : ''}
-                    </option>
-                  ))}
-                </select>
+          <AdditionalSpacesEditor
+            slots={additionalScheduleSlots({ horaInicio: '', horaFin: '', hasSecondSlot: enableSingleSecondSpace, secondEspacio: singleSecondSpace, secondHoraInicio: singleSecondStartTime, secondHoraFin: singleSecondEndTime, additionalSlots: additionalSpaces })}
+            onChange={slots => {
+              const [second, ...remaining] = slots;
+              setEnableSingleSecondSpace(Boolean(second));
+              if (second) {
+                setSingleSecondSpace(second.espacio);
+                setSingleSecondStartTime(second.horaInicio);
+                setSingleSecondEndTime(second.horaFin);
+              }
+              setAdditionalSpaces(remaining);
+            }}
+            availableSpaces={availableSpaces} baseSpace={formData.espacio} baseEnd={formData.horaFin}
+            participants={formData.cantidadParticipantes} allowOvernight={formData.terminaDiaSiguiente}
+          />
+          {singleSecondSpaceConflicts.length > 0 && (
+            <div className="space-y-2 text-xs text-rose-800">
+              <p>El segundo espacio está ocupado en el horario seleccionado.</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={handleFindNextSlotForSecondSpace} className="rounded-lg bg-rose-100 px-3 py-2 font-semibold hover:bg-rose-200 cursor-pointer">Buscar horario libre</button>
+                <button type="button" onClick={handleSwitchSecondSpaceToAvailable} className="rounded-lg bg-emerald-100 px-3 py-2 font-semibold text-emerald-800 hover:bg-emerald-200 cursor-pointer">Cambiar a sala disponible</button>
               </div>
-
-              <div className="space-y-1">
-                <label htmlFor="input-single-second-start" className="text-xs font-semibold text-slate-700 flex items-center space-x-1">
-                  <Clock className="w-3 h-3 text-indigo-600" />
-                  <span>Inicio 2° Espacio</span>
-                </label>
-                <input
-                  id="input-single-second-start"
-                  aria-label="Hora de inicio del segundo espacio"
-                  type="time"
-                  value={singleSecondStartTime}
-                  onChange={(e) => setSingleSecondStartTime(e.target.value)}
-                  className={`w-full px-2.5 py-2 bg-white border rounded-xl text-slate-900 font-mono text-xs focus:ring-2 shadow-2xs font-bold ${
-                    !singleSecondTimeValidation.isValid ? 'border-rose-400 bg-rose-50/40 text-rose-950 focus:ring-rose-400' : 'border-indigo-200 focus:ring-indigo-500'
-                  }`}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label htmlFor="input-single-second-end" className="text-xs font-semibold text-slate-700 flex items-center space-x-1">
-                  <Clock className="w-3 h-3 text-indigo-600" />
-                  <span>Término 2° Espacio</span>
-                </label>
-                <input
-                  id="input-single-second-end"
-                  aria-label="Hora de término del segundo espacio"
-                  type="time"
-                  value={singleSecondEndTime}
-                  onChange={(e) => setSingleSecondEndTime(e.target.value)}
-                  className={`w-full px-2.5 py-2 bg-white border rounded-xl text-slate-900 font-mono text-xs focus:ring-2 shadow-2xs font-bold ${
-                    !singleSecondTimeValidation.isValid ? 'border-rose-400 bg-rose-50/40 text-rose-950 focus:ring-rose-400' : 'border-indigo-200 focus:ring-indigo-500'
-                  }`}
-                />
-              </div>
-
-              {!singleSecondTimeValidation.isValid && (
-                <div className="sm:col-span-4 p-2.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-900 text-xs flex items-center space-x-2 font-semibold animate-fadeIn">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>⚠️ {singleSecondTimeValidation.error || 'La hora de término del 2° espacio debe ser posterior a la de inicio.'}</span>
-                </div>
-              )}
-
-              {singleSecondSpaceConflicts.length > 0 && (
-                <div className="sm:col-span-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 space-y-2 font-medium">
-                  <div className="flex items-center space-x-2 font-bold text-rose-950">
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>
-                      Alerta de topamiento: Ya existe una reserva en {formatDisplayTitle(singleSecondSpace)} entre {singleSecondStartTime} y {singleSecondEndTime}.
-                    </span>
-                  </div>
-
-                  {/* Direct 1-click solutions for second space */}
-                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-rose-200/80">
-                    <button
-                      type="button"
-                      onClick={handleFindNextSlotForSecondSpace}
-                      className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold transition flex items-center space-x-1 shadow-2xs cursor-pointer"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      <span>Buscar horario libre en {formatDisplayTitle(singleSecondSpace)}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleSwitchSecondSpaceToAvailable}
-                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition flex items-center space-x-1 shadow-2xs cursor-pointer"
-                    >
-                      <MapPin className="w-3 h-3" />
-                      <span>Cambiar a sala disponible a esta hora</span>
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -971,6 +856,7 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
         singleSecondSpace={singleSecondSpace}
         singleSecondStartTime={singleSecondStartTime}
         singleSecondEndTime={singleSecondEndTime}
+        additionalSpaces={additionalSpaces}
       />
     </div>
   );

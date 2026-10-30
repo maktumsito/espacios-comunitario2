@@ -98,17 +98,20 @@ export function useReservationModalValidation({
 }: UseReservationModalValidationProps) {
   // Real-time validations for time range
   const timeValidation = useMemo<TimeRangeValidationResult>(() => {
-    return validateTimeRange(
-      formData.horaInicio || '',
-      formData.horaFin || '',
-      Boolean(formData.terminaDiaSiguiente)
-    );
-  }, [formData.horaInicio, formData.horaFin, formData.terminaDiaSiguiente]);
+    const primary = validateTimeRange(formData.horaInicio || '', formData.horaFin || '', Boolean(formData.terminaDiaSiguiente));
+    if (!primary.isValid || preserveExistingSchedule) return primary;
+    for (const slot of reviewSlots || []) {
+      if (!slot.espacio) return { ...primary, isValid: false, error: `Selecciona un espacio para el ${formatDateDDMMYYYY(slot.fecha)}.` };
+      const timing = validateTimeRange(slot.horaInicio, slot.horaFin, Boolean(slot.terminaDiaSiguiente));
+      if (!timing.isValid) return { ...timing, error: `${slot.espacio}, ${formatDateDDMMYYYY(slot.fecha)}: ${timing.error}` };
+    }
+    return primary;
+  }, [formData.horaInicio, formData.horaFin, formData.terminaDiaSiguiente, reviewSlots, preserveExistingSchedule]);
 
   const singleSecondTimeValidation = useMemo<{ isValid: boolean; error?: string }>(() => {
-    if (!enableSingleSecondSpace) return { isValid: true, error: undefined };
-    return validateTimeRange(singleSecondStartTime || '', singleSecondEndTime || '');
-  }, [enableSingleSecondSpace, singleSecondStartTime, singleSecondEndTime]);
+    if (!enableSingleSecondSpace || (bookingMode === 'specific' && useCustomSchedulesPerDate) || (bookingMode === 'pattern' && useCustomSchedulesPerDay)) return { isValid: true, error: undefined };
+    return validateTimeRange(singleSecondStartTime || '', singleSecondEndTime || '', Boolean(formData.terminaDiaSiguiente) && singleSecondEndTime <= singleSecondStartTime);
+  }, [enableSingleSecondSpace, singleSecondStartTime, singleSecondEndTime, bookingMode, useCustomSchedulesPerDate, useCustomSchedulesPerDay, formData.terminaDiaSiguiente]);
 
   const rutValidation = useMemo<RutValidationResult>(() => {
     return validateRut(formData.rut || '', true);

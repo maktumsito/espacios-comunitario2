@@ -1,3 +1,4 @@
+import type { AdditionalSpaceSlot } from '../types';
 import { buildAvailabilityIndex, getAvailabilityCandidates } from '../utils/availabilityIndex';
 import { useMemo } from 'react';
 import { Reservation, SpaceInfo, UpdateScope, CustomScheduleSlot } from '../types';
@@ -24,6 +25,7 @@ interface UseReservationConflictResolutionProps {
   singleSecondSpace: string;
   singleSecondStartTime: string;
   singleSecondEndTime: string;
+  additionalSpaces?: AdditionalSpaceSlot[];
   bookingMode: 'single' | 'specific' | 'pattern';
   isEditingSingleOccurrence: boolean;
   editingReservation?: Reservation | null;
@@ -60,6 +62,7 @@ export function useReservationConflictResolution({
   singleSecondSpace,
   singleSecondStartTime,
   singleSecondEndTime,
+  additionalSpaces = [],
   bookingMode,
   isEditingSingleOccurrence,
   editingReservation,
@@ -89,14 +92,14 @@ export function useReservationConflictResolution({
       ? affectedReservations.map(r=>({fecha:r.fecha,espacio:r.espacio,horaInicio:r.horaInicio,horaFin:r.horaFin,terminaDiaSiguiente:r.terminaDiaSiguiente,sourceId:r.id}))
       : dates.flatMap(date=>scheduleSlotsForDate(date,{mode:isEditingSingleOccurrence?'single':bookingMode,base:formData,
         useCustomDates:useCustomSchedulesPerDate,customDates:dateSchedules,useCustomDays:useCustomSchedulesPerDay,customDays:daySchedules,
-        secondEnabled:!isEditingSingleOccurrence&&enableSingleSecondSpace,secondSpace:singleSecondSpace,secondStart:singleSecondStartTime,secondEnd:singleSecondEndTime}));
+        secondEnabled:!isEditingSingleOccurrence&&enableSingleSecondSpace,secondSpace:singleSecondSpace,secondStart:singleSecondStartTime,secondEnd:singleSecondEndTime,additionalSlots:additionalSpaces}));
     if (editingReservation && !isDuplicating && (!isEditingRecurring || updateScope === 'single') && slots.length) slots[0].sourceId=editingReservation.id;
     if (isEditingRecurring && editingReservation && updateScope !== 'single') slots=scopedScheduleSlots(slots,{
       scope:updateScope,source:editingReservation,history:allReservations,selectedIds:new Set(affectedReservations.map(r=>r.id)),
       rangeStartDate,rangeEndDate,
     });
     return slots;
-  },[isDuplicating,scheduleChanged,formData.fecha,formData.horaInicio,formData.horaFin,formData.espacio,formData.terminaDiaSiguiente,bookingMode,specificDates,generatedDates,isEditingRecurring,isEditingSingleOccurrence,editingReservation,updateScope,affectedReservations,allReservations,useCustomSchedulesPerDate,dateSchedules,useCustomSchedulesPerDay,daySchedules,enableSingleSecondSpace,singleSecondSpace,singleSecondStartTime,singleSecondEndTime,rangeStartDate,rangeEndDate]);
+  },[isDuplicating,scheduleChanged,formData.fecha,formData.horaInicio,formData.horaFin,formData.espacio,formData.terminaDiaSiguiente,bookingMode,specificDates,generatedDates,isEditingRecurring,isEditingSingleOccurrence,editingReservation,updateScope,affectedReservations,allReservations,useCustomSchedulesPerDate,dateSchedules,useCustomSchedulesPerDay,daySchedules,enableSingleSecondSpace,singleSecondSpace,singleSecondStartTime,singleSecondEndTime,additionalSpaces,rangeStartDate,rangeEndDate]);
   const availabilityIndex = useMemo(()=>buildAvailabilityIndex(allReservations),[allReservations]);
   const checkIndexedConflict: typeof checkSingleConflict = (candidate, _all, excluded, series) => {
     if (conflictReviewFrom && candidate.fecha && candidate.fecha < conflictReviewFrom) return [];
@@ -188,6 +191,7 @@ export function useReservationConflictResolution({
     singleSecondSpace,
     singleSecondStartTime,
     singleSecondEndTime,
+    additionalSpaces,
     allReservations,
     excludeReservationIds,
     excludeSeriesId

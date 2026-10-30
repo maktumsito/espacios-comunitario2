@@ -1,4 +1,4 @@
-import type { Reservation, UpdateScope, CustomScheduleSlot } from '../types';
+import type { Reservation, UpdateScope, CustomScheduleSlot, AdditionalSpaceSlot } from '../types';
 import { getChileLocalDateString, getDayOfWeekFromDateString } from './dateUtils';
 import { getSeriesEditStartDate } from './recurringEdits';
 import { isReservationActiveForAvailability, timeToMinutes } from './conflictDetector';
@@ -37,6 +37,13 @@ export interface ScheduleOptions {
   customDates?: Record<string, CustomScheduleSlot>; customDays?: Record<number, CustomScheduleSlot>;
   useCustomDates?: boolean; useCustomDays?: boolean;
   secondEnabled?: boolean; secondSpace?: string; secondStart?: string; secondEnd?: string;
+  additionalSlots?: AdditionalSpaceSlot[];
+}
+export function additionalScheduleSlots(schedule: CustomScheduleSlot): AdditionalSpaceSlot[] {
+  return [
+    ...(schedule.hasSecondSlot ? [{ espacio: schedule.secondEspacio || '', horaInicio: schedule.secondHoraInicio || '', horaFin: schedule.secondHoraFin || '' }] : []),
+    ...(schedule.additionalSlots || []),
+  ];
 }
 export function scheduleSlotsForDate(date: string, options: ScheduleOptions): ScheduleSlot[] {
   const { base } = options;
@@ -50,6 +57,7 @@ export function scheduleSlotsForDate(date: string, options: ScheduleOptions): Sc
     horaInicio: useCustom ? custom?.secondHoraInicio || '' : options.secondStart || '',
     horaFin: useCustom ? custom?.secondHoraFin || '' : options.secondEnd || '',
     terminaDiaSiguiente: Boolean(base.terminaDiaSiguiente) });
+  slots.push(...(useCustom ? custom?.additionalSlots || [] : options.additionalSlots || []).map(slot => ({ ...slot, fecha: date, espacio: normalizeSpaceName(slot.espacio) })));
   return slots.map(slot=>({...slot,terminaDiaSiguiente:Boolean(base.terminaDiaSiguiente) && timeToMinutes(slot.horaFin)<=timeToMinutes(slot.horaInicio)}));
 }
 export function sameScheduleSlot(a: Partial<ScheduleSlot>, b: Partial<ScheduleSlot>): boolean {
@@ -102,10 +110,11 @@ export function schedulesFromReservations(rows: Reservation[]) {
   let variableDates = false;
   for (const date of [...new Set(rows.map(r => r.fecha))].sort()) {
     const sessions = rows.filter(r => r.fecha === date).sort((a, b) => a.horaInicio.localeCompare(b.horaInicio) || a.espacio.localeCompare(b.espacio));
-    const [first, second] = sessions;
+    const [first, second, ...remaining] = sessions;
     if (!first) continue;
     const slot: CustomScheduleSlot = { horaInicio: first.horaInicio, horaFin: first.horaFin, espacio: first.espacio,
-      hasSecondSlot: Boolean(second), ...(second ? { secondHoraInicio: second.horaInicio, secondHoraFin: second.horaFin, secondEspacio: second.espacio } : {}) };
+      hasSecondSlot: Boolean(second), ...(second ? { secondHoraInicio: second.horaInicio, secondHoraFin: second.horaFin, secondEspacio: second.espacio } : {}),
+      ...(remaining.length ? { additionalSlots: remaining.map(({ espacio, horaInicio, horaFin }) => ({ espacio, horaInicio, horaFin })) } : {}) };
     dates[date] = slot;
     const weekday = getDayOfWeekFromDateString(date);
     if (days[weekday] && JSON.stringify(days[weekday]) !== JSON.stringify(slot)) variableDates = true;

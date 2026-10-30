@@ -1,3 +1,4 @@
+import type { ScheduleSlot } from '../utils/recurringSchedule';
 import { ReservationSectionHeader } from './ReservationSectionHeader';
 import { SETUP_LABELS } from '../utils/roomDistribution';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
@@ -9,7 +10,6 @@ import {
   Package,
   Sparkles,
   Edit2,
-  Clock,
   MapPin,
   AlertTriangle,
   FileSignature,
@@ -20,6 +20,7 @@ import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { isCommitmentLetterEligible } from '../utils/commitmentLetterPdf';
 
 export interface ReservationStep5ReviewProps {
+  reviewSlots?: ScheduleSlot[];
   isWizardMode: boolean;
   wizardStep: 1 | 2 | 3 | 4 | 5;
   formData: Partial<Reservation>;
@@ -37,6 +38,7 @@ export interface ReservationStep5ReviewProps {
 }
 
 export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = React.memo(({
+  reviewSlots,
   isWizardMode,
   wizardStep,
   formData,
@@ -55,11 +57,11 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
   if (isWizardMode && wizardStep !== 5) return null;
 
   const requiresLetter = isCommitmentLetterEligible(formData.tipoActividad, formData.tipoPrestamo) || Boolean(formData.requiereCartaCompromiso);
-  const totalCount = bookingMode === 'single'
+  const totalCount = reviewSlots?.length ?? (bookingMode === 'single'
     ? (enableSingleSecondSpace ? 2 : 1)
     : bookingMode === 'specific'
     ? (enableSingleSecondSpace ? specificDates.length * 2 : specificDates.length)
-    : (generatedDates.length || 0);
+    : (generatedDates.length || 0));
 
   const hasConflicts = conflicts.length > 0 || candidateConflictDates.length > 0;
 
@@ -154,18 +156,13 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
               <span>Modificar</span>
             </button>
           </div>
-          <div className="space-y-1 text-[11px]">
-            <div className="font-bold text-slate-900 text-sm">{formatDisplayTitle(formData.espacio || 'Espacio')}</div>
-            <div className="text-slate-600 flex items-center space-x-1">
-              <Clock className="w-3 h-3 text-slate-400" />
-              <span>{formData.horaInicio} - {formData.horaFin}</span>
-              {formData.terminaDiaSiguiente && <span className="text-amber-700 font-bold">(+1 día)</span>}
-            </div>
-            {enableSingleSecondSpace && singleSecondSpace && (
-              <div className="text-indigo-700 font-medium">
-                2° Espacio: {formatDisplayTitle(singleSecondSpace)} ({singleSecondStartTime} - {singleSecondEndTime})
+          <div className="max-h-64 overflow-y-auto pr-1 space-y-1 text-[11px]">
+            {(reviewSlots || [{ fecha: formData.fecha || '', espacio: formData.espacio || '', horaInicio: formData.horaInicio || '', horaFin: formData.horaFin || '' }]).map((slot, index) => (
+              <div key={`${slot.fecha}-${index}`} className="border-b border-slate-100 py-1 last:border-0">
+                <div className="font-bold text-slate-900">{formatDisplayTitle(slot.espacio || 'Espacio')}</div>
+                <div className="text-slate-600">{formatDateDDMMYYYY(slot.fecha)} · {slot.horaInicio} - {slot.horaFin}{slot.terminaDiaSiguiente && ' (+1 día)'}</div>
               </div>
-            )}
+            ))}
           </div>
         </div>
 

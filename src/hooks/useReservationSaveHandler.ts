@@ -1,3 +1,4 @@
+import type { AdditionalSpaceSlot } from '../types';
 import { toast } from 'sonner';
 import { MutableRefObject, useRef } from 'react';
 import { format } from 'date-fns';
@@ -67,6 +68,7 @@ interface UseReservationSaveHandlerProps {
   singleSecondStartTime: string;
   setSingleSecondStartTime: (val: string) => void;
   singleSecondEndTime: string;
+  additionalSpaces?: AdditionalSpaceSlot[];
   setSingleSecondEndTime: (val: string) => void;
   enableSingleSecondSpace: boolean;
   isEditingSingleOccurrence: boolean;
@@ -153,6 +155,7 @@ export function useReservationSaveHandler({
   singleSecondStartTime,
   setSingleSecondStartTime,
   singleSecondEndTime,
+  additionalSpaces = [],
   setSingleSecondEndTime,
   enableSingleSecondSpace,
   isEditingSingleOccurrence,
@@ -462,7 +465,7 @@ export function useReservationSaveHandler({
       base: effectiveFormData, customDates: effectiveDateSchedules, customDays: daySchedules,
       useCustomDates: effectiveUseCustomSchedulesPerDate, useCustomDays: useCustomSchedulesPerDay,
       secondEnabled: !isEditingSingleOccurrence && enableSingleSecondSpace,
-      secondSpace: effectiveSecondSpace, secondStart: effectiveSecondStartTime, secondEnd: effectiveSecondEndTime };
+      secondSpace: effectiveSecondSpace, secondStart: effectiveSecondStartTime, secondEnd: effectiveSecondEndTime, additionalSlots: additionalSpaces };
     let plannedSlots: ScheduleSlot[] = metadataOnly
       ? affectedReservations.filter(r => inEditScope(r.fecha)).map(r => ({fecha:r.fecha,espacio:r.espacio,horaInicio:r.horaInicio,horaFin:r.horaFin,terminaDiaSiguiente:r.terminaDiaSiguiente,sourceId:r.id}))
       : finalDates.flatMap(date => scheduleSlotsForDate(date, scheduleOptions));
@@ -575,7 +578,7 @@ export function useReservationSaveHandler({
         : isMultiEntry && generateFullSeries
         ? totalSlotsGenerated
         : isSingleMultiSpace
-        ? 2
+        ? totalSlotsGenerated
         : effectiveFormData.totalEnSerie || 1,
       tipoRecurrencia: isEditingSingleOccurrence
         ? editingReservation?.tipoRecurrencia || ''

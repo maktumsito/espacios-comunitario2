@@ -1,3 +1,4 @@
+import type { AdditionalSpaceSlot } from '../types';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { getEnabledSpaces } from '../utils/spaceAvailability';
 import { ModalOverlay } from './common/ModalOverlay';
@@ -388,6 +389,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   const [singleSecondSpace, setSingleSecondSpace] = useState<string>('');
   const [singleSecondStartTime, setSingleSecondStartTime] = useState<string>('11:00');
   const [singleSecondEndTime, setSingleSecondEndTime] = useState<string>('12:00');
+  const [additionalSpaces, setAdditionalSpaces] = useState<AdditionalSpaceSlot[]>([]);
 
   // Multi-day & Weekly pattern custom schedules hook
   const {
@@ -416,7 +418,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   const scheduleFingerprint = JSON.stringify({date: formData.fecha, start: formData.horaInicio, end: formData.horaFin,
     space: formData.espacio, overnight: formData.terminaDiaSiguiente, bookingMode, dates: selectedSpecificDates,
     selectedDays, recurrenceStartDate, recurrenceEndDate, useCustomSchedulesPerDate, dateSchedules,
-    useCustomSchedulesPerDay, daySchedules, enableSingleSecondSpace, singleSecondSpace, singleSecondStartTime, singleSecondEndTime});
+    useCustomSchedulesPerDay, daySchedules, enableSingleSecondSpace, singleSecondSpace, singleSecondStartTime, singleSecondEndTime, additionalSpaces});
   useEffect(() => {
     if (isOpen && initializationRevision > 0) setInitialFormBaseline({form: structuredClone(formData), schedule: scheduleFingerprint,
       history: editingReservation ? allReservations.filter(r=>belongsToSeries(r,editingReservation)) : []});
@@ -482,6 +484,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     if (draft.singleSecondSpace) setSingleSecondSpace(draft.singleSecondSpace);
     if (draft.singleSecondStartTime) setSingleSecondStartTime(draft.singleSecondStartTime);
     if (draft.singleSecondEndTime) setSingleSecondEndTime(draft.singleSecondEndTime);
+    setAdditionalSpaces(draft.additionalSpaces || []);
     if (draft.descargarCartaAlCrear !== undefined) setDescargarCartaAlCrear(draft.descargarCartaAlCrear);
 
     if (draft.settings) {
@@ -531,6 +534,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     singleSecondSpace,
     singleSecondStartTime,
     singleSecondEndTime,
+    additionalSpaces,
     descargarCartaAlCrear,
     onRestore: handleRestoreDraft
   });
@@ -577,6 +581,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     if (initializedFormKey.current === key) return;
     initializedFormKey.current = key;
     setInitialFormBaseline(null);
+    setAdditionalSpaces([]);
     setInitializationRevision(revision => revision + 1);
 
     if (editingReservation) {
@@ -950,6 +955,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     singleSecondSpace,
     singleSecondStartTime,
     singleSecondEndTime,
+    additionalSpaces,
     bookingMode,
     isEditingSingleOccurrence,
     editingReservation,
@@ -1039,142 +1045,16 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   };
 
   const effectiveSeriesSlotsForLetter = useMemo((): CommitmentScheduleSlot[] | undefined => {
-    // 1. Single booking mode with second space enabled
-    if (bookingMode === 'single' && enableSingleSecondSpace && singleSecondSpace) {
-      const d = formData.fecha || format(new Date(), 'yyyy-MM-dd');
-      return [
-        {
-          fecha: d,
-          horaInicio: formData.horaInicio || '14:00',
-          horaFin: formData.horaFin || '22:00',
-          espacio: formData.espacio || 'SALA 3'
-        },
-        {
-          fecha: d,
-          horaInicio: singleSecondStartTime || formData.horaFin || '14:00',
-          horaFin: singleSecondEndTime || '22:00',
-          espacio: singleSecondSpace
-        }
-      ];
-    }
-
-    // 2. Specific dates mode
-    if (bookingMode === 'specific' && generateFullSeries && specificDates.length > 0) {
-      const slots: CommitmentScheduleSlot[] = [];
-      specificDates.forEach((d) => {
-        const custom = useCustomSchedulesPerDate ? dateSchedules[d] : undefined;
-        slots.push({
-          fecha: d,
-          horaInicio: custom?.horaInicio || formData.horaInicio || '14:00',
-          horaFin: custom?.horaFin || formData.horaFin || '22:00',
-          espacio: custom?.espacio || formData.espacio || 'SALA 3'
-        });
-        if (useCustomSchedulesPerDate && custom?.hasSecondSlot && custom?.secondEspacio) {
-          slots.push({
-            fecha: d,
-            horaInicio: custom.secondHoraInicio || '11:00',
-            horaFin: custom.secondHoraFin || '12:00',
-            espacio: custom.secondEspacio
-          });
-        } else if (enableSingleSecondSpace && singleSecondSpace) {
-          slots.push({
-            fecha: d,
-            horaInicio: singleSecondStartTime || formData.horaFin || '14:00',
-            horaFin: singleSecondEndTime || '22:00',
-            espacio: singleSecondSpace
-          });
-        }
+    const groupId = editingReservation?.serieRecurrente || editingReservation?.recurrenteId;
+    if (!isDuplicating && isSingleDayMultiSpaceReservation(editingReservation) && groupId) {
+      const siblings = allReservations.filter(row => (row.serieRecurrente || row.recurrenteId) === groupId);
+      if (siblings.length) return siblings.map(row => {
+        const slot = row.id === editingReservation?.id ? reviewSlots[0] || row : row;
+        return { fecha: slot.fecha, horaInicio: slot.horaInicio, horaFin: slot.horaFin, espacio: slot.espacio };
       });
-      return slots;
     }
-
-    // 3. Weekly pattern mode
-    if (bookingMode === 'pattern' && generateFullSeries && generatedDates.length > 0) {
-      const slots: CommitmentScheduleSlot[] = [];
-      generatedDates.forEach((d) => {
-        const dayNum = getDayOfWeekFromDateString(d);
-        const customSlot = useCustomSchedulesPerDay ? daySchedules[dayNum] : undefined;
-        slots.push({
-          fecha: d,
-          horaInicio: customSlot?.horaInicio || formData.horaInicio || '14:00',
-          horaFin: customSlot?.horaFin || formData.horaFin || '22:00',
-          espacio: customSlot?.espacio || formData.espacio || 'SALA 3'
-        });
-        if (useCustomSchedulesPerDay && customSlot?.hasSecondSlot && customSlot?.secondEspacio) {
-          slots.push({
-            fecha: d,
-            horaInicio: customSlot.secondHoraInicio || '11:00',
-            horaFin: customSlot.secondHoraFin || '12:00',
-            espacio: customSlot.secondEspacio
-          });
-        } else if (enableSingleSecondSpace && singleSecondSpace) {
-          slots.push({
-            fecha: d,
-            horaInicio: singleSecondStartTime || formData.horaFin || '14:00',
-            horaFin: singleSecondEndTime || '22:00',
-            espacio: singleSecondSpace
-          });
-        }
-      });
-      return slots;
-    }
-
-    // 4. Editing reservation with second space toggled on
-    if (editingReservation && enableSingleSecondSpace && singleSecondSpace) {
-      const d = formData.fecha || editingReservation.fecha || format(new Date(), 'yyyy-MM-dd');
-      return [
-        {
-          fecha: d,
-          horaInicio: formData.horaInicio || editingReservation.horaInicio || '14:00',
-          horaFin: formData.horaFin || editingReservation.horaFin || '22:00',
-          espacio: formData.espacio || editingReservation.espacio || 'SALA 3'
-        },
-        {
-          fecha: d,
-          horaInicio: singleSecondStartTime || '14:00',
-          horaFin: singleSecondEndTime || '22:00',
-          espacio: singleSecondSpace
-        }
-      ];
-    }
-
-    // 5. Editing existing recurring series or existing multi-space reservation
-    if (editingReservation) {
-      const sId = editingReservation.serieRecurrente || editingReservation.recurrenteId;
-      if (sId && allReservations && allReservations.length > 0) {
-        const matches = allReservations.filter((r) => (r.serieRecurrente === sId || r.recurrenteId === sId) &&
-          r.fecha >= getSeriesEditStartDate('series', editingReservation.fecha));
-        if (matches.length > 0) {
-          return matches.map((r) => ({
-            fecha: r.fecha,
-            horaInicio: r.horaInicio || '14:00',
-            horaFin: r.horaFin || '22:00',
-            espacio: r.espacio || 'SALA 3'
-          }));
-        }
-      }
-    }
-    return undefined;
-  }, [
-    bookingMode,
-    enableSingleSecondSpace,
-    singleSecondSpace,
-    singleSecondStartTime,
-    singleSecondEndTime,
-    generateFullSeries,
-    specificDates,
-    generatedDates,
-    useCustomSchedulesPerDate,
-    dateSchedules,
-    useCustomSchedulesPerDay,
-    daySchedules,
-    formData.horaInicio,
-    formData.horaFin,
-    formData.espacio,
-    formData.fecha,
-    editingReservation,
-    allReservations
-  ]);
+    return reviewSlots.length ? reviewSlots.map(({ fecha, horaInicio, horaFin, espacio }) => ({ fecha, horaInicio, horaFin, espacio })) : undefined;
+  }, [reviewSlots, editingReservation, isDuplicating, allReservations]);
 
   const effectiveFormDataForLetter = useMemo(() => {
     const baseSpace = formData.espacio || 'SALA 3';
@@ -1240,6 +1120,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     singleSecondStartTime,
     setSingleSecondStartTime,
     singleSecondEndTime,
+    additionalSpaces,
     setSingleSecondEndTime,
     enableSingleSecondSpace,
     isEditingSingleOccurrence,
@@ -1606,6 +1487,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
             singleSecondStartTime={singleSecondStartTime}
             setSingleSecondStartTime={setSingleSecondStartTime}
             singleSecondEndTime={singleSecondEndTime}
+            additionalSpaces={additionalSpaces}
+            setAdditionalSpaces={setAdditionalSpaces}
             setSingleSecondEndTime={setSingleSecondEndTime}
             singleSecondTimeValidation={singleSecondTimeValidation}
             singleSecondSpaceConflicts={singleSecondSpaceConflicts}
@@ -1715,6 +1598,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
           )}
           {isWizardMode && wizardStep === 5 && (
             <ReservationStep5Review
+              reviewSlots={reviewSlots}
               isWizardMode={isWizardMode}
               wizardStep={wizardStep}
               formData={formData}

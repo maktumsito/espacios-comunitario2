@@ -1,3 +1,6 @@
+import { AdditionalSpacesEditor } from './AdditionalSpacesEditor';
+import { additionalScheduleSlots, scheduleSlotsForDate } from '../utils/recurringSchedule';
+import type { AdditionalSpaceSlot } from '../types';
 import { CalendarDateInput } from './common/CalendarDateInput';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useMemo } from 'react';
@@ -13,7 +16,6 @@ import {
   Clock,
   Sparkles,
   AlertTriangle,
-  Layers,
   Check,
   Repeat
 } from 'lucide-react';
@@ -90,6 +92,7 @@ export interface RecurrenceScheduleSectionProps {
   singleSecondSpace: string;
   singleSecondStartTime: string;
   singleSecondEndTime: string;
+  additionalSpaces?: AdditionalSpaceSlot[];
 }
 
 export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps> = ({
@@ -143,8 +146,19 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
   enableSingleSecondSpace,
   singleSecondSpace,
   singleSecondStartTime,
-  singleSecondEndTime
+  singleSecondEndTime,
+  additionalSpaces = []
 }) => {
+  const patternSlotCount = generatedDates.reduce((count, date) => count + scheduleSlotsForDate(date, {
+    mode: 'pattern', base: formData, useCustomDays: useCustomSchedulesPerDay, customDays: daySchedules,
+    secondEnabled: enableSingleSecondSpace, secondSpace: singleSecondSpace, secondStart: singleSecondStartTime, secondEnd: singleSecondEndTime,
+    additionalSlots: additionalSpaces,
+  }).length, 0);
+  const specificSlotCount = specificDates.reduce((count, date) => count + scheduleSlotsForDate(date, {
+    mode: 'specific', base: formData, useCustomDates: useCustomSchedulesPerDate, customDates: dateSchedules,
+    secondEnabled: enableSingleSecondSpace, secondSpace: singleSecondSpace, secondStart: singleSecondStartTime, secondEnd: singleSecondEndTime,
+    additionalSlots: additionalSpaces,
+  }).length, 0);
   // Calendar days grid for mini-calendar in specific dates mode
   const miniCalendarDays = useMemo(() => {
     if (bookingMode !== 'specific') return [];
@@ -441,7 +455,7 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
           <div className="flex items-center justify-between text-[11px] text-indigo-900 bg-indigo-50/80 px-3 py-2 rounded-xl border border-indigo-200">
             <div className="flex items-center space-x-1.5 font-bold">
               <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Total a programar: {specificDates.length} reserva(s) individual(es)</span>
+              <span>Total a programar: {specificSlotCount} reservas en {specificDates.length} fechas</span>
             </div>
             <span className="text-[10px] text-indigo-600 font-medium">
               {useCustomSchedulesPerDate ? 'Horarios diferenciados por fecha' : `Mismo horario (${formData.horaInicio} - ${formData.horaFin}) en ${formatDisplayTitle(formData.espacio)}`}
@@ -449,7 +463,7 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
           </div>
 
           {/* Switch for Diverse / Custom Schedules Per Date */}
-          {specificDates.length > 1 && (
+          {specificDates.length > 0 && (
             <div className="pt-2 border-t border-indigo-100/80 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-white rounded-xl border border-indigo-200/80 shadow-2xs">
                 <div className="flex items-center space-x-2.5">
@@ -597,17 +611,6 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
                                 </select>
                               </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateDateSchedule(d, 'hasSecondSlot', !customSlot.hasSecondSlot)}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer shrink-0 ${
-                                  customSlot.hasSecondSlot
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                                    : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                                }`}
-                              >
-                                {customSlot.hasSecondSlot ? '- Quitar 2° Espacio' : '+ 2° Espacio'}
-                              </button>
 
                               <button
                                 type="button"
@@ -620,51 +623,22 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
                             </div>
                           </div>
 
-                          {/* Slot 2 Row (if active) */}
-                          {customSlot.hasSecondSlot && (
-                            <div className="p-2 bg-indigo-50/70 border border-indigo-200/80 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-fadeIn">
-                              <div className="flex items-center space-x-1.5 text-[11px] font-bold text-indigo-900">
-                                <Layers className="w-3.5 h-3.5 text-indigo-600" />
-                                <span>2° Espacio para {formatDateDDMMYYYY(d)}:</span>
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-2 justify-end">
-                                <div className="flex items-center space-x-1">
-                                  <span className="text-[10px] font-semibold text-indigo-700">De:</span>
-                                  <input
-                                    type="time"
-                                    value={customSlot.secondHoraInicio || '11:00'}
-                                    onChange={(e) => handleUpdateDateSchedule(d, 'secondHoraInicio', e.target.value)}
-                                    className="px-2 py-1 bg-white border border-indigo-200 rounded-lg text-slate-900 font-mono text-xs focus:ring-1 focus:ring-indigo-500"
-                                  />
-                                </div>
-
-                                <div className="flex items-center space-x-1">
-                                  <span className="text-[10px] font-semibold text-indigo-700">A:</span>
-                                  <input
-                                    type="time"
-                                    value={customSlot.secondHoraFin || '12:00'}
-                                    onChange={(e) => handleUpdateDateSchedule(d, 'secondHoraFin', e.target.value)}
-                                    className="px-2 py-1 bg-white border border-indigo-200 rounded-lg text-slate-900 font-mono text-xs focus:ring-1 focus:ring-indigo-500"
-                                  />
-                                </div>
-
-                                <div className="flex items-center space-x-1">
-                                  <select
-                                    value={customSlot.secondEspacio || availableSpaces[1]?.name || 'SALA 2'}
-                                    onChange={(e) => handleUpdateDateSchedule(d, 'secondEspacio', e.target.value)}
-                                    className="px-2 py-1 bg-white border border-indigo-200 rounded-lg text-slate-900 text-xs font-semibold focus:ring-1 focus:ring-indigo-500 max-w-[130px] truncate"
-                                  >
-                                    {availableSpaces.map((sp) => (
-                                      <option key={sp.id || sp.name} value={sp.name}>
-                                        {sp.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                          <AdditionalSpacesEditor
+                            slots={additionalScheduleSlots(customSlot)}
+                            onChange={slots => {
+                              const [second, ...remaining] = slots;
+                              handleUpdateDateSchedule(d, 'hasSecondSlot', Boolean(second));
+                              if (second) {
+                                handleUpdateDateSchedule(d, 'secondEspacio', second.espacio);
+                                handleUpdateDateSchedule(d, 'secondHoraInicio', second.horaInicio);
+                                handleUpdateDateSchedule(d, 'secondHoraFin', second.horaFin);
+                              }
+                              handleUpdateDateSchedule(d, 'additionalSlots', remaining);
+                            }}
+                            availableSpaces={availableSpaces} baseSpace={customSlot.espacio || formData.espacio} baseEnd={customSlot.horaFin}
+                            participants={formData.cantidadParticipantes} allowOvernight={formData.terminaDiaSiguiente}
+                            context={formatDateDDMMYYYY(d)}
+                          />
 
                           {hasAnyConflict && (
                             <div className="w-full text-[11px] text-rose-800 font-medium flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-rose-200">
@@ -956,7 +930,7 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
           )}
 
           {/* 4. Switch for Diverse / Custom Schedules Per Day of Week */}
-          {selectedDays.length > 1 && (
+          {selectedDays.length > 0 && (
             <div className="pt-2 border-t border-blue-100/80 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-white rounded-xl border border-blue-200/80 shadow-2xs">
                 <div className="flex items-center space-x-2.5">
@@ -1070,17 +1044,6 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
                                 </select>
                               </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateDaySchedule(dayNum, 'hasSecondSlot', !customSlot.hasSecondSlot)}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer shrink-0 ${
-                                  customSlot.hasSecondSlot
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                                    : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-                                }`}
-                              >
-                                {customSlot.hasSecondSlot ? '- Quitar 2° Espacio' : '+ 2° Espacio'}
-                              </button>
 
                               <button
                                 type="button"
@@ -1093,51 +1056,22 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
                             </div>
                           </div>
 
-                          {/* Second Slot Row */}
-                          {customSlot.hasSecondSlot && (
-                            <div className="p-2 bg-blue-50/70 border border-blue-200/80 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-fadeIn">
-                              <div className="flex items-center space-x-1.5 text-[11px] font-bold text-blue-900">
-                                <Layers className="w-3.5 h-3.5 text-blue-600" />
-                                <span>2° Espacio para {dayObj?.full || 'este día'}:</span>
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-2 justify-end">
-                                <div className="flex items-center space-x-1">
-                                  <span className="text-[10px] font-semibold text-blue-700">De:</span>
-                                  <input
-                                    type="time"
-                                    value={customSlot.secondHoraInicio || '11:00'}
-                                    onChange={(e) => handleUpdateDaySchedule(dayNum, 'secondHoraInicio', e.target.value)}
-                                    className="px-2 py-1 bg-white border border-blue-200 rounded-lg text-slate-900 font-mono text-xs focus:ring-1 focus:ring-blue-500"
-                                  />
-                                </div>
-
-                                <div className="flex items-center space-x-1">
-                                  <span className="text-[10px] font-semibold text-blue-700">A:</span>
-                                  <input
-                                    type="time"
-                                    value={customSlot.secondHoraFin || '12:00'}
-                                    onChange={(e) => handleUpdateDaySchedule(dayNum, 'secondHoraFin', e.target.value)}
-                                    className="px-2 py-1 bg-white border border-blue-200 rounded-lg text-slate-900 font-mono text-xs focus:ring-1 focus:ring-blue-500"
-                                  />
-                                </div>
-
-                                <div className="flex items-center space-x-1">
-                                  <select
-                                    value={customSlot.secondEspacio || availableSpaces[1]?.name || 'SALA 2'}
-                                    onChange={(e) => handleUpdateDaySchedule(dayNum, 'secondEspacio', e.target.value)}
-                                    className="px-2 py-1 bg-white border border-blue-200 rounded-lg text-slate-900 text-xs font-semibold focus:ring-1 focus:ring-blue-500 max-w-[130px] truncate"
-                                  >
-                                    {availableSpaces.map((sp) => (
-                                      <option key={sp.id || sp.name} value={sp.name}>
-                                        {sp.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                          <AdditionalSpacesEditor
+                            slots={additionalScheduleSlots(customSlot)}
+                            onChange={slots => {
+                              const [second, ...remaining] = slots;
+                              handleUpdateDaySchedule(dayNum, 'hasSecondSlot', Boolean(second));
+                              if (second) {
+                                handleUpdateDaySchedule(dayNum, 'secondEspacio', second.espacio);
+                                handleUpdateDaySchedule(dayNum, 'secondHoraInicio', second.horaInicio);
+                                handleUpdateDaySchedule(dayNum, 'secondHoraFin', second.horaFin);
+                              }
+                              handleUpdateDaySchedule(dayNum, 'additionalSlots', remaining);
+                            }}
+                            availableSpaces={availableSpaces} baseSpace={customSlot.espacio || formData.espacio} baseEnd={customSlot.horaFin}
+                            participants={formData.cantidadParticipantes} allowOvernight={formData.terminaDiaSiguiente}
+                            context={dayObj?.full || 'este día'}
+                          />
                         </div>
                       );
                     })}
@@ -1152,15 +1086,13 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
             <div className="p-3 bg-white rounded-xl border border-blue-200 text-xs flex items-center justify-between gap-3 shadow-2xs">
               <div className="flex items-center space-x-2.5">
                 <div className={`p-2 rounded-lg font-bold ${generatedDates.length === 0 ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'}`}>
-                  {enableSingleSecondSpace && !useCustomSchedulesPerDay ? generatedDates.length * 2 : generatedDates.length}
+                  {patternSlotCount}
                 </div>
                 <div>
                   <span className="font-bold text-slate-800 block">
                     {generatedDates.length === 0
                       ? '0 sesiones calculadas (Serie vacía)'
-                      : enableSingleSecondSpace && !useCustomSchedulesPerDay
-                      ? `${generatedDates.length * 2} reservas calculadas (${generatedDates.length} fechas con 2 espacios por día)`
-                      : `${generatedDates.length} sesiones calculadas`}
+                      : `${patternSlotCount} reservas calculadas en ${generatedDates.length} fechas`}
                     {!includeHolidaysInSeries && patternHolidayAnalysis.omittedHolidays.length > 0 && (
                       <span className="ml-1.5 text-[10px] text-rose-600 font-semibold">
                         ({patternHolidayAnalysis.omittedHolidays.length} feriados omitidos)
@@ -1170,7 +1102,7 @@ export const RecurrenceScheduleSection: React.FC<RecurrenceScheduleSectionProps>
                   <span className="text-[11px] text-slate-500">
                     {generatedDates.length > 0
                       ? enableSingleSecondSpace && !useCustomSchedulesPerDay
-                        ? `1°: ${formatDisplayTitle(formData.espacio || 'Espacio 1')} (${formData.horaInicio || '10:00'}-${formData.horaFin || '11:00'}) | 2°: ${singleSecondSpace || 'Espacio 2'} (${singleSecondStartTime || '11:00'}-${singleSecondEndTime || '12:00'})`
+                        ? `${2 + additionalSpaces.length} espacios por fecha, cada uno con su horario`
                         : `Desde ${formatDateDDMMYYYY(generatedDates[0])} hasta ${formatDateDDMMYYYY(generatedDates[generatedDates.length - 1])}`
                       : recurrenceEndDate < recurrenceStartDate
                       ? 'Fecha Término es anterior a Fecha Inicio'

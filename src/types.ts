@@ -356,6 +356,12 @@ export interface BookingConflict {
   solapamiento: string;
 }
 
+export interface AdditionalSpaceSlot {
+  espacio: string;
+  horaInicio: string;
+  horaFin: string;
+}
+
 export interface CustomScheduleSlot {
   horaInicio: string;
   horaFin: string;
@@ -364,6 +370,8 @@ export interface CustomScheduleSlot {
   secondHoraInicio?: string;
   secondHoraFin?: string;
   secondEspacio?: string;
+  /** Further spaces after the legacy second space. */
+  additionalSlots?: AdditionalSpaceSlot[];
 }
 
 export interface ConflictSavePayload {
