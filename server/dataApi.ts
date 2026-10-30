@@ -194,10 +194,12 @@ export function registerDataApi(
   db: Firestore,
   sessions: AppSessions,
 ) {
+  const VIEW_IDLE_TTL_MS = 300000;
   const views = new Map<
     string,
     {
       snapshot: any;
+      docs: any[];
       version: string;
       lastUse: number;
       stop: () => void;
@@ -206,7 +208,7 @@ export function registerDataApi(
   >();
   const expireViews = setInterval(() => {
     for (const [key, view] of views)
-      if (Date.now() - view.lastUse > 120000) {
+      if (Date.now() - view.lastUse > VIEW_IDLE_TTL_MS) {
         view.stop();
         views.delete(key);
       }
@@ -232,7 +234,7 @@ export function registerDataApi(
           constraints: body.constraints || [],
         });
       for (const [id, v] of views)
-        if (Date.now() - v.lastUse > 120000) {
+        if (Date.now() - v.lastUse > VIEW_IDLE_TTL_MS) {
           v.stop();
           views.delete(id);
         }
@@ -248,6 +250,7 @@ export function registerDataApi(
         let sequence = 0;
         view = {
           snapshot: null,
+          docs: [],
           version: "",
           lastUse: Date.now(),
           stop: () => {},
@@ -260,6 +263,7 @@ export function registerDataApi(
         current.stop = ref.onSnapshot(
           (snapshot: any) => {
             current.snapshot = snapshot;
+            current.docs = records(snapshot, body.path);
             current.version = `${epoch}:${++sequence}`;
             ready();
           },
@@ -278,7 +282,7 @@ export function registerDataApi(
           ? { version: view.version, unchanged: true }
           : {
               version: view.version,
-              docs: records(view.snapshot, body.path),
+              docs: view.docs,
             };
       return message;
   };

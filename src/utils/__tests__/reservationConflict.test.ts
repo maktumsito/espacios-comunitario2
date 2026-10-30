@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   checkSingleConflict,
   findReservationConflicts,
+  detectEquipmentConflicts,
   validateTimeOrder,
   doSpacesConflict,
   normalizeSpace
@@ -258,5 +259,30 @@ describe('Reservation Conflict & Availability Suite', () => {
       ...(resB.equipamientoSolicitado || [])
     ];
     expect(combinedEquipment.length).toBe(2);
+  });
+
+  it('27. detectEquipmentConflicts detecta déficit de equipamiento en cruces de medianoche (terminaDiaSiguiente)', () => {
+    const overnightEq = createDummy({
+      id: 'res_overnight_eq',
+      fecha: '2026-09-15',
+      horaInicio: '22:00',
+      horaFin: '02:00',
+      espacio: 'SALA 1',
+      terminaDiaSiguiente: true,
+      equipamientoSolicitado: [{ equipmentId: 'eq_proyector', equipmentName: 'Proyector HD', quantity: 1 }],
+    });
+    const earlyMorningEq = createDummy({
+      id: 'res_early_eq',
+      fecha: '2026-09-16',
+      horaInicio: '01:00',
+      horaFin: '03:00',
+      espacio: 'SALA 2',
+      equipamientoSolicitado: [{ equipmentId: 'eq_proyector', equipmentName: 'Proyector HD', quantity: 1 }],
+    });
+
+    const eqConflicts = detectEquipmentConflicts([overnightEq, earlyMorningEq], { eq_proyector: 1 });
+    expect(eqConflicts.length).toBe(1);
+    expect(eqConflicts[0].fecha).toBe('2026-09-16');
+    expect(eqConflicts[0].deficit).toBe(1);
   });
 });

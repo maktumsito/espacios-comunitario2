@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Reservation, SpaceRating } from '../types';
 import {
   subscribeToRatings,
@@ -22,6 +22,7 @@ export function useRatingsState(reservations: Reservation[], {
   enabled = true, automaticEmailEnabled = true,
 }: { enabled?: boolean; automaticEmailEnabled?: boolean } = {}): UseRatingsStateReturn {
   const [ratings, setRatings] = useState<SpaceRating[]>(() => getLocalRatingsCache());
+  const lastMondayCheckRatingsRef = useRef<SpaceRating[] | null>(null);
 
   // Subscribe to Space Ratings from Firestore & Local Storage
   useEffect(() => {
@@ -42,10 +43,15 @@ export function useRatingsState(reservations: Reservation[], {
     };
   }, [enabled]);
 
-  // Automated Monday Email Check for Birthday Loans
+  // Automated Monday Email Check for Birthday Loans (only on Mondays and when ratings change)
   useEffect(() => {
-    if (enabled && automaticEmailEnabled && (ratings.length > 0 || reservations.length > 0)) {
-      checkAutomaticMondayEmail(ratings, reservations, (report) => {
+    if (!enabled || !automaticEmailEnabled) return;
+    if (new Date().getDay() !== 1) return;
+    if (ratings.length === 0 && reservations.length === 0) return;
+    if (lastMondayCheckRatingsRef.current === ratings) return;
+    lastMondayCheckRatingsRef.current = ratings;
+
+    checkAutomaticMondayEmail(ratings, reservations, (report) => {
         console.log(
           `[Envío Automático Lunes] Reporte generado para ${report.recipients.join(', ')} con ${report.ratingsCount} calificaciones de cumpleaños.`
         );
@@ -70,7 +76,6 @@ export function useRatingsState(reservations: Reservation[], {
           }
         });
       });
-    }
   }, [ratings, reservations, enabled, automaticEmailEnabled]);
 
   const handleSaveRating = useCallback(async (rating: SpaceRating, targetReservation?: Reservation | null) => {

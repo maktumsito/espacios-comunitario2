@@ -30,10 +30,19 @@ it('loads ratings only when requested and leaves automatic email checks disabled
 
 it('defers equipment while keeping permission and calendar configuration listeners active', () => {
   const toast = vi.fn();
-  const { rerender, unmount } = renderHook(({ equipmentEnabled }) => useAdminConfig(null, toast, { equipmentEnabled }),
-    { initialProps: { equipmentEnabled: false } });
+  const { rerender, unmount } = renderHook(({ equipmentEnabled, enabled }: { equipmentEnabled: boolean; enabled?: boolean }) =>
+    useAdminConfig(null, toast, { equipmentEnabled, enabled }),
+    { initialProps: { equipmentEnabled: false, enabled: true } });
   expect(mocks.equipment).not.toHaveBeenCalled(); expect(mocks.users).toHaveBeenCalledOnce(); expect(mocks.config).toHaveBeenCalledOnce();
-  rerender({ equipmentEnabled: true }); expect(mocks.equipment).toHaveBeenCalledOnce();
-  rerender({ equipmentEnabled: false }); expect(mocks.stopEquipment).toHaveBeenCalledOnce();
+  rerender({ equipmentEnabled: true, enabled: true }); expect(mocks.equipment).toHaveBeenCalledOnce();
+  rerender({ equipmentEnabled: false, enabled: true }); expect(mocks.stopEquipment).toHaveBeenCalledOnce();
   unmount();
+});
+
+it('defers all admin configuration and user listeners when unauthenticated (enabled: false)', () => {
+  const toast = vi.fn();
+  renderHook(() => useAdminConfig(null, toast, { enabled: false, equipmentEnabled: false }));
+  expect(mocks.users).not.toHaveBeenCalled();
+  expect(mocks.config).not.toHaveBeenCalled();
+  expect(mocks.equipment).not.toHaveBeenCalled();
 });

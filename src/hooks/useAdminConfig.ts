@@ -68,7 +68,7 @@ export interface UseAdminConfigReturn {
 export function useAdminConfig(
   currentUser: AuthUser | null,
   onToast: (msg: string, type?: 'success' | 'info' | 'error' | 'warning') => void,
-  { equipmentEnabled = true }: { equipmentEnabled?: boolean } = {},
+  { equipmentEnabled = true, enabled = true }: { equipmentEnabled?: boolean; enabled?: boolean } = {},
 ): UseAdminConfigReturn {
   const [spaces, setSpaces] = useState<SpaceInfo[]>(() => getStoredSpaces());
   const [loanTypes, setLoanTypes] = useState<LoanType[]>(() => getStoredLoanTypes());
@@ -78,6 +78,7 @@ export function useAdminConfig(
 
   // Subscribe to Users from Firestore across all devices
   useEffect(() => {
+    if (!enabled) return;
     const unsubUsers = subscribeToUsers((data) => {
       setUserAccounts(data);
     });
@@ -86,10 +87,11 @@ export function useAdminConfig(
         unsubUsers();
       }
     };
-  }, []);
+  }, [enabled]);
 
   // Subscribe to Admin Configuration from Firestore (Spaces, Loans, Activities)
   useEffect(() => {
+    if (!enabled) return;
     const unsubConfig = subscribeToAdminConfig((data) => {
       if (data.spaces) setSpaces(data.spaces);
       if (data.loanTypes) setLoanTypes(data.loanTypes);
@@ -100,7 +102,7 @@ export function useAdminConfig(
         unsubConfig();
       }
     };
-  }, []);
+  }, [enabled]);
 
   // Subscribe to Equipment Configuration from Firestore & Local Events
   useEffect(() => {

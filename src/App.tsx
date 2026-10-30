@@ -251,6 +251,7 @@ export default function App() {
     handleDeleteUser,
     handleResetUsers
   } = useAdminConfig(currentUser, triggerSyncToast, {
+    enabled: Boolean(currentUser),
     equipmentEnabled: Boolean(currentUser) && (isReservationModalOpen ||
       (currentView === 'admin' && adminSubTab === 'equipment')),
   });
@@ -262,9 +263,18 @@ export default function App() {
     handleDeleteRating: deleteRating,
     checkRatingAllowed
   } = useRatingsState(reservations, {
-    enabled: Boolean(currentUser) && (canWrite || currentView === 'mobile' || currentView === 'ratings' ||
-      currentView === 'admin' || currentView === 'maintenance' || isDetailModalOpen ||
-      isReservationModalOpen || isRatingModalOpen),
+    enabled: Boolean(currentUser) && (
+      currentView === 'mobile' ||
+      currentView === 'ratings' ||
+      currentView === 'directory' ||
+      currentView === 'analytics' ||
+      currentView === 'admin' ||
+      currentView === 'maintenance' ||
+      isDetailModalOpen ||
+      isReservationModalOpen ||
+      isRatingModalOpen ||
+      (canWrite && new Date().getDay() === 1)
+    ),
     automaticEmailEnabled: canWrite,
   });
 
@@ -514,19 +524,36 @@ export default function App() {
     }
   }, [currentUser]);
 
-  useEffect(() => {
-    if (reservations.length > 0) {
-      checkTodayImportantActivities(reservations);
+  const todayImportantSignature = useMemo(() => {
+    if (!currentUser || reservations.length === 0) return '';
+    const todayStr = getChileLocalDateString();
+    const parts: string[] = [];
+    for (let i = 0; i < reservations.length; i++) {
+      const r = reservations[i];
+      if (r.fecha === todayStr && r.importante === 'Sí' && r.estado !== 'cancelada') {
+        parts.push(`${r.id}:${r.horaInicio}:${r.horaFin}:${r.espacio}`);
+      }
     }
-  }, [reservations]);
+    return parts.join('|');
+  }, [reservations, currentUser]);
 
-  // Initialize Gmail Workspace OAuth Auth State Listener
   useEffect(() => {
+    if (todayImportantSignature) {
+      checkTodayImportantActivities(reservationsRef.current);
+    }
+  }, [todayImportantSignature]);
+
+  // Initialize Gmail Workspace OAuth Auth State Listener only when Gmail UI is active
+  const gmailUiActive = Boolean(currentUser) && (
+    isGmailDispatchModalOpen || (currentView === 'admin' && adminSubTab === 'gmail')
+  );
+  useEffect(() => {
+    if (!gmailUiActive) return;
     const unsubGmail = initGmailAuthListener();
     return () => {
       unsubGmail();
     };
-  }, []);
+  }, [gmailUiActive]);
 
   const unreadNotificationsCount = useMemo(() => {
     return notificationHistory.filter(n => !n.read).length;

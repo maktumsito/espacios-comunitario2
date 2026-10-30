@@ -996,6 +996,7 @@ export function detectEquipmentConflicts(
   equipmentStockMap: Record<string, number>
 ): EquipmentConflict[] {
   const conflicts: EquipmentConflict[] = [];
+  const recordedIntervals: Array<{ fecha: string; equipmentId: string; startMin: number; endMin: number }> = [];
   interface TimedReservation {
     readonly res: Reservation;
     readonly startMin: number;
@@ -1004,26 +1005,63 @@ export function detectEquipmentConflicts(
   const dateMap = new Map<string, TimedReservation[]>();
   const deletedSet = getDeletedIds();
 
-  // Group by non-exempt dates with precomputed start/end minutes
+  // Group by non-exempt dates with precomputed intervals (including overnight reservations)
   for (let i = 0; i < reservations.length; i++) {
     const r = reservations[i];
     if (!r.fecha || isDateExemptFromConflicts(r.fecha) || !isReservationActiveForAvailability(r, deletedSet) || !r.equipamientoSolicitado || r.equipamientoSolicitado.length === 0) {
       continue;
     }
-    let current = dateMap.get(r.fecha);
-    if (!current) {
-      current = [];
-      dateMap.set(r.fecha, current);
+    const intervals = getTimeIntervalsForReservation(r);
+    for (let k = 0; k < intervals.length; k++) {
+      const slot = intervals[k];
+      if (isDateExemptFromConflicts(slot.date)) continue;
+      let current = dateMap.get(slot.date);
+      if (!current) {
+        current = [];
+        dateMap.set(slot.date, current);
+      }
+      current.push({
+        res: r,
+        startMin: slot.startMin,
+        endMin: slot.endMin,
+      });
     }
-    current.push({
-      res: r,
-      startMin: timeToMinutes(r.horaInicio),
-      endMin: timeToMinutes(r.horaFin),
-    });
   }
 
   dateMap.forEach((dayRes, fecha) => {
     const len = dayRes.length;
+    if (len < 2) {
+      // Single reservation can still exceed stock on its own
+      if (len === 1) {
+        const { res: resA, startMin: startA, endMin: endA } = dayRes[0];
+        const eqList = resA.equipamientoSolicitado;
+        if (eqList) {
+          for (let k = 0; k < eqList.length; k++) {
+            const eq = eqList[k];
+            const stock = equipmentStockMap[eq.equipmentId] ?? 999;
+            if (eq.quantity > stock) {
+              recordedIntervals.push({ fecha, equipmentId: eq.equipmentId, startMin: startA, endMin: endA });
+              conflicts.push({
+                equipmentId: eq.equipmentId,
+                equipmentName: eq.equipmentName,
+                fecha,
+                horaInicio: formatMinutesToTime(startA),
+                horaFin: formatMinutesToTime(endA),
+                requestedTotal: eq.quantity,
+                availableTotal: stock,
+                deficit: eq.quantity - stock,
+                reservations: [{ reservation: resA, quantityRequested: eq.quantity }],
+              });
+            }
+          }
+        }
+      }
+      return;
+    }
+
+    // Sort by startMin for sweep-line early exit
+    dayRes.sort((a, b) => a.startMin - b.startMin);
+
     for (let i = 0; i < len; i++) {
       const { res: resA, startMin: startA, endMin: endA } = dayRes[i];
 
@@ -1032,7 +1070,9 @@ export function detectEquipmentConflicts(
 
       for (let j = 0; j < len; j++) {
         const { res: resB, startMin: startB, endMin: endB } = dayRes[j];
-        if (!isTimeOverlapping(startA, endA, startB, endB)) continue;
+        // Sweep-line early exit: once startB >= endA, no subsequent entry can overlap
+        if (startB >= endA) break;
+        if (endB <= startA) continue;
         const eqList = resB.equipamientoSolicitado;
         if (!eqList) continue;
         for (let k = 0; k < eqList.length; k++) {
@@ -1051,8 +1091,11 @@ export function detectEquipmentConflicts(
       eqMap.forEach((data, eqId) => {
         const stock = equipmentStockMap[eqId] ?? 999;
         if (data.totalReq > stock) {
-          const alreadyAdded = conflicts.some(c => c.fecha === fecha && c.equipmentId === eqId && isTimeOverlapping(timeToMinutes(c.horaInicio), timeToMinutes(c.horaFin), startA, endA));
+          const alreadyAdded = recordedIntervals.some(
+            c => c.fecha === fecha && c.equipmentId === eqId && isTimeOverlapping(c.startMin, c.endMin, startA, endA)
+          );
           if (!alreadyAdded) {
+            recordedIntervals.push({ fecha, equipmentId: eqId, startMin: startA, endMin: endA });
             conflicts.push({
               equipmentId: eqId,
               equipmentName: data.name,
