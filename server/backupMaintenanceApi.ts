@@ -1,5 +1,5 @@
 import type { Express } from 'express';
-import type { Firestore } from 'firebase-admin/firestore';
+import type { Firestore, Query } from 'firebase-admin/firestore';
 import { randomUUID } from 'node:crypto';
 import type { AppSessions } from './appSession';
 import { accountId, ApiFailure, apiError, requireManager } from './dataApi';
@@ -43,7 +43,7 @@ export function registerBackupMaintenanceApi(app: Express, db: Firestore, sessio
           } else {
             if (snapshot.get('protected') === true) throw new ApiFailure(409, 'La copia está protegida y no puede eliminarse.');
             const backupsCol: any = db.collection('copias_seguridad');
-            const backupsQuery = typeof backupsCol.select === 'function'
+            const backupsQuery: Query = typeof backupsCol.select === 'function'
               ? backupsCol.select('timestamp', 'fecha', 'tipo', 'totalReservas', 'tamanoBytes', 'checksum', 'protected')
               : backupsCol;
             const [backups, parts] = await Promise.all([

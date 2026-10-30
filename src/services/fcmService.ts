@@ -428,16 +428,18 @@ export async function broadcastFcmNotification(
       console.log('[FCM] Push Notification broadcasted to Firestore for registered devices:', notifId);
     } catch (err) {
       console.warn('[FCM] Error broadcasting notification to Firestore:', err);
-    } finally {
-      if (inFlightBroadcasts.get(fingerprint) === request) {
-        inFlightBroadcasts.delete(fingerprint);
-      }
     }
     return notifId;
   })();
 
   inFlightBroadcasts.set(fingerprint, request);
-  return request;
+  try {
+    return await request;
+  } finally {
+    if (inFlightBroadcasts.get(fingerprint) === request) {
+      inFlightBroadcasts.delete(fingerprint);
+    }
+  }
 }
 
 /**
