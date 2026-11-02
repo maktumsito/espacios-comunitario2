@@ -638,7 +638,7 @@ export function useReservationSaveHandler({
       autorizadoPor: loanScheduleCheck.requiresAuthorization
         ? currentUser?.name || currentUser?.username || 'Administrador/Coordinador'
         : effectiveFormData.autorizadoPor || '',
-      version: effectiveFormData.version ?? editingReservation?.version ?? 0,
+      version: isDuplicating ? 0 : effectiveFormData.version ?? editingReservation?.version ?? 0,
       updatedAt: new Date().toISOString()
     };
 

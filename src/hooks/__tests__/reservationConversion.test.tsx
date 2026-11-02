@@ -5,6 +5,29 @@ import { useReservationSaveHandler } from '../useReservationSaveHandler';
 import { conversionBase as base, conversionProps } from '../../test/reservationConversionFixture';
 beforeEach(()=>{localStorage.clear();vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-06T15:00:00Z'));});afterEach(()=>{cleanup();vi.useRealTimers();});
 
+it('saves a duplicate on a different day as new even when the form retains the source version', async () => {
+  const save = vi.fn().mockResolvedValue(true), p = conversionProps(save);
+  const duplicate = { ...base, id: 'duplicate-new', fecha: '2026-10-13' };
+  p.formData = duplicate;
+  p.editingReservation = { ...duplicate, fecha: base.fecha };
+  p.isDuplicating = true;
+  p.isEditingExisting = false;
+  p.bookingMode = 'single';
+  p.excludeReservationIds = [];
+  p.onClose = vi.fn();
+  const { result } = renderHook(() => useReservationSaveHandler(p));
+  await act(() => result.current.executeSave());
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(save.mock.calls[0][0]).toMatchObject({
+    id: duplicate.id, fecha: duplicate.fecha, version: 0,
+    horaInicio: base.horaInicio, horaFin: base.horaFin, espacio: base.espacio,
+    responsable: base.responsable, descripcion: base.descripcion, tipoActividad: base.tipoActividad,
+  });
+  expect(save.mock.calls[0][1]).toBe(false);
+  expect(p.onClose).toHaveBeenCalledOnce();
+  expect(base.version).toBe(3);
+});
+
 it('converts a normal booking to all remaining dates after omitting conflicting days',async()=>{
   const save=vi.fn().mockResolvedValue(true),p=conversionProps(save);
   p.allReservations=[base,{...base,id:'occupied',fecha:'2026-10-20'}];p.setShowConflictDialog=vi.fn();

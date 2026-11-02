@@ -16,6 +16,17 @@ function props():UseReservationCrudProps {return {
 };}
 beforeEach(()=> {localStorage.clear();vi.clearAllMocks();vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-06T15:00:00Z'));mocks.audit.mockResolvedValue(undefined);});
 afterEach(()=> {cleanup();vi.useRealTimers();});
+it('duplicates a persisted reservation with a new ID and no inherited version', () => {
+  const p = props();
+  const original = { ...row, version: 7 };
+  const { result } = renderHook(() => useReservationCrud(p));
+  act(() => result.current.handleDuplicateReservation(original));
+  const duplicate = (p.setEditingReservation as any).mock.calls[0][0];
+  expect(duplicate).toMatchObject({ version: 0, fecha: original.fecha, responsable: original.responsable, horaInicio: original.horaInicio, horaFin: original.horaFin, espacio: original.espacio });
+  expect(duplicate.id).not.toBe(original.id);
+  expect(original.version).toBe(7);
+  expect(p.setIsDuplicating).toHaveBeenCalledWith(true);
+});
 it('persists a past session room correction and applies the confirmed row to the visible agenda', async () => {
   vi.setSystemTime(new Date('2026-10-16T15:00:00Z'));
   const gaita: Reservation = { ...row, id: 'RSV_5GBNOSPJ_4', fecha: '2026-10-03', descripcion: 'Ensayo Gaita', espacio: 'SALA 6', actividadRecurrente: 'Sí', serieRecurrente: 'gaita-series', version: 3 };

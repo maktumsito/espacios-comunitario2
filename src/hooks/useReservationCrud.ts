@@ -590,6 +590,7 @@ export function useReservationCrud({
       const duplicate: Reservation = {
         ...sourceReserva,
         id: newId,
+        version: 0,
         descripcion: sourceReserva.descripcion
           ? (sourceReserva.descripcion.includes('(Copia)') ? sourceReserva.descripcion : `${sourceReserva.descripcion} (Copia)`)
           : `${sourceReserva.tipoActividad || 'Reserva'} (Copia)`,
