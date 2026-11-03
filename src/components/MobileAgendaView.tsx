@@ -333,6 +333,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
               <article
                 key={res.id}
                 id={`mobile-reservation-card-${res.id}`}
+                data-reservation-id={res.id}
                 onClick={() => onSelectReservation(res)}
                 className={`relative bg-white rounded-xl border transition-all overflow-hidden cursor-pointer ${
                   isConflict

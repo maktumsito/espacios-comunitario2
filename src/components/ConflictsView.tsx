@@ -208,7 +208,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 {/* The 2 Conflicting Reservations side-by-side */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Reserva A */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 flex flex-col justify-between">
+                  <div data-reservation-id={conflict.reservaA.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 flex flex-col justify-between">
                     <div className="space-y-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center space-x-1.5 text-xs font-mono font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">

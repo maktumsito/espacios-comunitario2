@@ -210,8 +210,10 @@ const CalendarEventTag = memo<CalendarEventTagProps>(({
     <button
       type="button"
       onClick={handleClick}
+      data-reservation-id={reservation.id}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
+      onContextMenu={() => setShowTooltip(false)}
       aria-label={`Actividad: ${displayTitle} a las ${reservation.horaInicio} en ${formatDisplayTitle(reservation.espacio)}`}
       className={`w-full text-left relative min-h-7 text-xs px-2 py-1 rounded-md truncate font-bold text-white flex items-center gap-1.5 shadow-sm transition-[filter,transform,box-shadow] hover:brightness-105 hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 cursor-pointer border border-black/10 ${
         isCancelled ? 'opacity-50 line-through grayscale-[50%]' : ''
@@ -447,6 +449,7 @@ const AgendaReservationCard = memo<AgendaReservationCardProps>(({
     <button
       type="button"
       onClick={handleClick}
+      data-reservation-id={reservation.id}
       aria-label={`Ver detalles de reserva: ${displayTitle}, ${reservation.horaInicio} a ${reservation.horaFin} en ${formatDisplayTitle(reservation.espacio)}, solicitante ${formatDisplayTitle(reservation.responsable)}`}
       title={`${displayTitle}\nTipo de actividad: ${formatDisplayTitle(reservation.tipoActividad || typeVisual.label)}\nResponsable: ${formatDisplayTitle(reservation.responsable || 'No especificado')}\nHorario: ${reservation.horaInicio} – ${reservation.horaFin}\nEspacio: ${formatDisplayTitle(reservation.espacio)}${reservation.telefonoContacto ? `\nTeléfono: ${reservation.telefonoContacto}` : ''}\n\n(Haz clic para abrir detalles completos)`}
       style={isCancelled ? undefined : { backgroundColor: typeVisual.background, borderColor: typeVisual.border }}

@@ -1737,6 +1737,9 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                             onMouseLeave={() => {
                               setHoveredCardInfo((current) => (current?.res.id === res.id ? null : current));
                             }}
+                            onContextMenu={() => {
+                              setHoveredCardInfo((current) => (current?.res.id === res.id ? null : current));
+                            }}
                             className={`timeline-booking absolute rounded-md ${paddingClass} ${styling.bg} border ${styling.border} ${styling.shadow} cursor-grab active:cursor-grabbing hover:z-30 hover:ring-2 hover:ring-blue-400/80 transition-all flex flex-col justify-between overflow-hidden select-none z-10 group/card focus:ring-2 focus:ring-blue-500 focus:outline-none focus:z-40 ${
                               isBeingDragged ? 'opacity-30 scale-95 ring-2 ring-blue-500' : ''
                             } ${isOverlapping ? 'ring-1 ring-rose-400/50' : ''}`}

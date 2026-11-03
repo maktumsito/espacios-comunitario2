@@ -154,6 +154,7 @@ export const SpaceDashboard: React.FC<SpaceDashboardProps> = ({
                         <div
                           key={res.id}
                           onClick={() => onSelectReservation(res)}
+                          data-reservation-id={res.id}
                           className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 flex items-center justify-between cursor-pointer border border-slate-200 transition"
                         >
                           <div className="truncate pr-2">

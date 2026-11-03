@@ -17,6 +17,8 @@ import { getDueReplacementReminders } from './utils/replacementReminders';
 import { isRecurringSeriesReservation } from './utils/recurringEdits';
 import { PendingReservationOperations } from './components/PendingReservationOperations';
 import { DeleteDayReservationsModal } from './components/DeleteDayReservationsModal';
+import { ReservationContextMenu } from './components/common/ReservationContextMenu';
+import { getTopmostDialog } from './utils/dialogKeyboard';
 import { Navbar } from './components/Navbar';
 import { AgendaToolbar } from './components/AgendaToolbar';
 import { isAgendaView, getAgendaPeriodCount, getAgendaPeriodLabel } from './utils/agendaPeriod';
@@ -118,6 +120,7 @@ export default function App() {
   const closingSession = useRef(false);
   const [pendingSeriesMove, setPendingSeriesMove] = useState<{ original: Reservation; target: Reservation; resolve: (result: boolean) => void } | null>(null);
   const [replacementSource, setReplacementSource] = useState<Reservation | null>(null);
+  const [contextMenuState, setContextMenuState] = useState<{ reservation: Reservation; x: number; y: number } | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [sessionChanged, setSessionChanged] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
@@ -415,6 +418,58 @@ export default function App() {
   const reservationsRef = useRef(reservations);
   reservationsRef.current = reservations;
 
+  useEffect(() => {
+    if (!currentUser) {
+      setContextMenuState(null);
+      return;
+    }
+    const handleGlobalContextMenu = (e: MouseEvent) => {
+      if (getTopmostDialog()) return;
+      const target = e.target instanceof Element ? e.target : null;
+      const cardEl = target?.closest('[data-reservation-id]') as HTMLElement | null;
+      if (!cardEl) return;
+      const resId = cardEl.getAttribute('data-reservation-id');
+      if (!resId) return;
+      const matched = reservationsRef.current.find((r) => r.id === resId);
+      if (!matched) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenuState({
+        reservation: matched,
+        x: e.clientX || 120,
+        y: e.clientY || 120
+      });
+    };
+
+    const handleContextMenuKey = (e: KeyboardEvent) => {
+      if (getTopmostDialog()) return;
+      if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+        const target = e.target instanceof Element ? e.target : document.activeElement;
+        const cardEl = target?.closest('[data-reservation-id]') as HTMLElement | null;
+        if (!cardEl) return;
+        const resId = cardEl.getAttribute('data-reservation-id');
+        if (!resId) return;
+        const matched = reservationsRef.current.find((r) => r.id === resId);
+        if (!matched) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = cardEl.getBoundingClientRect();
+        setContextMenuState({
+          reservation: matched,
+          x: Math.max(16, rect.left + Math.min(rect.width / 2, 120)),
+          y: Math.max(16, rect.top + Math.min(rect.height / 2, 48))
+        });
+      }
+    };
+
+    document.addEventListener('contextmenu', handleGlobalContextMenu);
+    window.addEventListener('keydown', handleContextMenuKey);
+    return () => {
+      document.removeEventListener('contextmenu', handleGlobalContextMenu);
+      window.removeEventListener('keydown', handleContextMenuKey);
+    };
+  }, [currentUser]);
+
   // Preload heavy modals on idle to ensure instantaneous 0ms interaction response
   useEffect(() => {
     const preload = () => {
@@ -671,6 +726,7 @@ export default function App() {
     pendingSeriesMove?.resolve(false);
     setPendingSeriesMove(null);
     setReplacementSource(null);
+    setContextMenuState(null);
     setSelectedReservation(null);
     setEditingReservation(null);
     setIsReservationModalOpen(false);
@@ -1506,6 +1562,58 @@ export default function App() {
       />
 
       {/* Modals */}
+      {contextMenuState && (
+        <ReservationContextMenu
+          reservation={reservations.find(r => r.id === contextMenuState.reservation.id) || contextMenuState.reservation}
+          x={contextMenuState.x}
+          y={contextMenuState.y}
+          currentUser={currentUser}
+          existingRating={ratings.find((rt) => rt.reservationId === contextMenuState.reservation.id) || null}
+          onClose={() => setContextMenuState(null)}
+          onViewDetails={(r) => {
+            setSelectedReservation(r);
+            setIsDetailModalOpen(true);
+          }}
+          onEdit={(r) => {
+            requireAuth(() => void prepareReservationEditor(r), 'editar esta reserva');
+          }}
+          onReplace={handleStartReplacement}
+          onDuplicate={(r) => {
+            handleDuplicateReservation(r);
+          }}
+          onToggleRealizada={(r) => {
+            if (!userCanEditReservations(currentUser)) {
+              triggerSyncToast('Permiso denegado: No tienes autorización para modificar reservas (gestión controlada por Cristian Shute).', 'error');
+              return;
+            }
+            requireAuth(() => handleQuickToggleRealizada(r), 'actualizar asistencia de reserva');
+          }}
+          onOpenRating={(r, rating) => {
+            handleOpenRatingModal(r, rating);
+          }}
+          onViewRelated={async (id) => {
+            try {
+              const related = reservations.find(r => r.id === id) || await fetchReservationById(id);
+              if (!related) throw new Error('La actividad relacionada ya no existe.');
+              setSelectedReservation(related);
+              setIsDetailModalOpen(true);
+            } catch (error: any) {
+              triggerSyncToast(error.message || 'No se pudo consultar la actividad relacionada.', 'error');
+            }
+          }}
+          onDelete={(id, isSeries, seriesId) => {
+            if (!userCanDeleteReservations(currentUser)) {
+              const target = reservations.find((r) => r.id === id);
+              if (target) handleRequestDelete(target);
+              return;
+            }
+            return requireAuth(() => handleDelete(id, isSeries, seriesId), 'eliminar esta reserva');
+          }}
+          onRequestDelete={(r) => {
+            requireAuth(() => handleRequestDelete(r), 'eliminar esta reserva');
+          }}
+        />
+      )}
       {pendingSeriesMove && <Suspense fallback={null}>
         <RecurringMoveScopeModal original={pendingSeriesMove.original} target={pendingSeriesMove.target}
           onCancel={() => { pendingSeriesMove.resolve(false); setPendingSeriesMove(null); }}
@@ -1534,6 +1642,7 @@ export default function App() {
             onClose={() => {
               setIsReservationModalOpen(false);
               setReplacementSource(null);
+    setContextMenuState(null);
               setEditingReservation(null);
               setIsDuplicating(false);
               setPrefillDate('');
