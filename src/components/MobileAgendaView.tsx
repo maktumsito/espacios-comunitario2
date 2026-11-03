@@ -15,6 +15,7 @@ import { formatDateYYYYMMDD, parseDateToNoon } from '../utils/dateUtils';
 import { getFuzzyMatchIds } from '../utils/fuzzySearch';
 import { validateAndFormatChileanPhone } from '../utils/validationUtils';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
+import { canReplaceOccurrence } from '../utils/reservationReplacement';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -57,6 +58,7 @@ interface MobileAgendaViewProps {
   onSelectReservation: (reservation: Reservation) => void;
   onEditReservation: (reservation: Reservation) => void;
   onDuplicateReservation?: (reservation: Reservation) => void;
+  onReplaceReservation?: (reservation: Reservation) => void;
   onDeleteReservation?: (id: string, isSeries?: boolean, seriesId?: string) => void;
   onRequestDelete?: (reservation: Reservation) => void;
   onNewReservationForDate?: (dateStr: string, space?: string) => void;
@@ -84,6 +86,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
   onSelectReservation,
   onEditReservation,
   onDuplicateReservation,
+  onReplaceReservation,
   onDeleteReservation,
   onRequestDelete,
   onNewReservationForDate,
@@ -399,6 +402,11 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
 
                   {/* Badges and metadata */}
                   <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                    {res.reemplazaReservaId && (
+                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 font-semibold border border-amber-200">
+                        <span>🔄 Reemplazo por el día</span>
+                      </span>
+                    )}
                     {res.actividadRecurrente === 'Sí' && (
                       <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200">
                         <Repeat className="w-3 h-3" />
@@ -554,6 +562,18 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                         </button>
                       )}
 
+                      {onReplaceReservation && canCreate && canEdit && canReplaceOccurrence(res) && (
+                        <button
+                          type="button"
+                          onClick={() => onReplaceReservation(res)}
+                          aria-label="Reemplazar solo este día"
+                          className="min-h-[44px] px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 flex items-center justify-center gap-1.5 text-xs font-semibold transition cursor-pointer"
+                          title="Reemplazar solo este día"
+                        >
+                          <Repeat className="w-4 h-4" />
+                          <span>Reemplazar día</span>
+                        </button>
+                      )}
                       {onDuplicateReservation && canCreate && (
                         <button
                           type="button"

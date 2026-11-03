@@ -51,6 +51,7 @@ import { validateStrictCalendarDate, clampAndFixCalendarDate } from '../utils/va
 import { useReservationDateIndex } from '../utils/reservationIndex';
 import { formatActivitiesCount } from '../utils/pluralUtils';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
+import { canReplaceOccurrence } from '../utils/reservationReplacement';
 
 const PrintScheduleModal = React.lazy(() =>
   import('./PrintScheduleModal').then((m) => ({ default: m.PrintScheduleModal }))
@@ -70,6 +71,7 @@ interface DailyUsageViewProps {
   onSelectReservation: (reserva: Reservation) => void;
   onEditReservation?: (reserva: Reservation) => void;
   onDuplicateReservation?: (reserva: Reservation) => void;
+  onReplaceReservation?: (reserva: Reservation) => void;
   onDeleteReservation?: (id: string, isSeries?: boolean, seriesId?: string) => void;
   onRequestDelete?: (reserva: Reservation) => void;
   onNewReservationWithSlot: (space: string, date: string, startTime: string, endTime: string) => void;
@@ -115,6 +117,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   onSelectReservation,
   onEditReservation,
   onDuplicateReservation,
+  onReplaceReservation,
   onDeleteReservation,
   onRequestDelete,
   onNewReservationWithSlot,
@@ -1761,6 +1764,11 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                                   {res.importante === 'Sí' && (
                                     <Flame className="w-2.5 h-2.5 text-amber-600 shrink-0 ml-0.5" />
                                   )}
+                                  {res.reemplazaReservaId && (
+                                    <span title="Reemplazo por el día" className="text-[7.5px] bg-amber-600 text-white px-1 py-0.2 rounded font-bold uppercase tracking-tight shrink-0">
+                                      🔄 Reemplazo
+                                    </span>
+                                  )}
                                   {normalizeSpaceName(res.espacio) !== normalizeSpaceName(space.name) && (
                                     <span
                                       title={`Reserva compartida en múltiples espacios: ${formatDisplayTitle(res.espacio)}`}
@@ -1773,6 +1781,19 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                                 
                                 {/* Quick edit/duplicate/delete icons on hover */}
                                 <div className="absolute right-0 top-0 hidden group-hover/card:flex group-focus-within/card:flex items-center space-x-0.5 shrink-0 bg-white/95 p-0.5 rounded shadow-2xs">
+                                  {onReplaceReservation && canReplaceOccurrence(res) && (
+                                    <button
+                                      type="button"
+                                      title="Reemplazar solo este día"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onReplaceReservation(res);
+                                      }}
+                                      className="p-0.5 rounded hover:bg-amber-600 hover:text-white text-amber-700 transition"
+                                    >
+                                      <RotateCcw className="w-2.5 h-2.5" />
+                                    </button>
+                                  )}
                                   {onDuplicateReservation && (
                                     <button
                                       type="button"

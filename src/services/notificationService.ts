@@ -1,6 +1,7 @@
 import { Reservation, BookingConflict } from '../types';
 import { DetectedConflictDetail } from '../utils/conflictDetector';
 import { formatDateDDMMYYYY, getChileLocalDateString } from '../utils/dateUtils';
+import { getDueReplacementReminders, getDaysUntilReservation } from '../utils/replacementReminders';
 import {
   broadcastFcmNotification,
   initializeFCM,
@@ -11,7 +12,7 @@ import {
 
 export interface AppNotificationItem {
   id: string;
-  type: 'conflict' | 'important' | 'holiday' | 'system';
+  type: 'conflict' | 'important' | 'holiday' | 'system' | 'replacement';
   title: string;
   body: string;
   timestamp: string; // ISO date string
@@ -26,6 +27,7 @@ export interface NotificationSettings {
   enabled: boolean;
   notifyTopamiento: boolean;
   notifyImportant: boolean;
+  notifyReplacement: boolean;
   notifyHolidays: boolean;
   notifyDailyReminder: boolean;
   soundEnabled: boolean;
@@ -35,11 +37,13 @@ export interface NotificationSettings {
 const SETTINGS_STORAGE_KEY = 'cc_notification_settings_v1';
 const HISTORY_STORAGE_KEY = 'cc_notification_history_v1';
 const LAST_DAILY_CHECK_KEY = 'cc_notification_last_daily_check';
+const REPLACEMENT_CHECK_STORAGE_KEY = 'cc_notification_replacement_checks_v1';
 
 const DEFAULT_SETTINGS: NotificationSettings = {
   enabled: true,
   notifyTopamiento: true,
   notifyImportant: true,
+  notifyReplacement: true,
   notifyHolidays: true,
   notifyDailyReminder: true,
   soundEnabled: true,
@@ -201,7 +205,7 @@ export async function requestPushPermission(): Promise<NotificationPermission | 
 }
 
 // 5. Web Audio API Sound Synthesizer (Zero External Dependencies)
-export function playNotificationTone(type: 'important' | 'conflict' | 'holiday' | 'system' | 'test' | 'default' = 'default'): void {
+export function playNotificationTone(type: 'important' | 'replacement' | 'conflict' | 'holiday' | 'system' | 'test' | 'default' = 'default'): void {
   const settings = getNotificationSettings();
   if (!settings.soundEnabled) return;
 
@@ -233,8 +237,8 @@ export function playNotificationTone(type: 'important' | 'conflict' | 'holiday' 
 
       osc.start(now);
       osc.stop(now + 0.4);
-    } else if (type === 'important') {
-      // Pleasant melodic chime for important activities (C5 -> E5 -> G5 -> C6)
+    } else if (type === 'important' || type === 'replacement') {
+      // Pleasant melodic chime for important activities and replacement alerts (C5 -> E5 -> G5 -> C6)
       const notes = [523.25, 659.25, 783.99, 1046.50];
       notes.forEach((freq, i) => {
         const osc = ctx.createOscillator();
@@ -274,7 +278,7 @@ export function playNotificationTone(type: 'important' | 'conflict' | 'holiday' 
 }
 
 // 6. Haptic Vibration for Android Phones
-export function triggerHapticFeedback(type: 'important' | 'conflict' | 'holiday' | 'system' | 'test' | 'default' = 'test'): void {
+export function triggerHapticFeedback(type: 'important' | 'replacement' | 'conflict' | 'holiday' | 'system' | 'test' | 'default' = 'test'): void {
   const settings = getNotificationSettings();
   if (!settings.vibrationEnabled) return;
 
@@ -283,8 +287,8 @@ export function triggerHapticFeedback(type: 'important' | 'conflict' | 'holiday'
       if (type === 'conflict') {
         // Distinctive warning vibration pattern
         navigator.vibrate([200, 100, 200, 100, 300]);
-      } else if (type === 'important') {
-        // Double pulse for important activity
+      } else if (type === 'important' || type === 'replacement') {
+        // Double pulse for important activity or replacement alert
         navigator.vibrate([150, 80, 250]);
       } else {
         // Quick feedback vibration
@@ -298,7 +302,7 @@ export function triggerHapticFeedback(type: 'important' | 'conflict' | 'holiday'
 
 // 7. Core Dispatcher: Push & In-App Notification
 export interface DispatchNotificationParams {
-  type: 'conflict' | 'important' | 'holiday' | 'system';
+  type: 'conflict' | 'important' | 'holiday' | 'system' | 'replacement';
   title: string;
   body: string;
   reservationId?: string;
@@ -326,6 +330,7 @@ export async function dispatchNotification({
   // Filter based on specific category settings
   if (type === 'conflict' && !settings.notifyTopamiento) return;
   if (type === 'important' && !settings.notifyImportant) return;
+  if (type === 'replacement' && !settings.notifyReplacement) return;
   if (type === 'holiday' && !settings.notifyHolidays) return;
 
   // 1. Audio and Haptics
@@ -352,7 +357,7 @@ export async function dispatchNotification({
   saveNotificationHistory([historyItem, ...history]);
 
   // 3. Send Firebase Cloud Messaging (FCM) broadcast to other registered mobile devices/computers
-  if (!isRemoteBroadcast && (type === 'important' || type === 'conflict')) {
+  if (!isRemoteBroadcast && (type === 'important' || type === 'conflict' || type === 'replacement')) {
     broadcastFcmNotification({
       type,
       title,
@@ -375,7 +380,7 @@ export async function dispatchNotification({
           view: view || (type === 'conflict' ? 'conflicts' : 'calendar'),
           reservationId
         },
-        requireInteraction: type === 'conflict' || type === 'important'
+        requireInteraction: type === 'conflict' || type === 'important' || type === 'replacement'
       };
 
       // Service Worker (Mobile Android Chrome / PWA / Desktop)
@@ -469,6 +474,103 @@ export function notifyImportantActivity(
 }
 
 /**
+ * Dispatches notification for a single-day replacement activity 🔄
+ * Uses the exact same alert mechanism as important activities (chime, vibration, Web Push, FCM, history)
+ * and names both involved stakeholders (original suspended activity & replacement activity).
+ */
+export function notifyReplacementActivity(
+  replacement: Reservation,
+  original?: Reservation,
+  action: 'scheduled' | 'upcoming_reminder' | 'starting_today' = 'scheduled',
+  daysUntil?: number
+): void {
+  if (!replacement || !replacement.reemplazaReservaId) return;
+
+  const origDesc = original?.descripcion || original?.tipoActividad || 'Actividad habitual';
+  const origResp = original?.responsable ? ` (${original.responsable})` : '';
+  const replDesc = replacement.descripcion || replacement.tipoActividad;
+  const replResp = replacement.responsable ? ` (${replacement.responsable})` : '';
+  const motivo = replacement.motivoReemplazo ? ` Motivo: ${replacement.motivoReemplazo}.` : '';
+
+  let title = `🔄 Reemplazo por un Día en ${replacement.espacio}`;
+  let body = '';
+
+  if (action === 'scheduled') {
+    title = `🔄 Reemplazo por un Día Agendado (${formatDateDDMMYYYY(replacement.fecha)})`;
+    body = `En ${replacement.espacio} (${replacement.horaInicio}-${replacement.horaFin}): "${replDesc}"${replResp} reemplaza por ese día a "${origDesc}"${origResp}.${motivo}`;
+  } else if (action === 'starting_today') {
+    title = `🔄 HOY rige Reemplazo por un Día en ${replacement.espacio}`;
+    body = `Hoy (${replacement.horaInicio}-${replacement.horaFin}): "${replDesc}"${replResp} ocupa el lugar de "${origDesc}"${origResp}.${motivo} Coordina con los involucrados.`;
+  } else {
+    const labelDays = daysUntil === 1 ? 'mañana' : `en ${daysUntil ?? 3} días`;
+    title = `🔄 Aviso Anticipado: Reemplazo ${labelDays} (${formatDateDDMMYYYY(replacement.fecha)})`;
+    body = `El ${formatDateDDMMYYYY(replacement.fecha)} en ${replacement.espacio} (${replacement.horaInicio}-${replacement.horaFin}): "${replDesc}"${replResp} reemplazará a "${origDesc}"${origResp}.${motivo} Involucra a ambos responsables.`;
+  }
+
+  dispatchNotification({
+    type: 'replacement',
+    title,
+    body,
+    reservationId: replacement.id,
+    spaceName: replacement.espacio,
+    targetDate: replacement.fecha,
+    view: 'calendar',
+    isRemoteBroadcast: action !== 'scheduled'
+  });
+}
+
+/**
+ * Checks upcoming replacement activities within their configured advance warning window (`diasAvisoReemplazo`)
+ * and triggers an important-style alert once per day per replacement so stakeholders can be contacted in advance.
+ */
+export function checkUpcomingReplacementActivities(reservations: Reservation[], todayStr = getChileLocalDateString()): number {
+  const settings = getNotificationSettings();
+  if (!settings.enabled || !settings.notifyReplacement) return 0;
+
+  const due = getDueReplacementReminders(reservations, todayStr);
+  if (due.length === 0) return 0;
+
+  let checkMap: Record<string, string> = {};
+  try {
+    const raw = localStorage.getItem(REPLACEMENT_CHECK_STORAGE_KEY);
+    if (raw) checkMap = JSON.parse(raw) || {};
+  } catch {
+    checkMap = {};
+  }
+
+  const byId = new Map(reservations.map(r => [r.id, r]));
+  let notifiedCount = 0;
+
+  for (const replacement of due) {
+    const checkKey = `${replacement.id}_${todayStr}`;
+    if (checkMap[checkKey]) continue;
+
+    checkMap[checkKey] = todayStr;
+    notifiedCount += 1;
+
+    const original = replacement.reemplazaReservaId ? byId.get(replacement.reemplazaReservaId) : undefined;
+    const daysUntil = getDaysUntilReservation(replacement.fecha, todayStr) ?? 0;
+
+    if (daysUntil <= 0) {
+      notifyReplacementActivity(replacement, original, 'starting_today', 0);
+    } else {
+      notifyReplacementActivity(replacement, original, 'upcoming_reminder', daysUntil);
+    }
+  }
+
+  if (notifiedCount > 0) {
+    try {
+      // Prune entries older than 35 days to keep storage clean
+      const entries = Object.entries(checkMap).slice(-100);
+      localStorage.setItem(REPLACEMENT_CHECK_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)));
+    } catch {
+      // Ignore storage quota error
+    }
+  }
+  return notifiedCount;
+}
+
+/**
  * Daily check for activities marked as important for today
  */
 export function checkTodayImportantActivities(reservations: Reservation[]): void {
@@ -513,8 +615,8 @@ export async function sendTestNotification(): Promise<void> {
     type: 'system',
     title: isAndroid ? '📱 Notificación Móvil Android Activa' : '🔔 Notificación de Prueba Exitosa',
     body: isAndroid
-      ? '¡Tu celular Android está configurado para recibir alertas de topamiento y actividades importantes!'
-      : 'Las alertas de doble reserva y actividades importantes están funcionando correctamente.',
+      ? '¡Tu celular Android está configurado para recibir alertas de topamiento, reemplazos y actividades importantes!'
+      : 'Las alertas de doble reserva, reemplazos por un día y actividades importantes están funcionando correctamente.',
     view: 'calendar'
   });
 }

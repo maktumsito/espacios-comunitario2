@@ -2,12 +2,14 @@ import type { Reservation, BatchUpdateInfo } from '../types';
 import { isSingleDayMultiSpaceReservation } from '../types';
 import { isReservationActiveForAvailability } from './conflictDetector';
 import { normalizeSpaceName } from '../data/spacesData';
+import { validateTimeRange } from './validationUtils';
 
 export function canReplaceOccurrence(original: Reservation): boolean {
-  return Boolean((original.serieRecurrente || original.recurrenteId) &&
+  return Boolean(
     !isSingleDayMultiSpaceReservation(original) &&
     !original.reemplazadaPorReservaId && !original.reemplazaReservaId &&
-    isReservationActiveForAvailability(original));
+    isReservationActiveForAvailability(original)
+  );
 }
 
 export function sameReplacementSlot(a: Reservation, b: Reservation): boolean {
@@ -16,21 +18,49 @@ export function sameReplacementSlot(a: Reservation, b: Reservation): boolean {
     Boolean(a.terminaDiaSiguiente) === Boolean(b.terminaDiaSiguiente);
 }
 
-export function buildReplacementBatch(original: Reservation, replacement: Reservation, id: string, reason: string): BatchUpdateInfo {
+export function isValidReplacementSlot(original: Reservation, replacement: Reservation): boolean {
+  return original.fecha === replacement.fecha &&
+    normalizeSpaceName(original.espacio) === normalizeSpaceName(replacement.espacio) &&
+    validateTimeRange(replacement.horaInicio, replacement.horaFin, Boolean(replacement.terminaDiaSiguiente)).isValid;
+}
+
+export function buildReplacementBatch(
+  original: Reservation,
+  replacement: Reservation,
+  id: string,
+  reason: string,
+  reminderDays?: number
+): BatchUpdateInfo {
   const motivo = reason.trim();
   if (!canReplaceOccurrence(original)) throw new Error('Esta sesión ya no está disponible para reemplazar.');
   if (!motivo) throw new Error('Indica el motivo del reemplazo.');
-  if (id === original.id || !sameReplacementSlot(original, replacement)) throw new Error('El reemplazo debe conservar la fecha, el espacio y el horario originales.');
+  if (id === original.id || !isValidReplacementSlot(original, replacement)) {
+    throw new Error('El reemplazo debe conservar la fecha y el espacio originales con un horario válido.');
+  }
+  const normalizedReminderDays = typeof reminderDays === 'number' && Number.isFinite(reminderDays)
+    ? Math.max(1, Math.min(30, Math.round(reminderDays)))
+    : (typeof replacement.diasAvisoReemplazo === 'number' && Number.isFinite(replacement.diasAvisoReemplazo)
+      ? Math.max(1, Math.min(30, Math.round(replacement.diasAvisoReemplazo)))
+      : undefined);
+
   const next: Reservation = {
     ...replacement, id, version: 0, estado: 'activa', actividadRecurrente: 'No',
     serieRecurrente: undefined, recurrenteId: undefined, indiceEnSerie: undefined, totalEnSerie: undefined,
     tipoRecurrencia: undefined, diasSemana: undefined, fechaInicioRecurrencia: undefined, fechaFinRecurrencia: undefined,
     reemplazaReservaId: original.id, reemplazadaPorReservaId: undefined, motivoReemplazo: motivo,
+    ...(normalizedReminderDays !== undefined ? { diasAvisoReemplazo: normalizedReminderDays } : { diasAvisoReemplazo: undefined }),
     googleEventId: undefined, realizada: 'No',
+  };
+  const suspended: Reservation = {
+    ...original,
+    estado: 'cancelada',
+    reemplazadaPorReservaId: id,
+    motivoReemplazo: motivo,
+    ...(normalizedReminderDays !== undefined ? { diasAvisoReemplazo: normalizedReminderDays } : {}),
   };
   return {
     scope: 'single', replacementOriginal: original,
-    updatedReservations: [{ ...original, estado: 'cancelada', reemplazadaPorReservaId: id, motivoReemplazo: motivo }, next],
+    updatedReservations: [suspended, next],
     affectedIds: [original.id],
     description: `Reemplazada solo la sesión '${original.descripcion}' del ${original.fecha} por '${next.descripcion}'. Motivo: ${motivo}`,
   };

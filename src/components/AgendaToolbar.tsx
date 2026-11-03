@@ -1,5 +1,5 @@
 import React from "react";
-import { Filter } from "lucide-react";
+import { Filter, ChevronLeft, ChevronRight, CalendarDays, RefreshCw, ArrowLeft } from "lucide-react";
 import { ViewMode } from "../types";
 
 interface AgendaToolbarProps {
@@ -9,6 +9,12 @@ interface AgendaToolbarProps {
   filtersOpen: boolean;
   hasActiveFilters: boolean;
   onToggleFilters: () => void;
+  onPrevPeriod?: () => void;
+  onNextPeriod?: () => void;
+  onGoToday?: () => void;
+  onBackToMonth?: () => void;
+  upcomingReplacementsCount?: number;
+  onOpenUpcomingReplacement?: () => void;
 }
 
 /** Changes presentation only; date, filters and subscriptions stay owned by App. */
@@ -19,21 +25,94 @@ export const AgendaToolbar = React.memo(function AgendaToolbar({
   filtersOpen,
   hasActiveFilters,
   onToggleFilters,
+  onPrevPeriod,
+  onNextPeriod,
+  onGoToday,
+  onBackToMonth,
+  upcomingReplacementsCount = 0,
+  onOpenUpcomingReplacement,
 }: AgendaToolbarProps) {
   return (
     <section
       aria-label="Vistas de la agenda"
-      className="agenda-controls mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
+      className="agenda-controls mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5"
     >
-      <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <h1 className="text-base font-bold tracking-tight text-slate-900">
           Agenda
         </h1>
+        {view !== "calendar" && onBackToMonth && (
+          <button
+            type="button"
+            onClick={onBackToMonth}
+            className="inline-flex min-h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+            title="Volver a la cuadrícula mensual (Alt+1)"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>Volver al mes</span>
+          </button>
+        )}
         <p className="text-xs text-slate-600" aria-live="polite">
           {summary}
         </p>
+        {upcomingReplacementsCount > 0 && onOpenUpcomingReplacement && (
+          <button
+            type="button"
+            onClick={onOpenUpcomingReplacement}
+            className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors"
+            title="Revisar cambios y reemplazos por un día próximos a regir"
+          >
+            <RefreshCw className="h-3.5 w-3.5 text-amber-700" />
+            <span>
+              {upcomingReplacementsCount === 1
+                ? "1 reemplazo próximo"
+                : `${upcomingReplacementsCount} reemplazos próximos`}
+            </span>
+          </button>
+        )}
       </div>
-      <div className="flex w-full items-center gap-2 sm:w-auto">
+      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        {(onPrevPeriod || onGoToday || onNextPeriod) && (
+          <div
+            className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5"
+            role="group"
+            aria-label="Navegación rápida de fecha"
+          >
+            {onPrevPeriod && (
+              <button
+                type="button"
+                onClick={onPrevPeriod}
+                aria-label={view === "calendar" ? "Mes anterior" : "Día anterior"}
+                title={view === "calendar" ? "Mes anterior" : "Día anterior"}
+                className="inline-flex min-h-9 min-w-8 items-center justify-center rounded-md px-1.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900 sm:min-h-7"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+            )}
+            {onGoToday && (
+              <button
+                type="button"
+                onClick={onGoToday}
+                title="Ir al día de hoy (Alt+T)"
+                className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-700 sm:min-h-7"
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+                <span>Hoy</span>
+              </button>
+            )}
+            {onNextPeriod && (
+              <button
+                type="button"
+                onClick={onNextPeriod}
+                aria-label={view === "calendar" ? "Mes siguiente" : "Día siguiente"}
+                title={view === "calendar" ? "Mes siguiente" : "Día siguiente"}
+                className="inline-flex min-h-9 min-w-8 items-center justify-center rounded-md px-1.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900 sm:min-h-7"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
         <div
           className="grid flex-1 grid-cols-3 rounded-lg border border-slate-200 bg-white p-0.5 sm:flex"
           role="group"

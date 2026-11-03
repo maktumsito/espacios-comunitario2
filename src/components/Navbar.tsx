@@ -389,12 +389,38 @@ const NavbarComponent: React.FC<NavbarProps> = ({
             <div className="min-w-0">
               <p className="truncate text-sm font-bold lg:text-base">
                 <span className="lg:hidden">CCD Diaguitas</span>
-                <span className="hidden lg:inline">{pageTitle}</span>
+                <span className="hidden lg:inline">{isSidebarHidden ? "CCD Diaguitas" : pageTitle}</span>
               </p>
               <p className="hidden text-xs text-slate-500 sm:block lg:hidden">
                 Espacios comunitarios
               </p>
             </div>
+            {isSidebarHidden && (
+              <div
+                role="navigation"
+                aria-label="Navegación rápida de escritorio"
+                className="ml-3 hidden items-center gap-1 border-l border-slate-200 pl-3 lg:flex"
+              >
+                {navItems.map(({ view, id, label, Icon, active, count }) => (
+                  <button
+                    key={`header-${id}`}
+                    id={id.replace("nav-tab-", "nav-header-tab-")}
+                    type="button"
+                    onClick={() => run(() => onViewChange(view))}
+                    aria-current={active ? "page" : undefined}
+                    className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${active ? "bg-blue-50 text-blue-800" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span>{label}</span>
+                    {!!count && (
+                      <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             {onOpenCommandPalette && (

@@ -110,6 +110,7 @@ export const ReservationSchema = z
     reemplazaReservaId: z.string().min(1).optional(),
     reemplazadaPorReservaId: z.string().min(1).optional(),
     motivoReemplazo: z.string().max(2000).optional(),
+    diasAvisoReemplazo: z.number().int().min(1).max(30).optional(),
     tipoPrestamo: z.string().optional(),
     domicilio: z.string().optional(),
     createdAt: z.string().optional(),

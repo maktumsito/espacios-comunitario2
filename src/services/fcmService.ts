@@ -36,7 +36,7 @@ export interface FcmDeviceRecord {
 
 export interface FcmNotificationPayload {
   id: string;
-  type: 'important' | 'conflict' | 'holiday' | 'system';
+  type: 'important' | 'conflict' | 'holiday' | 'system' | 'replacement';
   title: string;
   body: string;
   reservationId?: string;

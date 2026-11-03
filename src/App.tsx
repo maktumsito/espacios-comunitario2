@@ -13,6 +13,7 @@ import { getChileLocalDateString } from './utils/dateUtils';
 import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from './utils/spaceAvailability';
 import { canReplaceOccurrence } from './utils/reservationReplacement';
 import { useReplacementReminders } from './hooks/useReplacementReminders';
+import { getDueReplacementReminders } from './utils/replacementReminders';
 import { isRecurringSeriesReservation } from './utils/recurringEdits';
 import { PendingReservationOperations } from './components/PendingReservationOperations';
 import { DeleteDayReservationsModal } from './components/DeleteDayReservationsModal';
@@ -88,11 +89,12 @@ import { useReservationCrud } from './hooks/useReservationCrud';
 import { initGmailAuthListener } from './services/gmailDispatchService';
 import {
   checkTodayImportantActivities,
+  checkUpcomingReplacementActivities,
   getNotificationHistory,
   initNotificationListeners,
   AppNotificationItem
 } from './services/notificationService';
-import { format } from 'date-fns';
+import { format, addDays, subDays, addMonths, subMonths } from 'date-fns';
 import {
   AuthUser,
   getStoredAuthUser,
@@ -127,8 +129,19 @@ export default function App() {
     return stored;
   });
   const [currentView, setCurrentView] = useState<ViewMode>(() => getInitialViewMode());
-  const [isSidebarHidden, setIsSidebarHidden] = useState(true);
-  const toggleSidebar = useCallback(() => setIsSidebarHidden(hidden => !hidden), []);
+  const [isSidebarHidden, setIsSidebarHidden] = useState(() => {
+    try {
+      const saved = localStorage.getItem('cc_sidebar_hidden_v1');
+      return saved ? saved === '1' : true;
+    } catch {
+      return true;
+    }
+  });
+  const toggleSidebar = useCallback(() => setIsSidebarHidden(hidden => {
+    const next = !hidden;
+    try { localStorage.setItem('cc_sidebar_hidden_v1', next ? '1' : '0'); } catch {}
+    return next;
+  }), []);
   const [adminSubTab, setAdminSubTab] = useState<'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring' | 'health'>('spaces');
   const [selectedDailyDate, setSelectedDailyDate] = useState<Date>(() => new Date());
   const [isDeleteDayModalOpen, setIsDeleteDayModalOpen] = useState(false);
@@ -378,6 +391,11 @@ export default function App() {
       }
       openCreateModal({ date: format(selectedDailyDate || new Date(), 'yyyy-MM-dd') });
     },
+    onNavigateView: (view) => {
+      persistViewPreference(view);
+      setCurrentView(view);
+    },
+    onGoToday: () => setSelectedDailyDate(new Date()),
     isCommandPaletteOpen
   });
 
@@ -543,6 +561,18 @@ export default function App() {
     }
   }, [todayImportantSignature]);
 
+  const dueReplacements = useMemo(() => getDueReplacementReminders(reservations), [reservations]);
+  const upcomingReplacementSignature = useMemo(() => {
+    if (!currentUser || dueReplacements.length === 0) return '';
+    return dueReplacements.map(r => `${r.id}:${r.fecha}:${r.horaInicio}:${r.diasAvisoReemplazo ?? 3}`).join('|');
+  }, [dueReplacements, currentUser]);
+
+  useEffect(() => {
+    if (upcomingReplacementSignature) {
+      checkUpcomingReplacementActivities(reservationsRef.current);
+    }
+  }, [upcomingReplacementSignature]);
+
   // Initialize Gmail Workspace OAuth Auth State Listener only when Gmail UI is active
   const gmailUiActive = Boolean(currentUser) && (
     isGmailDispatchModalOpen || (currentView === 'admin' && adminSubTab === 'gmail')
@@ -671,6 +701,28 @@ export default function App() {
     setSelectedReservation(r);
     setIsDetailModalOpen(true);
   }, [setSelectedReservation, setIsDetailModalOpen]);
+
+  const handleStartReplacement = useCallback((r: Reservation) => {
+    requireAuth(() => {
+      if (!userCanCreateReservations(currentUser) || !userCanEditReservations(currentUser) || !canReplaceOccurrence(r)) {
+        triggerSyncToast('No tienes permisos o esta reserva no admite reemplazo por el día.', 'warning');
+        return;
+      }
+      setReplacementSource(r);
+      setEditingReservation(null);
+      setIsDuplicating(false);
+      setPrefillDate(r.fecha);
+      setPrefillSpace(r.espacio);
+      setPrefillStartTime(r.horaInicio);
+      setPrefillEndTime(r.horaFin);
+      setPrefillResponsable(r.responsable);
+      setPrefillRut(r.rut || '');
+      setPrefillPhone(r.telefonoContacto || '');
+      setPrefillEmail(r.emailContacto || '');
+      setIsDetailModalOpen(false);
+      setIsReservationModalOpen(true);
+    }, 'reemplazar esta actividad solo por este día');
+  }, [currentUser, requireAuth, triggerSyncToast, setEditingReservation, setIsDuplicating, setPrefillDate, setPrefillSpace, setPrefillStartTime, setPrefillEndTime, setPrefillResponsable, setPrefillRut, setPrefillPhone, setPrefillEmail, setIsDetailModalOpen, setIsReservationModalOpen]);
   const prepareReservationEditor = async (reservation: Reservation) => {
     if (!userCanEditReservations(currentUser)) { triggerSyncToast('No tienes permiso para editar reservas.','error'); return; }
     const request=++editorLoadRequest.current;
@@ -1067,6 +1119,16 @@ export default function App() {
           summary={`${visiblePeriodCounts.filtered} ${visiblePeriodCounts.filtered === 1 ? 'reserva' : 'reservas'} en ${visiblePeriodLabel}`}
           filtersOpen={isFilterBarOpen} hasActiveFilters={hasActiveFilters}
           onToggleFilters={() => setIsFilterBarOpen(open => !open)}
+          onPrevPeriod={() => setSelectedDailyDate(d => currentView === 'calendar' ? subMonths(d, 1) : subDays(d, 1))}
+          onNextPeriod={() => setSelectedDailyDate(d => currentView === 'calendar' ? addMonths(d, 1) : addDays(d, 1))}
+          onGoToday={() => setSelectedDailyDate(new Date())}
+          onBackToMonth={currentView !== 'calendar' ? () => { persistViewPreference('calendar'); setCurrentView('calendar'); } : undefined}
+          upcomingReplacementsCount={dueReplacements.length}
+          onOpenUpcomingReplacement={dueReplacements.length > 0 ? () => {
+            const nextRep = dueReplacements[0];
+            setSelectedReservation(nextRep);
+            setIsDetailModalOpen(true);
+          } : undefined}
         />}
         {isDeleteDayModalOpen && userCanDeleteReservations(currentUser) && (
           <DeleteDayReservationsModal initialDate={format(selectedDailyDate, 'yyyy-MM-dd')}
@@ -1140,6 +1202,7 @@ export default function App() {
               onDuplicateReservation={(r) => {
                 handleDuplicateReservation(r);
               }}
+              onReplaceReservation={handleStartReplacement}
               onEditReservation={(r) => { requireAuth(() => void prepareReservationEditor(r), 'editar esta reserva'); }}
               onDeleteReservation={(id, isSeries, seriesId) => {
                 return requireAuth(() => handleDelete(id, isSeries, seriesId), 'eliminar esta reserva');
@@ -1209,6 +1272,7 @@ export default function App() {
               onDuplicateReservation={(r) => {
                 handleDuplicateReservation(r);
               }}
+              onReplaceReservation={handleStartReplacement}
               onDeleteReservation={(id, isSeries, seriesId) => {
                 return requireAuth(() => handleDelete(id, isSeries, seriesId), 'eliminar esta reserva');
               }}
@@ -1469,6 +1533,7 @@ export default function App() {
             isOpen={isReservationModalOpen}
             onClose={() => {
               setIsReservationModalOpen(false);
+              setReplacementSource(null);
               setEditingReservation(null);
               setIsDuplicating(false);
               setPrefillDate('');

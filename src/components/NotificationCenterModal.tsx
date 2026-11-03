@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Star,
+  RefreshCw,
   Smartphone,
   Volume2,
   Vibrate,
@@ -110,11 +111,11 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
     markNotificationAsRead(item.id);
     setHistory(getNotificationHistory());
 
-    if (item.view && onNavigateToView) {
-      onNavigateToView(item.view as ViewMode);
-      onClose();
-    } else if (item.reservationId && onSelectReservation) {
+    if (item.reservationId && onSelectReservation) {
       onSelectReservation(item.reservationId);
+      onClose();
+    } else if (item.view && onNavigateToView) {
+      onNavigateToView(item.view as ViewMode);
       onClose();
     }
   };
@@ -144,7 +145,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                 )}
               </div>
               <p className="text-xs text-slate-400">
-                Doble reserva, topamientos y actividades importantes
+                Doble reserva, reemplazos por un día y actividades importantes
               </p>
             </div>
           </div>
@@ -201,7 +202,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                   ? isAndroid ? 'Recibirás avisos directos en tu teléfono Android' : 'Recibirás avisos en este navegador y sonido'
                   : permission === 'denied'
                   ? 'Puedes habilitarlas desde los permisos del navegador si deseas recibir alertas sonoras y push.'
-                  : 'Activa para recibir alertas de topamiento y actividades marcadas.'}
+                  : 'Activa para recibir alertas de topamiento, reemplazos y actividades marcadas.'}
               </p>
             </div>
           </div>
@@ -306,7 +307,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                   <div className="max-w-xs space-y-1">
                     <h4 className="text-sm font-bold text-slate-800">Bandeja al día</h4>
                     <p className="text-xs text-slate-500 leading-relaxed">
-                      Aquí aparecerán los avisos de topamiento de horario y las alertas de actividades marcadas como importantes.
+                      Aquí aparecerán los avisos de topamiento de horario, alertas de reemplazos por un día y actividades marcadas como importantes.
                     </p>
                   </div>
                   <button
@@ -332,6 +333,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
 
                     const isConflict = item.type === 'conflict';
                     const isImportant = item.type === 'important';
+                    const isReplacement = item.type === 'replacement';
 
                     return (
                       <div
@@ -341,7 +343,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                           !item.read
                             ? isConflict
                               ? 'bg-rose-50/80 border-rose-200 hover:bg-rose-100/70 shadow-2xs'
-                              : isImportant
+                              : isImportant || isReplacement
                               ? 'bg-amber-50/80 border-amber-200 hover:bg-amber-100/70 shadow-2xs'
                               : 'bg-blue-50/80 border-blue-200 hover:bg-blue-100/70 shadow-2xs'
                             : 'bg-white border-slate-200 hover:bg-slate-50'
@@ -352,13 +354,15 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                           className={`p-2 rounded-xl shrink-0 mt-0.5 ${
                             isConflict
                               ? 'bg-rose-100 text-rose-600'
-                              : isImportant
+                              : isImportant || isReplacement
                               ? 'bg-amber-100 text-amber-600'
                               : 'bg-blue-100 text-blue-600'
                           }`}
                         >
                           {isConflict ? (
                             <AlertTriangle className="w-4 h-4" />
+                          ) : isReplacement ? (
+                            <RefreshCw className="w-4 h-4" />
                           ) : isImportant ? (
                             <Star className="w-4 h-4 fill-amber-500" />
                           ) : (
@@ -373,7 +377,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                               className={`text-xs font-bold truncate ${
                                 isConflict
                                   ? 'text-rose-900'
-                                  : isImportant
+                                  : isImportant || isReplacement
                                   ? 'text-amber-900'
                                   : 'text-slate-900'
                               }`}
@@ -487,6 +491,32 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                   </label>
                 </div>
 
+                {/* 2.5. Reemplazos por un Día */}
+                <div className="p-3.5 bg-white rounded-2xl border border-slate-200 flex items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-start space-x-3">
+                    <div className="p-2 bg-amber-50 text-amber-600 rounded-xl mt-0.5">
+                      <RefreshCw className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 block">
+                        Reemplazos de Actividad por un Día 🔄
+                      </span>
+                      <p className="text-[11px] text-slate-500">
+                        Avisar días antes del cambio y al agendar un reemplazo excepcional para coordinar a los involucrados.
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={settings.notifyReplacement}
+                      onChange={() => handleToggleSetting('notifyReplacement')}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+
                 {/* 3. Recordatorio Diario */}
                 <div className="p-3.5 bg-white rounded-2xl border border-slate-200 flex items-center justify-between gap-3 shadow-2xs">
                   <div className="flex items-start space-x-3">
@@ -524,7 +554,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                         Vibración Háptica en Celular
                       </span>
                       <p className="text-[11px] text-slate-500">
-                        Vibrar el teléfono Android al detectar un topamiento o actividad importante.
+                        Vibrar el teléfono Android al detectar un topamiento, reemplazo o actividad importante.
                       </p>
                     </div>
                   </div>

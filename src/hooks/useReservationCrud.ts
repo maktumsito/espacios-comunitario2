@@ -31,7 +31,7 @@ import {
   hasReservationOccupancyChange
 } from '../services/reservationService';
 import { recordAuditEntry, computeReservationDiff } from '../services/auditLogService';
-import { notifyTopamiento, notifyImportantActivity } from '../services/notificationService';
+import { notifyTopamiento, notifyImportantActivity, notifyReplacementActivity } from '../services/notificationService';
 import {
   detectBatchConflicts,
   formatConflictMessage,
@@ -640,7 +640,7 @@ export function useReservationCrud({
         const original = batchUpdateInfo.replacementOriginal;
         const replacement = batchUpdateInfo.updatedReservations.find(r => r.reemplazaReservaId === original.id);
         if (!replacement) throw new Error('Falta la actividad excepcional.');
-        batchUpdateInfo = buildReplacementBatch(original, replacement, replacement.id, replacement.motivoReemplazo || '');
+        batchUpdateInfo = buildReplacementBatch(original, replacement, replacement.id, replacement.motivoReemplazo || '', replacement.diasAvisoReemplazo);
         allowConflictOverride = false;
         for (const interval of getTimeIntervalsForReservation(replacement)) {
           const availability = calculateEquipmentAvailability(interval.date, interval.startMin, interval.endMin,
@@ -787,6 +787,12 @@ export function useReservationCrud({
           try { notifyTopamiento(conflictsFound); } catch (error) { console.warn('Reserva confirmada; notificación pendiente:', error); }
         }
 
+        if (batchUpdateInfo.replacementOriginal) {
+          const confirmedReplacement = confirmedWrite.reservations.find(r => r.reemplazaReservaId === batchUpdateInfo!.replacementOriginal!.id);
+          if (confirmedReplacement) {
+            try { notifyReplacementActivity(confirmedReplacement, batchUpdateInfo.replacementOriginal, 'scheduled'); } catch (error) { console.warn('Reserva confirmada; notificación de reemplazo pendiente:', error); }
+          }
+        }
         if (firstRes.importante === 'Sí') {
           try { notifyImportantActivity(firstRes, 'updated'); } catch (error) { console.warn('Reserva confirmada; notificación pendiente:', error); }
         }

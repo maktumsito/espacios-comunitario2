@@ -3,7 +3,8 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Reservation } from '../../types';
 import { useReplacementReminders } from '../useReplacementReminders';
-import { getDueReplacementReminders } from '../../utils/replacementReminders';
+import { getDueReplacementReminders, getDaysUntilReservation } from '../../utils/replacementReminders';
+import { checkUpcomingReplacementActivities } from '../../services/notificationService';
 
 const replacement: Reservation = { id: 'new', fecha: '2026-10-06', horaInicio: '10:00', horaFin: '11:00', espacio: 'SALA 2', responsable: 'Vecino', descripcion: 'Reunión excepcional', tipoActividad: 'Reunión', actividadRecurrente: 'No', estado: 'activa', reemplazaReservaId: 'original', motivoReemplazo: 'Reunión de vecinos' };
 const original: Reservation = { ...replacement, id: 'original', descripcion: 'Taller semanal', actividadRecurrente: 'Sí', estado: 'cancelada', reemplazaReservaId: undefined, reemplazadaPorReservaId: 'new' };
@@ -11,11 +12,26 @@ const rows = [original, replacement];
 beforeEach(() => { localStorage.clear(); vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-03T15:00:00Z')); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
-it('starts three calendar days before, includes today and excludes past dates', () => {
+it('starts three calendar days before by default, includes today and excludes past dates', () => {
   expect(getDueReplacementReminders(rows, '2026-10-02')).toEqual([]);
   expect(getDueReplacementReminders(rows, '2026-10-03')).toEqual([replacement]);
   expect(getDueReplacementReminders(rows, '2026-10-06')).toEqual([replacement]);
   expect(getDueReplacementReminders(rows, '2026-10-07')).toEqual([]);
+});
+it('respects custom diasAvisoReemplazo window per reservation', () => {
+  const customReplacement: Reservation = { ...replacement, diasAvisoReemplazo: 5 };
+  expect(getDaysUntilReservation('2026-10-06', '2026-10-01')).toBe(5);
+  expect(getDueReplacementReminders([original, customReplacement], '2026-09-30')).toEqual([]);
+  expect(getDueReplacementReminders([original, customReplacement], '2026-10-01')).toEqual([customReplacement]);
+  expect(getDueReplacementReminders([original, customReplacement], '2026-10-06')).toEqual([customReplacement]);
+});
+it('triggers daily notification center reminders for upcoming replacements once per day', () => {
+  const notified = checkUpcomingReplacementActivities(rows, '2026-10-03');
+  expect(notified).toBe(1);
+  const repeatedSameDay = checkUpcomingReplacementActivities(rows, '2026-10-03');
+  expect(repeatedSameDay).toBe(0);
+  const nextDay = checkUpcomingReplacementActivities(rows, '2026-10-04');
+  expect(nextDay).toBe(1);
 });
 it('does not remind for a cancelled replacement, unrelated reservation or reactivated original', () => {
   expect(getDueReplacementReminders([original, { ...replacement, estado: 'cancelada' }], '2026-10-03')).toEqual([]);
@@ -48,7 +64,7 @@ it('uses the Santiago calendar day and refreshes when the app returns to focus',
 it('defers the popup while another modal is open and suppresses it without a session', () => {
   const { result, rerender } = renderHook(({ enabled, user }) => useReplacementReminders(rows, user, enabled), { initialProps: { enabled: false, user: 'user' as string | undefined } });
   expect(result.current.reminder).toBeNull();
-  rerender({ enabled: true, user: 'user' }); expect(result.current.reminder).toEqual(replacement);
+  rerender({ enabled: true, user: 'user' }); expect(result.current.reminder).toBe(replacement);
   rerender({ enabled: true, user: undefined }); expect(result.current.reminder).toBeNull();
 });
 it('reissues the reminder if the scheduled change is edited after acknowledgment', () => {

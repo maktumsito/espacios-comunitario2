@@ -1164,7 +1164,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     descargarCartaAlCrear,
     effectiveSeriesSlotsForLetter,
     onSave: replacementSource ? async (replacement) => {
-      const batch = buildReplacementBatch(replacementSource, replacement, replacementId.current, formData.motivoReemplazo || '');
+      const batch = buildReplacementBatch(replacementSource, replacement, replacementId.current, formData.motivoReemplazo || '', formData.diasAvisoReemplazo);
       const blocks = findMaintenanceBlockConflicts([batch.updatedReservations[1]], spaceBlocks);
       if (blocks.length) throw new Error(formatBlockConflictMessage(blocks[0]));
       return onSave(batch.updatedReservations[1], false, undefined, false, batch, false);
@@ -1438,6 +1438,26 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               <h3 className="font-bold">Reemplazar solo este día</h3>
               <p>{formatDateDDMMYYYY(replacementSource.fecha)} · {replacementSource.horaInicio}–{replacementSource.horaFin}{replacementSource.terminaDiaSiguiente ? ' (hasta el día siguiente)' : ''} · {formatDisplayTitle(replacementSource.espacio)}</p>
               <p>La fecha, el espacio y el horario se conservan. Las demás fechas de la serie continúan normalmente.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <label className="block text-xs font-semibold text-indigo-950">
+                  Hora inicio (ajustable para este día)
+                  <input
+                    type="time"
+                    value={formData.horaInicio || replacementSource.horaInicio}
+                    onChange={e => setFormData(prev => ({ ...prev, horaInicio: e.target.value }))}
+                    className="mt-1 block w-full rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-sm font-mono"
+                  />
+                </label>
+                <label className="block text-xs font-semibold text-indigo-950">
+                  Hora término (ajustable para este día)
+                  <input
+                    type="time"
+                    value={formData.horaFin || replacementSource.horaFin}
+                    onChange={e => setFormData(prev => ({ ...prev, horaFin: e.target.value }))}
+                    className="mt-1 block w-full rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-sm font-mono"
+                  />
+                </label>
+              </div>
               {loanScheduleCheck.requiresAuthorization && <label className="block">Clave de autorización de horario extendido
                 <input type="password" value={extendedAuthKey} onChange={e => setExtendedAuthKey(e.target.value)} className="block rounded-lg border bg-white p-2" />
               </label>}
@@ -1594,6 +1614,23 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               <textarea id="replacement-reason" maxLength={2000} value={formData.motivoReemplazo || ''}
                 onChange={e => setFormData(prev => ({ ...prev, motivoReemplazo: e.target.value }))}
                 className="w-full rounded-lg border border-slate-300 bg-white p-2" />
+              <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-amber-200/80">
+                <label className="text-xs font-semibold text-amber-950" htmlFor="replacement-reminder-days">
+                  Avisar días antes del cambio (para involucrar a los responsables):
+                </label>
+                <select
+                  id="replacement-reminder-days"
+                  value={formData.diasAvisoReemplazo ?? 3}
+                  onChange={e => setFormData(prev => ({ ...prev, diasAvisoReemplazo: Number(e.target.value) }))}
+                  className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-950"
+                >
+                  <option value={1}>1 día antes</option>
+                  <option value={2}>2 días antes</option>
+                  <option value={3}>3 días antes (recomendado)</option>
+                  <option value={5}>5 días antes</option>
+                  <option value={7}>7 días antes (1 semana)</option>
+                </select>
+              </div>
             </section>
           )}
           {isWizardMode && wizardStep === 5 && (

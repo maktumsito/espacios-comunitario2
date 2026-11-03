@@ -25,6 +25,7 @@ import {
 import { validateReservationWithZod } from "../schemas/reservationSchema";
 import {
   canReplaceOccurrence,
+  isValidReplacementSlot,
   sameReplacementSlot,
 } from "../utils/reservationReplacement";
 import {
@@ -709,7 +710,7 @@ export async function writeReservations(
             !existing &&
             linkedSource?.estado === "cancelada" &&
             linkedSource.reemplazadaPorReservaId === id &&
-            sameReplacementSlot(linkedSource, next) &&
+            isValidReplacementSlot(linkedSource, next) &&
             next.motivoReemplazo?.trim() &&
             linkedSource.motivoReemplazo === next.motivoReemplazo,
           );
@@ -718,7 +719,7 @@ export async function writeReservations(
             !existing &&
             next.estado === "cancelada" &&
             linkedReplacement?.reemplazaReservaId === id &&
-            sameReplacementSlot(next, linkedReplacement) &&
+            isValidReplacementSlot(next, linkedReplacement) &&
             next.motivoReemplazo?.trim() &&
             linkedReplacement.motivoReemplazo === next.motivoReemplazo,
           );
@@ -743,7 +744,7 @@ export async function writeReservations(
               !suspended ||
               suspended.estado !== "cancelada" ||
               suspended.reemplazadaPorReservaId !== next.id ||
-              !sameReplacementSlot(original, next) ||
+              !isValidReplacementSlot(original, next) ||
               !sameReplacementSlot(original, suspended) ||
               !next.motivoReemplazo?.trim() ||
               next.motivoReemplazo !== suspended.motivoReemplazo ||

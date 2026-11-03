@@ -174,7 +174,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
         type: 'action',
         title: 'Ver Calendario Mensual',
         subtitle: 'Cuadrícula general de actividades y ocupación',
-        badge: 'Vista',
+        badge: 'Atajo: Alt+1',
         badgeColor: 'slate',
         icon: <Calendar className="w-4 h-4 text-indigo-600" />,
         onSelect: () => {
@@ -187,7 +187,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
         type: 'action',
         title: 'Ver Uso Diario / Cronograma',
         subtitle: 'Línea de tiempo horaria por cancha y sala',
-        badge: 'Vista',
+        badge: 'Atajo: Alt+1',
         badgeColor: 'slate',
         icon: <Clock className="w-4 h-4 text-cyan-600" />,
         onSelect: () => {
@@ -261,6 +261,22 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
         }
       }
     ];
+
+    if (onNavigateToDate) {
+      systemActions.splice(1, 0, {
+        id: 'action-go-today',
+        type: 'action',
+        title: 'Ir al Día de Hoy',
+        subtitle: 'Saltar inmediatamente a la fecha actual en la agenda',
+        badge: 'Atajo: Alt+T',
+        badgeColor: 'emerald',
+        icon: <Calendar className="w-4 h-4 text-emerald-600" />,
+        onSelect: () => {
+          onClose();
+          onNavigateToDate(new Date());
+        }
+      });
+    }
 
     if (onOpenPrintModal) {
       systemActions.push({
@@ -368,7 +384,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
           title: formatDisplayTitle(r.tipoActividad || r.descripcion || 'Reserva sin título'),
           subtitle: `${formatDisplayTitle(r.responsable)}${r.rut ? ` (${r.rut})` : ''} • ${formatDisplayTitle(r.espacio)}`,
           metadata: `${dateLabel} • ${r.horaInicio} - ${r.horaFin}`,
-          badge: isRecurrente ? 'Recurrente' : undefined,
+          badge: r.reemplazaReservaId ? '🔄 Reemplazo' : isRecurrente ? 'Recurrente' : undefined,
           badgeColor: isRecurrente ? 'purple' : undefined,
           icon: <Calendar className="w-4 h-4 text-blue-600" />,
           onSelect: () => {

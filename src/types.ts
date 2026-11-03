@@ -14,6 +14,7 @@ export interface Reservation {
   reemplazaReservaId?: string;
   reemplazadaPorReservaId?: string;
   motivoReemplazo?: string;
+  diasAvisoReemplazo?: number;
   fecha: string; // YYYY-MM-DD
   horaInicio: string; // HH:mm
   horaFin: string; // HH:mm

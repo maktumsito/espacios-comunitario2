@@ -225,6 +225,9 @@ const CalendarEventTag = memo<CalendarEventTagProps>(({
       {reservation.solicitudEliminacion && !isCancelled && (
         <span className="shrink-0 text-xs" title="Solicitud de eliminación en espera">⏳</span>
       )}
+      {reservation.reemplazaReservaId && !isCancelled && (
+        <span className="shrink-0 text-xs" title="Reemplazo por el día">🔄</span>
+      )}
       <span className="truncate">{displayTitle}</span>
 
       {/* Floating Detailed Hover Tooltip */}

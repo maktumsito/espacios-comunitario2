@@ -31,6 +31,7 @@ import { format } from 'date-fns';
 import { CommitmentLetterModal } from './CommitmentLetterModal';
 import { MergeReservationsModal } from './MergeReservationsModal';
 import { getPhoneContactActions } from '../utils/phoneUtils';
+import { buildReplacementWhatsAppHref } from './ReplacementReminderModal';
 import { CommitmentLetterCard } from './CommitmentLetterCard';
 import { isCommitmentLetterEligible } from '../utils/commitmentLetterPdf';
 import { checkLoanScheduleLimit } from '../utils/validationUtils';
@@ -240,6 +241,33 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                 <div className="mt-2 text-xs text-indigo-800 space-y-1">
                   <p>{reservation.reemplazaReservaId ? 'Actividad excepcional: reemplaza una sesión recurrente.' : 'Esta sesión fue suspendida por una actividad excepcional.'}</p>
                   <p>Motivo: {reservation.motivoReemplazo}</p>
+                  {(() => {
+                    const relatedId = reservation.reemplazaReservaId || reservation.reemplazadaPorReservaId;
+                    const relatedRes = relatedId ? allReservations.find(r => r.id === relatedId) : undefined;
+                    if (!relatedRes) return null;
+                    const isReplacement = Boolean(reservation.reemplazaReservaId);
+                    const replacementRecord = isReplacement ? reservation : relatedRes;
+                    const originalRecord = isReplacement ? relatedRes : reservation;
+                    const otherWaHref = buildReplacementWhatsAppHref(
+                      relatedRes.telefonoContacto,
+                      isReplacement ? 'original' : 'replacement',
+                      replacementRecord,
+                      originalRecord
+                    );
+                    return (
+                      <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] text-indigo-900">
+                        <span>
+                          <strong>{isReplacement ? 'Cede el espacio:' : 'Reemplazada por:'}</strong>{' '}
+                          {formatDisplayTitle(relatedRes.descripcion || relatedRes.tipoActividad)} ({formatDisplayTitle(relatedRes.responsable)})
+                        </span>
+                        {otherWaHref && (
+                          <a href={otherWaHref} target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px]">
+                            WhatsApp involucrado
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {onViewRelated && <button type="button" className="underline font-semibold cursor-pointer"
                     onClick={() => void onViewRelated(reservation.reemplazaReservaId || reservation.reemplazadaPorReservaId!)}>
                     {reservation.reemplazaReservaId ? 'Ver actividad original' : 'Ver reemplazo'}
