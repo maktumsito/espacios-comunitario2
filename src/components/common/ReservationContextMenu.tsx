@@ -103,6 +103,8 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
   onDeleteDay
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [coords, setCoords] = useState<{ left: number; top: number }>({ left: x, top: y });
 
   const canCreate = userCanCreateReservations(currentUser);
@@ -123,35 +125,41 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
 
   // Clamp menu inside viewport
   useLayoutEffect(() => {
-    const el = menuRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const padding = 10;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const updatePosition = () => {
+      const el = menuRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const padding = 10;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
 
-    let nextLeft = x;
-    let nextTop = y;
+      let nextLeft = x;
+      let nextTop = y;
 
-    if (nextLeft + rect.width > vw - padding) {
-      nextLeft = Math.max(padding, vw - rect.width - padding);
-    }
-    if (nextTop + rect.height > vh - padding) {
-      nextTop = Math.max(padding, vh - rect.height - padding);
-    }
+      if (nextLeft + rect.width > vw - padding) {
+        nextLeft = Math.max(padding, vw - rect.width - padding);
+      }
+      if (nextTop + rect.height > vh - padding) {
+        nextTop = Math.max(padding, vh - rect.height - padding);
+      }
 
-    setCoords({ left: nextLeft, top: nextTop });
+      setCoords({ left: nextLeft, top: nextTop });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    return () => window.removeEventListener('resize', updatePosition);
   }, [x, y, reservation?.id, targetDateStr, targetSpaceName, targetStartTime]);
 
-  // Focus first item on mount and handle outside click, Escape, scroll, and arrow keys
+  // Focus first item on mount and handle outside click, Escape, and arrow keys
   useEffect(() => {
     const menuEl = menuRef.current;
     const firstBtn = menuEl?.querySelector<HTMLElement>('[role="menuitem"]');
     firstBtn?.focus({ preventScroll: true });
 
     const handlePointerDown = (e: MouseEvent) => {
+      if (e.button === 2) return;
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
+        onCloseRef.current();
       }
     };
 
@@ -159,7 +167,7 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -171,26 +179,18 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
         const nextIndex = currentIndex === -1
           ? 0
           : (currentIndex + delta + items.length) % items.length;
-        items[nextIndex]?.focus();
+        items[nextIndex]?.focus({ preventScroll: true });
       }
-    };
-
-    const handleScrollOrResize = () => {
-      onClose();
     };
 
     document.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('keydown', handleKeyDown, true);
-    window.addEventListener('scroll', handleScrollOrResize, true);
-    window.addEventListener('resize', handleScrollOrResize);
 
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown, true);
-      window.removeEventListener('scroll', handleScrollOrResize, true);
-      window.removeEventListener('resize', handleScrollOrResize);
     };
-  }, [onClose]);
+  }, []);
 
   const runAction = (action: () => void) => {
     onClose();

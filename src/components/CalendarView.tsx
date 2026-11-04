@@ -272,7 +272,7 @@ interface CalendarDayCellProps {
   isCurrentMonth: boolean;
   isDayToday: boolean;
   holidayInfo: ChileanHoliday | null;
-  onSelectDay: (day: Date) => void;
+  onSelectDay: (day: Date, shouldScroll?: boolean) => void;
   onNavigateToDay?: (day: Date) => void;
   onSelectReservation: (reserva: Reservation) => void;
   getSpaceColor: (spaceName: string) => string;
@@ -301,7 +301,7 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
   }, [onSelectDay, day]);
 
   const handleCellContextMenu = useCallback(() => {
-    onSelectDay(day);
+    onSelectDay(day, false);
   }, [onSelectDay, day]);
 
   const handleDoubleClick = useCallback(() => {
@@ -801,10 +801,10 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   }, [onVisibleMonthChange]);
 
   const agendaRef = useRef<HTMLDivElement>(null);
-  const handleSelectDay = useCallback((day: Date) => {
+  const handleSelectDay = useCallback((day: Date, shouldScroll = true) => {
     setSelectedDay(day);
     onSelectedDateChange?.(day);
-    if (window.innerWidth < 1280) agendaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    if (shouldScroll && window.innerWidth < 1280) agendaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }, [onSelectedDateChange]);
 
   return (

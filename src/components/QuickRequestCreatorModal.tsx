@@ -263,7 +263,6 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
       onClose={() => {
         if (!isSaving) onClose();
       }}
-      closeOnBackdrop={!isSaving}
       aria-label="Crear reserva automática desde solicitud escrita"
       className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150"
     >
