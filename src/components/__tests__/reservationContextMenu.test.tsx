@@ -220,7 +220,7 @@ describe('ReservationContextMenu', () => {
         defaultStartTime="10:00"
         defaultEndTime="11:30"
         availableSpaces={[
-          { id: 'sp-1', name: 'AUDITORIO', capacity: 80, color: '#2563eb', enabled: true }
+          { id: 'sp-1', name: 'AUDITORIO', capacity: 80, color: '#2563eb', activo: true, category: 'Eventos', iconName: 'Building2', description: '' }
         ]}
         allReservations={[]}
         onCreateDirectly={onCreateDirectly}
