@@ -1,4 +1,5 @@
 import type { AdditionalSpaceSlot } from '../types';
+import type { ParsedReservationRequest } from '../utils/requestTextParser';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { getEnabledSpaces } from '../utils/spaceAvailability';
 import { ModalOverlay } from './common/ModalOverlay';
@@ -85,6 +86,8 @@ interface ReservationModalProps {
   initialRut?: string;
   initialPhone?: string;
   initialEmail?: string;
+  initialParsedRequest?: ParsedReservationRequest | null;
+  onOpenQuickRequest?: () => void;
   currentUser?: AuthUser | null;
 }
 
@@ -113,6 +116,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   initialRut,
   initialPhone,
   initialEmail,
+  initialParsedRequest,
+  onOpenQuickRequest,
   currentUser
 }) => {
   const availableSpaces = useMemo(() => getEnabledSpaces(spaceCatalog), [spaceCatalog]);
@@ -577,7 +582,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) { initializedFormKey.current = null; return; }
-    const key = JSON.stringify([editingReservation?.id || replacementSource?.id || 'new', isDuplicating, initialDate, initialSpace, initialStartTime, initialEndTime]);
+    const key = JSON.stringify([editingReservation?.id || replacementSource?.id || 'new', isDuplicating, initialDate, initialSpace, initialStartTime, initialEndTime, initialParsedRequest]);
     if (initializedFormKey.current === key) return;
     initializedFormKey.current = key;
     setInitialFormBaseline(null);
@@ -752,39 +757,40 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
       setFormData({
         id: replacementSource ? replacementId.current : `RSV_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
-        fecha: initD,
-        horaInicio: safeInitStartTime,
-        horaFin: safeInitEndTime,
-        espacio: defaultSpace,
-        responsable: initialResponsable || '',
-        telefonoContacto: initialPhone || '',
-        emailContacto: initialEmail || '',
-        tipoActividad: defAct,
-        tipoPrestamo: defLoan,
-        descripcion: '',
-        actividadRecurrente: 'No',
-        diasSemana: 'lunes,miercoles',
-        fechaInicioRecurrencia: initD,
-        fechaFinRecurrencia: format(addMonths(new Date(), 3), 'yyyy-MM-dd'),
-        cantidadParticipantes: 15,
+        fecha: initialParsedRequest?.fecha || initD,
+        horaInicio: initialParsedRequest?.horaInicio || safeInitStartTime,
+        horaFin: initialParsedRequest?.horaFin || safeInitEndTime,
+        espacio: initialParsedRequest?.espacio || defaultSpace,
+        responsable: initialParsedRequest?.responsable || initialResponsable || '',
+        telefonoContacto: initialParsedRequest?.telefonoContacto || initialPhone || '',
+        emailContacto: initialParsedRequest?.emailContacto || initialEmail || '',
+        tipoActividad: initialParsedRequest?.tipoActividad || defAct,
+        tipoPrestamo: initialParsedRequest?.tipoPrestamo || defLoan,
+        descripcion: initialParsedRequest?.descripcion || '',
+        actividadRecurrente: initialParsedRequest?.bookingMode === 'pattern' ? 'Sí' : 'No',
+        diasSemana: initialParsedRequest?.diasSemana || 'lunes,miercoles',
+        fechaInicioRecurrencia: initialParsedRequest?.recurrenceStartDate || initD,
+        fechaFinRecurrencia: initialParsedRequest?.recurrenceEndDate || format(addMonths(new Date(), 3), 'yyyy-MM-dd'),
+        cantidadParticipantes: initialParsedRequest?.cantidadParticipantes || 15,
         realizada: 'No',
         importante: 'No',
-        comentarios: '',
-        rut: initialRut || '',
-        domicilio: '',
+        comentarios: initialParsedRequest?.comentarios || '',
+        rut: initialParsedRequest?.rut || initialRut || '',
+        domicilio: initialParsedRequest?.domicilio || '',
+        montaje: initialParsedRequest?.montaje,
         terminaDiaSiguiente: Boolean(replacementSource?.terminaDiaSiguiente),
         horarioExtendidoAutorizado: false,
         claveAutorizacion: '',
         autorizadoPor: '',
-        requiereCartaCompromiso: isCommitmentLetterEligible(defAct, defLoan),
-        equipamientoSolicitado: []
+        requiereCartaCompromiso: initialParsedRequest?.requiereCartaCompromiso ?? isCommitmentLetterEligible(defAct, defLoan),
+        equipamientoSolicitado: initialParsedRequest?.equipamientoSolicitado || []
       });
-      setBookingMode('single');
-      setSpecificDates([initD]);
+      setBookingMode(initialParsedRequest?.bookingMode || 'single');
+      setSpecificDates([initialParsedRequest?.fecha || initD]);
       setDateInputToAdd('');
-      setRecurrenceStartDate(initD);
-      setRecurrenceEndDate(format(addMonths(new Date(), 3), 'yyyy-MM-dd'));
-      setSelectedDays([initDayNum]);
+      setRecurrenceStartDate(initialParsedRequest?.recurrenceStartDate || initD);
+      setRecurrenceEndDate(initialParsedRequest?.recurrenceEndDate || format(addMonths(new Date(), 3), 'yyyy-MM-dd'));
+      setSelectedDays(initialParsedRequest?.selectedDays?.length ? initialParsedRequest.selectedDays : [initDayNum]);
       setGenerateFullSeries(true);
       setAllowConflictOverride(false);
       setShowConflictDialog(false);
@@ -800,7 +806,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       const defaultDaySlot = { horaInicio: safeInitStartTime, horaFin: safeInitEndTime, espacio: defaultSpace, hasSecondSlot: false, secondHoraInicio: safeInitEndTime, secondHoraFin: formatMinutesToTime(Math.min(1439, timeToMinutes(safeInitEndTime) + 60)), secondEspacio: defaultSecondSpace };
       setDaySchedules(Object.fromEntries([1, 2, 3, 4, 5, 6, 0].map(d => [d, { ...defaultDaySlot }])));
     }
-  }, [editingReservation, isDuplicating, initialDate, initialSpace, initialStartTime, initialEndTime, isOpen, availableSpaces, availableLoanTypes, availableActivityTypes]);
+  }, [editingReservation, isDuplicating, initialDate, initialSpace, initialStartTime, initialEndTime, initialParsedRequest, isOpen, availableSpaces, availableLoanTypes, availableActivityTypes]);
 
   // Synchronize start date if primary date changes
   const handlePrimaryDateChange = (newDate: string) => {
@@ -1309,6 +1315,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
           editingReservation={editingReservation}
           isWizardMode={isWizardMode}
           setIsWizardMode={setIsWizardMode}
+          onOpenQuickRequest={onOpenQuickRequest}
           onClose={() => { if (!isSubmittingRef.current) onClose(); }}
         />
 

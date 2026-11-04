@@ -1,6 +1,6 @@
 import { formatDisplayTitle } from "../utils/reservationVisuals";
 import React from "react";
-import { SlidersHorizontal, X } from "lucide-react";
+import { SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { Reservation } from "../types";
 
 interface ReservationModalHeaderProps {
@@ -9,6 +9,7 @@ interface ReservationModalHeaderProps {
   editingReservation?: Reservation | null;
   isWizardMode: boolean;
   setIsWizardMode: React.Dispatch<React.SetStateAction<boolean>>;
+  onOpenQuickRequest?: () => void;
   onClose: () => void;
 }
 
@@ -20,6 +21,7 @@ export const ReservationModalHeader: React.FC<ReservationModalHeaderProps> =
       editingReservation,
       isWizardMode,
       setIsWizardMode,
+      onOpenQuickRequest,
       onClose,
     }) => {
       return (
@@ -44,6 +46,18 @@ export const ReservationModalHeader: React.FC<ReservationModalHeaderProps> =
             </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+            {!replacementMode && !editingReservation && onOpenQuickRequest && (
+              <button
+                type="button"
+                id="btn-modal-open-quick-request"
+                onClick={onOpenQuickRequest}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-indigo-400/40 bg-indigo-500/20 px-2.5 py-1.5 text-xs font-semibold text-indigo-100 transition-colors hover:bg-indigo-500/30 sm:px-3 cursor-pointer"
+                title="Pegar o escribir solicitud para autocompletar o crear en un clic"
+              >
+                <Sparkles className="h-4 w-4 text-indigo-300 shrink-0" />
+                <span>Pegar solicitud</span>
+              </button>
+            )}
             {!replacementMode && (
               <button
                 type="button"
