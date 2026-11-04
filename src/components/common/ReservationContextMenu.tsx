@@ -210,7 +210,7 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
         zIndex: 120
       }}
       onContextMenu={(e) => e.preventDefault()}
-      className="w-72 rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-900/5 overflow-hidden animate-in fade-in zoom-in-95 duration-100 select-none"
+      className="w-72 max-h-[calc(100dvh-20px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-900/5 animate-in fade-in zoom-in-95 duration-100 select-none"
     >
       {/* Compact Header Summary */}
       <div className="bg-slate-50/90 px-3.5 py-2.5 border-b border-slate-200/80 space-y-1">
@@ -423,7 +423,7 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
         zIndex: 120
       }}
       onContextMenu={(e) => e.preventDefault()}
-      className="w-72 rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-900/5 overflow-hidden animate-in fade-in zoom-in-95 duration-100 select-none"
+      className="w-72 max-h-[calc(100dvh-20px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-900/5 animate-in fade-in zoom-in-95 duration-100 select-none"
     >
       {/* Calendar Context Header */}
       <div className="bg-slate-50/90 px-3.5 py-2.5 border-b border-slate-200/80 space-y-1">

@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReservationContextMenu } from '../common/ReservationContextMenu';
+import { QuickRequestCreatorModal } from '../QuickRequestCreatorModal';
 import type { Reservation } from '../../types';
 import type { AuthUser } from '../../services/authService';
 
@@ -173,5 +174,75 @@ describe('ReservationContextMenu', () => {
       endTime: '12:00'
     });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('triggers onOpenQuickRequest from calendar context menu and renders QuickRequestCreatorModal as a fixed viewport overlay', () => {
+    const onClose = vi.fn();
+    const onOpenQuickRequest = vi.fn();
+
+    render(
+      <ReservationContextMenu
+        reservation={null}
+        calendarContext={{
+          dateStr: '2026-11-20',
+          spaceName: 'AUDITORIO',
+          startTime: '10:00',
+          endTime: '11:30',
+          viewMode: 'calendar'
+        }}
+        x={200}
+        y={220}
+        currentUser={adminUser}
+        onClose={onClose}
+        onOpenQuickRequest={onOpenQuickRequest}
+      />
+    );
+
+    const quickBtn = screen.getByText('Crear desde texto de solicitud...');
+    fireEvent.click(quickBtn);
+    expect(onOpenQuickRequest).toHaveBeenCalledWith({
+      date: '2026-11-20',
+      space: 'AUDITORIO',
+      startTime: '10:00',
+      endTime: '11:30'
+    });
+
+    const onCreateDirectly = vi.fn();
+    const onOpenInFullForm = vi.fn();
+    const onModalClose = vi.fn();
+
+    render(
+      <QuickRequestCreatorModal
+        isOpen={true}
+        onClose={onModalClose}
+        defaultDate="2026-11-20"
+        defaultSpace="AUDITORIO"
+        defaultStartTime="10:00"
+        defaultEndTime="11:30"
+        availableSpaces={[
+          { id: 'sp-1', name: 'AUDITORIO', capacity: 80, color: '#2563eb', enabled: true }
+        ]}
+        allReservations={[]}
+        onCreateDirectly={onCreateDirectly}
+        onOpenInFullForm={onOpenInFullForm}
+      />
+    );
+
+    const dialog = screen.getByRole('dialog', {
+      name: 'Crear reserva automática desde solicitud escrita'
+    });
+    expect(dialog.className).toContain('fixed');
+    expect(dialog.className).toContain('inset-0');
+
+    const textarea = screen.getByLabelText(/Escribe o pega la solicitud/i);
+    fireEvent.change(textarea, {
+      target: {
+        value:
+          'Juan Pérez (RUT 12.345.678-5, tel +56912345678, juan@lascondes.cl) solicita Auditorio para Reunión Vecinal el 20-11-2026 de 10:00 a 11:30 para 30 personas'
+      }
+    });
+
+    fireEvent.click(screen.getByText('Crear Reserva Automáticamente'));
+    expect(onCreateDirectly).toHaveBeenCalledTimes(1);
   });
 });

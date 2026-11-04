@@ -10,7 +10,7 @@ interface ModalOverlayProps extends HTMLAttributes<HTMLDivElement> {
 
 /** Shared behavior for custom modal layouts and BaseModal. Mount only while open. */
 export const ModalOverlay = forwardRef<HTMLDivElement, ModalOverlayProps>(function ModalOverlay(
-  { onClose, closeOnBackdrop = false, onClick, children, style, ...props }, forwardedRef,
+  { onClose, closeOnBackdrop = false, onClick, children, style, className = 'fixed inset-0 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto', ...props }, forwardedRef,
 ) {
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -27,7 +27,7 @@ export const ModalOverlay = forwardRef<HTMLDivElement, ModalOverlayProps>(functi
     }
     return registerModal({ ...entry, element, close: () => closeRef.current() });
   }, [entry, id]);
-  return createPortal(<div {...props} ref={element => {
+  return createPortal(<div {...props} className={className} ref={element => {
     ref.current = element;
     if (typeof forwardedRef === 'function') forwardedRef(element);
     else if (forwardedRef) forwardedRef.current = element;

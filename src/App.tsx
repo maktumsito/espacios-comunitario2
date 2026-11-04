@@ -563,6 +563,7 @@ export default function App() {
       import('./components/ReservationModal');
       import('./components/ReservationDetailModal');
       import('./components/GlobalCommandPalette');
+      import('./components/QuickRequestCreatorModal');
     };
     if (typeof window !== 'undefined') {
       if ('requestIdleCallback' in window) {

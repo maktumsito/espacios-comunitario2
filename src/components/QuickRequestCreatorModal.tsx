@@ -259,8 +259,15 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
   };
 
   return (
-    <ModalOverlay onClose={onClose} aria-label="Crear reserva automática desde solicitud escrita">
-      <div className="w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92dvh] animate-in fade-in zoom-in-95 duration-150">
+    <ModalOverlay
+      onClose={() => {
+        if (!isSaving) onClose();
+      }}
+      closeOnBackdrop={!isSaving}
+      aria-label="Crear reserva automática desde solicitud escrita"
+      className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150"
+    >
+      <div className="relative my-auto w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92dvh] animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <header className="bg-slate-900 px-5 py-4 text-white flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
