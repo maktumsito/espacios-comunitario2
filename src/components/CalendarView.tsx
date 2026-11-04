@@ -283,6 +283,7 @@ interface CalendarDayCellProps {
  */
 const CalendarDayCell = memo<CalendarDayCellProps>(({
   day,
+  dateStr,
   dayReservations,
   dayBlocks = [],
   isSelected,
@@ -296,6 +297,10 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
 }) => {
   const { getReservationTypeVisual } = useReservationVisuals();
   const handleCellClick = useCallback(() => {
+    onSelectDay(day);
+  }, [onSelectDay, day]);
+
+  const handleCellContextMenu = useCallback(() => {
     onSelectDay(day);
   }, [onSelectDay, day]);
 
@@ -325,7 +330,9 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
     <div
       role="button"
       tabIndex={0}
+      data-calendar-date={dateStr}
       onClick={handleCellClick}
+      onContextMenu={handleCellContextMenu}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
       aria-pressed={isSelected}
@@ -547,7 +554,7 @@ const SelectedDayAgenda = memo<SelectedDayAgendaProps>(({
   }, [onNavigateToDay, selectedDay]);
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3 shadow-xs space-y-2.5">
+    <div data-calendar-date={selectedDayStr} className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3 shadow-xs space-y-2.5">
       <div className={`flex flex-col items-start justify-between gap-2 ${isExpanded ? 'pb-2.5 border-b border-slate-200' : ''}`}>
         <div>
           <div className="flex items-center flex-wrap gap-2">
@@ -801,7 +808,11 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   }, [onSelectedDateChange]);
 
   return (
-    <div className="w-full h-full mx-auto p-0.5 sm:p-1.5 space-y-2 flex flex-col flex-1">
+    <div
+      data-calendar-surface="monthly"
+      data-calendar-date={selectedDayStr}
+      className="w-full h-full mx-auto p-0.5 sm:p-1.5 space-y-2 flex flex-col flex-1"
+    >
       {/* Calendar Header Navigation */}
       <CalendarHeader
         currentDate={currentDate}

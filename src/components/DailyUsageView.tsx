@@ -904,7 +904,11 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   const gridMinWidth = timeColumnWidth + [...columnWidths.values()].reduce((sum, width) => sum + width, 0);
 
   return (
-    <div className="w-full min-w-0 space-y-1.5 pb-1 relative">
+    <div
+      data-calendar-surface="daily"
+      data-calendar-date={dateStr}
+      className="w-full min-w-0 space-y-1.5 pb-1 relative"
+    >
       {/* Toast Notification Banner */}
       {toastMessage && (
         <NotificationPortal><div className="fixed top-20 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 flex items-center space-x-3 animate-in fade-in slide-in-from-top-4 duration-200">
@@ -1304,6 +1308,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                 return (
                   <div
                     key={space.id}
+                    data-calendar-space={space.name}
+                    data-calendar-date={dateStr}
                     style={{ minWidth: columnWidths.get(space.id) }}
                     draggable={allowSpaceReorder}
                     onDragStart={(e) => handleHeaderDragStart(e, idx)}
@@ -1461,6 +1467,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                       key={space.id}
                       style={{ minWidth: columnWidths.get(space.id), containerType: 'inline-size' }}
                       data-drop-space={space.name}
+                      data-calendar-space={space.name}
+                      data-calendar-date={dateStr}
                       onDragOver={(e) => handleColumnDragOver(e, space.name)}
                       onDragLeave={(e) => {
                         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
@@ -1489,6 +1497,10 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                           <button
                             type="button"
                             key={h}
+                            data-calendar-date={dateStr}
+                            data-calendar-space={space.name}
+                            data-calendar-start={startH}
+                            data-calendar-end={endH}
                             style={{ top: `${topPx}px`, height: `${HOUR_HEIGHT}px` }}
                             onKeyDown={event => {
                               if (event.key !== 'Tab') return;

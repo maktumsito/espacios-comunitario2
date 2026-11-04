@@ -116,4 +116,62 @@ describe('ReservationContextMenu', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('renders calendar context menu actions when right-clicking anywhere on the calendar outside a reservation', () => {
+    const onClose = vi.fn();
+    const onCreateReservation = vi.fn();
+    const onNavigateToDay = vi.fn();
+    const onGoToday = vi.fn();
+    const onOpenPrintModal = vi.fn();
+    const onOpenGmailDispatch = vi.fn();
+    const onOpenCommandPalette = vi.fn();
+    const onToggleFilters = vi.fn();
+    const onDeleteDay = vi.fn();
+
+    render(
+      <ReservationContextMenu
+        reservation={null}
+        calendarContext={{
+          dateStr: '2026-10-15',
+          spaceName: 'AUDITORIO',
+          startTime: '11:00',
+          endTime: '12:00',
+          viewMode: 'calendar'
+        }}
+        x={200}
+        y={220}
+        currentUser={adminUser}
+        isFilterBarOpen={false}
+        onClose={onClose}
+        onCreateReservation={onCreateReservation}
+        onNavigateToDay={onNavigateToDay}
+        onGoToday={onGoToday}
+        onOpenPrintModal={onOpenPrintModal}
+        onOpenGmailDispatch={onOpenGmailDispatch}
+        onOpenCommandPalette={onOpenCommandPalette}
+        onToggleFilters={onToggleFilters}
+        onDeleteDay={onDeleteDay}
+      />
+    );
+
+    expect(screen.getByRole('menu')).toBeTruthy();
+    expect(screen.getByText('15-10-2026')).toBeTruthy();
+    expect(screen.getByText('Nueva reserva en Auditorio (11:00)')).toBeTruthy();
+    expect(screen.getByText('Ver vista diaria de esta fecha')).toBeTruthy();
+    expect(screen.getByText('Ir al día de hoy')).toBeTruthy();
+    expect(screen.getByText('Imprimir / PDF programación del día')).toBeTruthy();
+    expect(screen.getByText('Enviar programación por Gmail')).toBeTruthy();
+    expect(screen.getByText('Buscar en la agenda (Ctrl+K)')).toBeTruthy();
+    expect(screen.getByText('Mostrar filtros de agenda')).toBeTruthy();
+    expect(screen.getByText('Eliminar reservas del día')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Nueva reserva en Auditorio (11:00)'));
+    expect(onCreateReservation).toHaveBeenCalledWith({
+      date: '2026-10-15',
+      space: 'AUDITORIO',
+      startTime: '11:00',
+      endTime: '12:00'
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

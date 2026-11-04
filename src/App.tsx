@@ -9,7 +9,7 @@ import {
 } from './services/reservationService';
 import { fetchReservationById } from './services/reservationService';
 import { queryReservationsBySeries } from './services/reservationService';
-import { getChileLocalDateString } from './utils/dateUtils';
+import { getChileLocalDateString, parseDateToNoon } from './utils/dateUtils';
 import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from './utils/spaceAvailability';
 import { canReplaceOccurrence } from './utils/reservationReplacement';
 import { useReplacementReminders } from './hooks/useReplacementReminders';
@@ -17,7 +17,7 @@ import { getDueReplacementReminders } from './utils/replacementReminders';
 import { isRecurringSeriesReservation } from './utils/recurringEdits';
 import { PendingReservationOperations } from './components/PendingReservationOperations';
 import { DeleteDayReservationsModal } from './components/DeleteDayReservationsModal';
-import { ReservationContextMenu } from './components/common/ReservationContextMenu';
+import { ReservationContextMenu, CalendarContextTarget } from './components/common/ReservationContextMenu';
 import { getTopmostDialog } from './utils/dialogKeyboard';
 import { Navbar } from './components/Navbar';
 import { AgendaToolbar } from './components/AgendaToolbar';
@@ -120,7 +120,12 @@ export default function App() {
   const closingSession = useRef(false);
   const [pendingSeriesMove, setPendingSeriesMove] = useState<{ original: Reservation; target: Reservation; resolve: (result: boolean) => void } | null>(null);
   const [replacementSource, setReplacementSource] = useState<Reservation | null>(null);
-  const [contextMenuState, setContextMenuState] = useState<{ reservation: Reservation; x: number; y: number } | null>(null);
+  const [contextMenuState, setContextMenuState] = useState<{
+    reservation?: Reservation | null;
+    calendarContext?: CalendarContextTarget | null;
+    x: number;
+    y: number;
+  } | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [sessionChanged, setSessionChanged] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
@@ -417,25 +422,77 @@ export default function App() {
 
   const reservationsRef = useRef(reservations);
   reservationsRef.current = reservations;
+  const currentViewRef = useRef(currentView);
+  currentViewRef.current = currentView;
+  const selectedDailyDateRef = useRef(selectedDailyDate);
+  selectedDailyDateRef.current = selectedDailyDate;
 
   useEffect(() => {
     if (!currentUser) {
       setContextMenuState(null);
       return;
     }
+
+    const extractCalendarContext = (target: Element | null): CalendarContextTarget | null => {
+      if (!target) return null;
+      if (target.closest('input, textarea, select, [contenteditable="true"]')) {
+        return null;
+      }
+      const surfaceEl = target.closest('[data-calendar-surface], [data-calendar-date], [data-drop-space]');
+      const inMainAgenda = isAgendaView(currentViewRef.current) && Boolean(target.closest('#main-content'));
+      if (!surfaceEl && !inMainAgenda) return null;
+
+      const dateEl = target.closest('[data-calendar-date]');
+      const dateStr =
+        dateEl?.getAttribute('data-calendar-date') ||
+        format(selectedDailyDateRef.current || new Date(), 'yyyy-MM-dd');
+      const spaceName =
+        target.closest('[data-calendar-space]')?.getAttribute('data-calendar-space') ||
+        target.closest('[data-drop-space]')?.getAttribute('data-drop-space') ||
+        undefined;
+      const startTime =
+        target.closest('[data-calendar-start]')?.getAttribute('data-calendar-start') ||
+        undefined;
+      const endTime =
+        target.closest('[data-calendar-end]')?.getAttribute('data-calendar-end') ||
+        undefined;
+
+      return {
+        dateStr,
+        spaceName,
+        startTime,
+        endTime,
+        viewMode: currentViewRef.current
+      };
+    };
+
     const handleGlobalContextMenu = (e: MouseEvent) => {
       if (getTopmostDialog()) return;
       const target = e.target instanceof Element ? e.target : null;
       const cardEl = target?.closest('[data-reservation-id]') as HTMLElement | null;
-      if (!cardEl) return;
-      const resId = cardEl.getAttribute('data-reservation-id');
-      if (!resId) return;
-      const matched = reservationsRef.current.find((r) => r.id === resId);
-      if (!matched) return;
+      if (cardEl) {
+        const resId = cardEl.getAttribute('data-reservation-id');
+        const matched = resId ? reservationsRef.current.find((r) => r.id === resId) : undefined;
+        if (matched) {
+          e.preventDefault();
+          e.stopPropagation();
+          setContextMenuState({
+            reservation: matched,
+            calendarContext: null,
+            x: e.clientX || 120,
+            y: e.clientY || 120
+          });
+          return;
+        }
+      }
+
+      const calCtx = extractCalendarContext(target);
+      if (!calCtx) return;
       e.preventDefault();
       e.stopPropagation();
       setContextMenuState({
-        reservation: matched,
+        reservation: null,
+        calendarContext: calCtx,
         x: e.clientX || 120,
         y: e.clientY || 120
       });
@@ -446,18 +503,34 @@ export default function App() {
       if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
         const target = e.target instanceof Element ? e.target : document.activeElement;
         const cardEl = target?.closest('[data-reservation-id]') as HTMLElement | null;
-        if (!cardEl) return;
-        const resId = cardEl.getAttribute('data-reservation-id');
-        if (!resId) return;
-        const matched = reservationsRef.current.find((r) => r.id === resId);
-        if (!matched) return;
+        if (cardEl) {
+          const resId = cardEl.getAttribute('data-reservation-id');
+          const matched = resId ? reservationsRef.current.find((r) => r.id === resId) : undefined;
+          if (matched) {
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = cardEl.getBoundingClientRect();
+            setContextMenuState({
+              reservation: matched,
+              calendarContext: null,
+              x: Math.max(16, rect.left + Math.min(rect.width / 2, 120)),
+              y: Math.max(16, rect.top + Math.min(rect.height / 2, 48))
+            });
+            return;
+          }
+        }
+
+        const calCtx = extractCalendarContext(target);
+        if (!calCtx) return;
         e.preventDefault();
         e.stopPropagation();
-        const rect = cardEl.getBoundingClientRect();
+        const anchorEl = (target?.closest('[data-calendar-date], [data-drop-space], [data-calendar-surface]') || target) as HTMLElement | null;
+        const rect = anchorEl?.getBoundingClientRect();
         setContextMenuState({
-          reservation: matched,
-          x: Math.max(16, rect.left + Math.min(rect.width / 2, 120)),
-          y: Math.max(16, rect.top + Math.min(rect.height / 2, 48))
+          reservation: null,
+          calendarContext: calCtx,
+          x: rect ? Math.max(16, rect.left + Math.min(rect.width / 2, 120)) : 120,
+          y: rect ? Math.max(16, rect.top + Math.min(rect.height / 2, 48)) : 120
         });
       }
     };
@@ -1564,11 +1637,21 @@ export default function App() {
       {/* Modals */}
       {contextMenuState && (
         <ReservationContextMenu
-          reservation={reservations.find(r => r.id === contextMenuState.reservation.id) || contextMenuState.reservation}
+          reservation={
+            contextMenuState.reservation
+              ? (reservations.find(r => r.id === contextMenuState.reservation?.id) || contextMenuState.reservation)
+              : null
+          }
+          calendarContext={contextMenuState.calendarContext || null}
           x={contextMenuState.x}
           y={contextMenuState.y}
           currentUser={currentUser}
-          existingRating={ratings.find((rt) => rt.reservationId === contextMenuState.reservation.id) || null}
+          existingRating={
+            contextMenuState.reservation
+              ? (ratings.find((rt) => rt.reservationId === contextMenuState.reservation?.id) || null)
+              : null
+          }
+          isFilterBarOpen={isFilterBarOpen}
           onClose={() => setContextMenuState(null)}
           onViewDetails={(r) => {
             setSelectedReservation(r);
@@ -1612,6 +1695,70 @@ export default function App() {
           onRequestDelete={(r) => {
             requireAuth(() => handleRequestDelete(r), 'eliminar esta reserva');
           }}
+          onCreateReservation={({ date, space, startTime, endTime }) => {
+            requireAuth(() => {
+              if (!userCanCreateReservations(currentUser)) {
+                triggerSyncToast('Permiso denegado: No tienes autorización para registrar nuevas reservas (gestión controlada por Cristian Shute).', 'error');
+                return;
+              }
+              if (!enabledSpaces.length) {
+                triggerSyncToast('No hay espacios activos. Activa o crea un espacio en Administración.', 'warning');
+                return;
+              }
+              setEditingReservation(null);
+              setIsDuplicating(false);
+              setPrefillDate(date);
+              const resolvedSpace =
+                (space && enabledSpaces.some((s) => s.name === space) ? space : undefined) ||
+                (enabledSpaces.some((s) => s.name === filters.espacio) ? filters.espacio : enabledSpaces[0]?.name || '');
+              setPrefillSpace(resolvedSpace);
+              const isEarly = !startTime || startTime < '08:30';
+              const safeStart = isEarly ? '08:30' : startTime;
+              const safeEnd = isEarly
+                ? (endTime && endTime > '08:30' && endTime !== '09:00' ? endTime : '09:30')
+                : (endTime || '10:00');
+              setPrefillStartTime(safeStart);
+              setPrefillEndTime(safeEnd);
+              setIsReservationModalOpen(true);
+            }, 'crear una reserva en esta fecha');
+          }}
+          onNavigateToDay={(dateStr) => {
+            const targetDate = parseDateToNoon(dateStr);
+            setSelectedDailyDate(targetDate);
+            const nextView: ViewMode = isMobileDevice() ? 'mobile' : 'daily';
+            persistViewPreference(nextView);
+            setCurrentView(nextView);
+          }}
+          onSwitchToMonthView={(dateStr) => {
+            const targetDate = parseDateToNoon(dateStr);
+            setSelectedDailyDate(targetDate);
+            persistViewPreference('calendar');
+            setCurrentView('calendar');
+          }}
+          onGoToday={() => {
+            setSelectedDailyDate(new Date());
+          }}
+          onOpenPrintModal={(dateStr) => {
+            setGlobalPrintInitialDate(dateStr);
+            setIsGlobalPrintModalOpen(true);
+          }}
+          onOpenGmailDispatch={(dateStr) => {
+            openGmailDispatchModal(dateStr);
+          }}
+          onOpenCommandPalette={() => {
+            setIsCommandPaletteOpen(true);
+          }}
+          onToggleFilters={() => {
+            setIsFilterBarOpen((prev) => !prev);
+          }}
+          onDeleteDay={
+            userCanDeleteReservations(currentUser)
+              ? (dateStr) => {
+                  setSelectedDailyDate(parseDateToNoon(dateStr));
+                  setIsDeleteDayModalOpen(true);
+                }
+              : undefined
+          }
         />
       )}
       {pendingSeriesMove && <Suspense fallback={null}>

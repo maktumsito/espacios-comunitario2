@@ -15,7 +15,12 @@ import {
   ArrowUpRight,
   Clock,
   MapPin,
-  User
+  User,
+  Plus,
+  Calendar,
+  Printer,
+  Search,
+  Filter
 } from 'lucide-react';
 import { Reservation, SpaceRating } from '../../types';
 import {
@@ -26,17 +31,27 @@ import {
 } from '../../services/authService';
 import { canReplaceOccurrence } from '../../utils/reservationReplacement';
 import { formatDisplayTitle } from '../../utils/reservationVisuals';
-import { formatDateDDMMYYYY } from '../../utils/dateUtils';
+import { formatDateDDMMYYYY, getChileLocalDateString } from '../../utils/dateUtils';
 import { getPhoneContactActions } from '../../utils/phoneUtils';
 
+export interface CalendarContextTarget {
+  dateStr: string;
+  spaceName?: string;
+  startTime?: string;
+  endTime?: string;
+  viewMode?: string;
+}
+
 export interface ReservationContextMenuProps {
-  reservation: Reservation;
+  reservation?: Reservation | null;
+  calendarContext?: CalendarContextTarget | null;
   x: number;
   y: number;
   currentUser?: AuthUser | null;
   existingRating?: SpaceRating | null;
+  isFilterBarOpen?: boolean;
   onClose: () => void;
-  onViewDetails: (reservation: Reservation) => void;
+  onViewDetails?: (reservation: Reservation) => void;
   onEdit?: (reservation: Reservation) => void;
   onReplace?: (reservation: Reservation) => void;
   onDuplicate?: (reservation: Reservation) => void;
@@ -45,14 +60,25 @@ export interface ReservationContextMenuProps {
   onViewRelated?: (relatedId: string) => void;
   onDelete?: (id: string, isSeries?: boolean, seriesId?: string) => void;
   onRequestDelete?: (reservation: Reservation) => void;
+  onCreateReservation?: (params: { date: string; space?: string; startTime?: string; endTime?: string }) => void;
+  onNavigateToDay?: (dateStr: string) => void;
+  onSwitchToMonthView?: (dateStr: string) => void;
+  onGoToday?: () => void;
+  onOpenPrintModal?: (dateStr: string) => void;
+  onOpenGmailDispatch?: (dateStr: string) => void;
+  onOpenCommandPalette?: () => void;
+  onToggleFilters?: () => void;
+  onDeleteDay?: (dateStr: string) => void;
 }
 
 export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
   reservation,
+  calendarContext,
   x,
   y,
   currentUser,
   existingRating,
+  isFilterBarOpen,
   onClose,
   onViewDetails,
   onEdit,
@@ -62,7 +88,16 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
   onOpenRating,
   onViewRelated,
   onDelete,
-  onRequestDelete
+  onRequestDelete,
+  onCreateReservation,
+  onNavigateToDay,
+  onSwitchToMonthView,
+  onGoToday,
+  onOpenPrintModal,
+  onOpenGmailDispatch,
+  onOpenCommandPalette,
+  onToggleFilters,
+  onDeleteDay
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState<{ left: number; top: number }>({ left: x, top: y });
@@ -70,12 +105,18 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
   const canCreate = userCanCreateReservations(currentUser);
   const canEdit = userCanEditReservations(currentUser);
   const canDelete = userCanDeleteReservations(currentUser);
-  const isCancelled = reservation.estado === 'cancelada';
-  const isRealizada = reservation.realizada === 'Sí';
-  const canReplace = canCreate && canEdit && canReplaceOccurrence(reservation);
-  const relatedId = reservation.reemplazadaPorReservaId || reservation.reemplazaReservaId;
-  const phoneActions = getPhoneContactActions(reservation.telefonoContacto);
-  const displayTitle = formatDisplayTitle(reservation.descripcion || reservation.tipoActividad || 'Reserva');
+  const isCancelled = reservation?.estado === 'cancelada';
+  const isRealizada = reservation?.realizada === 'Sí';
+  const canReplace = Boolean(reservation && canCreate && canEdit && canReplaceOccurrence(reservation));
+  const relatedId = reservation?.reemplazadaPorReservaId || reservation?.reemplazaReservaId;
+  const phoneActions = reservation ? getPhoneContactActions(reservation.telefonoContacto) : null;
+  const displayTitle = reservation
+    ? formatDisplayTitle(reservation.descripcion || reservation.tipoActividad || 'Reserva')
+    : 'Opciones del Calendario';
+  const targetDateStr = reservation?.fecha || calendarContext?.dateStr || getChileLocalDateString();
+  const targetSpaceName = calendarContext?.spaceName;
+  const targetStartTime = calendarContext?.startTime;
+  const targetEndTime = calendarContext?.endTime;
 
   // Clamp menu inside viewport
   useLayoutEffect(() => {
@@ -97,7 +138,7 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
     }
 
     setCoords({ left: nextLeft, top: nextTop });
-  }, [x, y, reservation.id]);
+  }, [x, y, reservation?.id, targetDateStr, targetSpaceName, targetStartTime]);
 
   // Focus first item on mount and handle outside click, Escape, scroll, and arrow keys
   useEffect(() => {
@@ -153,7 +194,7 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
     action();
   };
 
-  const menuContent = (
+  const menuContent = reservation ? (
     <div
       ref={menuRef}
       id="reservation-context-menu"
@@ -205,15 +246,17 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
 
       {/* Menu Actions */}
       <div className="p-1.5 space-y-0.5">
-        <button
-          type="button"
-          role="menuitem"
-          onClick={() => runAction(() => onViewDetails(reservation))}
-          className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-800 focus:bg-blue-50 focus:text-blue-800 focus:outline-none transition cursor-pointer"
-        >
-          <Eye className="w-4 h-4 text-blue-600 shrink-0" />
-          <span>Ver detalles completos</span>
-        </button>
+        {onViewDetails && (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => runAction(() => onViewDetails(reservation))}
+            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-800 focus:bg-blue-50 focus:text-blue-800 focus:outline-none transition cursor-pointer"
+          >
+            <Eye className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>Ver detalles completos</span>
+          </button>
+        )}
 
         {canEdit && onEdit && (
           <button
@@ -359,6 +402,183 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
             >
               <Trash2 className="w-4 h-4 text-rose-600 shrink-0" />
               <span>{canDelete ? 'Eliminar reserva' : 'Solicitar eliminación'}</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  ) : (
+    <div
+      ref={menuRef}
+      id="calendar-context-menu"
+      role="menu"
+      aria-label={`Opciones de calendario: ${formatDateDDMMYYYY(targetDateStr)}`}
+      style={{
+        position: 'fixed',
+        left: `${coords.left}px`,
+        top: `${coords.top}px`,
+        zIndex: 120
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+      className="w-72 rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-900/5 overflow-hidden animate-in fade-in zoom-in-95 duration-100 select-none"
+    >
+      {/* Calendar Context Header */}
+      <div className="bg-slate-50/90 px-3.5 py-2.5 border-b border-slate-200/80 space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-extrabold text-slate-900 truncate">
+            {targetSpaceName ? formatDisplayTitle(targetSpaceName) : 'Calendario de Espacios'}
+          </span>
+          <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-800">
+            {formatDateDDMMYYYY(targetDateStr)}
+          </span>
+        </div>
+        {(targetStartTime || targetSpaceName) && (
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-600">
+            {targetStartTime && (
+              <span className="inline-flex items-center gap-1 font-mono font-semibold text-blue-700">
+                <Clock className="w-3 h-3 shrink-0" />
+                {targetStartTime}{targetEndTime ? `–${targetEndTime}` : ''}
+              </span>
+            )}
+            {targetSpaceName && (
+              <span className="inline-flex items-center gap-1 truncate max-w-[155px]">
+                <MapPin className="w-3 h-3 shrink-0 text-slate-400" />
+                {formatDisplayTitle(targetSpaceName)}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Calendar Menu Actions */}
+      <div className="p-1.5 space-y-0.5">
+        {canCreate && onCreateReservation && (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() =>
+              runAction(() =>
+                onCreateReservation({
+                  date: targetDateStr,
+                  space: targetSpaceName,
+                  startTime: targetStartTime,
+                  endTime: targetEndTime
+                })
+              )
+            }
+            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-blue-800 bg-blue-50/50 hover:bg-blue-100/80 focus:bg-blue-100/80 focus:outline-none transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>
+              {targetSpaceName && targetStartTime
+                ? `Nueva reserva en ${formatDisplayTitle(targetSpaceName)} (${targetStartTime})`
+                : targetSpaceName
+                ? `Nueva reserva en ${formatDisplayTitle(targetSpaceName)}`
+                : `Nueva reserva en este día (${formatDateDDMMYYYY(targetDateStr)})`}
+            </span>
+          </button>
+        )}
+
+        {onNavigateToDay && calendarContext?.viewMode === 'calendar' && (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => runAction(() => onNavigateToDay(targetDateStr))}
+            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-800 focus:bg-blue-50 focus:text-blue-800 focus:outline-none transition cursor-pointer"
+          >
+            <Clock className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>Ver vista diaria de esta fecha</span>
+          </button>
+        )}
+
+        {onSwitchToMonthView && calendarContext?.viewMode && calendarContext.viewMode !== 'calendar' && (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => runAction(() => onSwitchToMonthView(targetDateStr))}
+            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-800 focus:bg-blue-50 focus:text-blue-800 focus:outline-none transition cursor-pointer"
+          >
+            <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>Ver calendario mensual</span>
+          </button>
+        )}
+
+        {onGoToday && (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => runAction(() => onGoToday())}
+            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 focus:bg-slate-100 focus:outline-none transition cursor-pointer"
+          >
+            <RotateCcw className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Ir al día de hoy</span>
+          </button>
+        )}
+
+        {(onOpenPrintModal || onOpenGmailDispatch) && (
+          <div className="my-1 border-t border-slate-100 pt-1 space-y-0.5">
+            {onOpenPrintModal && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => runAction(() => onOpenPrintModal(targetDateStr))}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 focus:bg-slate-100 focus:outline-none transition cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-sky-600 shrink-0" />
+                <span>Imprimir / PDF programación del día</span>
+              </button>
+            )}
+            {onOpenGmailDispatch && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => runAction(() => onOpenGmailDispatch(targetDateStr))}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 focus:bg-slate-100 focus:outline-none transition cursor-pointer"
+              >
+                <Mail className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Enviar programación por Gmail</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {(onOpenCommandPalette || onToggleFilters) && (
+          <div className="my-1 border-t border-slate-100 pt-1 space-y-0.5">
+            {onOpenCommandPalette && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => runAction(() => onOpenCommandPalette())}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 focus:bg-slate-100 focus:outline-none transition cursor-pointer"
+              >
+                <Search className="w-4 h-4 text-slate-600 shrink-0" />
+                <span>Buscar en la agenda (Ctrl+K)</span>
+              </button>
+            )}
+            {onToggleFilters && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => runAction(() => onToggleFilters())}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 focus:bg-slate-100 focus:outline-none transition cursor-pointer"
+              >
+                <Filter className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>{isFilterBarOpen ? 'Ocultar filtros de agenda' : 'Mostrar filtros de agenda'}</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {canDelete && onDeleteDay && (
+          <div className="my-1 border-t border-slate-100 pt-1">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => runAction(() => onDeleteDay(targetDateStr))}
+              className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 focus:bg-rose-50 focus:outline-none transition cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>Eliminar reservas del día</span>
             </button>
           </div>
         )}

@@ -606,7 +606,12 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
   };
 
   return (
-    <div id="mobile-agenda-view-container" className="w-full max-w-3xl mx-auto pb-24 text-slate-900 animate-fadeIn">
+    <div
+      id="mobile-agenda-view-container"
+      data-calendar-surface="mobile"
+      data-calendar-date={selectedDayIso}
+      className="w-full max-w-3xl mx-auto pb-24 text-slate-900 animate-fadeIn"
+    >
       {/* 1. TOP MOBILE HEADER & DATE CONTROLS */}
       <header className="relative z-20 bg-[#f7f9fc]/95 backdrop-blur-md border-b border-slate-200/80 px-3.5 py-2.5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -683,6 +688,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                 key={item.iso}
                 type="button"
                 data-selected={isSel ? 'true' : 'false'}
+                data-calendar-date={item.iso}
                 onClick={() => onDateChange(item.date)}
                 className={`min-w-[54px] min-h-[60px] flex flex-col items-center justify-center rounded-xl p-1.5 transition cursor-pointer select-none border ${
                   isSel
