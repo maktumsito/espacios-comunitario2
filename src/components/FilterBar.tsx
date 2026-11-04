@@ -81,8 +81,9 @@ const FilterBarComponent: React.FC<FilterBarProps> = ({
 
   return (
     <section
+      id="reservation-filters"
       aria-label="Filtros de reservas"
-      className="border-b border-slate-200 bg-white px-3 py-4 sm:px-6"
+      className="mb-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5"
       onKeyDown={(event) => {
         if (
           event.key !== "Escape" ||
@@ -98,7 +99,10 @@ const FilterBarComponent: React.FC<FilterBarProps> = ({
     >
       <div className="mx-auto max-w-[1680px] space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-semibold text-slate-900">Filtrar reservas</h2>
+          <div className="space-y-1">
+            <h2 className="font-semibold text-slate-900">Filtrar reservas</h2>
+            <p className="text-sm text-slate-600">Los resultados se actualizan al cambiar los filtros.</p>
+          </div>
           {onClose && (
             <button
               id="btn-close-filterbar"
@@ -244,7 +248,7 @@ const FilterBarComponent: React.FC<FilterBarProps> = ({
               ],
               [
                 "soloRecurrentes",
-                "Series recurrentes",
+                "Actividades que se repiten",
                 "filter-toggle-recurrentes",
               ],
               [

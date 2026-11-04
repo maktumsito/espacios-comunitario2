@@ -35,10 +35,10 @@ export const AgendaToolbar = React.memo(function AgendaToolbar({
   return (
     <section
       aria-label="Vistas de la agenda"
-      className="agenda-controls mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5"
+      className="agenda-controls mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-slate-200 pb-3"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 className="text-base font-bold tracking-tight text-slate-900">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900">
           Agenda
         </h1>
         {view !== "calendar" && onBackToMonth && (
@@ -52,7 +52,7 @@ export const AgendaToolbar = React.memo(function AgendaToolbar({
             <span>Volver al mes</span>
           </button>
         )}
-        <p className="text-xs text-slate-600" aria-live="polite">
+        <p className="text-sm text-slate-600" aria-live="polite" aria-atomic="true">
           {summary}
         </p>
         {upcomingReplacementsCount > 0 && onOpenUpcomingReplacement && (
@@ -114,7 +114,7 @@ export const AgendaToolbar = React.memo(function AgendaToolbar({
           </div>
         )}
         <div
-          className="grid flex-1 grid-cols-3 rounded-lg border border-slate-200 bg-white p-0.5 sm:flex"
+          className="grid flex-1 grid-cols-3 rounded-lg border border-slate-200 bg-white p-1 sm:flex"
           role="group"
           aria-label="Presentación de la agenda"
         >
@@ -133,7 +133,7 @@ export const AgendaToolbar = React.memo(function AgendaToolbar({
                 view === value || (value === "timeline" && view === "daily")
               }
               onClick={() => onViewChange(value)}
-              className={`min-h-11 rounded-md px-3 text-xs font-semibold transition-colors sm:min-h-7 ${view === value || (value === "timeline" && view === "daily") ? "bg-blue-50 text-blue-800" : "text-slate-600 hover:bg-slate-50"}`}
+              className={`min-h-11 rounded-md px-4 text-sm font-semibold transition-colors active:scale-[0.98] ${view === value || (value === "timeline" && view === "daily") ? "bg-blue-50 text-blue-800" : "text-slate-600 hover:bg-slate-50"}`}
             >
               {label}
             </button>
@@ -144,7 +144,8 @@ export const AgendaToolbar = React.memo(function AgendaToolbar({
           type="button"
           onClick={onToggleFilters}
           aria-expanded={filtersOpen}
-          className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold sm:min-h-8 ${hasActiveFilters || filtersOpen ? "border-blue-200 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-700"}`}
+          aria-controls="reservation-filters"
+          className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors active:scale-[0.98] ${hasActiveFilters || filtersOpen ? "border-blue-200 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
         >
           <Filter className="h-4 w-4" />
           Filtros

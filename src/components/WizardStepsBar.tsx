@@ -67,7 +67,7 @@ export const WizardStepsBar: React.FC<WizardStepsBarProps> = React.memo(({
     <nav id="reservation-wizard-stepper" aria-label="Pasos del registro" className="space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
         <p className="font-medium text-slate-700" aria-live="polite">Paso {wizardStep} de 5 <span className="text-slate-400">·</span> {currentStepObj.label}</p>
-        <p className="hidden text-slate-500 sm:block">Los campos con * son obligatorios</p>
+        <p className="text-slate-600">* Campo obligatorio</p>
       </div>
       <ol className="grid grid-cols-5 gap-1 sm:gap-2">
         {steps.map((st) => {
@@ -102,13 +102,13 @@ export const WizardStepsBar: React.FC<WizardStepsBarProps> = React.memo(({
               >
                 {isDone ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : st.num}
               </div>
-              <div className="hidden w-full min-w-0 min-[380px]:block sm:w-auto sm:flex-1">
+              <div className="w-full min-w-0 sm:w-auto sm:flex-1">
                 <span
-                  className={`text-[10px] font-semibold block leading-tight sm:text-xs ${
+                  className={`text-xs font-semibold block leading-tight ${
                     isActive ? 'text-white' : isDone ? 'text-slate-800' : 'text-slate-600'
                   }`}
                 >
-                  <span className="sm:hidden">{st.num === 5 ? 'Revisión' : st.num === 2 ? 'Fecha y lugar' : st.label}</span>
+                  <span className="sm:hidden">{['Qué', 'Cuándo', 'Quién', 'Recursos', 'Revisar'][st.num - 1]}</span>
                   <span className="hidden sm:inline">{st.label}</span>
                 </span>
                 <span

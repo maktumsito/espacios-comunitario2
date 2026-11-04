@@ -98,7 +98,7 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
   return (
     <div id="reservation-step-4-container" className="space-y-4">
       {/* Step Header */}
-      <ReservationSectionHeader title="4. Recursos y Documentación" description="Agrega equipamiento si lo necesitas y revisa los documentos de esta categoría." icon={<Package className="h-4 w-4" />} />
+      <ReservationSectionHeader title="4. Recursos y documentos" description="Agrega los equipos que necesitas. Si se requiere una carta, revísala aquí." icon={<Package className="h-4 w-4" />} />
 
       {/* 1. Selector de Equipamiento */}
       <div className="space-y-1.5">

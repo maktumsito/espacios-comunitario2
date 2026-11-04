@@ -232,6 +232,15 @@ button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visib
   font-size: 1rem;
 }
 .reservation-form .text-xs { font-size: 0.875rem; line-height: 1.25rem; }
+#reservation-filters :is(input, select) { font-size: 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 /* Dense desktop toolbars keep comfortable hit areas on touch screens. */
 @container (max-width: 140px) {
   .timeline-booking { padding: 2px 4px; }

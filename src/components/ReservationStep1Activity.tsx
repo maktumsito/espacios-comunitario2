@@ -37,13 +37,13 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
   return (
     <div id="wizard-step-section-1" className="space-y-4">
       {/* Header of Step 1 */}
-      <ReservationSectionHeader title="1. Identificación y Tipo de Actividad" description="Define el nombre del taller o evento, su categoría y prioridad" icon={<Sparkles className="h-4 w-4" />} />
+      <ReservationSectionHeader title="1. Actividad" description="Escribe el nombre y elige el tipo de actividad." icon={<Sparkles className="h-4 w-4" />} />
 
       {/* Row 1: Nombre de la Actividad */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <label htmlFor="input-reserva-descripcion" className="font-semibold text-slate-700 flex items-center space-x-1.5">
-            <span>Nombre de la Actividad / Taller / Evento *</span>
+            <span>Nombre de la Actividad *</span>
             {formData.descripcion && descriptionValidation.isValid && (
               <span className="text-[10px] text-emerald-600 font-bold flex items-center space-x-0.5">
                 <CheckCircle2 className="w-3 h-3" />
@@ -62,7 +62,6 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
             >
               {formData.descripcion?.length || 0}/{MAX_ACTIVITY_DESCRIPTION_LENGTH}
             </span>
-            <span className="text-slate-400 font-normal">Obligatorio</span>
           </div>
         </div>
         <input
@@ -71,7 +70,9 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
           required
           autoFocus={isWizardMode}
           maxLength={MAX_ACTIVITY_DESCRIPTION_LENGTH}
-          placeholder="Ej: Taller de Danza Árabe, Reunión Junta de Vecinos, Torneo de Futsal..."
+          placeholder="Ej.: Taller de danza"
+          aria-invalid={Boolean(formData.descripcion && !descriptionValidation.isValid)}
+          aria-describedby={formData.descripcion && !descriptionValidation.isValid ? 'activity-name-error' : undefined}
           value={formData.descripcion || ''}
           onChange={(e) => setFormData((prev) => ({ ...prev, descripcion: e.target.value }))}
           className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 shadow-xs font-medium ${
@@ -81,7 +82,7 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
           }`}
         />
         {formData.descripcion && !descriptionValidation.isValid && (
-          <p className="text-[11px] font-semibold text-rose-600">
+          <p id="activity-name-error" role="alert" className="text-sm font-medium text-rose-700">
             {descriptionValidation.error}
           </p>
         )}
@@ -91,7 +92,7 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
       <div className="space-y-1.5">
         <label htmlFor="input-reserva-tipo" className="font-semibold text-slate-700 flex items-center space-x-1.5">
           <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-          <span>Categoría y Tipo de Préstamo *</span>
+          <span>Tipo de actividad *</span>
         </label>
         <select
           id="input-reserva-tipo"
@@ -116,7 +117,7 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
         </select>
         <p className="flex items-center gap-2 text-sm text-slate-600">
           <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: typeVisual.accent }} aria-hidden="true" />
-          Color automático para {typeVisual.label}. Cada tipo tiene un color diferente.
+          Así se verá {typeVisual.label} en la agenda.
         </p>
 
       </div>
@@ -126,9 +127,9 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
         <div className="p-3 bg-amber-50/90 rounded-xl border border-amber-200 flex items-start space-x-2 text-amber-950">
           <FileSignature className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <div className="text-[11px] leading-relaxed">
-            <span className="font-bold">Carta de Compromiso Requerida: </span>
+            <span className="font-bold">Requiere carta de compromiso. </span>
             <span>
-              Esta categoría requiere la emisión de Carta Compromiso comunitaria oficial. Podrás previsualizarla y gestionarla en el Paso 4 (Recursos).
+              Podrás revisarla en el paso 4: Recursos.
             </span>
           </div>
         </div>
@@ -139,12 +140,12 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
         <label className="font-semibold text-slate-700 flex items-center justify-between text-xs">
           <span className="flex items-center space-x-1.5">
             <Star className={`w-3.5 h-3.5 ${formData.importante === 'Sí' ? 'text-amber-500 fill-amber-400' : 'text-slate-400'}`} />
-            <span>Prioridad / Importancia Institucional</span>
+            <span>Destacar actividad</span>
           </span>
           {formData.importante === 'Sí' && (
             <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300 flex items-center space-x-1">
               <Smartphone className="w-2.5 h-2.5" />
-              <span>Notifica Celular</span>
+              <span>Envía aviso</span>
             </span>
           )}
         </label>
@@ -163,11 +164,11 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
               <Star className={`w-4 h-4 ${formData.importante === 'Sí' ? 'fill-white' : ''}`} />
             </div>
             <div className="min-w-0">
-              <span className="text-xs font-bold block truncate">
-                {formData.importante === 'Sí' ? 'Marcada como Actividad destacada' : 'Actividad Normal'}
+              <span className="text-sm font-semibold block">
+                {formData.importante === 'Sí' ? 'Actividad destacada' : 'Actividad habitual'}
               </span>
-              <span className="text-[10px] text-slate-500 block truncate">
-                {formData.importante === 'Sí' ? 'Genera notificación prioritaria a coordinadores' : 'Taller o evento comunitario habitual'}
+              <span className="text-sm text-slate-600 block">
+                {formData.importante === 'Sí' ? 'Se enviará un aviso a los coordinadores.' : 'Activa para avisar a los coordinadores.'}
               </span>
             </div>
           </div>

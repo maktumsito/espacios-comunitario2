@@ -33,10 +33,10 @@ it('uses the configured type color in the creation preview, calendar pill and le
   const { rerender } = render(view(types));
   const pill = () => screen.getByRole('button', { name: 'Actividad: Yoga a las 10:00 en Sala 2' });
   expect(pill().style.backgroundColor).toBe('rgb(18, 52, 86)');
-  const preview = screen.getByText(/Color automático para Charla/);
+  const preview = screen.getByText(/Así se verá Charla en la agenda/);
   expect((preview.firstElementChild as HTMLElement).style.backgroundColor).toBe('rgb(18, 52, 86)');
   expect((screen.getByText('Charla', { selector: 'div > span' }).previousElementSibling as HTMLElement).style.backgroundColor).toBe('rgb(18, 52, 86)');
-  fireEvent.change(screen.getByLabelText('Categoría y Tipo de Préstamo *'), { target: { value: 'CONVENIO' } });
+  fireEvent.change(screen.getByLabelText('Tipo de actividad *'), { target: { value: 'CONVENIO' } });
   expect(change).toHaveBeenCalledOnce();
   fireEvent.click(pill());
   expect(select).toHaveBeenCalledExactlyOnceWith(reservation);

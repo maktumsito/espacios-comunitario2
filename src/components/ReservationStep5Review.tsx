@@ -65,7 +65,7 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
   return (
     <div id="reservation-step-5-container" className="space-y-4">
       {/* Step Header */}
-      <ReservationSectionHeader title="5. Resumen y Confirmación Final" description="Verifica los datos antes de guardar la reserva en la agenda comunitaria" icon={<CheckCircle2 className="h-4 w-4" />} />
+      <ReservationSectionHeader title="5. Revisar reserva" description="Comprueba los datos. La reserva se guardará cuando confirmes." icon={<CheckCircle2 className="h-4 w-4" />} />
 
       {/* Total Sessions Banner */}
       <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl flex items-center justify-between">

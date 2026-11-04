@@ -227,7 +227,7 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
 
   return (
     <div id="wizard-step-section-2" className="space-y-4">
-      <ReservationSectionHeader title="2. Espacio, Fecha y Horarios" description="Espacio físico, fecha, horarios y modalidad de repetición" icon={<MapPin className="h-4 w-4" />} />
+      <ReservationSectionHeader title="2. Fecha y espacio" description="Elige dónde y cuándo se realizará. Si se repite, indica las fechas." icon={<MapPin className="h-4 w-4" />} />
 
       {/* Topamiento Conflict Banner if detected with Instant 1-Click Resolution */}
       <ReservationConflictBanner

@@ -62,7 +62,7 @@ export const ReservationStep3Applicant: React.FC<ReservationStep3ApplicantProps>
 
   return (
     <div id="reservation-step-3-container" className="space-y-4">
-      <ReservationSectionHeader title="3. Solicitante y Participantes" description="Datos de la persona u organización solicitante y aforo esperado" icon={<User className="h-4 w-4" />} />
+      <ReservationSectionHeader title="3. Solicitante" description="Indica quién solicita el espacio y cuántas personas asistirán." icon={<User className="h-4 w-4" />} />
 
       <ApplicantContactSection
         formData={formData}

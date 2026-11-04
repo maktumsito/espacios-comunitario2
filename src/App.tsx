@@ -1073,100 +1073,6 @@ export default function App() {
         }}
       />
 
-      {/* Filter and Search Bar - Kept hidden by default, toggled via Navbar or active filter ribbon */}
-      {currentView !== 'admin' && isFilterBarOpen && (
-        <FilterBar
-          filters={filters}
-          onFilterChange={setFilters}
-          onResetFilters={() =>
-            setFilters({
-              search: '',
-              espacio: '',
-              tipoActividad: '',
-              fechaDesde: '',
-              fechaHasta: '',
-              soloRecurrentes: false,
-              soloImportantes: false,
-              soloConTopamiento: false
-            })
-          }
-          onClose={() => setIsFilterBarOpen(false)}
-          totalFiltered={visiblePeriodCounts.filtered}
-          totalAll={visiblePeriodCounts.all}
-          periodLabel={visiblePeriodLabel}
-          conflictsCount={conflictsCount}
-          availableSpaces={spaces}
-          availableActivityTypes={activityTypes}
-        />
-      )}
-
-      {/* Subtle indicator banner when filters are active but panel is kept hidden */}
-      {currentView !== 'admin' && !isFilterBarOpen && (filters.fechaDesde && filters.fechaHasta && filters.fechaDesde > filters.fechaHasta) && (
-        <div className="bg-rose-50 border-b border-rose-300 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 animate-fadeIn shadow-2xs text-rose-900 font-semibold">
-          <div className="flex items-center space-x-2">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>⚠️ Rango de fechas no válido en filtros: "Desde" es posterior a "Hasta". Las reservas están ocultas hasta corregir el rango.</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={() => setIsFilterBarOpen(true)}
-              className="text-rose-700 hover:text-rose-900 font-bold underline cursor-pointer"
-            >
-              Corregir en filtros
-            </button>
-            <span className="text-rose-300">|</span>
-            <button
-              type="button"
-              onClick={() => setFilters(prev => ({ ...prev, fechaDesde: prev.fechaHasta, fechaHasta: prev.fechaDesde }))}
-              className="px-2 py-0.5 bg-rose-600 text-white rounded text-[11px] font-bold cursor-pointer"
-            >
-              Invertir fechas
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Subtle indicator banner when filters are active but panel is kept hidden */}
-      {currentView !== 'admin' && !isFilterBarOpen && hasActiveFilters && !(filters.fechaDesde && filters.fechaHasta && filters.fechaDesde > filters.fechaHasta) && (
-        <div className="bg-blue-50/95 border-b border-blue-200 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 animate-fadeIn shadow-2xs">
-          <div className="flex items-center space-x-2 text-blue-900 font-medium">
-            <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-            <span>
-              Filtros activos: {visiblePeriodCounts.filtered} de {visiblePeriodCounts.all} reservas en {visiblePeriodLabel}
-            </span>
-          </div>
-          <div className="flex items-center space-x-2.5">
-            <button
-              type="button"
-              onClick={() => setIsFilterBarOpen(true)}
-              className="text-blue-700 hover:text-blue-900 font-bold underline cursor-pointer text-xs"
-            >
-              Abrir panel de filtros
-            </button>
-            <span className="text-blue-300">|</span>
-            <button
-              type="button"
-              onClick={() =>
-                setFilters({
-                  search: '',
-                  espacio: '',
-                  tipoActividad: '',
-                  fechaDesde: '',
-                  fechaHasta: '',
-                  soloRecurrentes: false,
-                  soloImportantes: false,
-                  soloConTopamiento: false
-                })
-              }
-              className="text-rose-600 hover:text-rose-800 font-bold cursor-pointer text-xs"
-            >
-              Limpiar filtros
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Revalidation Banner for cloud synchronization feedback */}
       <RevalidationBanner isRevalidating={isFirebaseSyncing} />
       {generalDataPending && (
@@ -1189,6 +1095,117 @@ export default function App() {
             : `${isSidebarHidden ? 'max-w-none' : 'max-w-[1680px]'} px-3 sm:px-6 py-4`)
           : 'max-w-[1680px] px-3 sm:px-4 md:px-6 py-4'
       }`}>
+        {isAgendaView(currentView) && <AgendaToolbar
+          view={currentView}
+          onViewChange={view => { persistViewPreference(view); setCurrentView(view); }}
+          summary={`${visiblePeriodCounts.filtered} ${visiblePeriodCounts.filtered === 1 ? 'reserva' : 'reservas'} en ${visiblePeriodLabel}`}
+          filtersOpen={isFilterBarOpen} hasActiveFilters={hasActiveFilters}
+          onToggleFilters={() => setIsFilterBarOpen(open => !open)}
+          onPrevPeriod={() => setSelectedDailyDate(d => currentView === 'calendar' ? subMonths(d, 1) : subDays(d, 1))}
+          onNextPeriod={() => setSelectedDailyDate(d => currentView === 'calendar' ? addMonths(d, 1) : addDays(d, 1))}
+          onGoToday={() => setSelectedDailyDate(new Date())}
+          onBackToMonth={currentView !== 'calendar' ? () => { persistViewPreference('calendar'); setCurrentView('calendar'); } : undefined}
+          upcomingReplacementsCount={dueReplacements.length}
+          onOpenUpcomingReplacement={dueReplacements.length > 0 ? () => {
+            const nextRep = dueReplacements[0];
+            setSelectedReservation(nextRep);
+            setIsDetailModalOpen(true);
+          } : undefined}
+        />}
+        {/* Filter and Search Bar - Kept hidden by default, toggled via Navbar or active filter ribbon */}
+        {currentView !== 'admin' && isFilterBarOpen && (
+          <FilterBar
+            filters={filters}
+            onFilterChange={setFilters}
+            onResetFilters={() =>
+              setFilters({
+                search: '',
+                espacio: '',
+                tipoActividad: '',
+                fechaDesde: '',
+                fechaHasta: '',
+                soloRecurrentes: false,
+                soloImportantes: false,
+                soloConTopamiento: false
+              })
+            }
+            onClose={() => setIsFilterBarOpen(false)}
+            totalFiltered={visiblePeriodCounts.filtered}
+            totalAll={visiblePeriodCounts.all}
+            periodLabel={visiblePeriodLabel}
+            conflictsCount={conflictsCount}
+            availableSpaces={spaces}
+            availableActivityTypes={activityTypes}
+          />
+        )}
+
+        {/* Subtle indicator banner when filters are active but panel is kept hidden */}
+        {currentView !== 'admin' && !isFilterBarOpen && (filters.fechaDesde && filters.fechaHasta && filters.fechaDesde > filters.fechaHasta) && (
+          <div role="alert" className="mb-3 rounded-lg bg-rose-50 border border-rose-300 px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-2 animate-fadeIn shadow-2xs text-rose-900 font-semibold">
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>La fecha de inicio es posterior a la fecha de término. Corrige las fechas para ver las reservas.</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => setIsFilterBarOpen(true)}
+                className="min-h-11 text-rose-700 hover:text-rose-900 font-semibold underline"
+              >
+                Corregir en filtros
+              </button>
+              <span className="text-rose-300">|</span>
+              <button
+                type="button"
+                onClick={() => setFilters(prev => ({ ...prev, fechaDesde: prev.fechaHasta, fechaHasta: prev.fechaDesde }))}
+                className="min-h-11 px-3 bg-rose-600 text-white rounded-lg text-sm font-semibold"
+              >
+                Invertir fechas
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Subtle indicator banner when filters are active but panel is kept hidden */}
+        {currentView !== 'admin' && !isFilterBarOpen && hasActiveFilters && !(filters.fechaDesde && filters.fechaHasta && filters.fechaDesde > filters.fechaHasta) && (
+          <div role="status" className="mb-3 rounded-lg bg-blue-50/95 border border-blue-200 px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-2 animate-fadeIn shadow-2xs">
+            <div className="flex items-center space-x-2 text-blue-900 font-medium">
+              <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span>
+                Filtros activos: {visiblePeriodCounts.filtered} de {visiblePeriodCounts.all} reservas en {visiblePeriodLabel}
+              </span>
+            </div>
+            <div className="flex items-center space-x-2.5">
+              <button
+                type="button"
+                onClick={() => setIsFilterBarOpen(true)}
+                className="min-h-11 text-blue-700 hover:text-blue-900 font-semibold underline text-sm"
+              >
+                Abrir panel de filtros
+              </button>
+              <span className="text-blue-300">|</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setFilters({
+                    search: '',
+                    espacio: '',
+                    tipoActividad: '',
+                    fechaDesde: '',
+                    fechaHasta: '',
+                    soloRecurrentes: false,
+                    soloImportantes: false,
+                    soloConTopamiento: false
+                  })
+                }
+                className="min-h-11 text-blue-700 hover:text-blue-900 font-semibold text-sm"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          </div>
+        )}
+
         {!generalDataPending && <>
         <PendingReservationOperations user={currentUser} />
         {/* Banner de Recuperación de Borrador de Reserva tras Recarga Accidental */}
@@ -1285,23 +1302,6 @@ export default function App() {
           </div>
         )}
 
-        {isAgendaView(currentView) && <AgendaToolbar
-          view={currentView}
-          onViewChange={view => { persistViewPreference(view); setCurrentView(view); }}
-          summary={`${visiblePeriodCounts.filtered} ${visiblePeriodCounts.filtered === 1 ? 'reserva' : 'reservas'} en ${visiblePeriodLabel}`}
-          filtersOpen={isFilterBarOpen} hasActiveFilters={hasActiveFilters}
-          onToggleFilters={() => setIsFilterBarOpen(open => !open)}
-          onPrevPeriod={() => setSelectedDailyDate(d => currentView === 'calendar' ? subMonths(d, 1) : subDays(d, 1))}
-          onNextPeriod={() => setSelectedDailyDate(d => currentView === 'calendar' ? addMonths(d, 1) : addDays(d, 1))}
-          onGoToday={() => setSelectedDailyDate(new Date())}
-          onBackToMonth={currentView !== 'calendar' ? () => { persistViewPreference('calendar'); setCurrentView('calendar'); } : undefined}
-          upcomingReplacementsCount={dueReplacements.length}
-          onOpenUpcomingReplacement={dueReplacements.length > 0 ? () => {
-            const nextRep = dueReplacements[0];
-            setSelectedReservation(nextRep);
-            setIsDetailModalOpen(true);
-          } : undefined}
-        />}
         {isDeleteDayModalOpen && userCanDeleteReservations(currentUser) && (
           <DeleteDayReservationsModal initialDate={format(selectedDailyDate, 'yyyy-MM-dd')}
             onClose={() => setIsDeleteDayModalOpen(false)} onConfirm={handleDeleteDay} />
