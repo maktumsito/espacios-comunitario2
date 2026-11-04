@@ -29,11 +29,14 @@ import {
 } from '../types';
 import {
   parseReservationRequestText,
+  getRequestReservationDateIndex,
   ParsedReservationRequest
 } from '../utils/requestTextParser';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { checkSingleConflict, findMaintenanceBlockConflicts } from '../utils/conflictDetector';
+import { filterOutChileanHolidays, getChileanHolidayInfo } from '../utils/holidayUtils';
+import { differenceInCalendarDays, eachDayOfInterval, format, isValid, parseISO } from 'date-fns';
 
 export interface QuickRequestCreatorModalProps {
   isOpen: boolean;
@@ -136,8 +139,21 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
   const effective: ParsedReservationRequest = useMemo(() => {
     const merged: ParsedReservationRequest = {
       ...baseParsed,
-      ...overrides
+      ...overrides,
+      parsingWarnings: [...baseParsed.parsingWarnings]
     };
+
+    if (merged.bookingMode === 'pattern' && overrides.fecha) {
+      merged.recurrenceStartDate = overrides.fecha;
+      const start = parseISO(overrides.fecha);
+      const end = parseISO(merged.recurrenceEndDate);
+      if (isValid(start) && isValid(end) && start <= end && differenceInCalendarDays(end, start) <= 366) {
+        merged.generatedSeriesDates = [...filterOutChileanHolidays(eachDayOfInterval({ start, end })
+          .filter(date => merged.selectedDays.includes(date.getDay()))
+          .map(date => format(date, 'yyyy-MM-dd'))).validDates];
+      } else merged.generatedSeriesDates = [];
+      if (!merged.generatedSeriesDates.length) merged.parsingWarnings.push({ field: 'recurrencia', message: 'La fecha de inicio no deja sesiones en el período de la serie. Revisa el período en el formulario completo.' });
+    }
 
     // Recompute conflict if space, date, or time was overridden
     const datesToCheck =
@@ -146,7 +162,16 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
         : [merged.fecha];
 
     const reasons: string[] = [];
+    if (!isValid(parseISO(merged.fecha))) reasons.push('Selecciona una fecha válida para comprobar la disponibilidad.');
+    const reservationDateIndex = getRequestReservationDateIndex(allReservations);
+    const selectedSpace = availableSpaces.find(s => s.name === merged.espacio);
+    if (selectedSpace?.activo === false) reasons.push(`El espacio ${merged.espacio} está inactivo.`);
+    if (selectedSpace?.capacity && selectedSpace.capacity < merged.cantidadParticipantes) {
+      reasons.push(`Aforo insuficiente: capacidad ${selectedSpace.capacity}, solicitud ${merged.cantidadParticipantes}.`);
+    }
     for (const dt of datesToCheck) {
+      const holiday = getChileanHolidayInfo(dt);
+      if (holiday) reasons.push(`Feriado el ${formatDateDDMMYYYY(dt)} (${holiday.name})`);
       const candidateSlot: Partial<Reservation> = {
         espacio: merged.espacio,
         fecha: dt,
@@ -162,7 +187,7 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
       }
       const conflicts = checkSingleConflict(
         candidateSlot,
-        allReservations
+        reservationDateIndex.get(dt) || []
       );
       if (conflicts.length > 0) {
         reasons.push(
@@ -173,10 +198,19 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
 
     return {
       ...merged,
+      // A suggestion is valid only for the original slot, not after inline edits.
+      suggestedFreeSpace: Object.keys(overrides).some(key => ['fecha', 'horaInicio', 'horaFin', 'cantidadParticipantes', 'espacio'].includes(key))
+        ? undefined : baseParsed.suggestedFreeSpace,
+      parsingWarnings: merged.parsingWarnings.filter(warning => {
+        if (warning.field === 'fecha' && merged.bookingMode === 'single' && overrides.fecha && isValid(parseISO(overrides.fecha))) return false;
+        if (warning.field === 'horario' && overrides.horaInicio && overrides.horaFin && overrides.horaFin > overrides.horaInicio) return false;
+        if (warning.field === 'espacio' && overrides.espacio) return false;
+        return true;
+      }),
       hasConflict: reasons.length > 0,
       conflictDetails: reasons
     };
-  }, [baseParsed, overrides, spaceBlocks, allReservations]);
+  }, [baseParsed, overrides, spaceBlocks, allReservations, availableSpaces]);
 
   if (!isOpen) return null;
 
@@ -218,8 +252,16 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
   };
 
   const handleAutoCreate = async () => {
-    if (!rawText.trim() && !effective.responsable.trim() && !effective.descripcion.trim()) {
+    if (!rawText.trim()) {
       setErrorMsg('Escribe o pega los datos de la persona y su solicitud antes de crear la reserva.');
+      return;
+    }
+    if (effective.parsingWarnings.length) {
+      setErrorMsg(effective.parsingWarnings[0].message);
+      return;
+    }
+    if (!isValid(parseISO(effective.fecha))) {
+      setErrorMsg('Selecciona una fecha válida antes de crear la reserva.');
       return;
     }
     if (!effective.horaInicio || !effective.horaFin || effective.horaFin <= effective.horaInicio) {
@@ -278,7 +320,7 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
                 Crear Reserva Automática desde Solicitud
               </h2>
               <p className="text-xs text-slate-300 truncate">
-                Escribe o pega los datos de la persona y lo que solicita; el sistema detecta todo y agenda al instante.
+                Escribe o pega la solicitud y revisa los datos detectados antes de crear la reserva.
               </p>
             </div>
           </div>
@@ -351,6 +393,13 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
               </div>
             )}
           </div>
+
+          {effective.parsingWarnings.length > 0 && (
+            <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 space-y-1">
+              <p className="font-bold">Revisa estos datos antes de crear la reserva:</p>
+              {effective.parsingWarnings.map((warning, index) => <p key={`${warning.field}-${index}`}>{warning.message}</p>)}
+            </div>
+          )}
 
           {/* Live Extracted Preview & Inline Quick Adjustment */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 sm:p-4 space-y-3">

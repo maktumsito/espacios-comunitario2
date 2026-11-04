@@ -54,6 +54,77 @@ const mockEquipment: EquipmentItem[] = [
 ];
 
 describe('parseReservationRequestText', () => {
+  const parse = (text: string, spaces = mockSpaces) => parseReservationRequestText(text, {
+    availableSpaces: spaces, availableEquipment: mockEquipment,
+    defaultDate: '2026-11-04', referenceDate: '2026-11-04',
+  });
+
+  it('reconoce presentaciones informales y aforo sin etiquetas', () => {
+    const parsed = parse('Hola, soy María Soto y necesito Sala Espejos mañana de 6 a 8 pm, seremos 25.');
+    expect(parsed).toMatchObject({ responsable: 'María Soto', fecha: '2026-11-05', horaInicio: '18:00', horaFin: '20:00', cantidadParticipantes: 25 });
+  });
+
+  it.each(['Sala Espjeos', 'Sala Mulituso 1', 'Salón Audtorio'])('tolera errores de escritura en %s', room => {
+    const expected = room.includes('Espjeos') ? 'Sala Espejos' : room.includes('Mulituso') ? 'Sala Multiuso 1' : 'Salón Auditorio';
+    expect(parse(`Necesito ${room} el 20/11 de 10 a 12`).espacio).toBe(expected);
+    expect(parse(`Necesito ${room} el 20/11 de 10 a 12`).spaceWasAutoSelected).toBe(false);
+  });
+
+  it('no inventa salas fuera del catálogo ni cambia sus números', () => {
+    const parsed = parse('Espacio: Sala Multiuso 8, el 20/11 de 10 a 12');
+    expect(parsed.spaceWasAutoSelected).toBe(true);
+    expect(parsed.parsingWarnings.some(w => w.field === 'espacio')).toBe(true);
+    expect(parse('Solicito Gimnasio el 20/11').espacio).not.toBe('GIMNASIO');
+  });
+
+  it('no asigna como alternativa un espacio inactivo o con aforo insuficiente', () => {
+    const spaces = mockSpaces.map(s => ({ ...s, activo: s.id !== 'sp-2' }));
+    const parsed = parse('Espacio: Sala Espejos, el 20/11, para 70 personas', spaces);
+    expect(parsed.hasConflict).toBe(true);
+    expect(parsed.suggestedFreeSpace).toBeUndefined();
+    expect(parsed.conflictDetails[0]).toContain('Aforo insuficiente');
+  });
+
+  it('excluye equipos expresamente negados', () => {
+    const parsed = parse('Sin proyector ni micrófono, necesito 20 sillas y 3 mesas');
+    expect(parsed.equipamientoSolicitado).toHaveLength(2);
+    expect(parsed.equipamientoSolicitado.map(eq => eq.equipmentId)).toEqual(['eq-3', 'eq-4']);
+  });
+
+  it('no interpreta el RUT compacto como teléfono', () => {
+    expect(parse('RUT: 912345678').telefonoContacto).toBe('');
+  });
+
+  it('conserva conflictos de medianoche y actualiza los índices al recibir otro historial', () => {
+    const overnight: Reservation = {
+      id: 'overnight', fecha: '2026-11-19', horaInicio: '22:00', horaFin: '02:00',
+      terminaDiaSiguiente: true, espacio: 'Sala Espejos', responsable: 'María Soto',
+      telefonoContacto: '+56 9 1111 2222', tipoActividad: 'ENSAYO', descripcion: 'Ensayo nocturno', actividadRecurrente: 'No',
+    };
+    const options = { availableSpaces: mockSpaces, defaultDate: '2026-11-20', allReservations: [overnight] };
+    const request = 'Soy María Soto, necesito Sala Espejos el 20/11/2026 de 00:30 a 01:30';
+    const first = parseReservationRequestText(request, options);
+    expect(first.hasConflict).toBe(true);
+    expect(first.telefonoContacto).toBe('+56 9 1111 2222');
+    const next = parseReservationRequestText(request, {
+      ...options, allReservations: [{ ...overnight, estado: 'cancelada', telefonoContacto: '+56 9 3333 4444' }],
+    });
+    expect(next.hasConflict).toBe(false);
+    expect(next.telefonoContacto).toBe('+56 9 3333 4444');
+  });
+
+  it('expande rangos de días de la semana', () => {
+    const parsed = parse('De lunes a viernes desde 09/11/2026 hasta 13/11/2026 de 10 a 12');
+    expect(parsed.selectedDays).toEqual([1, 2, 3, 4, 5]);
+    expect(parsed.generatedSeriesDates).toHaveLength(5);
+  });
+
+  it.each(['todos los lunes desde 20/11/2026 hasta 01/11/2026', 'cada lunes desde 01/01/2026 hasta 01/01/2099'])('advierte rangos recurrentes inválidos: %s', text => {
+    const parsed = parse(text);
+    expect(parsed.generatedSeriesDates).toEqual([]);
+    expect(parsed.parsingWarnings.some(w => w.field === 'recurrencia')).toBe(true);
+  });
+
   it('extrae datos completos de solicitante, fecha, horario, sala, aforo, equipamiento y montaje desde texto estructurado', () => {
     const raw = `
 Solicitante: María Alejandra Soto Rivas

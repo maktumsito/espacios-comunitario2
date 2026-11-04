@@ -1,4 +1,6 @@
-import { addDays, addMonths, eachDayOfInterval, format, isValid, parseISO } from 'date-fns';
+import { addMonths, differenceInCalendarDays, eachDayOfInterval, format, isValid, parseISO } from 'date-fns';
+import Fuse from 'fuse.js';
+import { extractRequestDates, extractRequestTime, RequestParsingWarning } from './requestTextTemporal';
 import {
   ActivityTypeItem,
   EquipmentItem,
@@ -17,9 +19,11 @@ import { checkSingleConflict, findMaintenanceBlockConflicts } from './conflictDe
 import { filterOutChileanHolidays, getChileanHolidayInfo } from './holidayUtils';
 import { isCommitmentLetterEligible } from './commitmentLetterPdf';
 import { WEEKDAYS } from './dateUtils';
+import { buildReservationDateIndex } from './reservationIndex';
 
 export interface ParsedRequestOptions {
   defaultDate?: string; // YYYY-MM-DD
+  referenceDate?: string; // Today for relative expressions; independent of calendar selection.
   defaultSpace?: string;
   defaultStartTime?: string;
   defaultEndTime?: string;
@@ -61,36 +65,8 @@ export interface ParsedReservationRequest {
   conflictDetails: string[];
   suggestedFreeSpace?: string;
   detectedFields: string[];
+  parsingWarnings: RequestParsingWarning[];
 }
-
-const MONTH_NAME_MAP: Record<string, number> = {
-  enero: 1,
-  ene: 1,
-  febrero: 2,
-  feb: 2,
-  marzo: 3,
-  mar: 3,
-  abril: 4,
-  abr: 4,
-  mayo: 5,
-  may: 5,
-  junio: 6,
-  jun: 6,
-  julio: 7,
-  jul: 7,
-  agosto: 8,
-  ago: 8,
-  septiembre: 9,
-  setiembre: 9,
-  sep: 9,
-  set: 9,
-  octubre: 10,
-  oct: 10,
-  noviembre: 11,
-  nov: 11,
-  diciembre: 12,
-  dic: 12
-};
 
 const WEEKDAY_PATTERNS: Array<{ dayNum: number; id: string; regex: RegExp }> = [
   { dayNum: 1, id: 'lunes', regex: /\blunes\b/i },
@@ -123,10 +99,6 @@ function stripAccents(str: string): string {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
 function extractRut(text: string): string {
   // Match Chilean RUT patterns: 12.345.678-9, 12345678-9, 9.876.543-K
   const rutWithDash = /\b(\d{1,2}\.?\d{3}\.?\d{3})\s*[-‐‑–—]\s*([0-9kK])\b/g;
@@ -154,7 +126,11 @@ function extractEmail(text: string): string {
 }
 
 function extractPhone(text: string, excludeRut: string): string {
-  const cleanText = excludeRut ? text.replace(excludeRut, ' ') : text;
+  // Mask the original RUT spelling, not just its formatted representation.
+  const cleanText = text
+    .replace(/\b\d{1,2}\.?\d{3}\.?\d{3}\s*[-‐‑–—]\s*[0-9kK]\b/g, ' ')
+    .replace(/\b(?:rut|r\.u\.t\.?|run)\s*[:=-]?\s*[0-9.]{7,10}[0-9kK]\b/gi, ' ')
+    .replace(excludeRut || /$^/, ' ');
   // Match +56 9 XXXX XXXX, 569XXXXXXXX, 9 XXXX XXXX, +56 2 XXXX XXXX
   const phoneRegexes = [
     /(?:\+?56\s*)?([92])\s*(\d{4})\s*[-.\s]?\s*(\d{4})\b/,
@@ -205,6 +181,10 @@ function extractResponsable(
   }
 
   // 3. Natural language pattern: "Juan Pérez solicita...", "Solicitud de María Soto para..."
+  const introduction = /\b(?:me\s+llamo|mi\s+nombre\s+es|soy|solicita|a\s+nombre\s+de)\s+([a-záéíóúñ]+(?:[ \t]+[a-záéíóúñ]+){1,4}?)(?=[ \t]*(?:[,;\n.(]|$|y\s+|para\s+|rut\b|solicito\b|necesito\b|quiero\b|solicita\b))/i.exec(text);
+  if (introduction?.[1] && !/^(?:sala|el|la|un|una|reserva|reservar)\b/i.test(introduction[1])) {
+    return introduction[1].trim();
+  }
   const naturalBeforeVerb = /(?:^|\n|solicitud\s+de\s+|de\s+parte\s+de\s+)([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})\s*(?:,|\(|\bsolicita\b|\bpide\b|\brequiere\b|\bnecesita\b|\bagenda\b|\breserva\b|\brut\b)/i.exec(text);
   if (naturalBeforeVerb?.[1]) {
     const candidate = naturalBeforeVerb[1].trim();
@@ -227,128 +207,8 @@ function extractResponsable(
   return '';
 }
 
-function parseAllDatesFromText(text: string, baseDateIso: string): string[] {
-  const results: string[] = [];
-  const baseDate = parseISO(baseDateIso);
-  const currentYear = isValid(baseDate) ? baseDate.getFullYear() : new Date().getFullYear();
-
-  // 1. ISO YYYY-MM-DD
-  const isoRegex = /\b(20\d{2})[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b/g;
-  let m: RegExpExecArray | null;
-  while ((m = isoRegex.exec(text)) !== null) {
-    results.push(`${m[1]}-${m[2]}-${m[3]}`);
-  }
-
-  // 2. DD/MM/YYYY or DD-MM-YYYY
-  const dmyRegex = /\b(0?[1-9]|[12]\d|3[01])[-/](0?[1-9]|1[0-2])[-/](20\d{2}|\d{2})\b/g;
-  while ((m = dmyRegex.exec(text)) !== null) {
-    const day = pad2(parseInt(m[1], 10));
-    const month = pad2(parseInt(m[2], 10));
-    const yr = m[3].length === 2 ? `20${m[3]}` : m[3];
-    const iso = `${yr}-${month}-${day}`;
-    if (!results.includes(iso)) results.push(iso);
-  }
-
-  // 3. Natural Spanish date: "15 de noviembre de 2026" or "15 de noviembre"
-  const naturalDateRegex = /\b(0?[1-9]|[12]\d|3[01])\s+de\s+([a-záéíóú]+)(?:\s+(?:de|del)\s+(20\d{2}))?\b/gi;
-  while ((m = naturalDateRegex.exec(text)) !== null) {
-    const day = pad2(parseInt(m[1], 10));
-    const monthKey = stripAccents(m[2].toLowerCase());
-    const monthNum = MONTH_NAME_MAP[monthKey];
-    if (monthNum) {
-      const yr = m[3] || String(currentYear);
-      const iso = `${yr}-${pad2(monthNum)}-${day}`;
-      if (!results.includes(iso)) results.push(iso);
-    }
-  }
-
-  // 4. Relative words if no explicit date found yet
-  if (results.length === 0) {
-    const lower = stripAccents(text.toLowerCase());
-    const refToday = new Date();
-    if (/\bpasado\s+manana\b/.test(lower)) {
-      results.push(format(addDays(refToday, 2), 'yyyy-MM-dd'));
-    } else if (/\bmanana\b/.test(lower) && !/\bpor\s+la\s+manana\b/.test(lower) && !/\ben\s+la\s+manana\b/.test(lower)) {
-      results.push(format(addDays(refToday, 1), 'yyyy-MM-dd'));
-    } else if (/\bhoy\b/.test(lower)) {
-      results.push(format(refToday, 'yyyy-MM-dd'));
-    } else {
-      for (const wd of WEEKDAY_PATTERNS) {
-        const nextWdRegex = new RegExp(`\\b(?:pr[oó]ximo|este)\\s+${wd.regex.source.replace(/\\b/g, '')}\\b`, 'i');
-        if (nextWdRegex.test(text)) {
-          const base = isValid(baseDate) ? baseDate : refToday;
-          const currentDow = base.getDay();
-          let diff = (wd.dayNum - currentDow + 7) % 7;
-          if (diff === 0) diff = 7;
-          results.push(format(addDays(base, diff), 'yyyy-MM-dd'));
-          break;
-        }
-      }
-    }
-  }
-
-  return results;
-}
-
-function normalizeHourMinute(rawH: string, rawM?: string, meridiem?: string): string | null {
-  let h = parseInt(rawH, 10);
-  const m = rawM ? parseInt(rawM, 10) : 0;
-  if (isNaN(h) || isNaN(m) || m < 0 || m > 59) return null;
-  if (meridiem) {
-    const mer = meridiem.toLowerCase();
-    if (mer.includes('p') && h < 12) h += 12;
-    if (mer.includes('a') && h === 12) h = 0;
-  }
-  if (h < 0 || h > 23) return null;
-  return `${pad2(h)}:${pad2(m)}`;
-}
-
-function extractTimeRange(
-  text: string,
-  defaultStart = '10:00',
-  defaultEnd = '11:00'
-): { horaInicio: string; horaFin: string; detected: boolean } {
-  // 1. Explicit range with colons: "10:00 a 12:00", "de 15:30 a 17:00", "09:00 - 11:30"
-  const colonRange = /\b(?:de(?:sde)?(?:\s+las)?\s+)?([01]?\d|2[0-3]):([0-5]\d)\s*(?:a|hasta(?:\s+las)?|[-–—])\s*([01]?\d|2[0-3]):([0-5]\d)(?:\s*(?:hrs?\.?|horas?))?\b/i.exec(text);
-  if (colonRange) {
-    const start = normalizeHourMinute(colonRange[1], colonRange[2]);
-    const end = normalizeHourMinute(colonRange[3], colonRange[4]);
-    if (start && end) {
-      return { horaInicio: start, horaFin: end, detected: true };
-    }
-  }
-
-  // 2. Range without colons or mixed: "de 10 a 12 hrs", "de 9:30 a 11 hrs", "de 15 a 17 horas", "10 a 12pm"
-  const shortRange = /\b(?:de(?:sde)?(?:\s+las)?|horario\s*[:=-]?|entre(?:\s+las)?)\s*([01]?\d|2[0-3])(?::([0-5]\d))?\s*(am|pm)?\s*(?:a|y|hasta(?:\s+las)?|[-–—])\s*([01]?\d|2[0-3])(?::([0-5]\d))?\s*(am|pm|hrs?\.?|horas?)?\b/i.exec(text);
-  if (shortRange) {
-    const start = normalizeHourMinute(shortRange[1], shortRange[2], shortRange[3]);
-    const end = normalizeHourMinute(
-      shortRange[4],
-      shortRange[5],
-      shortRange[6] && /am|pm/i.test(shortRange[6]) ? shortRange[6] : undefined
-    );
-    if (start && end) {
-      return { horaInicio: start, horaFin: end, detected: true };
-    }
-  }
-
-  // 3. Single start time + duration or single "a las HH:MM"
-  const singleTime = /\b(?:a\s+las|desde\s+las|hora(?:\s+inicio)?\s*[:=-]?)\s*([01]?\d|2[0-3]):([0-5]\d)\b/i.exec(text);
-  if (singleTime) {
-    const start = normalizeHourMinute(singleTime[1], singleTime[2]);
-    if (start) {
-      const [sh, sm] = start.split(':').map(Number);
-      const endTotal = Math.min(23 * 60 + 59, (sh * 60 + sm) + 60);
-      const end = `${pad2(Math.floor(endTotal / 60))}:${pad2(endTotal % 60)}`;
-      return { horaInicio: start, horaFin: end, detected: true };
-    }
-  }
-
-  return { horaInicio: defaultStart, horaFin: defaultEnd, detected: false };
-}
-
 function extractParticipants(text: string): { count: number; detected: boolean } {
-  const labeled = /\b(?:aforo(?:\s+de)?|participantes|asistentes|cupo(?:s)?|cantidad(?:\s+de\s+(?:personas|asistentes|participantes))?)[ \t]*[:=-][ \t]*([1-9]\d{0,2})\b/i.exec(text);
+  const labeled = /\b(?:aforo|participantes|asistentes|cupo(?:s)?|somos|seremos|cantidad(?:\s+de\s+(?:personas|asistentes|participantes))?)[ \t]*(?::|=|-|de)?[ \t]*([1-9]\d{0,2})\b/i.exec(text);
   if (labeled?.[1]) {
     const val = parseInt(labeled[1], 10);
     if (val > 0 && val <= 500) {
@@ -365,7 +225,10 @@ function extractParticipants(text: string): { count: number; detected: boolean }
   return { count: 15, detected: false };
 }
 
+const spaceSearchCache = new WeakMap<readonly SpaceInfo[], Fuse<{ name: string; normalized: string }>>();
+
 function extractSpace(text: string, availableSpaces: readonly SpaceInfo[]): string | null {
+  text = text.replace(/\bmontaje\s+(?:tipo\s+|en\s+)?auditorio\b/gi, ' ');
   // Check custom spaces in availableSpaces first (longest name first so "SALA DE ESPEJOS" matches before "SALA")
   const sortedSpaces = [...availableSpaces].sort((a, b) => b.name.length - a.name.length);
   const normText = stripAccents(text.toUpperCase());
@@ -382,9 +245,39 @@ function extractSpace(text: string, availableSpaces: readonly SpaceInfo[]): stri
       const matchedInCatalog = availableSpaces.find(
         (s) => normalizeSpaceName(s.name) === canonical
       );
-      return matchedInCatalog ? matchedInCatalog.name : canonical;
+      const containing = availableSpaces.filter(s => stripAccents(s.name.toUpperCase()).includes(stripAccents(canonical)));
+      if (matchedInCatalog) return matchedInCatalog.name;
+      if (containing.length === 1) return containing[0].name;
     }
   }
+
+  // Reuse the catalog index while typing. Only match short windows, never an entire message.
+  // Keep room numbers exact: a typo must never turn "Sala 8" into "Sala 3".
+  let search = spaceSearchCache.get(availableSpaces);
+  if (!search) {
+    search = new Fuse(availableSpaces.map(s => ({ name: s.name, normalized: stripAccents(s.name.toLowerCase()) })), {
+      keys: ['normalized'], includeScore: true, threshold: 0.2, ignoreLocation: true, ignoreFieldNorm: true
+    });
+    spaceSearchCache.set(availableSpaces, search);
+  }
+  const tokens = stripAccents(text.toLowerCase()).match(/[a-z0-9]+/g) || [];
+  const matches = new Map<string, number>();
+  for (let i = 0; i < tokens.length; i++) {
+    for (let length = 1; length <= 5 && i + length <= tokens.length; length++) {
+      const phrase = tokens.slice(i, i + length).join(' ');
+      if (phrase.length < 5 || /^(?:para|desde|hasta|horario|montaje|sin|no)\b/.test(phrase)) continue;
+      for (const result of search.search(phrase, { limit: 2 })) {
+        const target = result.item.normalized;
+        if ((phrase.match(/\d+/g) || []).join() !== (target.match(/\d+/g) || []).join()) continue;
+        // No partial-name guesses ("sala" / "multiuso"); require comparable lengths.
+        if (Math.abs(target.length - phrase.length) > Math.max(2, target.length * 0.2)) continue;
+        const score = result.score ?? 1;
+        if (score <= 0.2) matches.set(result.item.name, Math.min(matches.get(result.item.name) ?? 1, score));
+      }
+    }
+  }
+  const ranked = [...matches].sort((a, b) => a[1] - b[1]);
+  if (ranked.length && (!ranked[1] || ranked[1][1] - ranked[0][1] >= 0.08)) return ranked[0][0];
   return null;
 }
 
@@ -474,6 +367,8 @@ function extractEquipment(
   const requests: ReservationEquipmentRequest[] = [];
   if (!availableEquipment || availableEquipment.length === 0) return requests;
 
+  text = text.replace(/\b(?:sin|no\s+(?:necesito|necesita|necesitamos|requiero|requiere|requerimos))\s+[^,;\n.]+/gi, ' ');
+
   const normText = stripAccents(text.toLowerCase());
 
   const keywordAliases: Array<{ keywords: RegExp; matchNamePart: string }> = [
@@ -556,39 +451,24 @@ function extractMontaje(text: string): RoomSetup | undefined {
   };
 }
 
-/**
- * Parses a natural-language or structured request string and returns all extracted reservation fields,
- * enriching applicant data from historical reservations and checking space availability.
- */
-export function parseReservationRequestText(
-  rawText: string,
-  options: ParsedRequestOptions = {}
-): ParsedReservationRequest {
-  const text = (rawText || '').trim();
-  const availableSpaces = options.availableSpaces && options.availableSpaces.length > 0
-    ? options.availableSpaces
-    : SPACES_LIST;
-  const availableActivityTypes = options.availableActivityTypes || [];
-  const availableLoanTypes = options.availableLoanTypes || DEFAULT_LOAN_TYPES;
-  const availableEquipment = options.availableEquipment || [];
-  const allReservations = options.allReservations || [];
-  const spaceBlocks = options.spaceBlocks || [];
-  const defaultDate = options.defaultDate || format(new Date(), 'yyyy-MM-dd');
+type ApplicantHistoryEntry = Pick<Reservation, 'responsable' | 'rut' | 'telefonoContacto' | 'emailContacto' | 'domicilio'>;
+const applicantHistoryCache = new WeakMap<readonly Reservation[], Map<string, ApplicantHistoryEntry>>();
+const reservationDateIndexCache = new WeakMap<readonly Reservation[], Map<string, Reservation[]>>();
 
-  const detectedFields: string[] = [];
+/** React data arrays are immutable; a new snapshot invalidates the index naturally. */
+export function getRequestReservationDateIndex(reservations: readonly Reservation[]) {
+  let index = reservationDateIndexCache.get(reservations);
+  if (!index) {
+    index = buildReservationDateIndex(reservations);
+    reservationDateIndexCache.set(reservations, index);
+  }
+  return index;
+}
 
-  // Build historical applicant directory
-  const knownResponsablesMap = new Map<
-    string,
-    {
-      responsable: string;
-      rut?: string;
-      telefonoContacto?: string;
-      emailContacto?: string;
-      domicilio?: string;
-    }
-  >();
-
+function getApplicantDirectory(allReservations: readonly Reservation[]): Map<string, ApplicantHistoryEntry> {
+  const cached = applicantHistoryCache.get(allReservations);
+  if (cached) return cached;
+  const knownResponsablesMap = new Map<string, ApplicantHistoryEntry>();
   for (const r of allReservations) {
     const name = (r.responsable || '').trim();
     if (!name) continue;
@@ -609,6 +489,34 @@ export function parseReservationRequestText(
       if (!existing.domicilio && r.domicilio) existing.domicilio = r.domicilio;
     }
   }
+  applicantHistoryCache.set(allReservations, knownResponsablesMap);
+  return knownResponsablesMap;
+}
+
+/**
+ * Parses a natural-language or structured request string and returns all extracted reservation fields,
+ * enriching applicant data from historical reservations and checking space availability.
+ */
+export function parseReservationRequestText(
+  rawText: string,
+  options: ParsedRequestOptions = {}
+): ParsedReservationRequest {
+  const text = (rawText || '').normalize('NFC').replace(/\u00a0/g, ' ').replace(/\r\n?/g, '\n').trim();
+  const availableSpaces = options.availableSpaces && options.availableSpaces.length > 0
+    ? options.availableSpaces
+    : SPACES_LIST;
+  const availableActivityTypes = options.availableActivityTypes || [];
+  const availableLoanTypes = options.availableLoanTypes || DEFAULT_LOAN_TYPES;
+  const availableEquipment = options.availableEquipment || [];
+  const allReservations = options.allReservations || [];
+  const spaceBlocks = options.spaceBlocks || [];
+  const defaultDate = options.defaultDate || format(new Date(), 'yyyy-MM-dd');
+
+  const detectedFields: string[] = [];
+  const parsingWarnings: RequestParsingWarning[] = [];
+
+  const knownResponsablesMap = getApplicantDirectory(allReservations);
+  const reservationDateIndex = getRequestReservationDateIndex(allReservations);
 
   // 1. Extract Applicant Info
   let rut = extractRut(text);
@@ -631,6 +539,8 @@ export function parseReservationRequestText(
   let historicalMatch = responsable
     ? knownResponsablesMap.get(stripAccents(responsable.toLowerCase()))
     : undefined;
+  const cleanRut = (value: string) => value.replace(/[^0-9kK]/g, '').toUpperCase();
+  if (historicalMatch?.rut && rut && cleanRut(historicalMatch.rut) !== cleanRut(rut)) historicalMatch = undefined;
 
   if (!historicalMatch && (rut || emailContacto)) {
     const cleanTargetRut = rut.replace(/[^0-9kK]/g, '').toUpperCase();
@@ -638,7 +548,7 @@ export function parseReservationRequestText(
       const entryCleanRut = (entry.rut || '').replace(/[^0-9kK]/g, '').toUpperCase();
       if (
         (cleanTargetRut && entryCleanRut === cleanTargetRut) ||
-        (emailContacto && entry.emailContacto?.toLowerCase() === emailContacto.toLowerCase())
+        (!cleanTargetRut && emailContacto && entry.emailContacto?.toLowerCase() === emailContacto.toLowerCase())
       ) {
         historicalMatch = entry;
         break;
@@ -656,9 +566,11 @@ export function parseReservationRequestText(
   }
 
   // 2. Extract Dates & Recurrence
-  const parsedDates = parseAllDatesFromText(text, defaultDate);
+  const dateExtract = extractRequestDates(text, defaultDate, options.referenceDate || format(new Date(), 'yyyy-MM-dd'));
+  const parsedDates = dateExtract.dates;
+  parsingWarnings.push(...dateExtract.warnings);
   if (parsedDates.length > 0) detectedFields.push('Fecha');
-  const primaryDate = parsedDates[0] || defaultDate;
+  const primaryDate = parsedDates[0] || (dateExtract.warnings.length ? '' : defaultDate);
 
   // Detect recurring weekdays (e.g. "todos los lunes y miércoles", "cada martes y jueves", "semanal")
   const matchedWeekdays: number[] = [];
@@ -666,6 +578,16 @@ export function parseReservationRequestText(
     if (wd.regex.test(text)) {
       matchedWeekdays.push(wd.dayNum);
     }
+  }
+  const weekdayRange = /\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\s+(?:a|al|hasta(?:\s+el)?)\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/.exec(stripAccents(text.toLowerCase()));
+  if (weekdayRange) {
+    const start = WEEKDAY_PATTERNS.find(wd => wd.id === weekdayRange[1])!.dayNum;
+    const end = WEEKDAY_PATTERNS.find(wd => wd.id === weekdayRange[2])!.dayNum;
+    for (let offset = 0; offset <= (end - start + 7) % 7; offset++) {
+      const day = (start + offset) % 7;
+      if (!matchedWeekdays.includes(day)) matchedWeekdays.push(day);
+    }
+    matchedWeekdays.sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
   }
 
   const hasRecurrenceKeyword =
@@ -683,7 +605,7 @@ export function parseReservationRequestText(
 
   const recurrenceStartDate = parsedDates[0] || defaultDate;
   const recurrenceEndDate =
-    parsedDates.length >= 2 && parsedDates[1] > recurrenceStartDate
+    parsedDates.length >= 2
       ? parsedDates[1]
       : format(addMonths(parseISO(recurrenceStartDate), 2), 'yyyy-MM-dd');
 
@@ -693,24 +615,30 @@ export function parseReservationRequestText(
     try {
       const start = parseISO(recurrenceStartDate);
       const end = parseISO(recurrenceEndDate);
-      if (isValid(start) && isValid(end) && end >= start) {
+      if (end < start || differenceInCalendarDays(end, start) > 366) {
+        parsingWarnings.push({ field: 'recurrencia', message: 'Revisa el período de la serie: el término debe ser posterior al inicio y abarcar como máximo un año.' });
+      } else if (isValid(start) && isValid(end)) {
         const rawDates = eachDayOfInterval({ start, end })
           .filter((d) => selectedDays.includes(d.getDay()))
           .map((d) => format(d, 'yyyy-MM-dd'));
         const { validDates } = filterOutChileanHolidays(rawDates);
         generatedSeriesDates = [...validDates];
+        if (!generatedSeriesDates.length) parsingWarnings.push({ field: 'recurrencia', message: 'El período no contiene sesiones disponibles en los días indicados.' });
       }
     } catch {
-      generatedSeriesDates = [primaryDate];
+      parsingWarnings.push({ field: 'recurrencia', message: 'No se pudo interpretar el período de la serie. Revisa las fechas.' });
     }
+  } else if (parsedDates.length > 1) {
+    parsingWarnings.push({ field: 'recurrencia', message: 'Hay varias fechas en la solicitud. Define los días de la serie en el formulario completo o deja una sola fecha.' });
   }
 
   // 3. Extract Time Range
-  const timeExtract = extractTimeRange(
+  const timeExtract = extractRequestTime(
     text,
     options.defaultStartTime || '08:30',
     options.defaultEndTime || '09:30'
   );
+  parsingWarnings.push(...timeExtract.warnings);
   if (timeExtract.detected) detectedFields.push('Horario');
   const { horaInicio, horaFin } = timeExtract;
 
@@ -722,10 +650,19 @@ export function parseReservationRequestText(
   // 5. Extract Space & Check Conflicts / Auto-assign Free Space
   const explicitSpace = extractSpace(text, availableSpaces);
   if (explicitSpace) detectedFields.push('Espacio');
+  if (!explicitSpace && /\b(?:(?:espacio|sala)\s*[:=-]\s*\S|sala\s+(?:multiuso\s+)?\d+)/i.test(text)) {
+    parsingWarnings.push({ field: 'espacio', message: 'No se reconoció el espacio solicitado. Selecciona una sala del catálogo.' });
+  }
 
   const isSpaceFreeForDates = (spaceName: string, datesToCheck: string[]): { free: boolean; reasons: string[] } => {
     const reasons: string[] = [];
+    const catalogSpace = availableSpaces.find(s => s.name === spaceName);
+    if (catalogSpace?.activo === false) reasons.push(`El espacio ${spaceName} está inactivo.`);
+    if (catalogSpace?.capacity && catalogSpace.capacity < cantidadParticipantes) {
+      reasons.push(`Aforo insuficiente en ${spaceName}: capacidad ${catalogSpace.capacity}, solicitud ${cantidadParticipantes}.`);
+    }
     for (const dt of datesToCheck) {
+      const reservationsForDate = reservationDateIndex.get(dt) || [];
       const holiday = getChileanHolidayInfo(dt);
       if (holiday && datesToCheck.length === 1) {
         reasons.push(`Feriado el ${dt} (${holiday.name})`);
@@ -745,7 +682,7 @@ export function parseReservationRequestText(
       }
       const resConflicts = checkSingleConflict(
         candidateSlot,
-        allReservations
+        reservationsForDate
       );
       if (resConflicts.length > 0) {
         reasons.push(
@@ -753,7 +690,7 @@ export function parseReservationRequestText(
         );
       } else {
         const normTargetSpace = normalizeSpaceName(spaceName);
-        const directOverlap = allReservations.find(
+        const directOverlap = reservationsForDate.find(
           (r) =>
             r.fecha === dt &&
             r.estado !== 'cancelada' &&
@@ -789,25 +726,36 @@ export function parseReservationRequestText(
       return capA - capB;
     });
     for (const sp of candidates) {
-      if (isSpaceFreeForDates(sp.name, targetDatesForCheck).free) {
+      if (sp.activo === false || (sp.capacity && sp.capacity < cantidadParticipantes)) continue;
+      if (checkAvailability(sp.name).free) {
         return sp.name;
       }
     }
     return undefined;
   };
 
-  const suggestedFreeSpace = findBestFreeSpace();
+  // Check the selected room first; only scan alternatives when one is needed.
   let espacio =
     explicitSpace ||
     (options.defaultSpace && availableSpaces.some((s) => s.name === options.defaultSpace)
       ? options.defaultSpace
       : undefined) ||
-    suggestedFreeSpace ||
-    availableSpaces[0]?.name ||
-    'AUDITORIO';
+    '';
+
+  const availabilityCache = new Map<string, ReturnType<typeof isSpaceFreeForDates>>();
+  const checkAvailability = (name: string) => {
+    let result = availabilityCache.get(name);
+    if (!result) {
+      result = isSpaceFreeForDates(name, targetDatesForCheck);
+      availabilityCache.set(name, result);
+    }
+    return result;
+  };
+  const suggestedFreeSpace = !espacio || !checkAvailability(espacio).free ? findBestFreeSpace() : undefined;
+  espacio ||= suggestedFreeSpace || availableSpaces.find(s => s.activo !== false)?.name || availableSpaces[0]?.name || 'AUDITORIO';
 
   const spaceWasAutoSelected = !explicitSpace;
-  const availabilityCheck = isSpaceFreeForDates(espacio, targetDatesForCheck);
+  const availabilityCheck = checkAvailability(espacio);
 
   // 6. Activity Description & Type
   const { tipoActividad, tipoPrestamo } = inferActivityAndLoanType(
@@ -857,6 +805,7 @@ export function parseReservationRequestText(
     hasConflict: !availabilityCheck.free,
     conflictDetails: availabilityCheck.reasons,
     suggestedFreeSpace: !availabilityCheck.free ? suggestedFreeSpace : undefined,
-    detectedFields
+    detectedFields,
+    parsingWarnings
   };
 }
