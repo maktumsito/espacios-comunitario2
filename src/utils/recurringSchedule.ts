@@ -25,12 +25,6 @@ export function isDateInSeriesScope(date: string, context: SeriesScope): boolean
   if (scope === 'selected') return history.some(r => selectedIds?.has(r.id) && r.fecha === date && belongsToSeries(r, source));
   return true;
 }
-export function scopedSeriesRows(context: SeriesScope): Reservation[] {
-  return context.history.filter(r => belongsToSeries(r, context.source) &&
-    isDateInSeriesScope(r.fecha, context) && !r.reemplazadaPorReservaId && isReservationActiveForAvailability(r) &&
-    (context.scope !== 'single' || r.id === context.source.id) &&
-    (context.scope !== 'selected' || context.selectedIds?.has(r.id)));
-}
 
 export interface ScheduleOptions {
   mode: 'single' | 'specific' | 'pattern'; base: Partial<Reservation>;

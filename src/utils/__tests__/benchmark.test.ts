@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Reservation } from '../../types';
 import { findReservationConflicts, detectAllConflicts } from '../conflictDetector';
 import { buildReservationDateIndex } from '../reservationIndex';
-import { calculateReservationsHash, fastHashString } from '../../services/reservationService';
+import { calculateReservationsHash } from '../../services/reservationService';
 
 function generateMockReservations(count: number): Reservation[] {
   const spaces = ['GIMNASIO', 'MULTICANCHA', 'SALA 2', 'SALA 3', 'AUDITORIO'];

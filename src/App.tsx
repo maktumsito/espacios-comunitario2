@@ -111,7 +111,7 @@ import {
 } from './services/authService';
 import { LoginScreen } from './components/LoginScreen';
 import { AppFooter } from './components/AppFooter';
-import { Wifi, WifiOff, Clock, ShieldCheck, Filter, RotateCcw, AlertTriangle, Trash2 } from 'lucide-react';
+import { Wifi, WifiOff, Clock, ShieldCheck, Filter, RotateCcw, AlertTriangle } from 'lucide-react';
 import { checkAndRunScheduledBackup } from './services/backupService';
 import { getActiveDraftSummary, removeStoredDraft, ActiveDraftSummary } from './hooks/useReservationAutosave';
 

@@ -2,7 +2,7 @@
 import { initializeApp, deleteApp } from 'firebase/app';
 import { connectFirestoreEmulator, collection, getDocs, getFirestore, terminate } from 'firebase/firestore';
 import { act, renderHook, cleanup } from '@testing-library/react';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 const fault = vi.hoisted(() => ({ db: null as any, interrupt: true }));
 vi.mock('../../src/firebase/config', () => ({ getDb: () => fault.db }));
 vi.mock('../../src/services/reservationService', async original => {

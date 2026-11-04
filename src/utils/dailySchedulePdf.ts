@@ -111,8 +111,7 @@ export async function generateDailySchedulePdf(options: DailySchedulePdfOptions)
     selectedActivityTypes,
     onlyOccupiedSpaces = true,
     include3DaysImportant = false,
-    customNote,
-    generatedBy = 'Centro Comunitario Diaguitas'
+    customNote
   } = options;
 
   // Hoja configurada en 8.5 x 13 pulgadas = 215.9 mm x 330.2 mm (Tamaño Oficio / Folio tradicional)

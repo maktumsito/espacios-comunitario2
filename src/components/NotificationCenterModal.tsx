@@ -11,8 +11,7 @@ import {
   requestPushPermission,
   getNotificationPermission,
   sendTestNotification,
-  isAndroidDevice,
-  isPushNotificationSupported
+  isAndroidDevice
 } from '../services/notificationService';
 import {
   Bell,
@@ -57,7 +56,6 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
   const [activeTab, setActiveTab] = useState<'history' | 'settings'>('history');
 
   const isAndroid = isAndroidDevice();
-  const isSupported = isPushNotificationSupported();
 
   useEffect(() => {
     if (!isOpen) return;

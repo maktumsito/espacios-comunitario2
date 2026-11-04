@@ -12,8 +12,7 @@ import {
   onSnapshot,
   query,
   orderBy,
-  limit,
-  serverTimestamp
+  limit
 } from '../firebase/gateway';
 import { getFirebaseApp, getDb } from '../firebase/config';
 import { getCurrentUser } from './authService';
@@ -64,7 +63,6 @@ export const FCM_VAPID_KEY =
 const isBrowser = typeof window !== 'undefined' && typeof localStorage !== 'undefined';
 
 let messagingInstance: Messaging | null = null;
-let activeFcmToken: string | null = null;
 let fcmServiceWorkerReg: ServiceWorkerRegistration | null = null;
 
 export function shouldRefreshToken(): boolean {
@@ -121,19 +119,6 @@ export function detectDevicePlatform(): { platform: 'Android' | 'iOS' | 'Desktop
   else if (/opera|opr/i.test(ua)) browser = 'Opera';
 
   return { platform, browser };
-}
-
-/**
- * Returns the currently active FCM token stored locally
- */
-export function getActiveFcmToken(): string | null {
-  if (activeFcmToken) return activeFcmToken;
-  if (!isBrowser) return null;
-  try {
-    return localStorage.getItem(LOCAL_FCM_TOKEN_KEY);
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -221,7 +206,6 @@ export async function initializeFCM(
       token = `FCM_DEV_${getOrCreateDeviceId()}_${Date.now()}`;
     }
 
-    activeFcmToken = token;
     if (isBrowser) {
       try {
         localStorage.setItem(LOCAL_FCM_TOKEN_KEY, token);
@@ -293,7 +277,6 @@ export async function refreshFcmToken(): Promise<string | null> {
       serviceWorkerRegistration: swReg || undefined
     });
     if (newToken) {
-      activeFcmToken = newToken;
       if (isBrowser) {
         localStorage.setItem(LOCAL_FCM_TOKEN_KEY, newToken);
         localStorage.setItem(FCM_LAST_REFRESH_KEY, Date.now().toString());
@@ -364,7 +347,6 @@ export async function saveDeviceTokenToFirestore(token: string): Promise<void> {
 async function registerFallbackDeviceRecord(): Promise<string> {
   const deviceId = getOrCreateDeviceId();
   const token = `FCM_SYNC_${deviceId}`;
-  activeFcmToken = token;
   if (isBrowser) {
     try {
       localStorage.setItem(LOCAL_FCM_TOKEN_KEY, token);
@@ -490,37 +472,6 @@ export function subscribeToFcmBroadcasts(
     return unsubscribe;
   } catch (err) {
     console.warn('[FCM] Could not establish Firestore push listener:', err);
-    return () => {};
-  }
-}
-
-/**
- * Subscribes to the list of all registered FCM devices in real-time
- */
-export function subscribeToRegisteredDevices(
-  onUpdate: (devices: FcmDeviceRecord[]) => void
-): () => void {
-  try {
-    const db = getDb();
-    const colRef = collection(db, FCM_TOKENS_COLLECTION);
-
-    const unsubscribe = onSnapshot(
-      colRef,
-      (snapshot) => {
-        const list: FcmDeviceRecord[] = [];
-        snapshot.forEach((docSnap) => {
-          list.push(docSnap.data() as FcmDeviceRecord);
-        });
-        onUpdate(list);
-      },
-      (error) => {
-        console.debug('[FCM] Registered devices subscription notice:', error?.message || error);
-      }
-    );
-
-    return unsubscribe;
-  } catch (err) {
-    console.warn('[FCM] Error listening to registered devices:', err);
     return () => {};
   }
 }

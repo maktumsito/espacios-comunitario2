@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   X,
@@ -8,13 +8,8 @@ import {
   PlusCircle,
   RotateCcw,
   Search,
-  Calendar,
-  Clock,
-  MapPin,
-  User,
   CheckCircle2,
   AlertTriangle,
-  ArrowRight,
   Filter,
   Download,
   ShieldCheck,
@@ -242,22 +237,6 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
-
-  const formatTimestamp = (isoStr: string) => {
-    try {
-      const d = new Date(isoStr);
-      return d.toLocaleString('es-CL', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
-    } catch {
-      return isoStr;
-    }
   };
 
   const getActionBadge = (action: AuditActionType) => {

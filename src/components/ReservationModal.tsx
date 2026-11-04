@@ -797,15 +797,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       setSingleSecondEndTime(formatMinutesToTime(Math.min(1439, timeToMinutes(safeInitEndTime) + 60)));
       setUseCustomSchedulesPerDay(false);
       setUseCustomSchedulesPerDate(false);
-      setDaySchedules({
-        1: { horaInicio: safeInitStartTime, horaFin: safeInitEndTime, espacio: defaultSpace, hasSecondSlot: false, secondHoraInicio: safeInitEndTime, secondHoraFin: formatMinutesToTime(Math.min(1439, timeToMinutes(safeInitEndTime) + 60)), secondEspacio: defaultSecondSpace },
-        2: { horaInicio: safeInitStartTime, horaFin: safeInitEndTime, espacio: defaultSpace, hasSecondSlot: false, secondHoraInicio: safeInitEndTime, secondHoraFin: formatMinutesToTime(Math.min(1439, timeToMinutes(safeInitEndTime) + 60)), secondEspacio: defaultSecondSpace },
-        3: { horaInicio: safeInitStartTime, horaFin: safeInitEndTime, espacio: defaultSpace, hasSecondSlot: false, secondHoraInicio: safeInitEndTime, secondHoraFin: formatMinutesToTime(Math.min(1439, timeToMinutes(safeInitEndTime) + 60)), secondEspacio: defaultSecondSpace },
-        4: { horaInicio: safeInitStartTime, horaFin: safeInitEndTime, espacio: defaultSpace, hasSecondSlot: false, secondHoraInicio: safeInitEndTime, secondHoraFin: formatMinutesToTime(Math.min(1439, timeToMinutes(safeInitEndTime) + 60)), secondEspacio: defaultSecondSpace },
-        5: { horaInicio: safeInitStartTime, horaFin: safeInitEndTime, espacio: defaultSpace, hasSecondSlot: false, secondHoraInicio: safeInitEndTime, secondHoraFin: formatMinutesToTime(Math.min(1439, timeToMinutes(safeInitEndTime) + 60)), secondEspacio: defaultSecondSpace },
-        6: { horaInicio: safeInitStartTime, horaFin: safeInitEndTime, espacio: defaultSpace, hasSecondSlot: false, secondHoraInicio: safeInitEndTime, secondHoraFin: formatMinutesToTime(Math.min(1439, timeToMinutes(safeInitEndTime) + 60)), secondEspacio: defaultSecondSpace },
-        0: { horaInicio: safeInitStartTime, horaFin: safeInitEndTime, espacio: defaultSpace, hasSecondSlot: false, secondHoraInicio: safeInitEndTime, secondHoraFin: formatMinutesToTime(Math.min(1439, timeToMinutes(safeInitEndTime) + 60)), secondEspacio: defaultSecondSpace }
-      });
+      const defaultDaySlot = { horaInicio: safeInitStartTime, horaFin: safeInitEndTime, espacio: defaultSpace, hasSecondSlot: false, secondHoraInicio: safeInitEndTime, secondHoraFin: formatMinutesToTime(Math.min(1439, timeToMinutes(safeInitEndTime) + 60)), secondEspacio: defaultSecondSpace };
+      setDaySchedules(Object.fromEntries([1, 2, 3, 4, 5, 6, 0].map(d => [d, { ...defaultDaySlot }])));
     }
   }, [editingReservation, isDuplicating, initialDate, initialSpace, initialStartTime, initialEndTime, isOpen, availableSpaces, availableLoanTypes, availableActivityTypes]);
 
@@ -991,8 +984,6 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     secondSpaceCapacityWarning,
     isFormSubmitDisabled,
     hasStep1Conflict,
-    validateStep1,
-    validateStep2,
     isStep1ActivityCompleted,
     isStep2DateTimeCompleted,
     isStep3ApplicantCompleted,
@@ -1190,14 +1181,14 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     }
     if (isWizardMode) {
       if (wizardStep === 1) {
-        if (validateStep1(true)) {
+        if (validateStep1Activity(true)) {
           setWizardStep(2);
           scrollToModalTop();
         }
         return;
       }
       if (wizardStep === 2) {
-        if (validateStep2(true)) {
+        if (validateStep2DateTime(true)) {
           setWizardStep(3);
           scrollToModalTop();
         }

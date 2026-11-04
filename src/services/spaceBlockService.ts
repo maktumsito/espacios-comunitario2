@@ -11,7 +11,6 @@ import {
 import { getDb } from '../firebase/config';
 import { SpaceBlock } from '../types';
 import { normalizeSpaceName } from '../data/spacesData';
-import { timeToMinutes } from '../utils/conflictDetector';
 
 const COLLECTION_NAME = 'bloqueos_espacios';
 const LOCAL_STORAGE_KEY = 'ccd_bloqueos_espacios_cache_v1';
@@ -165,58 +164,4 @@ export async function deleteSpaceBlock(id: string): Promise<void> {
       throw err;
     }
   }
-}
-
-/**
- * Helper to check if a specific space and time overlaps with an active space block.
- * Returns the matching block if blocked, or null if clear.
- */
-export function checkSpaceBlocked(
-  space: string,
-  date: string, // YYYY-MM-DD
-  startTime: string, // HH:mm
-  endTime: string, // HH:mm
-  blocks: SpaceBlock[]
-): SpaceBlock | null {
-  if (!space || !date || !blocks || blocks.length === 0) return null;
-  const targetSpaceNorm = normalizeSpaceName(space);
-  const startMin = timeToMinutes(startTime || '08:00');
-  const endMin = timeToMinutes(endTime || '22:30');
-
-  for (const b of blocks) {
-    if (!b.activo) continue;
-    // Check if target date is within block range [fechaInicio, fechaFin]
-    if (date < b.fechaInicio || date > b.fechaFin) continue;
-
-    // Check space matching (identical or sub-spaces if configured)
-    const blockSpaceNorm = normalizeSpaceName(b.espacio);
-    const matchesSpace = blockSpaceNorm === targetSpaceNorm ||
-      (b.bloquearSubEspacios && targetSpaceNorm.includes(blockSpaceNorm)) ||
-      (b.bloquearSubEspacios && blockSpaceNorm.includes(targetSpaceNorm));
-
-    if (!matchesSpace) continue;
-
-    // Check time collision
-    if (b.todoElDia) {
-      return b;
-    }
-
-    const bStartMin = timeToMinutes(b.horaInicio || '08:00');
-    const bEndMin = timeToMinutes(b.horaFin || '22:30');
-
-    // Overlap: startMin < bEndMin && endMin > bStartMin
-    if (startMin < bEndMin && endMin > bStartMin) {
-      return b;
-    }
-  }
-
-  return null;
-}
-
-/**
- * Get all active blocks for a particular date
- */
-export function getBlocksForDate(date: string, blocks: SpaceBlock[]): SpaceBlock[] {
-  if (!date || !blocks) return [];
-  return blocks.filter((b) => b.activo && date >= b.fechaInicio && date <= b.fechaFin);
 }

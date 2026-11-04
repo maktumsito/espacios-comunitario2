@@ -159,3 +159,11 @@ export function normalizeSpaceName(name?: string): string {
   return clean;
 }
 
+/**
+ * Returns the configured color for a space name from SPACES_LIST, defaulting to slate-500 (#64748b).
+ */
+export function getSpaceColor(spaceName: string): string {
+  const found = SPACES_LIST.find((s) => s.name.toUpperCase() === spaceName.toUpperCase());
+  return found ? found.color : '#64748b';
+}
+

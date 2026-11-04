@@ -27,16 +27,13 @@ import {
 import {
   DEFAULT_GMAIL_SENDER,
   connectGoogleGmailAccount,
-  getGmailAccessToken,
   isGmailConnected,
   isPersistentGmailConnection,
-  getCurrentGoogleUser,
   disconnectGoogleGmail,
   subscribeGmailAuthState,
   loadGmailDispatchConfig,
   saveGmailDispatchConfig,
   GmailDispatchConfig,
-  GoogleAuthUserInfo,
   ScheduledDispatchConfig,
   DEFAULT_SCHEDULED_CONFIG,
   calculateScheduledDates,
@@ -44,8 +41,7 @@ import {
   AlcanceActividadesTipo,
   calculateActivityDatesForDispatchDate,
   calculateAllScheduledActivityDates,
-  EmailDispatchFilterMode,
-  isLoanReservation
+  EmailDispatchFilterMode
 } from '../services/gmailDispatchService';
 import { ActivityTypeItem, LoanType } from '../types';
 import { format, addMonths } from 'date-fns';
@@ -64,7 +60,6 @@ export const AdminGmailConfig: React.FC<AdminGmailConfigProps> = ({
   onOpenGmailDispatch,
   currentUser
 }) => {
-  const [googleUser, setGoogleUser] = useState<GoogleAuthUserInfo | null>(getCurrentGoogleUser());
   const [hasToken, setHasToken] = useState(isGmailConnected());
   const [connectionPersistent, setConnectionPersistent] = useState(isPersistentGmailConnection());
   const [isConnecting, setIsConnecting] = useState(false);
@@ -81,7 +76,6 @@ export const AdminGmailConfig: React.FC<AdminGmailConfigProps> = ({
     includeResponsibleContact: true
   });
 
-  const [isLoadingConfig, setIsLoadingConfig] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessToast, setSaveSuccessToast] = useState(false);
   const [newRecipientInput, setNewRecipientInput] = useState('');
@@ -129,8 +123,7 @@ export const AdminGmailConfig: React.FC<AdminGmailConfigProps> = ({
 
   // Subscribe to auth state
   useEffect(() => {
-    const unsub = subscribeGmailAuthState((user, token, serverConnected, persistent) => {
-      setGoogleUser(user);
+    const unsub = subscribeGmailAuthState((_user, token, serverConnected, persistent) => {
       setHasToken(Boolean(token) || Boolean(serverConnected));
       setConnectionPersistent(Boolean(persistent));
     });
@@ -145,7 +138,6 @@ export const AdminGmailConfig: React.FC<AdminGmailConfigProps> = ({
         setConfig(saved.schedule?.alcanceActividades === 'proxima_semana'
           ? { ...saved, schedule: { ...saved.schedule, alcanceActividades: 'semana_en_curso' } }
           : saved);
-        setIsLoadingConfig(false);
       }
     });
     return () => {

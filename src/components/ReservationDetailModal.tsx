@@ -3,7 +3,7 @@ import { RoomSetupPreview } from './RoomSetupPreview';
 import { SETUP_LABELS } from '../utils/roomDistribution';
 import React from 'react';
 import { Reservation, SpaceRating, CommitmentLetterAttachment, isSingleDayMultiSpaceReservation } from '../types';
-import { SPACES_LIST } from '../data/spacesData';
+import { getSpaceColor } from '../data/spacesData';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { isWeekend, isBirthdayReservation, isEligibleForRating, isRatingAllowedForReservation } from '../services/ratingService';
 import {
@@ -37,7 +37,6 @@ import { isCommitmentLetterEligible } from '../utils/commitmentLetterPdf';
 import { checkLoanScheduleLimit } from '../utils/validationUtils';
 import {
   AuthUser,
-  isCoordinatorOrAdmin,
   userCanCreateReservations,
   userCanEditReservations,
   userCanDeleteReservations
@@ -134,11 +133,6 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   const canCreate = userCanCreateReservations(currentUser);
   const reactivationBlocked = Boolean(reservation.reemplazadaPorReservaId &&
     checkSingleConflict({ ...reservation, estado: 'activa' }, allReservations, [reservation.id]).length);
-
-  const getSpaceColor = (spaceName: string) => {
-    const found = SPACES_LIST.find(s => s.name.toUpperCase() === spaceName.toUpperCase());
-    return found ? found.color : '#64748b';
-  };
 
   const spaceColor = getSpaceColor(reservation.espacio);
   const isWeekendRes = isWeekend(reservation.fecha);

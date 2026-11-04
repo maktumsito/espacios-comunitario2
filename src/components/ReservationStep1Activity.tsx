@@ -7,8 +7,7 @@ import {
   Star,
   Smartphone,
   Check,
-  FileSignature,
-  Info
+  FileSignature
 } from 'lucide-react';
 import { Reservation, ActivityTypeItem } from '../types';
 import { MAX_ACTIVITY_DESCRIPTION_LENGTH } from '../utils/validationUtils';

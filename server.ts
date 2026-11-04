@@ -20,19 +20,14 @@ import fs from 'fs';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
-import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
-  initializeFirestore,
-  getFirestore,
   doc,
   getDocFromServer,
   setDoc,
   runTransaction,
-  connectFirestoreEmulator,
   Firestore
 } from './src/firebase/gateway';
 
-import type { Reservation } from './src/types';
 import type { UserAccount } from './src/services/authService';
 import {
   generateDailySchedulePdf,
@@ -50,17 +45,6 @@ const localTestMode = process.env.VITE_LOCAL_TEST_MODE === 'true';
 // The container startup probe also probes port 3000. Therefore, the server must listen on 3000.
 const PORT = 3000;
 const TIMEZONE = 'America/Santiago';
-
-// Read Firebase config from repository
-let firebaseConfig: any = null;
-try {
-  const cfgPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(cfgPath)) {
-    firebaseConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-  }
-} catch (e) {
-  console.warn('[Server] Could not read firebase-applet-config.json:', e);
-}
 
 // Privileged database access stays exclusively on the server.
 function getServerDb(): Firestore | null {
@@ -326,7 +310,6 @@ async function logDispatchToFirestore(data: Record<string, any>) {
     const db = getServerDb();
     if (!db) return;
 
-    const logId = `dispatch_${Date.now()}`;
     // Save in configuracion_sistema for consistency with firestore rules
     await setDoc(doc(db, 'configuracion_sistema', 'last_email_dispatch'), {
       data: {

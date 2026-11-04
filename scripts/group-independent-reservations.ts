@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { initializeApp } from 'firebase-admin/app';
 import {getFirestore} from 'firebase-admin/firestore';

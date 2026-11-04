@@ -33,7 +33,6 @@ import {
 import {
   getLocalCache,
   seedAllToFirestore,
-  setLocalCache,
   normalizeReservationFromFirestore,
 } from "./reservationService";
 import {
@@ -46,6 +45,7 @@ import { getAllAuthorizedUsers, getStoredAuthUser, isCristianShute, UserAccount,
 import { automaticBackupsToRotate } from '../utils/maintenanceDiagnostics';
 import { getLocalRatingsCache } from "./ratingService";
 import { recordAuditEntry } from "./auditLogService";
+import { formatDateYYYYMMDD } from "../utils/dateUtils";
 
 // ============================================================================
 // CONSTANTS & STORAGE KEYS
@@ -120,24 +120,8 @@ export interface BackupScheduleConfig {
 // HELPER FUNCTIONS & CHECKSUMS
 // ============================================================================
 
-/**
- * Calculates a lightweight deterministic string checksum for the backup data.
- */
-function calculateSimpleChecksum(content: string): string {
-  let hash = 0;
-  for (let i = 0; i < content.length; i++) {
-    const char = content.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return `CHK_${Math.abs(hash).toString(16).toUpperCase().padStart(8, "0")}`;
-}
-
 export function formatLocalDateString(date: Date = new Date()): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return formatDateYYYYMMDD(date);
 }
 
 /**

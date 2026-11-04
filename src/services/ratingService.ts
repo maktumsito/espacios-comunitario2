@@ -2,7 +2,7 @@ import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import { collection, doc, deleteDoc, Unsubscribe, query, orderBy, limit } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 import { SpaceRating, Reservation } from '../types';
-import { formatDateDDMMYYYY } from '../utils/dateUtils';
+import { formatDateDDMMYYYY, formatDateYYYYMMDD } from '../utils/dateUtils';
 import { getAuthSessionToken } from './authService';
 import { getLocalCache } from './reservationService';
 
@@ -142,16 +142,6 @@ export interface AutoTriggerPayload {
 // ==========================================
 
 /**
- * Formats a Date object as a local YYYY-MM-DD string without UTC timezone drift.
- */
-export function formatToLocalDateString(d: Date): string {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-/**
  * Checks if a given YYYY-MM-DD date string represents a weekend day (Saturday or Sunday).
  */
 export function isWeekend(dateStr: string): boolean {
@@ -233,7 +223,7 @@ export function getCurrentWeekendEndStr(referenceDate: Date = new Date()): strin
   const day = d.getDay();
   const diffToSunday = day === 0 ? 0 : 7 - day;
   d.setDate(d.getDate() + diffToSunday);
-  return formatToLocalDateString(d);
+  return formatDateYYYYMMDD(d);
 }
 
 /**
@@ -516,8 +506,8 @@ export function getPastWeekendRatings(
   const sun = new Date(sat);
   sun.setDate(sat.getDate() + 1);
 
-  const satStr = formatToLocalDateString(sat);
-  const sunStr = formatToLocalDateString(sun);
+  const satStr = formatDateYYYYMMDD(sat);
+  const sunStr = formatDateYYYYMMDD(sun);
 
   const weekendRatings = ratings.filter(
     (r) => (r.fecha === satStr || r.fecha === sunStr) && r.esCumpleanos
@@ -637,7 +627,7 @@ export function checkAutomaticMondayEmail(
     }
     const today = new Date();
     const isMonday = today.getDay() === 1;
-    const todayStr = formatToLocalDateString(today);
+    const todayStr = formatDateYYYYMMDD(today);
     const lastSentDate = localStorage.getItem(AUTO_EMAIL_LOG_KEY);
 
     if (isMonday && lastSentDate !== todayStr) {

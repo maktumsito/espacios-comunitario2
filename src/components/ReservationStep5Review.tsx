@@ -5,17 +5,14 @@ import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React from 'react';
 import {
   CheckCircle2,
-  Calendar,
   User,
   Package,
   Sparkles,
   Edit2,
   MapPin,
-  AlertTriangle,
-  FileSignature,
-  FileText
+  AlertTriangle
 } from 'lucide-react';
-import { Reservation, EquipmentItem } from '../types';
+import { Reservation } from '../types';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { isCommitmentLetterEligible } from '../utils/commitmentLetterPdf';
 

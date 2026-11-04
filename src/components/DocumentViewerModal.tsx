@@ -46,10 +46,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 25, 250));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 25, 50));
   const handleRotate = () => setRotation((prev) => (prev + 90) % 360);
-  const handleReset = () => {
-    setZoom(100);
-    setRotation(0);
-  };
 
   const handleDownload = () => {
     const link = document.createElement('a');

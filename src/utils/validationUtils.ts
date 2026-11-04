@@ -208,40 +208,6 @@ export function validatePhone(phone: string, allowEmpty = true): PhoneValidation
   };
 }
 
-/**
- * Normalizes any Chilean phone number into E.164 international format (+569XXXXXXXX or +56XXXXXXXX)
- */
-export function formatPhoneToInternational(phone: string): string {
-  if (!phone) return '';
-  const digits = phone.replace(/\D/g, '');
-  if (!digits) return '';
-
-  if (digits.startsWith('56')) {
-    return `+${digits}`;
-  }
-  // Standard Chilean 8 or 9 digit number
-  return `+56${digits}`;
-}
-
-/**
- * Generates a clean tel: protocol link for a phone number
- */
-export function getPhoneTelLink(phone: string): string {
-  const intl = formatPhoneToInternational(phone);
-  return intl ? `tel:${intl}` : '#';
-}
-
-/**
- * Generates a clean WhatsApp link for a phone number
- */
-export function getPhoneWhatsAppLink(phone: string, message?: string): string {
-  const intl = formatPhoneToInternational(phone);
-  if (!intl) return '#';
-  const cleanNumber = intl.replace(/\+/g, '');
-  const url = `https://wa.me/${cleanNumber}`;
-  return message ? `${url}?text=${encodeURIComponent(message)}` : url;
-}
-
 
 // ==========================================
 // 3. STRICT CALENDAR DATE VALIDATION

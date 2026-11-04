@@ -9,7 +9,7 @@ import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } fr
 import { Reservation, SpaceInfo, FilterState, SpaceBlock } from '../types';
 import { SPACES_LIST, normalizeSpaceName } from '../data/spacesData';
 import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from '../utils/spaceAvailability';
-import { timeToMinutes, formatMinutesToTime, getConflictReservationIds, doSpacesConflict, getConstituentSpaces, normalizeSpace, isReservationActiveForAvailability, getTimeIntervalsForReservation, findMaintenanceBlockConflicts } from '../utils/conflictDetector';
+import { timeToMinutes, getConflictReservationIds, doSpacesConflict, getConstituentSpaces, normalizeSpace, isReservationActiveForAvailability, getTimeIntervalsForReservation, findMaintenanceBlockConflicts } from '../utils/conflictDetector';
 import { getChileanHolidayInfo } from '../utils/holidayUtils';
 import {
   Calendar as CalendarIcon,
@@ -33,8 +33,7 @@ import {
   User,
   Clock,
   Phone,
-  MapPin,
-  Mail
+  MapPin
 } from 'lucide-react';
 import {
   format,
@@ -83,24 +82,6 @@ interface DailyUsageViewProps {
   onDateChange?: (date: Date) => void;
 }
 
-// Default ordered space list matching the user's required canonical layout:
-// Auditorio, Gimnasio, Sala Espejos, Tatami, Sala 2, Sala 3, Sala 4, Sala 5, Sala 6, Biblioteca, Patio Exterior, Cocina, Multicancha, Box 1
-const DEFAULT_ORDERED_SPACES: string[] = [
-  'AUDITORIO',
-  'GIMNASIO',
-  'SALA DE ESPEJOS',
-  'TATAMI',
-  'SALA 2',
-  'SALA 3',
-  'SALA 4',
-  'SALA 5',
-  'SALA 6',
-  'BIBLIOTECA',
-  'PATIO EXTERIOR',
-  'COCINA',
-  'MULTICANCHA',
-  'BOX 1'
-];
 const EMPTY_BLOCKS: readonly SpaceBlock[] = [];
 
 const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
@@ -153,7 +134,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   const selectedDate = currentDate;
   const [searchQuery, setSearchQuery] = useState<string>(() => globalFilters?.search || '');
   const [dateErrorMessage, setDateErrorMessage] = useState<string | null>(null);
-  const [hoveredSlot, setHoveredSlot] = useState<{ space: string; hour: number } | null>(null);
+  const [, setHoveredSlot] = useState<{ space: string; hour: number } | null>(null);
   const [hoveredCardInfo, setHoveredCardInfo] = useState<{
     res: Reservation;
     rect: DOMRect;
@@ -1663,7 +1644,6 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                         const isVeryShort = cardHeight < 44;
                         const isShort = cardHeight >= 44 && cardHeight < 68;
                         const isMedium = cardHeight >= 68 && cardHeight < 110;
-                        const isTall = cardHeight >= 110;
 
                         // Primary activity title and subcategory distinction
                         const mainTitle = (res.descripcion && res.descripcion.trim()) ? res.descripcion.trim() : res.tipoActividad;

@@ -1,6 +1,6 @@
 import { CalendarDateInput } from './common/CalendarDateInput';
 import { ModalOverlay } from './common/ModalOverlay';
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Reservation, SpaceInfo } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
@@ -182,10 +182,6 @@ export const CommitmentLetterModal: React.FC<CommitmentLetterModalProps> = ({
       setIsGeneratingPdf(false);
     }
   };
-
-  const formattedFechaConDia = rangeInfo.formattedDateWithDay;
-  const horaInicioStr = localData.horaInicio || '14:00';
-  const horaFinStr = localData.horaFin || '22:00';
 
   // Copy plain text formatted letter matching the official attached template
   const handleCopyText = () => {

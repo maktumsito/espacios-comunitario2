@@ -21,9 +21,7 @@ import {
   Filter,
   X,
   CornerDownLeft,
-  ChevronRight,
-  ArrowUpDown,
-  Tag
+  ChevronRight
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -152,7 +150,6 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
   // Categorized items based on query
   const { actions, reservationItems, applicantItems, spaceItems, flattenedItems } = useMemo(() => {
     const normQ = normalizeStr(query);
-    const cleanRutQ = query.replace(/[^0-9kK]/g, '').toLowerCase();
 
     // 1. SYSTEM ACTIONS
     const systemActions: PaletteCommandItem[] = [

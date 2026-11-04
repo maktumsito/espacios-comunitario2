@@ -10,18 +10,16 @@ import {
 } from '../services/applicantDirectoryService';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { getPhoneContactActions } from '../utils/phoneUtils';
-import { ApplicantSummaryCard } from './ApplicantSummaryCard';
+import { ApplicantSummaryCard, getActivityBadgeStyle } from './ApplicantSummaryCard';
 import {
   Users,
   Search,
-  Star,
   Calendar,
   AlertTriangle,
   FileSignature,
   Phone,
   Mail,
   Home,
-  ChevronRight,
   X,
   Tag
 } from 'lucide-react';
@@ -31,20 +29,6 @@ interface ApplicantDirectoryViewProps {
   ratings: readonly SpaceRating[];
   onSelectReservation?: (reserva: Reservation) => void;
   onNewReservationForApplicant?: (applicant: ApplicantSummary) => void;
-}
-
-function getActivityBadgeStyle(cat: string) {
-  switch (cat) {
-    case 'PRÉSTAMO':
-      return 'bg-blue-50 text-blue-700 border-blue-200';
-    case 'ENSAYO':
-      return 'bg-purple-50 text-purple-700 border-purple-200';
-    case 'CUMPLEAÑOS':
-      return 'bg-pink-50 text-pink-700 border-pink-200';
-    case 'OTROS':
-    default:
-      return 'bg-slate-100 text-slate-700 border-slate-200';
-  }
 }
 
 export const ApplicantDirectoryView: React.FC<ApplicantDirectoryViewProps> = ({

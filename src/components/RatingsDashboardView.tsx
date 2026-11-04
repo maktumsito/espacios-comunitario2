@@ -19,8 +19,7 @@ import {
   Search,
   Building2,
   Clock,
-  Send,
-  Zap
+  Send
 } from 'lucide-react';
 import { ConfirmationModal } from './common/ConfirmationModal';
 

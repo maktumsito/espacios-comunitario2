@@ -8,7 +8,7 @@ import {
   findAvailableTimeSlotsInSpace,
   findAlternativeFreeSpaces
 } from '../utils/conflictRecommender';
-import { formatDateDDMMYYYY, getDayOfWeekFromDateString } from '../utils/dateUtils';
+import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { scheduleSlotsForDate, scopedScheduleSlots, sameScheduleSlot, type ScheduleSlot } from '../utils/recurringSchedule';
 
 interface UseReservationConflictResolutionProps {

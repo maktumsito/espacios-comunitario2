@@ -4,7 +4,7 @@ import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from './common/PaginationControls';
 import { Reservation, SpaceBlock } from '../types';
 import { detectAllConflicts, detectReservationsBlockedByMaintenance } from '../utils/conflictDetector';
-import { SPACES_LIST } from '../data/spacesData';
+import { getSpaceColor } from '../data/spacesData';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { DuplicateReview } from './maintenance/DuplicateReview';
 import {
@@ -16,7 +16,6 @@ import {
   Calendar,
   RefreshCw,
   Sparkles,
-  Trash2,
   ChevronDown,
   ChevronUp,
   Wrench
@@ -47,11 +46,6 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
       ...prev,
       [key]: !prev[key]
     }));
-  };
-
-  const getSpaceColor = (spaceName: string) => {
-    const found = SPACES_LIST.find(s => s.name.toUpperCase() === spaceName.toUpperCase());
-    return found ? found.color : '#64748b';
   };
 
   return (

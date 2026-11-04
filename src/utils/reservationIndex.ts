@@ -101,18 +101,6 @@ export function buildReservationDateIndex(
 }
 
 /**
- * Retrieves all reservations for a given date in O(1) time.
- */
-export function getReservationsForDate(
-  index: Map<string, Reservation[]>,
-  dateStr: string
-): Reservation[] {
-  if (!dateStr || !index) return [];
-  const key = dateStr.length === 10 ? dateStr : dateStr.trim();
-  return index.get(key) || [];
-}
-
-/**
  * React hook to memoize the date-based reservation index.
  * Recomputes only when the underlying reservations reference changes.
  */

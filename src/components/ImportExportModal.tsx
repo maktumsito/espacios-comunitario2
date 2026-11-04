@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Reservation } from '../types';
 import { exportToCsv } from '../utils/csvExportImport';
 import { parseCsvRows } from '../utils/csvParser';
@@ -61,7 +61,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   onRestoreFromBackup
 }) => {
   const [activeTab, setActiveTab] = useState<'backups' | 'csv'>('backups');
-  const [isUploading, setIsUploading] = useState(false);
+  const [, setIsUploading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{ type: 'idle' | 'loading' | 'success' | 'error'; msg?: string }>({
     type: 'idle'
   });

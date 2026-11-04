@@ -72,13 +72,6 @@ export function recordFirestoreRead(module: string, count: number): void {
 }
 
 /**
- * Returns current read statistics broken down by module.
- */
-export function getFirestoreReadStats(): FirestoreReadStats {
-  return { ...loadPersistedReads() };
-}
-
-/**
  * Returns total cumulative reads across all tracked modules.
  */
 export function getTotalFirestoreReads(): number {

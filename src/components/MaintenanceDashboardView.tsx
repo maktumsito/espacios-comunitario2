@@ -13,11 +13,7 @@ import {
   AlertTriangle,
   Search,
   Wrench,
-  Repeat,
-  ChevronDown,
-  ChevronUp,
-  ShieldAlert,
-  Building2
+  Repeat
 } from 'lucide-react';
 import { SpaceBlockModal } from './SpaceBlockModal';
 
@@ -224,7 +220,6 @@ export const MaintenanceDashboardView: React.FC<MaintenanceDashboardViewProps> =
           {filteredBlocks.map((block) => {
             const isOngoing = todayStr >= block.fechaInicio && todayStr <= block.fechaFin;
             const isFuture = block.fechaInicio > todayStr;
-            const isPast = block.fechaFin < todayStr;
 
             return (
               <div

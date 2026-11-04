@@ -16,7 +16,7 @@ interface ApplicantSummaryCardProps {
   onSelect: (applicant: ApplicantSummary) => void;
 }
 
-function getActivityBadgeStyle(cat: string) {
+export function getActivityBadgeStyle(cat: string) {
   switch (cat) {
     case 'PRÉSTAMO':
       return 'bg-blue-50 text-blue-700 border-blue-200';

@@ -1,4 +1,3 @@
-import {doc,getDocFromServer} from './gateway';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeFirestore, getFirestore, Firestore, setLogLevel, connectFirestoreEmulator, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { firestoreReadPolicy } from './readPolicy';
@@ -53,19 +52,6 @@ export function getDb(): Firestore {
     if (localTestMode) connectFirestoreEmulator(dbInstance!, '127.0.0.1', 8087);
   }
   return dbInstance;
-}
-
-// Function to test connectivity safely without uncaught runtime crashes
-export async function testFirestoreConnection(): Promise<boolean> {
-  try {
-    const db = getDb();
-    await getDocFromServer(doc(db, '_connection_test', 'ping'));
-    return true;
-  } catch (error) {
-    // Firestore works offline / optimistic as well
-    console.debug('Firestore connection probe:', error instanceof Error ? error.message : String(error));
-    return false;
-  }
 }
 
 let authInstance: Auth | null = null;

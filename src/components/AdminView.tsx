@@ -67,12 +67,8 @@ import {
   AlertCircle,
   UserCheck,
   Wrench,
-  Hammer,
   X,
-  LogOut,
   Package,
-  Mail,
-  Repeat,
   ShieldAlert,
   CalendarPlus
 } from 'lucide-react';

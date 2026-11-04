@@ -5,7 +5,6 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Reservation, SpaceInfo, SpaceBlock, SpaceRating } from '../types';
 import {
   AuthUser,
-  isCoordinatorOrAdmin,
   userCanCreateReservations,
   userCanEditReservations,
   userCanDeleteReservations
@@ -13,7 +12,6 @@ import {
 import { normalizeSpaceName } from '../data/spacesData';
 import { formatDateYYYYMMDD, parseDateToNoon } from '../utils/dateUtils';
 import { getFuzzyMatchIds } from '../utils/fuzzySearch';
-import { validateAndFormatChileanPhone } from '../utils/validationUtils';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { canReplaceOccurrence } from '../utils/reservationReplacement';
 import {
@@ -22,10 +20,6 @@ import {
   ChevronRight,
   Clock,
   MapPin,
-  User,
-  Phone,
-  MessageCircle,
-  Mail,
   AlertTriangle,
   Star,
   Plus,
@@ -37,13 +31,11 @@ import {
   CheckCircle2,
   Circle,
   Wrench,
-  Monitor,
   Repeat,
   FileCheck,
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
-  ArrowRight,
   MoreHorizontal
 } from 'lucide-react';
 

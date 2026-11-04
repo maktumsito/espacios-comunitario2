@@ -7,7 +7,7 @@ import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } fro
 import { getChileanHolidayInfo, ChileanHoliday } from '../utils/holidayUtils';
 import { useReservationDateIndex } from '../utils/reservationIndex';
 import { getActiveWindowStartDate } from '../services/reservationService';
-import { RESERVATION_TYPE_LEGEND, getActivityColorText, formatDisplayTitle } from '../utils/reservationVisuals';
+import { getActivityColorText, formatDisplayTitle } from '../utils/reservationVisuals';
 import {
   ChevronLeft,
   ChevronRight,
@@ -29,30 +29,18 @@ import {
   startOfWeek,
   endOfWeek,
   eachDayOfInterval,
-  isSameMonth,
-  isSameDay,
-  isToday
+  isSameMonth
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 // ============================================================================
 // COLOR CODING & LEGEND DATA
 // ============================================================================
-export const COLOR_LEGEND_ITEMS = [
-  ...RESERVATION_TYPE_LEGEND.map((item) => ({
-    label: item.label,
-    color: item.accent,
-    bg: item.background,
-    border: item.border
-  })),
-  { label: 'Topamiento / Conflicto', color: '#e11d48', bg: '#fff1f2', border: '#fb7185' }
-];
-
-export const ColorLegendBar: React.FC = () => {
+const ColorLegendBar: React.FC = () => {
   const { legend } = useReservationVisuals();
   const items = [
     ...legend.map(item => ({ label: item.label, color: item.accent, bg: item.background, border: item.border })),
-    COLOR_LEGEND_ITEMS[COLOR_LEGEND_ITEMS.length - 1],
+    { label: 'Topamiento / Conflicto', color: '#e11d48', bg: '#fff1f2', border: '#fb7185' },
   ];
   return (
     <details className="bg-white border border-slate-200 rounded-xl p-2 shadow-2xs">

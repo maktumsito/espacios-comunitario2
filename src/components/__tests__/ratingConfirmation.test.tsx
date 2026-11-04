@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import React from 'react';
 import { render, fireEvent, screen, act, cleanup } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { SpaceRatingModal } from '../SpaceRatingModal';

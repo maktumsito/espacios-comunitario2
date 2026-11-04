@@ -1,5 +1,5 @@
 import { formatDisplayTitle } from '../utils/reservationVisuals';
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Reservation } from '../types';
 import type { RecurringMoveScope } from '../utils/recurringEdits';
 import { BaseModal } from './common/BaseModal';

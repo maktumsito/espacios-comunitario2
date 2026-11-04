@@ -77,14 +77,6 @@ describe.skipIf(process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8087')('isola
     await expect(service.saveReservation(make('holiday-conflict', {fecha:'2026-12-25', claveAutorizacionFeriado:'CCD'}))).rejects.toThrow(/conflicto/i);
     await expect(service.saveReservation(make('unauthorized-holiday', {fecha:'2026-12-25', espacio:'SALA 3'}))).rejects.toThrow(/feriado/i);
   });
-  it('cleans minute conflicts only after confirming deletion and removing availability entries', async () => {
-    await service.saveReservationsBatch([make('round'),make('minute',{horaInicio:'10:05',horaFin:'11:05'})],{allowConflictOverride:true});
-    const result=await service.cleanConflictingMinuteReservations(service.getLocalCache());
-    expect(result.deletedReservations.map(r=>r.id)).toEqual(['minute']);
-    expect((await getDoc(doc(context.db,'reservas','minute'))).exists()).toBe(false);
-    const slots=await getDocs(collection(context.db,'schedule_slots'));
-    expect(slots.docs.flatMap(d=>d.data().bookings).some(b=>b.id==='minute')).toBe(false);
-  });
   it('restores an authorized snapshot with existing overlaps and replaces confirmed cache', async () => {
     await service.saveReservation(make('obsolete'));
     service.setLocalCache([...service.getLocalCache(),make('local-only',{espacio:'SALA 3'})]);

@@ -3,12 +3,6 @@ import { isReservationPermissionAdmin, reservationPermission } from '../utils/us
 import { sharedOnSnapshot as onSnapshot } from "../firebase/sharedSnapshot";
 import {
   collection,
-  doc,
-  setDoc,
-  deleteDoc,
-  getDocs,
-  getDoc,
-  writeBatch,
 } from "../firebase/gateway";
 import { getDb } from "../firebase/config";
 import { AUTH_SESSION_ID_KEY, SESSION_CREDENTIAL_STORAGE_KEY, SESSION_TOKEN_STORAGE_KEY, bindBrowserSession,
@@ -239,19 +233,6 @@ export function sanitizeUsernameDocId(username: string): string {
 
 const isBrowser =
   typeof window !== "undefined" && typeof localStorage !== "undefined";
-
-/**
- * Cleans an object to remove undefined properties before saving to Firestore
- */
-function cleanUserForFirestore(user: UserAccount): Record<string, any> {
-  const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(user)) {
-    if (value !== undefined) {
-      result[key] = value;
-    }
-  }
-  return result;
-}
 
 /**
  * Obtiene todos los usuarios autorizados desde cache local / memoria
@@ -594,18 +575,14 @@ export function canAccessAdminPanel(user?: AuthUser | null): boolean {
 }
 
 export function canManageMasterConfig(user?: AuthUser | null): boolean {
-  if (!user) return false;
-  const role = (user.role || "").trim().toLowerCase();
-  return role === "administrador" || role === "coordinador";
+  return isCoordinatorOrAdmin(user);
 }
 
 /**
  * Solo usuarios Administrador o Coordinador pueden ver el registro de auditoría/cambios y deshacerlos
  */
 export function canViewAuditLog(user?: AuthUser | null): boolean {
-  if (!user) return false;
-  const role = (user.role || "").trim().toLowerCase();
-  return role === "administrador" || role === "coordinador";
+  return isCoordinatorOrAdmin(user);
 }
 
 // Cierre de sesión tras una hora sin actividad.

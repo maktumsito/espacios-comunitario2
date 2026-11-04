@@ -9,7 +9,6 @@ import { calculateEquipmentAvailability, getStoredEquipment } from '../services/
 import { buildReservationMoveBatch, getSeriesEditStartDate, type RecurringMoveScope } from '../utils/recurringEdits';
 import { getChileLocalDateString } from '../utils/dateUtils';
 import { checkLoanScheduleLimit } from '../utils/validationUtils';
-import { isChileanHoliday } from '../utils/holidayUtils';
 import {
   saveReservation,
   commitReservationChanges,
@@ -20,13 +19,10 @@ import {
   ReservationVersionError,
   saveReservationsBatch,
   deleteReservationById,
-  deleteReservationsBatch,
   deleteSeriesByRecurrenteId,
   seedAllToFirestore,
   deleteAllHolidayReservations,
   getDeletedIds,
-  recordDeletedId,
-  unrecordDeletedId,
   hasReservationMaterialChange,
   hasReservationOccupancyChange
 } from '../services/reservationService';

@@ -429,7 +429,7 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
   // Calculate upcoming preview dates for modifying series
   const modifyPreview = useMemo(() => {
     if (!modifyingSeries || !newEndDate) return null;
-    const { fechaFin: curEnd, fechaInicio, diasSemana, reservations: curList } = modifyingSeries;
+    const { fechaFin: curEnd, diasSemana, reservations: curList } = modifyingSeries;
 
     if (newEndDate === curEnd) {
       return { type: 'same', count: 0, newDates: [], datesToRemove: [] };
@@ -518,7 +518,7 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
     setModifySuccess(null);
 
     try {
-      const { reservations: curList, diasSemana, horaInicio, horaFin, espacio } = modifyingSeries;
+      const { reservations: curList, horaInicio, horaFin, espacio } = modifyingSeries;
       const firstRes = curList[0];
 
       // Build explicit slots list from fechaInicio to newEndDate

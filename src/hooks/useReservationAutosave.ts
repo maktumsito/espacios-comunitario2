@@ -156,25 +156,6 @@ export function getActiveDraftSummary(): ActiveDraftSummary | null {
   }
 }
 
-/**
- * Clears all reservation drafts from localStorage.
- */
-export function clearAllReservationDrafts(): void {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
-  try {
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith(STORAGE_PREFIX) || key === ACTIVE_CONTEXT_KEY)) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach((k) => localStorage.removeItem(k));
-  } catch (err) {
-    console.warn('Error al limpiar borradores:', err);
-  }
-}
-
 interface UseReservationAutosaveOptions {
   editScope?: DraftEditScope;
   settings?: DraftFormSettings;

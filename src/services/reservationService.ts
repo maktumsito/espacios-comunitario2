@@ -3,33 +3,29 @@ import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
 import {
   collection,
   doc,
-  deleteDoc,
-  writeBatch,
   getDocs,
   getDoc,
   query,
   where,
   orderBy,
-  runTransaction,
   Unsubscribe
 } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 import { Reservation } from '../types';
 import { getAuthSessionToken, getStoredAuthUser, isCoordinatorOrAdmin, userCanCreateReservations, userCanEditReservations, userCanDeleteReservations } from './authService';
-import { writeReservations, readPendingOperations, hasReservationMaterialChange, hasReservationOccupancyChange, type WriteOptions, type WriteResult } from './reservationWriter';
+import { writeReservations, readPendingOperations, hasReservationMaterialChange, type WriteOptions, type WriteResult } from './reservationWriter';
 import { updateOperationJournal } from './reservationOperationJournal';
 export { getPendingOperations, readPendingOperations, hasReservationMaterialChange, hasReservationOccupancyChange, ReservationWriteError, ReservationVersionError } from './reservationWriter';
 import { INITIAL_RESERVATIONS } from '../data/initialData';
-import { isChileanHoliday, verifyHolidayOverrideKey } from '../utils/holidayUtils';
+import { isChileanHoliday } from '../utils/holidayUtils';
 import { normalizeSpaceName } from '../data/spacesData';
 import { getChileLocalDateString } from '../utils/dateUtils';
-import { checkSingleConflict, isReservationActiveForAvailability, detectAllConflicts } from '../utils/conflictDetector';
+import { checkSingleConflict, isReservationActiveForAvailability } from '../utils/conflictDetector';
 import {
   getIndexedDbReservations,
   setIndexedDbReservations
 } from '../utils/indexedDbStorage';
-import { validateReservationWithZod } from '../schemas/reservationSchema';
-import { validateTimeRange, validateStrictCalendarDate } from '../utils/validationUtils';
+import { validateStrictCalendarDate } from '../utils/validationUtils';
 import { recordFirestoreRead } from '../utils/firestoreTracker';
 
 // ============================================================================
@@ -70,39 +66,10 @@ export interface CacheVersionMetadata {
 let inMemoryReservationsCache: Reservation[] | null = null;
 let inMemoryDataHash: string | null = null;
 let inMemoryLastFirestoreHash: string | null = null;
-const purgedIdsInFlight = new Set<string>();
-
-// Firestore limits writeBatch to 500 operations per batch; 450 provides safety buffer
-const FIRESTORE_MAX_BATCH_SIZE = 450;
-
-// Purged minute conflict tracking is now performed definitively via cleanMinuteConflictsMigration.ts
-// The static array is neutralized to avoid runtime linear scanning over every reservation.
-export const KNOWN_PURGED_MINUTE_CONFLICT_BASE_IDS: readonly string[] = Object.freeze([]);
-
-export function isPurgedMinuteConflictId(_id: string): boolean {
-  return false;
-}
 
 // ============================================================================
 // DETERMINISTIC DATA HASHING ENGINE (CYRB53)
 // ============================================================================
-
-/**
- * High-performance 53-bit deterministic hash function.
- * Produces a collision-resistant hexadecimal hash signature for string payloads.
- */
-export function fastHashString(str: string, seed = 0): string {
-  let h1 = 0xdeadbeef ^ seed;
-  let h2 = 0x41c6ce57 ^ seed;
-  for (let i = 0; i < str.length; i++) {
-    const ch = str.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761);
-    h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
-}
 
 export function fastHashRowStream(rows: readonly string[], seed = 0): string {
   let h1 = 0xdeadbeef ^ seed;
@@ -1222,15 +1189,6 @@ export async function deleteAllHolidayReservations(): Promise<{
     deletedReservations: toDelete,
     remainingReservations: remaining
   };
-}
-
-/** Legacy entry point retained for callers; automatic deletion by time rounding is disabled. */
-export async function cleanConflictingMinuteReservations(currentReservations?: Reservation[]): Promise<{
-  deletedCount: number; deletedReservations: Reservation[]; remainingReservations: Reservation[];
-}> {
-  const current = currentReservations ?? getLocalCache();
-  if (detectAllConflicts(current).length) throw new Error('Revisa los conflictos individualmente. La limpieza automática por minutos está deshabilitada.');
-  return { deletedCount: 0, deletedReservations: [], remainingReservations: current };
 }
 
 /**

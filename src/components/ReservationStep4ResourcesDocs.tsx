@@ -9,11 +9,7 @@ import {
   CheckCircle2,
   FileText,
   ChevronDown,
-  ChevronUp,
-  Download,
-  Lightbulb,
-  Check,
-  Plus
+  ChevronUp
 } from 'lucide-react';
 import { Reservation, EquipmentItem } from '../types';
 import { EquipmentSelector } from './EquipmentSelector';
@@ -54,7 +50,7 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
 }) => {
   const requiresLetter = isCommitmentLetterEligible(formData.tipoActividad, formData.tipoPrestamo) || Boolean(formData.requiereCartaCompromiso);
   const [showAiAssistant, setShowAiAssistant] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiPrompt] = useState('');
   const [appliedAiNotice, setAppliedAiNotice] = useState(false);
 
   if (isWizardMode && wizardStep !== 4) return null;

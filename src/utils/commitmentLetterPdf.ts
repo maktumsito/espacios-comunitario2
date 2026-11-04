@@ -479,7 +479,6 @@ export async function generateCommitmentLetterPdfDoc(
   });
 
   const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 11;
   const contentWidth = pageWidth - margin * 2;
 

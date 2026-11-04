@@ -132,29 +132,6 @@ export async function setIndexedDbReservations(reservations: readonly Reservatio
 }
 
 /**
- * Clears the reservation cache store in IndexedDB.
- */
-export async function clearIndexedDbReservations(): Promise<void> {
-  if (!isIndexedDbSupported()) {
-    return;
-  }
-  try {
-    const db = await getDbInstance();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const request = store.delete(CACHE_KEY);
-      request.onsuccess = () => resolve();
-      request.onerror = () => resolve();
-    });
-  } catch (err) {
-    if (isIndexedDbSupported()) {
-      console.warn('Could not clear IndexedDB:', err);
-    }
-  }
-}
-
-/**
  * Retrieves all cached audit log entries from IndexedDB asynchronously.
  * Bypasses browser localStorage ~5MB quota limits.
  */
@@ -214,29 +191,6 @@ export async function setIndexedDbAuditLogs(entries: readonly AuditChangeLogEntr
   } catch (err) {
     if (isIndexedDbSupported()) {
       console.warn('Could not persist audit logs to IndexedDB:', err);
-    }
-  }
-}
-
-/**
- * Clears the audit log store in IndexedDB.
- */
-export async function clearIndexedDbAuditLogs(): Promise<void> {
-  if (!isIndexedDbSupported()) {
-    return;
-  }
-  try {
-    const db = await getDbInstance();
-    return new Promise((resolve) => {
-      const tx = db.transaction(AUDIT_STORE_NAME, 'readwrite');
-      const store = tx.objectStore(AUDIT_STORE_NAME);
-      const request = store.delete(AUDIT_CACHE_KEY);
-      request.onsuccess = () => resolve();
-      request.onerror = () => resolve();
-    });
-  } catch (err) {
-    if (isIndexedDbSupported()) {
-      console.warn('Could not clear audit logs in IndexedDB:', err);
     }
   }
 }

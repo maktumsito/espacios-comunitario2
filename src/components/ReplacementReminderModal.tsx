@@ -1,5 +1,5 @@
 import { formatDisplayTitle } from '../utils/reservationVisuals';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BellRing, Phone, Mail, MessageCircle, UserCheck, CalendarClock } from 'lucide-react';
 import type { Reservation } from '../types';
 import { BaseModal } from './common/BaseModal';

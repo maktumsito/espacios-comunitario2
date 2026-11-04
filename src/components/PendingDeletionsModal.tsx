@@ -2,7 +2,7 @@ import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useState } from 'react';
 import { Reservation } from '../types';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
-import { SPACES_LIST } from '../data/spacesData';
+import { getSpaceColor } from '../data/spacesData';
 import {
   Clock,
   Trash2,
@@ -50,11 +50,6 @@ export const PendingDeletionsModal: React.FC<PendingDeletionsModalProps> = ({
   });
 
   if (!isOpen) return null;
-
-  const getSpaceColor = (spaceName: string) => {
-    const space = SPACES_LIST.find((s) => s.name.toUpperCase() === spaceName.toUpperCase());
-    return space ? space.color : '#64748b';
-  };
 
   const modalFooter = (
     <div className="w-full flex items-center justify-between">

@@ -20,7 +20,6 @@ import {
   Repeat,
   CalendarDays,
   CheckSquare,
-  Square,
   Check,
   FileText,
   Printer,
@@ -48,7 +47,6 @@ import { es } from 'date-fns/locale';
 import {
   DEFAULT_GMAIL_SENDER,
   connectGoogleGmailAccount,
-  getGmailAccessToken,
   isGmailConnected,
   isPersistentGmailConnection,
   getCurrentGoogleUser,
