@@ -64,6 +64,8 @@ describe('horarios de solicitudes en español', () => {
     ['el 20/11/2026 de 18 a 20', '18:00', '20:00'],
     ['de seis y media a ocho de la tarde', '18:30', '20:00'],
     ['de 18-20 horas', '18:00', '20:00'],
+    ['de 10 a 12 personas, de 18 a 20 horas', '18:00', '20:00'],
+    ['de 18 a 20 horas, de 10 a 12 personas', '18:00', '20:00'],
   ])('interpreta %s', (text, start, end) => {
     expect(time(text)).toMatchObject({ horaInicio: start, horaFin: end, detected: true, warnings: [] });
   });

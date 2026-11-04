@@ -16,6 +16,8 @@ export function extractRequestDates(text: string, defaultDate: string, reference
   const base = parseISO(defaultDate);
   const year = isValid(base) ? base.getFullYear() : new Date().getFullYear();
   const dates: string[] = [];
+  let startDate: string | undefined;
+  let endDate: string | undefined;
   const warnings: RequestParsingWarning[] = [];
   const monthPattern = 'enero|ene|febrero|feb|marzo|mar|abril|abr|mayo|may|junio|jun|julio|jul|agosto|ago|septiembre|setiembre|sep|sept|set|octubre|oct|noviembre|nov|diciembre|dic';
   // Share the month in "del 10 al 30 de noviembre" and "10, 17 y 24 de noviembre".
@@ -37,13 +39,16 @@ export function extractRequestDates(text: string, defaultDate: string, reference
     const parsed = parseISO(iso);
     if (!isValid(parsed) || format(parsed, 'yyyy-MM-dd') !== iso) {
       warnings.push({ field: 'fecha', message: `La fecha «${match[0]}» no es válida. Corrígela antes de reservar.` });
-    } else if (!dates.includes(iso)) {
-      dates.push(iso);
+    } else {
+      if (!dates.includes(iso)) dates.push(iso);
+      const before = normalized.slice(0, match.index).trimEnd();
+      if (/\b(?:desde(?:\s+el)?|fecha\s+(?:de\s+)?inicio\s*[:=]?|inicio\s*[:=])$/.test(before)) startDate = iso;
+      if (/\b(?:hasta(?:\s+el)?|fecha\s+(?:de\s+)?(?:fin|termino)\s*[:=]?|(?:fin|termino)\s*[:=])$/.test(before)) endDate = iso;
     }
   }
   if (dates.length === 0 && warnings.length === 0) {
     const ref = parseISO(referenceDate);
-    if (!isValid(ref)) return { dates, warnings };
+    if (!isValid(ref)) return { dates, warnings, startDate, endDate };
     // Remove time-of-day phrases so "mañana por la mañana" still means tomorrow.
     const relativeText = normalized.replace(/\b(?:por|en|de)\s+la\s+manana\b/g, '');
     const relative = /\bpasado\s+manana\b/.test(relativeText) ? 2
@@ -60,7 +65,7 @@ export function extractRequestDates(text: string, defaultDate: string, reference
       }
     }
   }
-  return { dates, warnings };
+  return { dates, warnings, startDate, endDate };
 }
 
 /** Time grammar deliberately requires context for bare numbers (dates and quantities are not hours). */
@@ -80,8 +85,12 @@ export function extractRequestTime(text: string, defaultStart: string, defaultEn
     .replace(/\b\d{1,2}[-/]\d{1,2}[-/](?:20\d{2}|\d{2})\b/g, ' ')
     .replace(/\b\d{1,2}\/\d{1,2}\b/g, ' ');
   const hour = '(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?';
-  const range = new RegExp(`\\b(?:de(?:sde)?(?:\\s+las)?\\s+|entre(?:\\s+las)?\\s+|horario\\s*[:=-]?\\s*)${hour}\\s*(?:h(?:rs?)?\\.?|horas?)?\\s*(?:a(?:\\s+las)?|hasta(?:\\s+las)?|y(?:\\s+las)?|[-–—])\\s*${hour}\\b`, 'i').exec(normalized)
-    || new RegExp(`\\b${hour}\\s*(?:h(?:rs?)?\\.?|horas?)?\\s*(?:a(?:\\s+las)?|hasta(?:\\s+las)?|[-–—])\\s*${hour}\\s*(?:h(?:rs?)?\\.?|horas?)?\\b`, 'i').exec(normalized);
+  const rangePatterns = [new RegExp(`\\b(?:de(?:sde)?(?:\\s+las)?\\s+|entre(?:\\s+las)?\\s+|horario\\s*[:=-]?\\s*)${hour}\\s*(?:h(?:rs?)?\\.?|horas?)?\\s*(?:a(?:\\s+las)?|hasta(?:\\s+las)?|y(?:\\s+las)?|[-–—])\\s*${hour}\\b`, 'gi'),
+    new RegExp(`\\b${hour}\\s*(?:h(?:rs?)?\\.?|horas?)?\\s*(?:a(?:\\s+las)?|hasta(?:\\s+las)?|[-–—])\\s*${hour}\\s*(?:h(?:rs?)?\\.?|horas?)?\\b`, 'gi')];
+  const range = rangePatterns.flatMap(pattern => [...normalized.matchAll(pattern)]).find(match => {
+    const after = normalized.slice(match.index! + match[0].length);
+    return !/^\s*(?:[-/]\d|personas\b|participantes\b|sillas\b|mesas\b)/.test(after);
+  });
   const warnings: RequestParsingWarning[] = [];
   const fallback = { horaInicio: defaultStart, horaFin: defaultEnd, detected: false, warnings };
   const period = /\b(?:de|por|en)\s+la\s+(tarde|noche|manana)\b/.exec(normalized)?.[1];
@@ -98,10 +107,15 @@ export function extractRequestTime(text: string, defaultStart: string, defaultEn
     warnings.push({ field: 'horario', message: 'El horario no es válido o termina antes de comenzar. Indica inicio y término en formato de 24 horas.' });
     return fallback;
   };
+  const labeledStart = new RegExp(`(?:^|[\\n,; ])(?:hora(?:\\s+de)?\\s+)?inicio\\s*[:=]\\s*${hour}\\b`, 'i').exec(normalized);
+  const labeledEnd = new RegExp(`(?:^|[\\n,; ])(?:hora(?:\\s+de)?\\s+)?(?:fin|termino)\\s*[:=]\\s*${hour}\\b`, 'i').exec(normalized);
+  if (labeledStart && labeledEnd) {
+    const start = toMinutes(labeledStart[1], labeledStart[2], labeledStart[3]);
+    const end = toMinutes(labeledEnd[1], labeledEnd[2], labeledEnd[3]);
+    if (start === null || end === null || end <= start) return invalid();
+    return { horaInicio: hhmm(start), horaFin: hhmm(end), detected: true, warnings };
+  }
   if (range) {
-    // Do not mistake "del 10-11-2026" or "de 10 a 12 personas" for a time range.
-    const after = normalized.slice((range.index || 0) + range[0].length);
-    if (/^\s*(?:[-/]\d|personas\b|participantes\b|sillas\b|mesas\b)/.test(after)) return fallback;
     let start = toMinutes(range[1], range[2], range[3]);
     let end = toMinutes(range[4], range[5], range[6]);
     if (!range[3] && range[6] && Number(range[1]) <= 12) {

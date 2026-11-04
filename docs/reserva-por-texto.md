@@ -12,6 +12,14 @@ La detección funciona en el navegador, sin enviar solicitudes a un servicio de 
 
 La búsqueda aproximada solo completa espacios existentes en el catálogo. No se utiliza para identificar personas ni completar RUT o contactos por semejanza.
 
+## Orden de los datos
+
+Los campos se buscan de forma independiente en todo el mensaje. Un nombre aislado puede aparecer al comienzo, al medio o al final. Los campos etiquetados también se pueden pegar en una sola línea sin comas, por ejemplo `Horario: 18:00 a 20:00 Actividad: Taller de Yoga Nombre completo: María Soto Fecha: 20/11/2026`.
+
+Las etiquetas `Fecha inicio:`, `Fecha fin:`, `Hora inicio:` y `Hora término:`, así como `desde` y `hasta` para fechas, determinan el significado aunque el término aparezca antes del inicio. Se conserva el texto original en los comentarios. Para nombres sin etiqueta se requiere un segmento claro con mayúsculas de nombre propio; si aparecen dos candidatos, no se elige uno por su posición.
+
+La independencia del orden se comprueba con las 120 permutaciones de cinco bloques de una solicitud y con rotaciones e inversiones de diez campos etiquetados. No se altera el orden interno de las frases: `de 18 a 20` conserva su significado.
+
 ## Formatos cubiertos
 
 - Fechas ISO, día/mes/año, año corto y día/mes sin año. Sin año explícito se usa el año de la fecha seleccionada en el calendario.

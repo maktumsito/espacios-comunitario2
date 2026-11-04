@@ -369,6 +369,9 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
               className="w-full rounded-xl border border-slate-300 bg-slate-50/60 focus:bg-white p-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition"
               autoFocus
             />
+            <p className="text-[11px] text-slate-500">
+              Puedes escribir los datos en cualquier orden. Si incluyes varias personas o fechas, usa etiquetas como «Solicitante:», «Fecha inicio:» y «Fecha fin:».
+            </p>
 
             {/* Detected badges bar */}
             {effective.detectedFields.length > 0 && (

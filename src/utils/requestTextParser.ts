@@ -20,6 +20,7 @@ import { filterOutChileanHolidays, getChileanHolidayInfo } from './holidayUtils'
 import { isCommitmentLetterEligible } from './commitmentLetterPdf';
 import { WEEKDAYS } from './dateUtils';
 import { buildReservationDateIndex } from './reservationIndex';
+import { separateRequestFields } from './requestTextFields';
 
 export interface ParsedRequestOptions {
   defaultDate?: string; // YYYY-MM-DD
@@ -171,21 +172,24 @@ function extractResponsable(
     return labelMatch[1].trim();
   }
 
+  // Explicit introductions take priority over a different person mentioned in the message.
+  const introduction = /\b(?:me\s+llamo|mi\s+nombre\s+es|soy|solicita|a\s+nombre\s+de)\s+([a-záéíóúñ]+(?:[ \t]+[a-záéíóúñ]+){1,4}?)(?=[ \t]*(?:[,;\n.(]|$|y\s+|para\s+|rut\b|solicito\b|necesito\b|quiero\b|solicita\b))/i.exec(text);
+  if (introduction?.[1] && !/^(?:sala|el|la|un|una|reserva|reservar)\b/i.test(introduction[1])) {
+    return introduction[1].trim();
+  }
+
   // 2. Check if any known responsable from history appears in the text
   const normalizedText = stripAccents(text.toLowerCase());
   for (const [, entry] of knownMap) {
     const cleanName = stripAccents(entry.responsable.toLowerCase());
-    if (cleanName.length >= 5 && normalizedText.includes(cleanName)) {
+    const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (cleanName.length >= 5 && new RegExp(`\\b${escaped}\\b`).test(normalizedText)) {
       return entry.responsable;
     }
   }
 
   // 3. Natural language pattern: "Juan Pérez solicita...", "Solicitud de María Soto para..."
-  const introduction = /\b(?:me\s+llamo|mi\s+nombre\s+es|soy|solicita|a\s+nombre\s+de)\s+([a-záéíóúñ]+(?:[ \t]+[a-záéíóúñ]+){1,4}?)(?=[ \t]*(?:[,;\n.(]|$|y\s+|para\s+|rut\b|solicito\b|necesito\b|quiero\b|solicita\b))/i.exec(text);
-  if (introduction?.[1] && !/^(?:sala|el|la|un|una|reserva|reservar)\b/i.test(introduction[1])) {
-    return introduction[1].trim();
-  }
-  const naturalBeforeVerb = /(?:^|\n|solicitud\s+de\s+|de\s+parte\s+de\s+)([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})\s*(?:,|\(|\bsolicita\b|\bpide\b|\brequiere\b|\bnecesita\b|\bagenda\b|\breserva\b|\brut\b)/i.exec(text);
+  const naturalBeforeVerb = /(?:^|\n|solicitud\s+de\s+|de\s+parte\s+de\s+)([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})\s*(?:\bsolicita\b|\bpide\b|\brequiere\b|\bnecesita\b|\bagenda\b|\breserva\b|\brut\b)/i.exec(text);
   if (naturalBeforeVerb?.[1]) {
     const candidate = naturalBeforeVerb[1].trim();
     const stopWords = /^(hola|buenos|buenas|estimados|estimado|solicito|solicita|reserva|reservar|taller|actividad|reunion|sala|auditorio|gimnasio)$/i;
@@ -195,14 +199,13 @@ function extractResponsable(
     }
   }
 
-  // 4. First segment if formatted like "Juan Pérez, RUT 12.345..."
-  const firstSegment = text.trim().split(/[,;\n(]/)[0]?.trim() || '';
-  if (/^[A-ZÁÉÍÓÚÑa-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]+){1,3}$/.test(firstSegment) && firstSegment.length <= 45) {
-    const lower = stripAccents(firstSegment.toLowerCase());
-    if (!/\b(taller|sala|auditorio|gimnasio|tatami|cocina|patio|cancha|reunion|charla|ensayo|cumpleanos|solicito|necesito|reservar)\b/.test(lower)) {
-      return firstSegment;
-    }
-  }
+  // An isolated name can occur anywhere. Do not guess between multiple names or activity phrases.
+  const candidates = text.split(/[,;\n().]/).map(segment => segment.trim()).filter(segment => {
+    if (segment.length > 55 || !/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ'-]+(?:\s+(?:(?:de|del|la|las|los)\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñ'-]+){1,4}$/.test(segment)) return false;
+    return !/\b(taller|clases?|sala|salon|auditorio|gimnasio|tatami|cocina|patio|cancha|reunion|charla|ensayo|cumpleanos|solicito|necesito|reservar|hola|buenos|buenas|montaje|proyector|microfono|sillas?|mesas?|lunes|martes|miercoles|jueves|viernes|sabado|domingo|calle|avenida|pasaje|actividad|club|junta|vecinos)\b/.test(stripAccents(segment.toLowerCase()));
+  });
+  const uniqueCandidates = [...new Set(candidates)];
+  if (uniqueCandidates.length === 1) return uniqueCandidates[0];
 
   return '';
 }
@@ -501,7 +504,7 @@ export function parseReservationRequestText(
   rawText: string,
   options: ParsedRequestOptions = {}
 ): ParsedReservationRequest {
-  const text = (rawText || '').normalize('NFC').replace(/\u00a0/g, ' ').replace(/\r\n?/g, '\n').trim();
+  const text = separateRequestFields((rawText || '').normalize('NFC').replace(/\u00a0/g, ' ').replace(/\r\n?/g, '\n').trim());
   const availableSpaces = options.availableSpaces && options.availableSpaces.length > 0
     ? options.availableSpaces
     : SPACES_LIST;
@@ -570,7 +573,7 @@ export function parseReservationRequestText(
   const parsedDates = dateExtract.dates;
   parsingWarnings.push(...dateExtract.warnings);
   if (parsedDates.length > 0) detectedFields.push('Fecha');
-  const primaryDate = parsedDates[0] || (dateExtract.warnings.length ? '' : defaultDate);
+  const primaryDate = dateExtract.startDate || parsedDates[0] || (dateExtract.warnings.length ? '' : defaultDate);
 
   // Detect recurring weekdays (e.g. "todos los lunes y miércoles", "cada martes y jueves", "semanal")
   const matchedWeekdays: number[] = [];
@@ -603,11 +606,11 @@ export function parseReservationRequestText(
     .map((d) => d.key)
     .join(',');
 
-  const recurrenceStartDate = parsedDates[0] || defaultDate;
+  const recurrenceStartDate = dateExtract.startDate || parsedDates.find(date => date !== dateExtract.endDate) || defaultDate;
   const recurrenceEndDate =
-    parsedDates.length >= 2
-      ? parsedDates[1]
-      : format(addMonths(parseISO(recurrenceStartDate), 2), 'yyyy-MM-dd');
+    dateExtract.endDate || (parsedDates.length >= 2
+      ? parsedDates.find(date => date !== recurrenceStartDate) || recurrenceStartDate
+      : format(addMonths(parseISO(recurrenceStartDate), 2), 'yyyy-MM-dd'));
 
   let generatedSeriesDates: string[] = [];
   if (bookingMode === 'pattern') {
@@ -799,7 +802,7 @@ export function parseReservationRequestText(
     generatedSeriesDates,
     equipamientoSolicitado,
     montaje,
-    comentarios: text ? `Solicitud ingresada por texto: ${text}` : '',
+    comentarios: (rawText || '').trim() ? `Solicitud ingresada por texto: ${(rawText || '').trim()}` : '',
     requiereCartaCompromiso,
     matchedFromHistory,
     hasConflict: !availabilityCheck.free,

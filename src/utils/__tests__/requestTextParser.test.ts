@@ -59,6 +59,49 @@ describe('parseReservationRequestText', () => {
     defaultDate: '2026-11-04', referenceDate: '2026-11-04',
   });
 
+  it('reconoce los mismos datos en las 120 permutaciones de una solicitud', () => {
+    const chunks = ['María Soto', 'Taller de Yoga', 'Sala Espejos', '20/11/2026', 'de 18 a 20 para 25 personas'];
+    const permutations = (items: string[]): string[][] => items.length ? items.flatMap((item, index) =>
+      permutations(items.filter((_, i) => i !== index)).map(rest => [item, ...rest])) : [[]];
+    for (const order of permutations(chunks)) {
+      const text = order.join(', ');
+      expect(parse(text), text).toMatchObject({
+        responsable: 'María Soto', descripcion: 'Taller de Yoga', espacio: 'Sala Espejos',
+        fecha: '2026-11-20', horaInicio: '18:00', horaFin: '20:00', cantidadParticipantes: 25, parsingWarnings: [],
+      });
+    }
+  });
+
+  it('separa campos etiquetados consecutivos en cualquier posición sin comas', () => {
+    const chunks = ['Nombre completo: María Soto', 'Actividad: Taller de Yoga', 'Espacio: Sala Espejos',
+      'Fecha: 20/11/2026', 'Horario: 18:00 a 20:00', 'Aforo: 25', 'Dirección: Av. Apoquindo 4500',
+      'Teléfono: +56987654321', 'RUT: 12.345.678-5', 'Correo: maria@example.cl'];
+    for (let index = 0; index < chunks.length; index++) {
+      const order = [...chunks.slice(index), ...chunks.slice(0, index)];
+      for (const fields of [order, [...order].reverse()]) {
+        const text = fields.join(' ');
+        expect(parse(text), text).toMatchObject({ responsable: 'María Soto', descripcion: 'Taller de Yoga',
+          espacio: 'Sala Espejos', fecha: '2026-11-20', horaInicio: '18:00', horaFin: '20:00',
+          cantidadParticipantes: 25, domicilio: 'Av. Apoquindo 4500', telefonoContacto: '+56 9 8765 4321',
+          rut: '12.345.678-5', emailContacto: 'maria@example.cl', parsingWarnings: [], comentarios: `Solicitud ingresada por texto: ${text}` });
+      }
+    }
+  });
+
+  it.each([
+    'Hasta el 30/11/2026, cada lunes, desde el 09/11/2026, fin: 20:00, inicio: 18:00',
+    'Fecha fin: 30/11/2026 Fecha inicio: 09/11/2026 Hora término: 20:00 Hora inicio: 18:00, cada lunes',
+  ])('interpreta inicio y término aunque aparezcan al revés: %s', text => {
+    expect(parse(text)).toMatchObject({ bookingMode: 'pattern', recurrenceStartDate: '2026-11-09',
+      recurrenceEndDate: '2026-11-30', horaInicio: '18:00', horaFin: '20:00',
+      generatedSeriesDates: ['2026-11-09', '2026-11-16', '2026-11-23', '2026-11-30'], parsingWarnings: [] });
+  });
+
+  it('no confunde actividades con nombres ni elige entre dos personas sin identificar al solicitante', () => {
+    expect(parse('Taller de Yoga, Sala Espejos, 20/11/2026, de 18 a 20').responsable).toBe('');
+    expect(parse('María Soto, Juan Pérez, Sala Espejos, 20/11/2026, de 18 a 20').responsable).toBe('');
+  });
+
   it('reconoce presentaciones informales y aforo sin etiquetas', () => {
     const parsed = parse('Hola, soy María Soto y necesito Sala Espejos mañana de 6 a 8 pm, seremos 25.');
     expect(parsed).toMatchObject({ responsable: 'María Soto', fecha: '2026-11-05', horaInicio: '18:00', horaFin: '20:00', cantidadParticipantes: 25 });
