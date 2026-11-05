@@ -37,6 +37,12 @@ function setup() {
 }
 
 describe('crear reservas desde texto', () => {
+  it('muestra el nombre escrito en minúsculas sin exigir una etiqueta', () => {
+    const { type } = setup();
+    type('juan vallejo');
+    expect((screen.getByLabelText('Nombre Solicitante / Responsable') as HTMLInputElement).value).toBe('juan vallejo');
+  });
+
   it('no crea reservas vacías aunque existan valores predeterminados', async () => {
     const { save, create } = setup();
     await save();

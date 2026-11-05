@@ -47,3 +47,10 @@ it('redacts detected fields without serializing other parsed values or losing th
   for (const value of ['María Soto', '12345678-5', '1234 5678', 'maria@example.com', 'Av. Uno 22']) expect(safe).not.toContain(value);
   expect(redactRequestPersonalData('RUT 123456785 solicita auditorio', { rut: '12.345.678-5' })).not.toContain('123456785');
 });
+
+it('keeps a lowercase applicant name out of the AI request', () => {
+  const text = 'juan vallejo, taller de yoga, auditorio, 20/11/2026, de 18 a 20';
+  const parsed = parseReservationRequestText(text);
+  expect(parsed.responsable).toBe('juan vallejo');
+  expect(redactRequestPersonalData(text, parsed)).not.toContain('juan vallejo');
+});

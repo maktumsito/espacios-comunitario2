@@ -102,6 +102,17 @@ describe('parseReservationRequestText', () => {
     expect(parse('María Soto, Juan Pérez, Sala Espejos, 20/11/2026, de 18 a 20').responsable).toBe('');
   });
 
+  it.each(['juan vallejo', 'JUAN VALLEJO', 'Juan Vallejo', 'maría de la cruz'])('reconoce nombres sin etiquetas en cualquier combinación de mayúsculas: %s', name => {
+    expect(parse(name).responsable).toBe(name);
+    expect(parse(`${name}, taller de yoga, sala espejos, 20/11/2026, de 18 a 20`).responsable).toBe(name);
+    expect(parse(`taller de yoga, sala espejos, 20/11/2026, de 18 a 20, ${name}`).responsable).toBe(name);
+  });
+
+  it.each(['para baile', 'con proyector', 'un espacio', 'el viernes', 'requiere parlante', 'quiero bailar', 'juan vallejo y maría soto',
+    'juan vallejo, maría soto, taller de yoga'])('no inventa un solicitante a partir de frases o personas ambiguas: %s', text => {
+    expect(parse(text).responsable).toBe('');
+  });
+
   it('reconoce presentaciones informales y aforo sin etiquetas', () => {
     const parsed = parse('Hola, soy María Soto y necesito Sala Espejos mañana de 6 a 8 pm, seremos 25.');
     expect(parsed).toMatchObject({ responsable: 'María Soto', fecha: '2026-11-05', horaInicio: '18:00', horaFin: '20:00', cantidadParticipantes: 25 });

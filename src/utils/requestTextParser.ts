@@ -203,7 +203,8 @@ function extractResponsable(
 
   // An isolated name can occur anywhere. Do not guess between multiple names or activity phrases.
   const candidates = text.split(/[,;\n().]/).map(segment => segment.trim()).filter(segment => {
-    if (segment.length > 55 || !/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ'-]+(?:\s+(?:(?:de|del|la|las|los)\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñ'-]+){1,4}$/.test(segment)) return false;
+    if (segment.length > 55 || !/^[a-záéíóúñ][a-záéíóúñ'-]+(?:\s+(?:(?:de|del|la|las|los)\s+)?[a-záéíóúñ][a-záéíóúñ'-]+){1,4}$/i.test(segment)) return false;
+    if (/^(?:para|por|con|sin|de|del|el|la|los|las|un|una|unos|unas|a|en|soy|me|mi|se|quiero|queremos|solicito|solicita|solicitamos|necesito|necesita|necesitamos|requiero|requiere|requerimos|pido|pide|pedimos|reserva|reservar|agendar)\b|\by\b/i.test(segment)) return false;
     return !/\b(taller|clases?|sala|salon|auditorio|gimnasio|tatami|cocina|patio|cancha|reunion|charla|ensayo|cumpleanos|solicito|necesito|reservar|hola|buenos|buenas|montaje|proyector|microfono|sillas?|mesas?|lunes|martes|miercoles|jueves|viernes|sabado|domingo|calle|avenida|pasaje|actividad|club|junta|vecinos)\b/.test(stripAccents(segment.toLowerCase()));
   });
   const uniqueCandidates = [...new Set(candidates)];
