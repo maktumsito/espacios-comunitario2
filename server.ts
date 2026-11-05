@@ -46,9 +46,11 @@ const localTestMode = process.env.VITE_LOCAL_TEST_MODE === 'true';
 const PORT = 3000;
 const TIMEZONE = 'America/Santiago';
 
+import { getDb } from './src/firebase/config';
+
 // Privileged database access stays exclusively on the server.
 function getServerDb(): Firestore | null {
-  try { return getServerDatabase() as unknown as Firestore; }
+  try { return getDb(); }
   catch { return null; }
 }
 
@@ -632,7 +634,11 @@ async function executeExpiredSlotsCleanup(daysOld = 30): Promise<{ purgedCount: 
       if (expiredIds.length) {
         purgedCount += await runTransaction(db, async tx => {
           const snapshots = await Promise.all(expiredIds.map(id => tx.get(doc(db, 'schedule_slots', id))));
-          const eligible = snapshots.filter(snapshot => snapshot.exists() && isPurgeableScheduleSlot(snapshot.id, snapshot.data()!, cutoffDateStr));
+          const eligible = snapshots.filter(snapshot => {
+            const exists = typeof snapshot.exists === 'function' ? snapshot.exists() : Boolean(snapshot.exists);
+            const data = typeof snapshot.data === 'function' ? snapshot.data() : (snapshot.data as any);
+            return exists && data && isPurgeableScheduleSlot(snapshot.id, data, cutoffDateStr);
+          });
           eligible.forEach(snapshot => tx.delete(snapshot.ref));
           return eligible.length;
         });
