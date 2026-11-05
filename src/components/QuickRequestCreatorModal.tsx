@@ -1,4 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { analyzeReservationRequest } from '../services/requestAiService';
+import type { RequestAiExtraction } from '../utils/requestAiSchema';
 import {
   Sparkles,
   X,
@@ -94,16 +96,47 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
   const [overrides, setOverrides] = useState<Partial<ParsedReservationRequest>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [aiExtraction, setAiExtraction] = useState<RequestAiExtraction>();
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isReviewed, setIsReviewed] = useState(false);
+  const [analysisNotice, setAnalysisNotice] = useState('');
+  const pendingAnalysis = useRef<AbortController | null>(null);
+  const analysisVersion = useRef(0);
+
+  const cancelAnalysis = () => {
+    analysisVersion.current++;
+    pendingAnalysis.current?.abort();
+    pendingAnalysis.current = null;
+    setIsAnalyzing(false);
+  };
+  const handleClose = () => {
+    if (isSaving) return;
+    cancelAnalysis();
+    onClose();
+  };
 
   useEffect(() => {
     if (isOpen) {
       setErrorMsg(null);
       setIsSaving(false);
+      setAiExtraction(undefined);
+      setIsReviewed(false);
+      setAnalysisNotice('');
+      setIsAnalyzing(false);
     }
+    return () => {
+      analysisVersion.current++;
+      pendingAnalysis.current?.abort();
+      pendingAnalysis.current = null;
+    };
   }, [isOpen]);
+
+  const referenceDate = useMemo(() => new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Santiago' }).format(new Date()), [isOpen]);
 
   const baseParsed = useMemo(() => {
     return parseReservationRequestText(rawText, {
+      aiExtraction,
+      referenceDate,
       defaultDate,
       defaultSpace,
       defaultStartTime,
@@ -116,6 +149,8 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
       spaceBlocks
     });
   }, [
+    aiExtraction,
+    referenceDate,
     rawText,
     defaultDate,
     defaultSpace,
@@ -131,6 +166,10 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
 
   // Reset overrides when rawText changes significantly
   const handleTextChange = (nextText: string) => {
+    cancelAnalysis();
+    setAiExtraction(undefined);
+    setIsReviewed(false);
+    setAnalysisNotice('');
     setRawText(nextText);
     setOverrides({});
     setErrorMsg(null);
@@ -205,6 +244,8 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
         if (warning.field === 'fecha' && merged.bookingMode === 'single' && overrides.fecha && isValid(parseISO(overrides.fecha))) return false;
         if (warning.field === 'horario' && overrides.horaInicio && overrides.horaFin && overrides.horaFin > overrides.horaInicio) return false;
         if (warning.field === 'espacio' && overrides.espacio) return false;
+        if (warning.field === 'participantes' && overrides.cantidadParticipantes) return false;
+        if (warning.field === 'actividad' && overrides.descripcion?.trim()) return false;
         return true;
       }),
       hasConflict: reasons.length > 0,
@@ -252,8 +293,34 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
   };
 
   const handleAutoCreate = async () => {
+    if (pendingAnalysis.current || isSaving) return;
     if (!rawText.trim()) {
       setErrorMsg('Escribe o pega los datos de la persona y su solicitud antes de crear la reserva.');
+      return;
+    }
+    if (!isReviewed) {
+      const controller = new AbortController();
+      const version = ++analysisVersion.current;
+      pendingAnalysis.current = controller;
+      setIsAnalyzing(true);
+      setErrorMsg(null);
+      try {
+        const extraction = await analyzeReservationRequest(rawText, baseParsed, {
+          defaultDate, availableSpaces, availableActivityTypes, availableLoanTypes, availableEquipment,
+        }, controller.signal);
+        if (version !== analysisVersion.current || controller.signal.aborted) return;
+        setAiExtraction(extraction);
+        setAnalysisNotice('Solicitud analizada con IA. Revisa los datos y confirma para crear la reserva.');
+      } catch (error) {
+        if (version !== analysisVersion.current || controller.signal.aborted) return;
+        setAnalysisNotice(`${error instanceof Error && !(error instanceof TypeError) ? error.message : 'No se pudo analizar la solicitud.'} Revisa los datos del detector local antes de confirmar.`);
+      } finally {
+        if (version === analysisVersion.current) {
+          pendingAnalysis.current = null;
+          setIsAnalyzing(false);
+          setIsReviewed(true);
+        }
+      }
       return;
     }
     if (effective.parsingWarnings.length) {
@@ -302,9 +369,7 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
 
   return (
     <ModalOverlay
-      onClose={() => {
-        if (!isSaving) onClose();
-      }}
+      onClose={handleClose}
       aria-label="Crear reserva automática desde solicitud escrita"
       className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150"
     >
@@ -326,7 +391,7 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Cerrar asistente de solicitud"
             className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition cursor-pointer"
           >
@@ -363,6 +428,7 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
             <textarea
               id="quick-request-textarea"
               rows={4}
+              maxLength={12000}
               value={rawText}
               onChange={(e) => handleTextChange(e.target.value)}
               placeholder="Ejemplo: Juan Pérez, RUT 12.345.678-9, tel +56 9 8765 4321, correo juan@lascondes.cl, solicita Auditorio para Taller de Yoga el 15-11-2026 de 10:00 a 12:00 para 25 personas, requiere proyector y micrófono..."
@@ -372,6 +438,10 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
             <p className="text-[11px] text-slate-500">
               Puedes escribir los datos en cualquier orden. Si incluyes varias personas o fechas, usa etiquetas como «Solicitante:», «Fecha inicio:» y «Fecha fin:».
             </p>
+            <p className="text-[11px] text-slate-500">
+              Al crear, Gemini analizará la solicitud y podrás confirmar los datos. Se ocultan los datos personales detectados antes de consultar la IA.
+            </p>
+            {analysisNotice && <p aria-live="polite" className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900">{analysisNotice}</p>}
 
             {/* Detected badges bar */}
             {effective.detectedFields.length > 0 && (
@@ -717,7 +787,7 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
         <footer className="bg-slate-50 border-t border-slate-200 px-4 py-3 sm:px-6 flex flex-wrap items-center justify-between gap-2 shrink-0">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition cursor-pointer"
           >
             Cancelar
@@ -728,6 +798,7 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
               type="button"
               id="btn-open-in-full-form"
               onClick={() => {
+                cancelAnalysis();
                 onOpenInFullForm(effective);
               }}
               className="px-3.5 py-2 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
@@ -739,7 +810,7 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
             <button
               type="button"
               id="btn-auto-create-reservation"
-              disabled={isSaving}
+              disabled={isSaving || isAnalyzing}
               onClick={handleAutoCreate}
               className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
             >
@@ -747,6 +818,10 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
               <span>
                 {isSaving
                   ? 'Creando reserva...'
+                  : isAnalyzing
+                  ? 'Analizando solicitud…'
+                  : isReviewed
+                  ? aiExtraction ? 'Confirmar y crear reserva' : 'Confirmar y crear con detector local'
                   : effective.bookingMode === 'pattern' && effective.generatedSeriesDates.length > 1
                   ? `Crear Serie Automáticamente (${effective.generatedSeriesDates.length} fechas)`
                   : 'Crear Reserva Automáticamente'}

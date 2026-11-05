@@ -6,6 +6,10 @@ import { QuickRequestCreatorModal } from '../QuickRequestCreatorModal';
 import type { Reservation } from '../../types';
 import type { AuthUser } from '../../services/authService';
 
+vi.mock('../../services/requestAiService', () => ({
+  analyzeReservationRequest: vi.fn().mockRejectedValue(new Error('IA sin configurar')),
+}));
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -176,7 +180,7 @@ describe('ReservationContextMenu', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('triggers onOpenQuickRequest from calendar context menu and renders QuickRequestCreatorModal as a fixed viewport overlay', () => {
+  it('triggers onOpenQuickRequest from calendar context menu and renders QuickRequestCreatorModal as a fixed viewport overlay', async () => {
     const onClose = vi.fn();
     const onOpenQuickRequest = vi.fn();
 
@@ -243,6 +247,8 @@ describe('ReservationContextMenu', () => {
     });
 
     fireEvent.click(screen.getByText('Crear Reserva Automáticamente'));
+    expect(onCreateDirectly).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: /Confirmar y crear con detector local/ }));
     expect(onCreateDirectly).toHaveBeenCalledTimes(1);
   });
 });

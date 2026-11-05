@@ -6,7 +6,7 @@ const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 
 const monthNumber = (word: string) => word.startsWith('set') ? 9 : months.findIndex(m => m.startsWith(word)) + 1;
 
 export interface RequestParsingWarning {
-  field: 'fecha' | 'horario' | 'recurrencia' | 'espacio';
+  field: 'fecha' | 'horario' | 'recurrencia' | 'espacio' | 'participantes' | 'actividad';
   message: string;
 }
 

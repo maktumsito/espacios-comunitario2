@@ -21,8 +21,10 @@ import { isCommitmentLetterEligible } from './commitmentLetterPdf';
 import { WEEKDAYS } from './dateUtils';
 import { buildReservationDateIndex } from './reservationIndex';
 import { separateRequestFields } from './requestTextFields';
+import type { RequestAiExtraction } from './requestAiSchema';
 
 export interface ParsedRequestOptions {
+  aiExtraction?: RequestAiExtraction;
   defaultDate?: string; // YYYY-MM-DD
   referenceDate?: string; // Today for relative expressions; independent of calendar selection.
   defaultSpace?: string;
@@ -517,6 +519,7 @@ export function parseReservationRequestText(
 
   const detectedFields: string[] = [];
   const parsingWarnings: RequestParsingWarning[] = [];
+  const ai = options.aiExtraction;
 
   const knownResponsablesMap = getApplicantDirectory(allReservations);
   const reservationDateIndex = getRequestReservationDateIndex(allReservations);
@@ -570,6 +573,13 @@ export function parseReservationRequestText(
 
   // 2. Extract Dates & Recurrence
   const dateExtract = extractRequestDates(text, defaultDate, options.referenceDate || format(new Date(), 'yyyy-MM-dd'));
+  const aiDate = ai?.fecha || ai?.recurrenceStartDate;
+  if (aiDate) {
+    dateExtract.dates = [aiDate];
+    dateExtract.startDate = ai?.recurrenceStartDate || aiDate;
+    dateExtract.endDate = ai?.recurrenceEndDate || undefined;
+    dateExtract.warnings = [];
+  }
   const parsedDates = dateExtract.dates;
   parsingWarnings.push(...dateExtract.warnings);
   if (parsedDates.length > 0) detectedFields.push('Fecha');
@@ -592,6 +602,7 @@ export function parseReservationRequestText(
     }
     matchedWeekdays.sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
   }
+  if (ai?.selectedDays) matchedWeekdays.splice(0, matchedWeekdays.length, ...new Set(ai.selectedDays));
 
   const hasRecurrenceKeyword =
     /\b(todos\s+los|cada\s+(?:semana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)|semanal(?:mente)?|recurrente|serie\s+de|del\s+\d{1,2}[-/]\d{1,2}.*al\s+\d{1,2}[-/]\d{1,2}|desde\s+el.*hasta\s+el)\b/i.test(
@@ -599,20 +610,24 @@ export function parseReservationRequestText(
     ) || matchedWeekdays.length >= 2;
 
   const bookingMode: 'single' | 'pattern' =
-    hasRecurrenceKeyword && matchedWeekdays.length > 0 ? 'pattern' : 'single';
+    ai?.bookingMode || (hasRecurrenceKeyword && matchedWeekdays.length > 0 ? 'pattern' : 'single');
 
   const selectedDays = bookingMode === 'pattern' ? matchedWeekdays : [1, 3];
   const diasSemana = WEEKDAYS.filter((d) => selectedDays.includes(d.dayNum))
     .map((d) => d.key)
     .join(',');
 
-  const recurrenceStartDate = dateExtract.startDate || parsedDates.find(date => date !== dateExtract.endDate) || defaultDate;
+  const recurrenceStartDate = ai?.recurrenceStartDate || dateExtract.startDate || parsedDates.find(date => date !== dateExtract.endDate) || defaultDate;
   const recurrenceEndDate =
+    ai && bookingMode === 'pattern' ? ai.recurrenceEndDate || dateExtract.endDate || '' :
     dateExtract.endDate || (parsedDates.length >= 2
       ? parsedDates.find(date => date !== recurrenceStartDate) || recurrenceStartDate
       : format(addMonths(parseISO(recurrenceStartDate), 2), 'yyyy-MM-dd'));
 
   let generatedSeriesDates: string[] = [];
+  if (ai && bookingMode === 'pattern' && (!ai.recurrenceStartDate || !ai.recurrenceEndDate || !selectedDays.length)) {
+    parsingWarnings.push({ field: 'recurrencia', message: 'La serie necesita fecha de inicio, fecha de término y días de la semana. Revísalos en el formulario completo.' });
+  }
   if (bookingMode === 'pattern') {
     detectedFields.push('Recurrencia Semanal');
     try {
@@ -641,6 +656,12 @@ export function parseReservationRequestText(
     options.defaultStartTime || '08:30',
     options.defaultEndTime || '09:30'
   );
+  if (ai?.horaInicio && ai.horaFin) {
+    timeExtract.horaInicio = ai.horaInicio;
+    timeExtract.horaFin = ai.horaFin;
+    timeExtract.detected = true;
+    timeExtract.warnings = [];
+  }
   parsingWarnings.push(...timeExtract.warnings);
   if (timeExtract.detected) detectedFields.push('Horario');
   const { horaInicio, horaFin } = timeExtract;
@@ -648,10 +669,13 @@ export function parseReservationRequestText(
   // 4. Extract Participants
   const partExtract = extractParticipants(text);
   if (partExtract.detected) detectedFields.push('Aforo');
-  const cantidadParticipantes = partExtract.count;
+  const cantidadParticipantes = ai?.cantidadParticipantes ?? partExtract.count;
+  if (ai && !ai.fecha && !dateExtract.dates.length) parsingWarnings.push({ field: 'fecha', message: 'No se indicó una fecha. Confirma la fecha antes de crear la reserva.' });
+  if (ai && (!ai.horaInicio || !ai.horaFin) && !timeExtract.detected) parsingWarnings.push({ field: 'horario', message: 'No se indicó un horario completo. Confirma inicio y término.' });
+  if (ai && !ai.cantidadParticipantes && !partExtract.detected) parsingWarnings.push({ field: 'participantes', message: 'Confirma la cantidad de participantes antes de crear la reserva.' });
 
   // 5. Extract Space & Check Conflicts / Auto-assign Free Space
-  const explicitSpace = extractSpace(text, availableSpaces);
+  const explicitSpace = (ai?.espacio && availableSpaces.some(s => s.name === ai.espacio) ? ai.espacio : undefined) || extractSpace(text, availableSpaces);
   if (explicitSpace) detectedFields.push('Espacio');
   if (!explicitSpace && /\b(?:(?:espacio|sala)\s*[:=-]\s*\S|sala\s+(?:multiuso\s+)?\d+)/i.test(text)) {
     parsingWarnings.push({ field: 'espacio', message: 'No se reconoció el espacio solicitado. Selecciona una sala del catálogo.' });
@@ -761,20 +785,25 @@ export function parseReservationRequestText(
   const availabilityCheck = checkAvailability(espacio);
 
   // 6. Activity Description & Type
-  const { tipoActividad, tipoPrestamo } = inferActivityAndLoanType(
+  const inferred = inferActivityAndLoanType(
     text,
     availableActivityTypes,
     availableLoanTypes
   );
+  const tipoActividad = ai?.tipoActividad || inferred.tipoActividad;
+  const tipoPrestamo = ai?.tipoPrestamo || inferred.tipoPrestamo;
   const rawDesc = extractActivityDescription(text, responsable, espacio);
   if (rawDesc) detectedFields.push('Actividad');
-  const descripcion = rawDesc || (responsable ? `${tipoActividad} - ${responsable}` : tipoActividad);
+  const descripcion = ai?.descripcion || rawDesc || (responsable ? `${tipoActividad} - ${responsable}` : tipoActividad);
+  if (ai && !ai.descripcion && !rawDesc) parsingWarnings.push({ field: 'actividad', message: 'Confirma la descripción de la actividad.' });
 
   // 7. Equipment & Room Setup
-  const equipamientoSolicitado = extractEquipment(text, availableEquipment);
+  const equipamientoSolicitado = ai?.equipamientoSolicitado?.map(item => ({ ...item,
+    equipmentName: availableEquipment.find(eq => eq.id === item.equipmentId)?.name || '',
+  })).filter(item => item.equipmentName) ?? extractEquipment(text, availableEquipment);
   if (equipamientoSolicitado.length > 0) detectedFields.push('Equipamiento');
 
-  const montaje = extractMontaje(text);
+  const montaje = ai?.montaje ?? extractMontaje(text);
   if (montaje) detectedFields.push('Montaje');
 
   const requiereCartaCompromiso = isCommitmentLetterEligible(tipoActividad, tipoPrestamo);
@@ -808,7 +837,7 @@ export function parseReservationRequestText(
     hasConflict: !availabilityCheck.free,
     conflictDetails: availabilityCheck.reasons,
     suggestedFreeSpace: !availabilityCheck.free ? suggestedFreeSpace : undefined,
-    detectedFields,
+    detectedFields: ai ? [...new Set([...detectedFields, 'Analizado con IA'])] : detectedFields,
     parsingWarnings
   };
 }
