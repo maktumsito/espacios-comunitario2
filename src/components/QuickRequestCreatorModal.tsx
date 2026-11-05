@@ -627,7 +627,7 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
                 >
                   {availableSpaces.map((sp) => (
                     <option key={sp.id} value={sp.name}>
-                      {formatDisplayTitle(sp.name)} {sp.capacity ? `(Cap. ${sp.capacity})` : ''}
+                      {formatDisplayTitle(sp.name)}
                     </option>
                   ))}
                 </select>

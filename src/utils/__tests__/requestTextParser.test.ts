@@ -124,6 +124,30 @@ describe('parseReservationRequestText', () => {
     expect(parse(`Necesito ${room} el 20/11 de 10 a 12`).spaceWasAutoSelected).toBe(false);
   });
 
+  it.each([
+    ['aud', 'Salón Auditorio'], ['AUDI', 'Salón Auditorio'], ['espe', 'Sala Espejos'],
+    ['sala de espe', 'Sala Espejos'], ['multi', 'Sala Multiuso 1'], ['multiuso', 'Sala Multiuso 1'],
+    ['multi 1', 'Sala Multiuso 1'], ['sal 1', 'Sala Multiuso 1'],
+  ])('reconoce el nombre incompleto %s como %s', (fragment, expected) => {
+    expect(parse(`Necesito ${fragment} el 20/11/2026 de 10 a 12`)).toMatchObject({
+      espacio: expected, spaceWasAutoSelected: false, parsingWarnings: [],
+    });
+  });
+
+  it('pide seleccionar el espacio cuando un fragmento corresponde a varias salas y respeta los números', () => {
+    const spaces = [...mockSpaces, { ...mockSpaces[0], id: 'multiuso-2', name: 'Sala Multiuso 2' }];
+    const ambiguous = parse('Necesito multi el 20/11/2026 de 10 a 12', spaces);
+    expect(ambiguous.spaceWasAutoSelected).toBe(true);
+    expect(ambiguous.parsingWarnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'espacio', message: expect.stringContaining('varios espacios') }),
+    ]));
+    expect(parse('Necesito multi2 el 20/11/2026 de 10 a 12', spaces)).toMatchObject({
+      espacio: 'Sala Multiuso 2', spaceWasAutoSelected: false,
+    });
+    expect(parse('Espacio: multi8 el 20/11/2026 de 10 a 12', spaces).spaceWasAutoSelected).toBe(true);
+    expect(parse('Necesito una sala el 20/11/2026 de 10 a 12', spaces).parsingWarnings).toEqual([]);
+  });
+
   it('no inventa salas fuera del catálogo ni cambia sus números', () => {
     const parsed = parse('Espacio: Sala Multiuso 8, el 20/11 de 10 a 12');
     expect(parsed.spaceWasAutoSelected).toBe(true);

@@ -37,6 +37,13 @@ function setup() {
 }
 
 describe('crear reservas desde texto', () => {
+  it('reconoce un espacio abreviado y muestra sus opciones sin capacidades', () => {
+    const { type } = setup();
+    type('juan vallejo, aud, taller de yoga el 20/11/2026 de 18 a 20 para 20 personas');
+    expect((screen.getByLabelText('Espacio Asignado') as HTMLSelectElement).value).toBe('AUDITORIO');
+    expect(screen.getAllByRole('option').every(option => !/Cap\.|capacidad/i.test(option.textContent || ''))).toBe(true);
+  });
+
   it('muestra el nombre escrito en minúsculas sin exigir una etiqueta', () => {
     const { type } = setup();
     type('juan vallejo');

@@ -233,6 +233,35 @@ function extractParticipants(text: string): { count: number; detected: boolean }
 
 const spaceSearchCache = new WeakMap<readonly SpaceInfo[], Fuse<{ name: string; normalized: string }>>();
 
+function findPartialSpaceCandidates(text: string, availableSpaces: readonly SpaceInfo[]): string[] {
+  const normalized = stripAccents(text.toLowerCase());
+  const tokens = [...normalized.matchAll(/[a-z]+|\d+/g)];
+  const genericWords = ['sala', 'salon', 'espacio', 'de', 'del', 'la', 'el', 'los', 'las'];
+  const candidates = new Set<string>();
+  const catalog = availableSpaces.map(space => ({
+    name: space.name,
+    words: stripAccents(space.name.toLowerCase()).match(/[a-z]+/g) || [],
+    numbers: space.name.match(/\d+/g) || [],
+  }));
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    const fragment = token[0];
+    if (fragment.length < 3 || !/^[a-z]+$/.test(fragment)) continue;
+    const next = tokens[index + 1];
+    const number = next && /^\d+$/.test(next[0]) &&
+      /^[ \t#-]*$/.test(normalized.slice(token.index! + fragment.length, next.index)) ? next[0] : undefined;
+    const generic = genericWords.some(word => word.startsWith(fragment));
+    if (generic && !number) continue;
+    for (const space of catalog) {
+      if (number && (space.numbers.length !== 1 || space.numbers[0] !== number)) continue;
+      if (space.words.some(word => word.startsWith(fragment) && (number || !genericWords.includes(word)))) {
+        candidates.add(space.name);
+      }
+    }
+  }
+  return [...candidates];
+}
+
 function extractSpace(text: string, availableSpaces: readonly SpaceInfo[]): string | null {
   text = text.replace(/\bmontaje\s+(?:tipo\s+|en\s+)?auditorio\b/gi, ' ');
   // Check custom spaces in availableSpaces first (longest name first so "SALA DE ESPEJOS" matches before "SALA")
@@ -257,6 +286,10 @@ function extractSpace(text: string, availableSpaces: readonly SpaceInfo[]): stri
     }
   }
 
+  // Accept distinctive fragments ("aud", "espe", "multiuso") only for a unique catalog match.
+  const partialCandidates = findPartialSpaceCandidates(text, availableSpaces);
+  if (partialCandidates.length) return partialCandidates.length === 1 ? partialCandidates[0] : null;
+
   // Reuse the catalog index while typing. Only match short windows, never an entire message.
   // Keep room numbers exact: a typo must never turn "Sala 8" into "Sala 3".
   let search = spaceSearchCache.get(availableSpaces);
@@ -275,7 +308,7 @@ function extractSpace(text: string, availableSpaces: readonly SpaceInfo[]): stri
       for (const result of search.search(phrase, { limit: 2 })) {
         const target = result.item.normalized;
         if ((phrase.match(/\d+/g) || []).join() !== (target.match(/\d+/g) || []).join()) continue;
-        // No partial-name guesses ("sala" / "multiuso"); require comparable lengths.
+        // For typo matching, require comparable lengths; unique fragments are handled above.
         if (Math.abs(target.length - phrase.length) > Math.max(2, target.length * 0.2)) continue;
         const score = result.score ?? 1;
         if (score <= 0.2) matches.set(result.item.name, Math.min(matches.get(result.item.name) ?? 1, score));
@@ -678,7 +711,10 @@ export function parseReservationRequestText(
   // 5. Extract Space & Check Conflicts / Auto-assign Free Space
   const explicitSpace = (ai?.espacio && availableSpaces.some(s => s.name === ai.espacio) ? ai.espacio : undefined) || extractSpace(text, availableSpaces);
   if (explicitSpace) detectedFields.push('Espacio');
-  if (!explicitSpace && /\b(?:(?:espacio|sala)\s*[:=-]\s*\S|sala\s+(?:multiuso\s+)?\d+)/i.test(text)) {
+  const ambiguousSpaces = explicitSpace ? [] : findPartialSpaceCandidates(text, availableSpaces);
+  if (ambiguousSpaces.length > 1) {
+    parsingWarnings.push({ field: 'espacio', message: `El nombre incompleto coincide con varios espacios: ${ambiguousSpaces.join(', ')}. Selecciona el espacio solicitado.` });
+  } else if (!explicitSpace && /\b(?:(?:espacio|sala)\s*[:=-]\s*\S|sala\s+(?:multiuso\s+)?\d+)/i.test(text)) {
     parsingWarnings.push({ field: 'espacio', message: 'No se reconoció el espacio solicitado. Selecciona una sala del catálogo.' });
   }
 
