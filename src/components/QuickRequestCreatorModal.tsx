@@ -438,9 +438,6 @@ export const QuickRequestCreatorModal: React.FC<QuickRequestCreatorModalProps> =
             <p className="text-[11px] text-slate-500">
               Puedes escribir los datos en cualquier orden. Si incluyes varias personas o fechas, usa etiquetas como «Solicitante:», «Fecha inicio:» y «Fecha fin:».
             </p>
-            <p className="text-[11px] text-slate-500">
-              Al crear, Gemini analizará la solicitud y podrás confirmar los datos. Se ocultan los datos personales detectados antes de consultar la IA.
-            </p>
             {analysisNotice && <p aria-live="polite" className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900">{analysisNotice}</p>}
 
             {/* Detected badges bar */}
