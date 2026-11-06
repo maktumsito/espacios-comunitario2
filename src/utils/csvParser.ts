@@ -395,5 +395,11 @@ export function expandRecurringReservations(rawReservations: readonly Reservatio
  */
 export function parseCsvRows(csvContent: string): Reservation[] {
   const rawRows = parseRawCsvRows(csvContent);
+  // Native exports already contain concrete sessions, including exceptions and
+  // moved dates. Expanding them again would invent sessions and discard variants.
+  const headers = splitCsvLine(csvContent.trim().split(/\r?\n/, 1)[0]);
+  if (['id', 'fecha', 'serieRecurrente', 'recurrenteId', 'indiceEnSerie', 'totalEnSerie', 'estado'].every(header => headers.includes(header))) {
+    return rawRows;
+  }
   return expandRecurringReservations(rawRows);
 }
