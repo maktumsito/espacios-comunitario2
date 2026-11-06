@@ -47,11 +47,11 @@ const localTestMode = process.env.VITE_LOCAL_TEST_MODE === 'true';
 const PORT = 3000;
 const TIMEZONE = 'America/Santiago';
 
-import { getDb } from './src/firebase/config';
+
 
 // Privileged database access stays exclusively on the server.
 function getServerDb(): Firestore | null {
-  try { return getDb(); }
+  try { return getServerDatabase() as unknown as Firestore; }
   catch { return null; }
 }
 
