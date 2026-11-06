@@ -1,5 +1,7 @@
 # Importación de talleres CCD desde Excel o CSV
 
+Cada fila dispone de **Eliminar taller de la importación**. Quita el taller y sus sesiones pendientes, actualiza los contadores y exige revisar nuevamente antes de guardar. **Deshacer última eliminación** restaura la fila con su espacio, categoría y opciones personalizadas. Esta acción no elimina reservas ya guardadas ni modifica el archivo original. Al cargar otro archivo se reinicia la lista de eliminaciones.
+
 En **Importar, exportar y respaldos → Excel, Planilla y CSV → Importar talleres desde Excel o CSV**, selecciona el archivo `.xlsx` o `.csv`. También puedes usar el botón general **Importar Excel o CSV**: reconoce las columnas de talleres y abre su revisión, conservando la compatibilidad con respaldos CSV de reservas. Disponible para los perfiles con permiso de carga masiva.
 
 La primera hoja de Excel o la tabla CSV debe incluir `NOMBRE TALLER`, `HORARIO 1` y `PROFESOR`; se admiten otras columnas `HORARIO 2`, `HORARIO 3`, etc. Se detectan los separadores de CSV punto y coma, coma o tabulación, comillas, saltos de línea dentro de celdas y archivos UTF-8 o Windows-1252. Los horarios tienen el formato `LUN 16:00-17:00`. Se reconocen los siete días abreviados, mayúsculas/minúsculas, tildes y espacios alrededor del guion. Un horario vacío se omite; los datos inválidos muestran la fila y detienen la lectura.

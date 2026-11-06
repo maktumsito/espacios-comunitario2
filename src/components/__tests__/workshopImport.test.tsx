@@ -12,6 +12,42 @@ vi.mock('read-excel-file/browser', () => ({ readSheet }));
 const data = [['NOMBRE TALLER', 'HORARIO 1', 'HORARIO 2', 'PROFESOR'], ['Danza', 'LUN 10:00-11:00', 'MIE 11:00-12:00', 'María Pérez']];
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
+it('excludes a removed workshop and its conflicts from the confirmed import', async () => {
+  const save = vi.fn().mockResolvedValue(undefined);
+  const rows = parseWorkshopRows([...data, ['Tejido', 'LUN 10:00-11:00', '', 'Otra profesora']]);
+  render(<WorkshopImport spaces={SPACES_LIST} spaceBlocks={[]} reservations={[]} onImportReservations={save} source={{ rows, name: 'talleres.xlsx' }} />);
+  fireEvent.change(screen.getByLabelText('Espacio para Danza (fila 2)'), { target: { value: 'SALA 2' } });
+  fireEvent.change(screen.getByLabelText('Espacio para Tejido (fila 3)'), { target: { value: 'SALA 2' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Revisar importación' }));
+  await screen.findByText(/Hay .* topamientos/);
+  fireEvent.click(screen.getByRole('button', { name: 'Eliminar taller Danza de la importación (fila 2)' }));
+  expect(screen.queryByText('Fila 2: Danza')).toBeNull();
+  expect(screen.queryByLabelText('Resumen de importación')).toBeNull();
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Revisar importación' }));
+  await screen.findByLabelText('Resumen de importación');
+  expect(screen.queryByText(/Hay .* topamientos/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /Guardar \d+ sesiones recurrentes/ }));
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  expect(save.mock.calls[0][0].every((row: Reservation) => row.descripcion === 'Tejido')).toBe(true);
+});
+
+it('allows removing the last workshop and undoing without losing its room or category', async () => {
+  const save = await open();
+  await review();
+  fireEvent.change(screen.getByLabelText('Categoría de actividad para Danza (fila 2)'), { target: { value: 'TALLER JJV' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Eliminar taller Danza de la importación (fila 2)' }));
+  expect(screen.getByText(/No quedan talleres para importar/)).toBeTruthy();
+  expect(screen.queryByLabelText('Resumen de importación')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Revisar importación' })).toBeNull();
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Deshacer última eliminación' }));
+  expect((screen.getByLabelText('Espacio para Danza (fila 2)') as HTMLSelectElement).value).toBe('SALA 2');
+  expect((screen.getByLabelText('Categoría de actividad para Danza (fila 2)') as HTMLSelectElement).value).toBe('TALLER JJV');
+  expect(screen.queryByRole('button', { name: 'Deshacer última eliminación' })).toBeNull();
+  expect(screen.queryByLabelText('Resumen de importación')).toBeNull();
+});
+
 async function open(existing: Reservation[] = [], blocks: SpaceBlock[] = [], save = vi.fn().mockResolvedValue(undefined)) {
   readSheet.mockResolvedValue(data);
   render(<WorkshopImport spaces={SPACES_LIST} spaceBlocks={blocks} reservations={existing} onImportReservations={save} currentUser={{ username: 'test', name: 'Test', role: 'Administrador', initials: 'T', avatarColor: 'blue' }} />);

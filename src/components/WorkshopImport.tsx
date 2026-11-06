@@ -23,6 +23,7 @@ interface Props {
 
 export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportReservations, source, currentUser, activityTypes, loanTypes, equipment }: Props) {
   const [rows, setRows] = useState<WorkshopRow[]>([]);
+  const [removedRows, setRemovedRows] = useState<WorkshopRow[]>([]);
   const [assignments, setAssignments] = useState<Record<number, string>>({});
   const [activityAssignments, setActivityAssignments] = useState<Record<number, string>>({});
   const [preview, setPreview] = useState<WorkshopImportPreview | null>(null);
@@ -35,7 +36,7 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
   const section = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!source) return;
-    setRows(source.rows); setFilename(source.name); setAssignments({}); setActivityAssignments({}); setDrafts({}); setPreview(null); setError(''); setMessage('');
+    setRows(source.rows); setRemovedRows([]); setEditor(null); setFilename(source.name); setAssignments({}); setActivityAssignments({}); setDrafts({}); setPreview(null); setError(''); setMessage('');
     section.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
   }, [source]);
   const enabledSpaces = getEnabledSpaces(spaces);
@@ -53,7 +54,7 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
 
   async function load(file?: File) {
     if (!file) return;
-    setBusy(true); setError(''); setMessage(''); setFilename(''); setPreview(null); setRows([]); setAssignments({}); setActivityAssignments({}); setDrafts({});
+    setBusy(true); setError(''); setMessage(''); setFilename(''); setPreview(null); setRows([]); setRemovedRows([]); setEditor(null); setAssignments({}); setActivityAssignments({}); setDrafts({});
     try {
       const result = await readReservationImportFile(file);
       if (!result.workshops) throw new Error('El archivo debe incluir NOMBRE TALLER, HORARIO 1 y PROFESOR. Para respaldos de reservas utiliza Importar Excel o CSV.');
@@ -82,7 +83,7 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
       if (!latest.reservations.length) { setPreview(latest); setMessage('Estos talleres ya están ingresados.'); return; }
       await onImportReservations(latest.reservations);
       setMessage(`Se guardaron ${latest.reservations.length} sesiones de talleres.`);
-      setPreview(null); setRows([]); setAssignments({}); setActivityAssignments({}); setDrafts({}); setFilename('');
+      setPreview(null); setRows([]); setRemovedRows([]); setAssignments({}); setActivityAssignments({}); setDrafts({}); setFilename('');
     } catch (cause) {
       setError(`${(cause as Error).message} Puedes volver a revisar y reintentar; las sesiones confirmadas no se duplican.`);
       setPreview(null);
@@ -99,6 +100,22 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
     finally { setBusy(false); }
   }
 
+  function remove(row: WorkshopRow) {
+    if (busy) return;
+    setRows(previous => previous.filter(item => item.row !== row.row));
+    setRemovedRows(previous => [...previous, row]);
+    setPreview(null); setError(''); setMessage('');
+    if (editor?.row === row.row) setEditor(null);
+  }
+
+  function undoRemove() {
+    if (busy || !removedRows.length) return;
+    const restored = removedRows[removedRows.length - 1];
+    setRows(previous => [...previous, restored].sort((a, b) => a.row - b.row));
+    setRemovedRows(previous => previous.slice(0, -1));
+    setPreview(null); setError(''); setMessage('');
+  }
+
   return <section ref={section} aria-label="Importar talleres desde Excel" className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200 space-y-3">
     <h3 className="font-bold text-sm text-slate-900">Importar talleres desde Excel o CSV</h3>
     <p className="text-xs text-slate-600">Valores iniciales: reservas semanales del 01/03/2027 al 30/11/2027 y profesor como responsable. Elige el espacio y la categoría de actividad de cada taller antes de importar. Puedes cambiar los demás datos en Editar todas las opciones.</p>
@@ -107,6 +124,10 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
       <input aria-label="Excel de talleres" type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy} className="block w-full mt-2 text-xs" onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; void load(file); }} />
     </label>
     {filename && <p className="text-xs text-slate-700 break-all">Archivo cargado: {filename}</p>}
+    {removedRows.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+      <p role="status" className="text-xs text-amber-900">{removedRows.length} taller(es) eliminado(s) de esta importación. {rows.length === 0 ? 'No quedan talleres para importar.' : 'Sus sesiones no se guardarán.'} Las reservas existentes no se modifican.</p>
+      <button type="button" disabled={busy} onClick={undoRemove} className="min-h-11 px-3 rounded-lg border border-amber-300 bg-white text-xs font-semibold text-amber-900">Deshacer última eliminación</button>
+    </div>}
     {rows.length > 0 && <>
       <p className="text-xs font-semibold text-slate-700">{rows.length} talleres · {rows.reduce((count, row) => count + row.schedules.length, 0)} horarios semanales · {missing} espacios pendientes · {missingCategories} categorías pendientes</p>
       <div className="max-h-80 overflow-y-auto space-y-2">
@@ -135,6 +156,7 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
             </select>
           </label>
           <button type="button" disabled={busy || !enabledSpaces.length} onClick={() => void edit(row)} className="min-h-11 px-3 rounded-lg border border-slate-300 text-xs font-semibold text-blue-800">Editar todas las opciones (fila {row.row})</button>
+          <button type="button" disabled={busy} onClick={() => remove(row)} aria-label={`Eliminar taller ${drafts[row.row]?.[0]?.descripcion || row.name} de la importación (fila ${row.row})`} className="min-h-11 px-3 rounded-lg border border-red-200 text-xs font-semibold text-red-800 sm:ml-2">Eliminar taller de la importación</button>
         </div>)}
       </div>
       <button type="button" disabled={busy || missing > 0 || missingCategories > 0} onClick={() => void review()} className="min-h-11 px-4 rounded-xl bg-white border border-blue-300 text-sm font-semibold text-blue-800 disabled:opacity-50">Revisar importación</button>
