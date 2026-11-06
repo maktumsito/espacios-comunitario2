@@ -196,14 +196,18 @@ const NavbarComponent: React.FC<NavbarProps> = ({
       Icon: Star,
       active: currentView === "ratings",
     },
-    {
-      view: "conflicts" as ViewMode,
-      id: "nav-tab-conflicts",
-      label: "Conflictos",
-      Icon: AlertTriangle,
-      active: currentView === "conflicts",
-      count: conflictsCount,
-    },
+    ...(conflictsCount > 0 || currentView === "conflicts"
+      ? [
+          {
+            view: "conflicts" as ViewMode,
+            id: "nav-tab-conflicts",
+            label: "Conflictos",
+            Icon: AlertTriangle,
+            active: currentView === "conflicts",
+            count: conflictsCount,
+          },
+        ]
+      : []),
     {
       view: "analytics" as ViewMode,
       id: "nav-tab-analytics",
@@ -282,16 +286,6 @@ const NavbarComponent: React.FC<NavbarProps> = ({
           )}
           {toolButton("Papelera y auditoría", onOpenAuditLog, History)}
         </>
-      )}
-      {onDeleteDay && (
-        <div className="mt-2 border-t border-slate-200 pt-2">
-          {toolButton(
-            "Eliminar reservas de un día",
-            onDeleteDay,
-            Trash2,
-            "btn-tools-delete-day",
-          )}
-        </div>
       )}
     </>
   );
@@ -442,24 +436,6 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                 <kbd className="hidden rounded border border-slate-200 px-1 text-xs text-slate-500 xl:inline">
                   Ctrl K
                 </kbd>
-              </button>
-            )}
-            {onOpenNotificationCenter && (
-              <button
-                id="btn-navbar-notifications"
-                type="button"
-                onClick={onOpenNotificationCenter}
-                aria-label={`Centro de notificaciones${unreadNotificationsCount ? `: ${unreadNotificationsCount} sin leer` : ""}`}
-                className={`${iconButton} relative`}
-              >
-                <Bell className="h-5 w-5" />
-                {unreadNotificationsCount > 0 && (
-                  <span className="absolute right-0 top-0 rounded-full bg-rose-600 px-1.5 text-[11px] font-bold text-white">
-                    {unreadNotificationsCount > 99
-                      ? "99+"
-                      : unreadNotificationsCount}
-                  </span>
-                )}
               </button>
             )}
             <div className="relative hidden lg:block" ref={toolsMenuRef}>

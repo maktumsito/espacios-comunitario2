@@ -57,6 +57,7 @@ export interface ReservationContextMenuProps {
   onReplace?: (reservation: Reservation) => void;
   onDuplicate?: (reservation: Reservation) => void;
   onToggleRealizada?: (reservation: Reservation) => void;
+  onOpenCheckIn?: (reservation: Reservation) => void;
   onOpenRating?: (reservation: Reservation, rating?: SpaceRating) => void;
   onViewRelated?: (relatedId: string) => void;
   onDelete?: (id: string, isSeries?: boolean, seriesId?: string) => void;
@@ -87,6 +88,7 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
   onReplace,
   onDuplicate,
   onToggleRealizada,
+  onOpenCheckIn,
   onOpenRating,
   onViewRelated,
   onDelete,
@@ -308,6 +310,19 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
           >
             <Copy className="w-4 h-4 text-slate-600 shrink-0" />
             <span>Duplicar reserva</span>
+          </button>
+        )}
+
+        {canEdit && onOpenCheckIn && !isCancelled && (
+          <button
+            type="button"
+            role="menuitem"
+            id="menu-btn-quick-checkin"
+            onClick={() => runAction(() => onOpenCheckIn(reservation))}
+            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-emerald-800 bg-emerald-50/60 hover:bg-emerald-100 focus:bg-emerald-100 focus:outline-none transition cursor-pointer"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Registrar asistencia (Check-in)</span>
           </button>
         )}
 

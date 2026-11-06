@@ -24,12 +24,10 @@ import {
   XCircle,
   Check,
   Ban,
-  GitMerge,
   CheckCircle2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { CommitmentLetterModal } from './CommitmentLetterModal';
-import { MergeReservationsModal } from './MergeReservationsModal';
 import { getPhoneContactActions } from '../utils/phoneUtils';
 import { buildReplacementWhatsAppHref } from './ReplacementReminderModal';
 import { CommitmentLetterCard } from './CommitmentLetterCard';
@@ -57,6 +55,7 @@ interface ReservationDetailModalProps {
   onDelete?: (id: string, isSeries?: boolean, seriesId?: string) => void | Promise<void>;
   onRequestDelete?: (reserva: Reservation) => void;
   onToggleRealizada?: (reserva: Reservation) => void;
+  onOpenCheckIn?: (reserva: Reservation) => void;
   onUpdateReservation?: (updated: Reservation) => void;
   onMergeReservations?: (targetReservationId: string, sourceReservationIds: string[]) => Promise<boolean | void> | boolean | void;
   existingRating?: SpaceRating | null;
@@ -78,8 +77,9 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   onDelete,
   onRequestDelete,
   onToggleRealizada,
+  onOpenCheckIn,
   onUpdateReservation,
-  onMergeReservations,
+  onMergeReservations: _onMergeReservations,
   existingRating,
   onOpenRatingModal,
   allReservations = [],
@@ -88,7 +88,6 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   onRejectDeleteRequest
 }) => {
   const [showCommitmentLetter, setShowCommitmentLetter] = React.useState(false);
-  const [showMergeModal, setShowMergeModal] = React.useState(false);
 
   // Accessible non-blocking confirmation dialog state (D4)
   const [confirmModal, setConfirmModal] = React.useState<{
@@ -490,17 +489,38 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
             )}
           </div>
 
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-            <div className="text-[10px] text-slate-500 uppercase font-semibold flex items-center space-x-1">
-              <Users className="w-3 h-3 text-blue-600" />
-              <span>Participantes</span>
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+            <div className="text-[10px] text-slate-500 uppercase font-semibold flex items-center justify-between">
+              <span className="flex items-center space-x-1">
+                <Users className="w-3 h-3 text-blue-600" />
+                <span>Participantes & Asistencia</span>
+              </span>
+              {onOpenCheckIn && (
+                <button
+                  type="button"
+                  id="btn-detail-quick-checkin-link"
+                  onClick={() => {
+                    onClose();
+                    onOpenCheckIn(reservation);
+                  }}
+                  className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>Registrar Check-in</span>
+                </button>
+              )}
             </div>
             <div className="font-bold text-slate-900">{reservation.cantidadParticipantes || 0} personas</div>
-            <div className="flex items-center space-x-1 pt-0.5">
-              <span className="text-[11px] text-slate-500 font-medium">Asistencia:</span>
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              <span className="text-[11px] text-slate-500 font-medium">Estado:</span>
               <button
                 type="button"
                 onClick={() => {
+                  if (onOpenCheckIn) {
+                    onClose();
+                    onOpenCheckIn(reservation);
+                    return;
+                  }
                   if (!onToggleRealizada) return;
                   const isCurrentlyAttended = reservation.realizada === 'Sí';
                   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -522,23 +542,42 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                     onToggleRealizada(reservation);
                   }
                 }}
-                className={`text-[11px] font-bold px-2 py-0.5 rounded-md cursor-pointer transition inline-flex items-center gap-1 shadow-xs ${
+                className={`text-[11px] font-bold px-2.5 py-1 rounded-md cursor-pointer transition inline-flex items-center gap-1 shadow-xs ${
                   reservation.realizada === 'Sí'
                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200'
+                    : reservation.realizada === 'No'
+                    ? 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200'
                     : 'bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300'
                 }`}
-                title="Haga clic para alternar asistencia"
+                title="Haga clic para actualizar estado de asistencia"
               >
                 {reservation.realizada === 'Sí' ? (
                   <>
                     <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-                    <span>Realizada</span>
+                    <span>Realizada (Asistió)</span>
+                  </>
+                ) : reservation.realizada === 'No' ? (
+                  <>
+                    <XCircle className="w-3 h-3 text-rose-700" />
+                    <span>No Asistió (No-show)</span>
                   </>
                 ) : (
-                  <span>Pendiente</span>
+                  <>
+                    <Clock className="w-3 h-3 text-slate-500" />
+                    <span>Pendiente de ejecución</span>
+                  </>
                 )}
               </button>
             </div>
+            {reservation.checkInRegistro && (
+              <div className="mt-1 pt-1 border-t border-slate-200/60 text-[10px] text-slate-500">
+                <span>Check-in: </span>
+                <strong className="text-slate-700">{reservation.checkInRegistro.registradoPor}</strong>
+                {reservation.checkInRegistro.notas && (
+                  <span className="italic block text-slate-600 mt-0.5">"{reservation.checkInRegistro.notas}"</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -865,17 +904,19 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                     <span>{reservation.estado === 'cancelada' ? 'Reactivar' : 'Cancelar Reserva'}</span>
                   </button>
                 )}
-                {onMergeReservations && (
+                {onOpenCheckIn && (
                   <button
-                    id="btn-detail-merge"
+                    id="btn-detail-checkin"
                     type="button"
-                    aria-label="Juntar o fusionar con otra reserva de esta misma actividad"
-                    onClick={() => setShowMergeModal(true)}
-                    className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 hover:text-purple-800 border border-purple-200 text-xs font-bold shadow-xs transition cursor-pointer"
-                    title="Juntar con otra reserva del mismo día o solicitante para unificarlas"
+                    onClick={() => {
+                      onClose();
+                      onOpenCheckIn(reservation);
+                    }}
+                    className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold shadow-xs transition cursor-pointer"
+                    title="Registrar asistencia y novedades de la actividad (Check-in rápido)"
                   >
-                    <GitMerge className="w-4 h-4 text-purple-600" />
-                    <span>Juntar Reserva</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Check-in / Asistencia</span>
                   </button>
                 )}
                 <button
@@ -912,24 +953,6 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
           onClose={() => setShowCommitmentLetter(false)}
           reservationData={reservation}
           allReservations={allReservations}
-        />
-      )}
-
-      {/* Merge Reservations Modal */}
-      {showMergeModal && onMergeReservations && (
-        <MergeReservationsModal
-          isOpen={showMergeModal}
-          onClose={() => setShowMergeModal(false)}
-          targetReservation={reservation}
-          allReservations={allReservations}
-          onConfirmMerge={async (targetId, sourceIds) => {
-            const ok = await onMergeReservations(targetId, sourceIds);
-            if (ok !== false) {
-              setShowMergeModal(false);
-              onClose();
-            }
-            return ok;
-          }}
         />
       )}
 

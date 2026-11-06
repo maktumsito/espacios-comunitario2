@@ -39,6 +39,7 @@ export interface Reservation {
   fechaFinRecurrencia?: string;
   cantidadParticipantes?: number;
   realizada?: 'Sí' | 'No' | 'Pendiente' | string;
+  checkInRegistro?: CheckInRecord;
   rut?: string;
   domicilio?: string;
   informeSemanal?: string;
@@ -65,6 +66,14 @@ export interface Reservation {
   createdBy?: string;
   version?: number;
   restoredStateVersion?: number;
+}
+
+export interface CheckInRecord {
+  registradoPor: string;
+  fechaHora: string;
+  estado: 'Sí' | 'No' | 'Pendiente';
+  participantesReales?: number;
+  notas?: string;
 }
 
 export type RoomSetupType = 'auditorio' | 'aula' | 'u' | 'circulo' | 'mesas' | 'despejado';

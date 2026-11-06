@@ -23,6 +23,7 @@ import {
   Trash2,
   GripVertical,
   Check,
+  CheckCircle2,
   Star,
   Copy,
   Filter,
@@ -68,6 +69,7 @@ interface DailyUsageViewProps {
   selectedDate?: Date;
   initialDate?: Date;
   onSelectReservation: (reserva: Reservation) => void;
+  onOpenCheckIn?: (reserva: Reservation) => void;
   onEditReservation?: (reserva: Reservation) => void;
   onDuplicateReservation?: (reserva: Reservation) => void;
   onReplaceReservation?: (reserva: Reservation) => void;
@@ -96,6 +98,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   selectedDate: propSelectedDate,
   initialDate,
   onSelectReservation,
+  onOpenCheckIn,
   onEditReservation,
   onDuplicateReservation,
   onReplaceReservation,
@@ -1770,6 +1773,17 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                                       className="text-[7.5px] bg-indigo-600/90 text-white px-1 py-0.2 rounded font-bold normal-case tracking-tight shrink-0 truncate max-w-[80px]"
                                     >
                                       {formatDisplayTitle(res.espacio)}
+                                    </span>
+                                  )}
+                                  {res.realizada === 'Sí' && (
+                                    <span title="Actividad realizada (asistencia confirmada)" className="text-[7.5px] bg-emerald-600 text-white px-1 py-0.2 rounded font-bold tracking-tight shrink-0 flex items-center gap-0.5">
+                                      <CheckCircle2 className="w-2 h-2 text-white" />
+                                      <span>Realizada</span>
+                                    </span>
+                                  )}
+                                  {res.realizada === 'No' && (
+                                    <span title="No asistió / No-show" className="text-[7.5px] bg-rose-600 text-white px-1 py-0.2 rounded font-bold tracking-tight shrink-0">
+                                      ✕ No asistió
                                     </span>
                                   )}
                                 </div>

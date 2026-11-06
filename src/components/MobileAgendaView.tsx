@@ -30,6 +30,7 @@ import {
   Trash2,
   CheckCircle2,
   Circle,
+  XCircle,
   Wrench,
   Repeat,
   FileCheck,
@@ -55,6 +56,7 @@ interface MobileAgendaViewProps {
   onRequestDelete?: (reservation: Reservation) => void;
   onNewReservationForDate?: (dateStr: string, space?: string) => void;
   onToggleRealizada?: (reservation: Reservation) => void;
+  onOpenCheckIn?: (reservation: Reservation) => void;
   onOpenRating?: (reservation: Reservation, rating?: SpaceRating) => void;
   ratings?: SpaceRating[];
   currentUser?: AuthUser | null;
@@ -83,6 +85,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
   onRequestDelete,
   onNewReservationForDate,
   onToggleRealizada,
+  onOpenCheckIn,
   onOpenRating,
   ratings = [],
   currentUser,
@@ -489,25 +492,44 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                     className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {/* Left: Asistencia / Realizada toggle */}
-                    {onToggleRealizada && canEdit ? (
-                      <button
-                        type="button"
-                        onClick={() => onToggleRealizada(res)}
-                        className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer ${
-                          isRealizada
-                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                            : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
-                        }`}
-                        title={isRealizada ? 'Marcar como pendiente' : 'Marcar como realizada'}
-                      >
-                        {isRealizada ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        ) : (
-                          <Circle className="w-4 h-4 text-slate-400" />
+                    {/* Left: Asistencia / Realizada / Check-in */}
+                    {canEdit ? (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {onOpenCheckIn && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenCheckIn(res)}
+                            className="min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 shadow-2xs"
+                            title="Abrir check-in de asistencia y novedades"
+                          >
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>Check-in</span>
+                          </button>
                         )}
-                        <span>{isRealizada ? 'Realizada' : 'Pendiente'}</span>
-                      </button>
+                        {onToggleRealizada && (
+                          <button
+                            type="button"
+                            onClick={() => onToggleRealizada(res)}
+                            className={`min-h-[44px] px-2.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer ${
+                              isRealizada
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : res.realizada === 'No'
+                                ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+                            }`}
+                            title={isRealizada ? 'Marcar como pendiente' : 'Marcar como realizada'}
+                          >
+                            {isRealizada ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            ) : res.realizada === 'No' ? (
+                              <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            ) : (
+                              <Circle className="w-4 h-4 text-slate-400 shrink-0" />
+                            )}
+                            <span>{isRealizada ? 'Realizada' : res.realizada === 'No' ? 'No asistió' : 'Pendiente'}</span>
+                          </button>
+                        )}
+                      </div>
                     ) : <div />}
 
                     <button

@@ -1054,9 +1054,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
       <label className="block text-sm font-medium text-slate-700 sm:hidden">Sección de administración
         <select value={activeTab} onChange={event => handleTabChange(event.target.value as AdminTab)} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">
           <optgroup label="Catálogos"><option value="spaces">Espacios y salas</option><option value="activities">Tipos de actividad</option><option value="equipment">Equipamiento y recursos</option></optgroup>
-          <optgroup label="Operación"><option value="maintenance">Mantención y bloqueos</option><option value="recurring">Actividades recurrentes</option></optgroup>
+          <optgroup label="Operación"><option value="maintenance">Bloqueos y Obras de Salas</option><option value="recurring">Actividades recurrentes</option></optgroup>
           <optgroup label="Personas"><option value="applicants">Registro de solicitantes</option><option value="users">Usuarios y accesos</option></optgroup>
-          <optgroup label="Sistema"><option value="gmail">Despacho Gmail</option>{showCategories && <option value="health">Salud y mantención del sistema</option>}</optgroup>
+          <optgroup label="Sistema"><option value="gmail">Despacho Gmail</option>{showCategories && <option value="health">Copias y Mantenimiento Técnico</option>}</optgroup>
         </select>
       </label>
       <nav aria-label="Secciones de administración" className="hidden sm:grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -1067,14 +1067,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
             { tab: 'equipment', label: `Equipamiento y recursos (${effectiveEquipment.length})` },
           ] },
           { label: 'Operación', items: [
-            { tab: 'maintenance', label: `Mantención y bloqueos (${(spaceBlocks || []).length})` },
+            { tab: 'maintenance', label: `Bloqueos y Obras de Salas (${(spaceBlocks || []).length})` },
             { tab: 'recurring', label: 'Actividades recurrentes' },
           ] },
           { label: 'Personas', items: [
             { tab: 'applicants', label: 'Registro de solicitantes' },
             { tab: 'users', label: `Usuarios y accesos (${effectiveUsers.length})` },
           ] },
-          { label: 'Sistema', items: [{ tab: 'gmail', label: 'Despacho Gmail' }, ...(showCategories ? [{ tab: 'health' as AdminTab, label: 'Salud y mantención del sistema' }] : [])] },
+          { label: 'Sistema', items: [{ tab: 'gmail', label: 'Despacho Gmail' }, ...(showCategories ? [{ tab: 'health' as AdminTab, label: 'Copias y Mantenimiento Técnico' }] : [])] },
         ] as { label: string; items: { tab: AdminTab; label: string }[] }[]).map(group => <div key={group.label} className="min-w-0">
           <h2 className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{group.label}</h2>
           <div className="space-y-1">{group.items.map(item => <button key={item.tab} id={`admin-tab-${item.tab}`} type="button" onClick={() => handleTabChange(item.tab)} aria-current={activeTab === item.tab ? 'page' : undefined} className={`flex min-h-11 w-full items-center rounded-lg px-2 py-2 text-left text-sm ${activeTab === item.tab ? 'bg-blue-50 font-semibold text-blue-800' : 'text-slate-600 hover:bg-slate-50'}`}>{item.label}</button>)}</div>
