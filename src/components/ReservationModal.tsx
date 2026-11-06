@@ -55,6 +55,7 @@ interface SeriesItemSlot {
 }
 
 interface ReservationModalProps {
+  draftMode?: boolean;
   replacementSource?: Reservation | null;
   isOpen: boolean;
   onClose: () => void;
@@ -92,6 +93,7 @@ interface ReservationModalProps {
 }
 
 export const ReservationModal: React.FC<ReservationModalProps> = ({
+  draftMode = false,
   replacementSource,
   isOpen,
   onClose,
@@ -1093,6 +1095,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
   // Modular save handler hook
   const { executeSave } = useReservationSaveHandler({
+    draftMode,
     scheduleChanged: !initialFormBaseline || initialFormBaseline.schedule !== scheduleFingerprint,
     initialFormData: initialFormBaseline?.form,
     initialReservations: initialFormBaseline?.history,
@@ -1310,6 +1313,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       <div className="flex h-[100dvh] max-h-[100dvh] w-full max-w-5xl flex-col overflow-hidden bg-white shadow-2xl sm:h-[min(820px,calc(100dvh-2rem))] sm:rounded-2xl sm:border sm:border-slate-200">
         {/* Header */}
         <ReservationModalHeader
+          draftMode={draftMode}
           replacementMode={Boolean(replacementSource)}
           isDuplicating={isDuplicating}
           editingReservation={editingReservation}
@@ -1351,6 +1355,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               />
           </div>}
           <div id="reservation-modal-form-body" className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-5 sm:px-7 sm:py-6">
+          {draftMode && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">Estás editando el taller antes de importar. Guardar cambios solo actualiza la revisión; la base de datos se modifica al confirmar la importación.</p>}
           {!availableSpaces.length && !isEditingExisting && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">No hay espacios activos. Activa o crea un espacio en Administración antes de reservar.</p>}
           {/* Notification & Context Alerts */}
           <ReservationModalAlerts
@@ -1688,6 +1693,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
           {/* Buttons Footer */}
           <ReservationModalFooter
+            draftMode={draftMode}
             replacementMode={Boolean(replacementSource)}
             editingReservation={editingReservation}
             isDuplicating={isDuplicating}

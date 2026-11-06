@@ -118,7 +118,7 @@ export function schedulesFromReservations(rows: Reservation[]) {
 }
 
 const editableFields = ['tipoActividad', 'descripcion', 'responsable', 'telefonoContacto', 'emailContacto', 'tipoPrestamo',
-  'cantidadParticipantes', 'equipamientoSolicitado', 'importante', 'comentarios', 'rut', 'domicilio',
+  'cantidadParticipantes', 'equipamientoSolicitado', 'montaje', 'importante', 'comentarios', 'rut', 'domicilio',
   'requiereCartaCompromiso', 'cartaCompromisoAdjunta', 'realizada'] as const;
 export function applyChangedSeriesFields(row: Reservation, form: Partial<Reservation>, baseline: Partial<Reservation>): Reservation {
   const next = { ...row };

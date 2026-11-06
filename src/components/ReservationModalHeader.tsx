@@ -4,6 +4,7 @@ import { SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { Reservation } from "../types";
 
 interface ReservationModalHeaderProps {
+  draftMode?: boolean;
   replacementMode?: boolean;
   isDuplicating: boolean;
   editingReservation?: Reservation | null;
@@ -16,6 +17,7 @@ interface ReservationModalHeaderProps {
 export const ReservationModalHeader: React.FC<ReservationModalHeaderProps> =
   React.memo(
     ({
+      draftMode = false,
       replacementMode = false,
       isDuplicating,
       editingReservation,
@@ -29,7 +31,7 @@ export const ReservationModalHeader: React.FC<ReservationModalHeaderProps> =
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             <div className="min-w-0 space-y-1">
             <h2 className="text-base font-semibold tracking-tight sm:text-lg">
-              {replacementMode
+              {draftMode ? 'Editar taller antes de importar' : replacementMode
                 ? "Reemplazar solo este día"
                 : isDuplicating
                   ? "Duplicar reserva"

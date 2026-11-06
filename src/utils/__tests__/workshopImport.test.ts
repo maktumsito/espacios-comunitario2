@@ -51,6 +51,22 @@ describe('workshop Excel import', () => {
     await expect(buildWorkshopImport(rows(), {}, SPACES_LIST, [])).rejects.toThrow('espacio activo');
     await expect(buildWorkshopImport(rows(), { 2: 'SALA 2' }, SPACES_LIST.map(space => ({ ...space, activo: false })), [])).rejects.toThrow('espacio activo');
   });
+  it('preserves every edited reservation option, individual dates and rooms through preview and retries', async () => {
+    const initial = await build();
+    const custom = initial.reservations.slice(0, 2).map((row, index) => ({ ...row,
+      fecha: index === 0 ? '2028-03-01' : '2028-03-02', espacio: index === 0 ? 'SALA 2' : 'TATAMI',
+      descripcion: 'Nombre editado', responsable: 'Otro profesor', tipoActividad: 'ENSAYO', tipoPrestamo: 'ENSAYO',
+      telefonoContacto: '912345678', emailContacto: 'correo@example.com', cantidadParticipantes: 7,
+      importante: 'Sí', comentarios: 'Detalles del taller', montaje: { tipo: 'circulo' as const, instrucciones: 'Siete sillas' },
+      equipamientoSolicitado: [{ equipmentId: 'chair', equipmentName: 'Sillas', quantity: 7 }],
+      fechaInicioRecurrencia: '2028-03-01', fechaFinRecurrencia: '2028-03-02', tipoRecurrencia: 'especificas', diasSemana: '',
+    }));
+    const edited = await buildWorkshopImport(rows(), {}, SPACES_LIST, [], { 2: custom });
+    expect(edited.reservations).toHaveLength(2);
+    expect(edited.omittedHolidays).toHaveLength(0);
+    expect(edited.reservations[0]).toMatchObject({ ...custom[0], id: expect.any(String), totalEnSerie: 2, indiceEnSerie: 1 });
+    expect((await buildWorkshopImport(rows(), {}, SPACES_LIST, edited.reservations, { 2: custom })).duplicates).toBe(2);
+  });
   it('keeps names with different schedules separate and stable after row reordering', async () => {
     const parsed = parseWorkshopRows([header, ['Danza', 'LUN 10:00-11:00', '', 'Profesora'], ['Danza', 'MAR 10:00-11:00', '', 'Profesora']]);
     const first = await buildWorkshopImport(parsed, { 2: 'SALA 2', 3: 'SALA 2' }, SPACES_LIST, []);

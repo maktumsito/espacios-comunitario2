@@ -1,6 +1,7 @@
 import type { Reservation, SpaceInfo } from '../types';
-import { getChileanHolidayInfo } from './holidayUtils';
+import { getChileanHolidayInfo, verifyHolidayOverrideKey } from './holidayUtils';
 import { getEnabledSpaces } from './spaceAvailability';
+import { ReservationSchema } from '../schemas/reservationSchema';
 
 export const WORKSHOP_START = '2027-03-01';
 export const WORKSHOP_END = '2027-11-30';
@@ -64,7 +65,7 @@ function sessionKey(row: Reservation): string {
   return JSON.stringify([row.fecha, row.horaInicio, row.horaFin, normalize(row.espacio), normalize(row.descripcion), normalize(row.responsable), normalize(row.tipoActividad)]);
 }
 
-export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignments: Record<number, string>, spaces: readonly SpaceInfo[], existing: readonly Reservation[]): Promise<WorkshopImportPreview> {
+export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignments: Record<number, string>, spaces: readonly SpaceInfo[], existing: readonly Reservation[], drafts: Record<number, Reservation[]> = {}): Promise<WorkshopImportPreview> {
   const enabledNames = new Set(getEnabledSpaces(spaces).map(space => space.name));
   const byId = new Map(existing.map(row => [row.id, row]));
   const existingKeys = new Set(existing.map(sessionKey));
@@ -73,7 +74,8 @@ export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignme
   const identities = new Set<string>();
   for (const row of rows) {
     const space = assignments[row.row];
-    if (!enabledNames.has(space)) throw new Error(`Fila ${row.row}: selecciona un espacio activo.`);
+    const draft = drafts[row.row];
+    if (!draft && !enabledNames.has(space)) throw new Error(`Fila ${row.row}: selecciona un espacio activo.`);
     const schedules = [...row.schedules].sort((a, b) => a.day - b.day || a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
     const identity = JSON.stringify([normalize(row.name), normalize(row.teacher), schedules, WORKSHOP_START, WORKSHOP_END]);
     if (identities.has(identity)) throw new Error(`Fila ${row.row}: este taller y sus horarios ya aparecen en el archivo.`);
@@ -83,7 +85,7 @@ export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignme
     const series: Reservation[] = [];
     // Calendar dates must not drift across Chile's daylight-saving transitions.
     const end = Date.parse(`${WORKSHOP_END}T12:00:00Z`);
-    for (let timestamp = Date.parse(`${WORKSHOP_START}T12:00:00Z`); timestamp <= end; timestamp += 86_400_000) {
+    for (let timestamp = Date.parse(`${WORKSHOP_START}T12:00:00Z`); !draft && timestamp <= end; timestamp += 86_400_000) {
       const date = new Date(timestamp);
       for (const slot of schedules.filter(slot => slot.day === date.getUTCDay())) {
         const iso = date.toISOString().slice(0, 10);
@@ -100,6 +102,29 @@ export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignme
           fechaInicioRecurrencia: WORKSHOP_START, fechaFinRecurrencia: WORKSHOP_END,
           diasSemana: [...new Set(schedules.map(slot => Object.keys(weekdays).find(key => weekdays[key] === slot.day)!.toLowerCase()))].join(','),
           estado: 'activa', realizada: 'No' });
+      }
+    }
+    if (draft) {
+      if (!draft.length) throw new Error(`Fila ${row.row}: el taller debe tener al menos una sesión.`);
+      const used = new Set<string>();
+      const ids = new Set<string>();
+      for (const item of [...draft].sort((a, b) => a.fecha.localeCompare(b.fecha) || a.horaInicio.localeCompare(b.horaInicio) || a.espacio.localeCompare(b.espacio))) {
+        if (!enabledNames.has(item.espacio)) throw new Error(`Fila ${row.row}: selecciona un espacio activo para ${item.fecha}.`);
+        const check = ReservationSchema.safeParse(item);
+        if (!check.success) throw new Error(`Fila ${row.row}: ${check.error.issues[0].message}`);
+        const key = JSON.stringify([item.fecha, item.horaInicio, item.horaFin, item.espacio]);
+        if (used.has(key)) throw new Error(`Fila ${row.row}: hay sesiones repetidas.`);
+        used.add(key);
+        const holiday = getChileanHolidayInfo(item.fecha);
+        if (holiday && !verifyHolidayOverrideKey(item.claveAutorizacionFeriado || item.claveAutorizacion || '')) {
+          const omitted = holidays.get(item.fecha) || { date: item.fecha, name: holiday.name, sessions: 0 };
+          omitted.sessions++; holidays.set(item.fecha, omitted); continue;
+        }
+        let id = `${seriesId}_${item.fecha}_${item.horaInicio.replace(':', '')}_${item.horaFin.replace(':', '')}`;
+        if (ids.has(id)) id += `_${(await digest(item.espacio)).slice(0, 8)}`;
+        ids.add(id);
+        series.push({ ...item, id, serieRecurrente: item.actividadRecurrente === 'Sí' ? seriesId : undefined,
+          recurrenteId: item.actividadRecurrente === 'Sí' ? seriesId : undefined, version: 0 });
       }
     }
     series.forEach((reservation, index) => {

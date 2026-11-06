@@ -1,12 +1,14 @@
-# Importación de talleres CCD desde Excel
+# Importación de talleres CCD desde Excel o CSV
 
-En **Importar, exportar y respaldos → Excel, Planilla y CSV → Importar talleres desde Excel**, selecciona el archivo `.xlsx`. Disponible para los perfiles con permiso de carga masiva.
+En **Importar, exportar y respaldos → Excel, Planilla y CSV → Importar talleres desde Excel o CSV**, selecciona el archivo `.xlsx` o `.csv`. También puedes usar el botón general **Importar Excel o CSV**: reconoce las columnas de talleres y abre su revisión, conservando la compatibilidad con respaldos CSV de reservas. Disponible para los perfiles con permiso de carga masiva.
 
-La primera hoja debe incluir `NOMBRE TALLER`, `HORARIO 1` y `PROFESOR`; se admiten otras columnas `HORARIO 2`, `HORARIO 3`, etc. Los horarios tienen el formato `LUN 16:00-17:00`. Se reconocen los siete días abreviados, mayúsculas/minúsculas, tildes y espacios alrededor del guion. Un horario vacío se omite; los datos inválidos muestran la fila y detienen la lectura.
+La primera hoja de Excel o la tabla CSV debe incluir `NOMBRE TALLER`, `HORARIO 1` y `PROFESOR`; se admiten otras columnas `HORARIO 2`, `HORARIO 3`, etc. Se detectan los separadores de CSV punto y coma, coma o tabulación, comillas, saltos de línea dentro de celdas y archivos UTF-8 o Windows-1252. Los horarios tienen el formato `LUN 16:00-17:00`. Se reconocen los siete días abreviados, mayúsculas/minúsculas, tildes y espacios alrededor del guion. Un horario vacío se omite; los datos inválidos muestran la fila y detienen la lectura.
 
 Selecciona un espacio activo por fila de taller. Ese espacio se aplica a todos sus horarios. La importación mantiene separados los talleres con el mismo nombre y distintos horarios. No solicita contactos ni participantes ni les asigna valores inventados.
 
-Los valores de esta importación son:
+El botón **Editar todas las opciones** abre el formulario completo de la reserva para cada taller: nombre, actividad, tipo de préstamo, responsable, contactos, participantes, fechas, recurrencia, horarios, espacios por día o fecha, montaje, equipamiento, comentarios y documentos. Permite aplicar los cambios a toda la serie o al alcance seleccionado. Solo modifica un borrador local; la escritura en la base de datos ocurre al confirmar la importación. Cambiar el selector simple de espacio después de personalizar aplica ese espacio a todas las sesiones del taller, conservando sus demás opciones.
+
+Los valores iniciales de esta importación son:
 
 - Actividad: `TALLER CCD`.
 - Descripción: `NOMBRE TALLER`.

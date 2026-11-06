@@ -44,6 +44,7 @@ export interface SeriesItemSlot {
 }
 
 interface UseReservationSaveHandlerProps {
+  draftMode?: boolean;
   scheduleChanged?: boolean;
   initialFormData?: Partial<Reservation>;
   initialReservations?: Reservation[];
@@ -131,6 +132,7 @@ interface UseReservationSaveHandlerProps {
 }
 
 export function useReservationSaveHandler({
+  draftMode = false,
   scheduleChanged = true,
   initialFormData,
   initialReservations,
@@ -607,7 +609,7 @@ export function useReservationSaveHandler({
           ? Number(effectiveFormData.cantidadParticipantes)
           : editingReservation && !isDuplicating && editingReservation.cantidadParticipantes !== undefined
           ? editingReservation.cantidadParticipantes
-          : 10,
+          : draftMode ? undefined : 10,
       realizada: effectiveFormData.realizada || 'No',
       rut: effectiveFormData.rut || '',
       domicilio: effectiveFormData.domicilio || '',
@@ -627,6 +629,7 @@ export function useReservationSaveHandler({
       ),
       cartaCompromisoAdjunta: effectiveFormData.cartaCompromisoAdjunta,
       equipamientoSolicitado: effectiveFormData.equipamientoSolicitado || [],
+      montaje: effectiveFormData.montaje,
       terminaDiaSiguiente: Boolean(effectiveFormData.terminaDiaSiguiente),
       horarioExtendidoAutorizado: loanScheduleCheck.requiresAuthorization
         ? true
@@ -834,8 +837,9 @@ export function useReservationSaveHandler({
                   effectiveFormData.cantidadParticipantes !== ('' as any) &&
                   Number.isFinite(Number(effectiveFormData.cantidadParticipantes))
                     ? Number(effectiveFormData.cantidadParticipantes)
-                    : match.cantidadParticipantes ?? 10,
+                    : match.cantidadParticipantes ?? (draftMode ? undefined : 10),
                 equipamientoSolicitado: slotEquip,
+                montaje: effectiveFormData.montaje,
                 importante: effectiveFormData.importante || match.importante,
                 comentarios:
                   effectiveFormData.comentarios !== undefined ? effectiveFormData.comentarios : match.comentarios,
@@ -872,6 +876,7 @@ export function useReservationSaveHandler({
               // Brand new occurrence for newly expanded dates/slots in the series
               updatedList.push({
                 ...baseRef,
+                montaje: effectiveFormData.montaje,
                 id: (()=>{const key=JSON.stringify([editingReservation.id,slot.fecha,slot.espacio,slot.horaInicio,slot.horaFin,sIdx]);let id=newOccurrenceIds.current.get(key);if(!id){id=`RSV_${crypto.randomUUID()}`;newOccurrenceIds.current.set(key,id);}return id;})(),
                 googleEventId: undefined, cartaCompromisoAdjunta: undefined, cartaCompromisoDescargada: false,
                 reemplazaReservaId: undefined, reemplazadaPorReservaId: undefined, motivoReemplazo: undefined,
@@ -898,7 +903,7 @@ export function useReservationSaveHandler({
                   effectiveFormData.cantidadParticipantes !== ('' as any) &&
                   Number.isFinite(Number(effectiveFormData.cantidadParticipantes))
                     ? Number(effectiveFormData.cantidadParticipantes)
-                    : baseRef.cantidadParticipantes ?? 10,
+                    : baseRef.cantidadParticipantes ?? (draftMode ? undefined : 10),
                 equipamientoSolicitado: slotEquip,
                 importante: effectiveFormData.importante || baseRef.importante || 'No',
                 comentarios:
@@ -954,12 +959,16 @@ export function useReservationSaveHandler({
           const totalSeriesCount = new Set([...knownSeries.filter(r=>!removedIds.has(r.id)).map(r=>r.id),...updatedList.map(r=>r.id)]).size;
           const seriesMembershipUnchanged = !isConvertingToSeries && idsToDelete.length === 0 && updatedList.length === cleanAffected.length && updatedList.every(item => cleanAffected.some(old => old.id === item.id));
           updatedList.forEach(r=>{
+            if (draftMode) {
+              r.cartaCompromisoAdjunta = effectiveFormData.cartaCompromisoAdjunta;
+              r.descargarCartaAlCrear = finalReserva.descargarCartaAlCrear;
+            }
             r.indiceEnSerie = oldIndices.get(r.id) || ++nextIndex;
             r.totalEnSerie = totalSeriesCount || updatedList.length;
             const existing=cleanAffected.find(old=>old.id===r.id);
-            if (existing && initialFormData) {
+            if (existing && initialFormData && !draftMode) {
               const changed=applyChangedSeriesFields(existing,effectiveFormData,initialFormData);
-              for (const field of ['tipoActividad','descripcion','responsable','telefonoContacto','emailContacto','tipoPrestamo','cantidadParticipantes','equipamientoSolicitado','importante','comentarios','rut','domicilio','requiereCartaCompromiso','cartaCompromisoAdjunta','realizada'] as const) (r as any)[field]=changed[field];
+              for (const field of ['tipoActividad','descripcion','responsable','telefonoContacto','emailContacto','tipoPrestamo','cantidadParticipantes','equipamientoSolicitado','montaje','importante','comentarios','rut','domicilio','requiereCartaCompromiso','cartaCompromisoAdjunta','realizada'] as const) (r as any)[field]=changed[field];
             }
             if (existing && sameScheduleSlot(existing,r)) {
               r.horarioExtendidoAutorizado = existing.horarioExtendidoAutorizado;
@@ -1024,7 +1033,7 @@ export function useReservationSaveHandler({
           return;
         }
       }
-    if (isLetterActiveForDownload && descargarCartaAlCrear) {
+    if (!draftMode && isLetterActiveForDownload && descargarCartaAlCrear) {
       void (async () => {
         try {
           const letterReserva: Reservation = {

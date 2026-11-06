@@ -175,7 +175,9 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
       </div>
 
       {/* 3. Carta de Compromiso */}
+      {!formData.montaje && <button type="button" onClick={() => setFormData(prev => ({ ...prev, montaje: { tipo: 'despejado', instrucciones: '' } }))} className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700">Configurar montaje de sala</button>}
       {formData.montaje && <section className="rounded-xl border border-slate-200 p-4 space-y-3">
+        <button type="button" onClick={() => setFormData(prev => ({ ...prev, montaje: undefined }))} className="min-h-11 text-xs font-semibold text-slate-600">Quitar configuración de montaje</button>
         <label className="block text-xs font-semibold text-slate-700">Montaje de sala
           <select className="mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={formData.montaje.tipo} onChange={event => {
             const tipo = event.target.value as RoomSetupType;

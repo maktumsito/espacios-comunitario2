@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Reservation, SpaceInfo, SpaceBlock } from '../types';
+import { ActivityTypeItem, EquipmentItem, LoanType, Reservation, SpaceInfo, SpaceBlock } from '../types';
 import { WorkshopImport } from './WorkshopImport';
+import { readReservationImportFile } from '../utils/workshopImportFile';
+import type { WorkshopRow } from '../utils/workshopImport';
 import { exportToCsv } from '../utils/csvExportImport';
 import { parseCsvRows } from '../utils/csvParser';
 import { INITIAL_RESERVATIONS } from '../data/initialData';
@@ -48,6 +50,9 @@ interface ImportExportModalProps {
   reservations: Reservation[];
   spaces: SpaceInfo[];
   spaceBlocks?: SpaceBlock[];
+  activityTypes?: ActivityTypeItem[];
+  loanTypes?: LoanType[];
+  equipment?: EquipmentItem[];
   onImportReservations: (newReservations: Reservation[]) => Promise<void>;
   onSyncAllToFirebase: () => Promise<{ count: number; error?: string }>;
   currentUser?: AuthUser | null;
@@ -60,6 +65,9 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   reservations,
   spaces,
   spaceBlocks = [],
+  activityTypes,
+  loanTypes,
+  equipment,
   onImportReservations,
   onSyncAllToFirebase,
   currentUser,
@@ -71,6 +79,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
     type: 'idle'
   });
   const [importedCount, setImportedCount] = useState<number | null>(null);
+  const [workshopSource, setWorkshopSource] = useState<{ rows: WorkshopRow[]; name: string } | null>(null);
 
   // Backup state
   const [backupConfig, setBackupConfig] = useState(getBackupScheduleConfig());
@@ -319,7 +328,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
     reader.readAsText(file);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canManageSync) {
       setSyncStatus({
         type: 'error',
@@ -330,14 +339,18 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
 
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
 
     setIsUploading(true);
-    const reader = new FileReader();
-
-    reader.onload = async (event) => {
       try {
-        const text = event.target?.result as string;
-        const parsed = parseCsvRows(text);
+        const result = await readReservationImportFile(file);
+        if (result.workshops) {
+          setWorkshopSource({ rows: result.workshops, name: file.name });
+          setSyncStatus({ type: 'idle' });
+          setImportedCount(null);
+          return;
+        }
+        const parsed = parseCsvRows(result.csv);
         if (parsed.length > 0) {
           await onImportReservations(parsed);
           setImportedCount(parsed.length);
@@ -360,9 +373,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
       } finally {
         setIsUploading(false);
       }
-    };
-
-    reader.readAsText(file);
   };
 
   const handleSyncFirestore = async () => {
@@ -866,7 +876,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
               </div>
             )}
 
-            {canManageSync && <WorkshopImport spaces={spaces} spaceBlocks={spaceBlocks} reservations={reservations} onImportReservations={onImportReservations} />}
+            {canManageSync && <WorkshopImport spaces={spaces} spaceBlocks={spaceBlocks} reservations={reservations} onImportReservations={onImportReservations} source={workshopSource} currentUser={currentUser} activityTypes={activityTypes} loanTypes={loanTypes} equipment={equipment} />}
 
             {/* CSV Export */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
@@ -898,21 +908,21 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs text-slate-800 flex items-center space-x-1.5">
                     <Upload className="w-4 h-4 text-blue-600" />
-                    <span>Importar Archivo CSV</span>
+                    <span>Importar Excel o CSV</span>
                   </span>
                   <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-semibold">
                     Gestión
                   </span>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Sube un archivo CSV con columnas de reservas para incorporarlas al sistema.
+                  Sube talleres en Excel o CSV para revisarlos y elegir sus espacios. También admite respaldos CSV con columnas de reservas.
                 </p>
                 <label className="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-50 border border-dashed border-slate-300 hover:border-blue-500 text-xs font-semibold text-slate-600 flex flex-col items-center justify-center cursor-pointer transition shadow-2xs">
                   <Upload className="w-5 h-5 text-slate-400 mb-1" />
-                  <span>Haz clic para seleccionar o arrastra tu archivo CSV</span>
+                  <span>Seleccionar archivo Excel o CSV</span>
                   <input
                     type="file"
-                    accept=".csv,text/csv"
+                    accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     onChange={handleFileUpload}
                     className="hidden"
                   />

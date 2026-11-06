@@ -14,7 +14,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 async function open(existing: Reservation[] = [], blocks: SpaceBlock[] = [], save = vi.fn().mockResolvedValue(undefined)) {
   readSheet.mockResolvedValue(data);
-  render(<WorkshopImport spaces={SPACES_LIST} spaceBlocks={blocks} reservations={existing} onImportReservations={save} />);
+  render(<WorkshopImport spaces={SPACES_LIST} spaceBlocks={blocks} reservations={existing} onImportReservations={save} currentUser={{ username: 'test', name: 'Test', role: 'Administrador', initials: 'T', avatarColor: 'blue' }} />);
   fireEvent.change(screen.getByLabelText('Excel de talleres'), { target: { files: [new File(['test'], 'talleres.xlsx')] } });
   await screen.findByText('Fila 2: Danza');
   return save;
@@ -34,7 +34,7 @@ it('asks only for a room and saves only after reviewing the generated sessions',
   fireEvent.click(screen.getByRole('button', { name: /Guardar \d+ sesiones recurrentes/ }));
   await waitFor(() => expect(save).toHaveBeenCalledOnce());
   expect(save.mock.calls[0][0][0]).toMatchObject({ espacio: 'SALA 2', responsable: 'María Pérez', tipoActividad: 'TALLER CCD', actividadRecurrente: 'Sí' });
-  await screen.findByText(/Se guardaron .* sesiones recurrentes/);
+  await screen.findByText(/Se guardaron .* sesiones de talleres/);
 });
 
 it('blocks saving when an existing reservation overlaps', async () => {
@@ -62,3 +62,25 @@ it('reports malformed files without enabling import', async () => {
   expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('Fila 2'));
   expect(screen.queryByRole('combobox')).toBeNull();
 });
+
+it('opens the full reservation editor and keeps edits in the import draft until final confirmation', async () => {
+  const save = await open();
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'SALA 2' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Editar todas las opciones (fila 2)' }));
+  await screen.findByText('Editar taller antes de importar', {}, { timeout: 15000 });
+  fireEvent.change(screen.getByLabelText(/Nombre de la Actividad/), { target: { value: 'Danza personalizada' } });
+  fireEvent.change(document.getElementById('input-reserva-email')!, { target: { value: 'profesor@example.com' } });
+  fireEvent.change(document.getElementById('input-reserva-participantes')!, { target: { value: '7' } });
+  fireEvent.change(document.getElementById('input-reserva-comentarios')!, { target: { value: 'Preparar la sala' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Configurar montaje de sala' }));
+  fireEvent.change(screen.getByLabelText('Instrucciones de montaje'), { target: { value: 'Siete sillas en círculo' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Aplicar cambios a la importación' }));
+  await screen.findByText('Fila 2: Danza personalizada');
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Revisar importación' }));
+  await screen.findByLabelText('Resumen de importación');
+  fireEvent.click(screen.getByRole('button', { name: /Guardar \d+ sesiones recurrentes/ }));
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  expect(save.mock.calls[0][0].every((row: Reservation) => row.descripcion === 'Danza personalizada')).toBe(true);
+  expect(save.mock.calls[0][0].every((row: Reservation) => row.emailContacto === 'profesor@example.com' && row.cantidadParticipantes === 7 && row.comentarios === 'Preparar la sala' && row.montaje?.instrucciones === 'Siete sillas en círculo')).toBe(true);
+}, 30000);

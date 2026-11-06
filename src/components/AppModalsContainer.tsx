@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Reservation, SpaceInfo, SpaceRating, ViewMode, ActivityTypeItem, LoanType, SpaceBlock } from '../types';
+import { Reservation, SpaceInfo, SpaceRating, ViewMode, ActivityTypeItem, LoanType, SpaceBlock, EquipmentItem } from '../types';
 import { AuthUser, isCoordinatorOrAdmin } from '../services/authService';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 
@@ -54,6 +54,7 @@ export interface AppModalsContainerProps {
   reservations: Reservation[];
   spaces: SpaceInfo[];
   spaceBlocks?: SpaceBlock[];
+  equipment?: EquipmentItem[];
   activityTypes: ActivityTypeItem[];
   loanTypes: LoanType[];
 
@@ -143,6 +144,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
   reservations,
   spaces,
   spaceBlocks,
+  equipment,
   activityTypes,
   loanTypes,
 
@@ -261,6 +263,9 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
             isOpen={isImportExportModalOpen}
             spaces={spaces}
             spaceBlocks={spaceBlocks}
+            activityTypes={activityTypes}
+            loanTypes={loanTypes}
+            equipment={equipment}
             onClose={onCloseImportExportModal}
             reservations={reservations}
             currentUser={currentUser}

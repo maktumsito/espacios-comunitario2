@@ -11,6 +11,7 @@ import {
 import { Reservation } from '../types';
 
 interface ReservationModalFooterProps {
+  draftMode?: boolean;
   replacementMode?: boolean;
   editingReservation?: Reservation | null;
   isDuplicating: boolean;
@@ -53,6 +54,7 @@ interface ReservationModalFooterProps {
 }
 
 export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = React.memo(({
+  draftMode = false,
   replacementMode = false,
   editingReservation,
   isDuplicating,
@@ -283,7 +285,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
               id="btn-submit-reservation"
               key="submit-reservation"
               type="submit"
-              aria-label="Confirmar y guardar reserva de espacio"
+              aria-label={draftMode ? 'Aplicar cambios a la importación' : 'Confirmar y guardar reserva de espacio'}
               disabled={isFormSubmitDisabled || (isEditingExisting && !canModifyReservation)}
               className={`min-h-11 min-w-0 flex-1 px-4 py-2.5 rounded-lg text-white text-sm font-semibold transition-colors sm:flex-none ${
                 isFormSubmitDisabled || (isEditingExisting && !canModifyReservation)
@@ -308,6 +310,8 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
                 ? 'Revisa el horario del segundo espacio'
                 : (conflicts.length > 0 || candidateConflictDates.length > 0) && !allowConflictOverride
                 ? (candidateConflictDates.length > 1 ? `Resolver conflictos (${candidateConflictDates.length} días)` : 'Revisa el conflicto de horario')
+                : draftMode
+                ? 'Aplicar cambios a la importación'
                 : isDuplicating
                 ? (bookingMode === 'specific' && generateFullSeries
                     ? (specificDates.length === 0
