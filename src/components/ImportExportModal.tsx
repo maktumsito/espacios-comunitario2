@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Reservation } from '../types';
+import { Reservation, SpaceInfo, SpaceBlock } from '../types';
+import { WorkshopImport } from './WorkshopImport';
 import { exportToCsv } from '../utils/csvExportImport';
 import { parseCsvRows } from '../utils/csvParser';
 import { INITIAL_RESERVATIONS } from '../data/initialData';
@@ -45,6 +46,8 @@ interface ImportExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   reservations: Reservation[];
+  spaces: SpaceInfo[];
+  spaceBlocks?: SpaceBlock[];
   onImportReservations: (newReservations: Reservation[]) => Promise<void>;
   onSyncAllToFirebase: () => Promise<{ count: number; error?: string }>;
   currentUser?: AuthUser | null;
@@ -55,6 +58,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   isOpen,
   onClose,
   reservations,
+  spaces,
+  spaceBlocks = [],
   onImportReservations,
   onSyncAllToFirebase,
   currentUser,
@@ -459,7 +464,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
             }`}
           >
             <FileSpreadsheet className="w-4 h-4 text-blue-600" />
-            <span>Planilla y Archivos CSV</span>
+            <span>Excel, Planilla y CSV</span>
           </button>
         </div>
 
@@ -860,6 +865,8 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                 </p>
               </div>
             )}
+
+            {canManageSync && <WorkshopImport spaces={spaces} spaceBlocks={spaceBlocks} reservations={reservations} onImportReservations={onImportReservations} />}
 
             {/* CSV Export */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">

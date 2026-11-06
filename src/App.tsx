@@ -2070,6 +2070,7 @@ export default function App() {
       {/* Container modularizado para todos los modales auxiliares de la aplicación */}
       <AppModalsContainer
         currentUser={currentUser}
+        spaceBlocks={spaceBlocks}
         reservations={reservations}
         spaces={spaces}
         activityTypes={activityTypes}
