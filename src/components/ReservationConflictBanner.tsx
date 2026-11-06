@@ -77,7 +77,7 @@ export const ReservationConflictBanner: React.FC<ReservationConflictBannerProps>
           <p className="text-xs text-rose-800">
             {candidateConflictDates.length > 1
               ? `Se detectaron coincidencias de horario en ${candidateConflictDates.length} de las fechas programadas para esta reserva. Puedes aplicar soluciones masivas o individuales.`
-              : `El espacio ${formatDisplayTitle(formData.espacio)} ya está ocupado en la fecha ${formatDateDDMMYYYY(formData.fecha || '')} durante el bloque seleccionado (${formData.horaInicio} - ${formData.horaFin}).`}
+              : `El espacio ${formatDisplayTitle(formData.espacio)} ya está ocupado en la fecha ${formatDateDDMMYYYY(candidateConflictDates[0] || formData.fecha || '')} durante el bloque seleccionado (${formData.horaInicio} - ${formData.horaFin}).`}
           </p>
 
           {/* Detalle de reservas existentes con botón de mover inmediatamente después */}

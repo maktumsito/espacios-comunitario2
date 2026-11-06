@@ -813,17 +813,19 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   // Synchronize start date if primary date changes
   const handlePrimaryDateChange = (newDate: string) => {
     setFormData((prev) => ({ ...prev, fecha: newDate }));
-    if (!editingReservation) {
+    if (!editingReservation || isDuplicating) {
       setRecurrenceStartDate(newDate);
       if (!newDate) return;
-      if (!specificDates.includes(newDate)) {
+      if (isDuplicating && bookingMode === 'single') {
+        setSpecificDates([newDate]);
+      } else if (bookingMode !== 'pattern' && !specificDates.includes(newDate)) {
         setSpecificDates((prev) => Array.from(new Set([newDate, ...prev])).sort());
       }
       try {
         const parsed = parseISO(newDate);
         setCurrentCalendarMonth(parsed);
         const dayNum = parsed.getDay();
-        if (!selectedDays.includes(dayNum)) {
+        if (!isDuplicating && bookingMode === 'single' && !selectedDays.includes(dayNum)) {
           setSelectedDays((prev) => Array.from(new Set([...prev, dayNum])));
         }
       } catch (e) {

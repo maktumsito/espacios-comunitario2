@@ -199,11 +199,17 @@ export function useReservationConflictResolution({
 
   // Real-time conflict check memoized to avoid recalculating on every re-render and keystroke
   const conflicts = useMemo<Reservation[]>(() => {
+    // A recurrence boundary is not necessarily a booked day. Multi-date modes
+    // are checked against reviewSlots by candidateConflictDates below.
+    if (bookingMode !== 'single' && !isEditingSingleOccurrence) return [];
     if (!formData.fecha || !formData.espacio || !formData.horaInicio || !formData.horaFin) return [];
     return checkIndexedConflict(formData, allReservations, excludeReservationIds, excludeSeriesId);
   }, [
     reviewSlots,
     conflictReviewFrom,
+    bookingMode,
+    isEditingSingleOccurrence,
+    formData.id,
     formData.fecha,
     formData.horaInicio,
     formData.horaFin,
