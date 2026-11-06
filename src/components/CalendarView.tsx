@@ -209,9 +209,6 @@ const CalendarEventTag = memo<CalendarEventTagProps>(({
       style={{ backgroundColor: isCancelled ? '#64748b' : color, color: getActivityColorText(isCancelled ? '#64748b' : color) }}
     >
       <span className="font-mono tabular-nums text-xs font-bold shrink-0">{reservation.horaInicio}</span>
-      {isCancelled && (
-        <span className="shrink-0 text-xs font-bold text-rose-200" title="Reserva Cancelada">🚫</span>
-      )}
       {reservation.solicitudEliminacion && !isCancelled && (
         <span className="shrink-0 text-xs" title="Solicitud de eliminación en espera">⏳</span>
       )}
@@ -465,12 +462,6 @@ const AgendaReservationCard = memo<AgendaReservationCardProps>(({
         </div>
 
         <div className="flex items-center space-x-1 shrink-0">
-          {isCancelled && (
-            <span className="text-xs font-bold px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-0.5">
-              <span>🚫</span>
-              <span>Cancelada</span>
-            </span>
-          )}
           {isImportant && !isCancelled && (
             <span className="p-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200" title="Actividad Importante">
               <Flame className="w-2.5 h-2.5 text-amber-500" />

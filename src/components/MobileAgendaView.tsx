@@ -367,12 +367,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                         </span>
                       )}
 
-                      {isConflict && (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-xs font-extrabold">
-                          <AlertTriangle className="w-3 h-3 text-rose-600" />
-                          <span>TOPAMIENTO</span>
-                        </span>
-                      )}
+
 
                       {res.importante === 'Sí' && (
                         <span className="p-1 rounded-md bg-amber-100 text-amber-800" title="Actividad Importante">
@@ -513,20 +508,16 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                             className={`min-h-[44px] px-2.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer ${
                               isRealizada
                                 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                : res.realizada === 'No'
-                                ? 'bg-rose-50 text-rose-800 border border-rose-200'
                                 : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
                             }`}
                             title={isRealizada ? 'Marcar como pendiente' : 'Marcar como realizada'}
                           >
                             {isRealizada ? (
                               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                            ) : res.realizada === 'No' ? (
-                              <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
                             ) : (
                               <Circle className="w-4 h-4 text-slate-400 shrink-0" />
                             )}
-                            <span>{isRealizada ? 'Realizada' : res.realizada === 'No' ? 'No asistió' : 'Pendiente'}</span>
+                            <span>{isRealizada ? 'Realizada' : 'Pendiente'}</span>
                           </button>
                         )}
                       </div>

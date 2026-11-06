@@ -1749,11 +1749,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                                   <span data-reservation-time aria-label={`${res.horaInicio} a ${res.horaFin}`} className="font-mono tabular-nums font-bold text-[10px] leading-3 whitespace-nowrap text-slate-700 bg-white/95 px-0.5 rounded border border-black/5 shrink-0 select-none">
                                     {isOverlapping && layout.totalCols >= 2 ? res.horaInicio : `${res.horaInicio}–${res.horaFin}`}
                                   </span>
-                                  {isConflict && (
-                                    <span title="Topamiento de horario" className="text-[7.5px] bg-rose-600 text-white px-1 py-0.2 rounded font-black uppercase tracking-tight shrink-0">
-                                      ⚠️ TOP
-                                    </span>
-                                  )}
+
                                   {res.solicitudEliminacion && (
                                     <span title="Solicitud de eliminación en espera de autorización" className="text-[7.5px] bg-amber-500 text-white px-1 py-0.2 rounded font-bold uppercase tracking-tight shrink-0 flex items-center gap-0.5">
                                       <span>⏳</span>
@@ -1775,17 +1771,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                                       {formatDisplayTitle(res.espacio)}
                                     </span>
                                   )}
-                                  {res.realizada === 'Sí' && (
-                                    <span title="Actividad realizada (asistencia confirmada)" className="text-[7.5px] bg-emerald-600 text-white px-1 py-0.2 rounded font-bold tracking-tight shrink-0 flex items-center gap-0.5">
-                                      <CheckCircle2 className="w-2 h-2 text-white" />
-                                      <span>Realizada</span>
-                                    </span>
-                                  )}
-                                  {res.realizada === 'No' && (
-                                    <span title="No asistió / No-show" className="text-[7.5px] bg-rose-600 text-white px-1 py-0.2 rounded font-bold tracking-tight shrink-0">
-                                      ✕ No asistió
-                                    </span>
-                                  )}
+
                                 </div>
                                 
                                 {/* Quick edit/duplicate/delete icons on hover */}
