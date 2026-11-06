@@ -65,7 +65,7 @@ function sessionKey(row: Reservation): string {
   return JSON.stringify([row.fecha, row.horaInicio, row.horaFin, normalize(row.espacio), normalize(row.descripcion), normalize(row.responsable), normalize(row.tipoActividad)]);
 }
 
-export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignments: Record<number, string>, spaces: readonly SpaceInfo[], existing: readonly Reservation[], drafts: Record<number, Reservation[]> = {}): Promise<WorkshopImportPreview> {
+export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignments: Record<number, string>, spaces: readonly SpaceInfo[], existing: readonly Reservation[], drafts: Record<number, Reservation[]> = {}, activityAssignments: Record<number, string> = {}): Promise<WorkshopImportPreview> {
   const enabledNames = new Set(getEnabledSpaces(spaces).map(space => space.name));
   const byId = new Map(existing.map(row => [row.id, row]));
   const existingKeys = new Set(existing.map(sessionKey));
@@ -97,7 +97,8 @@ export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignme
           continue;
         }
         series.push({ id: `${seriesId}_${iso}_${slot.start.replace(':', '')}_${slot.end.replace(':', '')}`, fecha: iso, horaInicio: slot.start, horaFin: slot.end,
-          espacio: space, responsable: row.teacher, descripcion: row.name, tipoActividad: 'TALLER CCD', actividadRecurrente: 'Sí',
+          espacio: space, responsable: row.teacher, descripcion: row.name, tipoActividad: activityAssignments[row.row] || 'TALLER CCD',
+          ...(activityAssignments[row.row] ? { tipoPrestamo: activityAssignments[row.row] } : {}), actividadRecurrente: 'Sí',
           tipoRecurrencia: 'semanal', serieRecurrente: seriesId, recurrenteId: seriesId,
           fechaInicioRecurrencia: WORKSHOP_START, fechaFinRecurrencia: WORKSHOP_END,
           diasSemana: [...new Set(schedules.map(slot => Object.keys(weekdays).find(key => weekdays[key] === slot.day)!.toLowerCase()))].join(','),

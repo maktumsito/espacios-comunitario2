@@ -20,20 +20,22 @@ async function open(existing: Reservation[] = [], blocks: SpaceBlock[] = [], sav
   return save;
 }
 async function review() {
-  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'SALA 2' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Espacio para Danza (fila 2)' }), { target: { value: 'SALA 2' } });
   fireEvent.click(screen.getByRole('button', { name: 'Revisar importación' }));
   await screen.findByLabelText('Resumen de importación');
 }
 
-it('asks only for a room and saves only after reviewing the generated sessions', async () => {
+it('assigns the selected room and activity category to every imported session', async () => {
   const save = await open();
   expect((screen.getByRole('button', { name: 'Revisar importación' }) as HTMLButtonElement).disabled).toBe(true);
   expect(save).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText('Categoría de actividad para Danza (fila 2)'), { target: { value: 'TALLER JJV' } });
   await review();
   expect(save).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: /Guardar \d+ sesiones recurrentes/ }));
   await waitFor(() => expect(save).toHaveBeenCalledOnce());
-  expect(save.mock.calls[0][0][0]).toMatchObject({ espacio: 'SALA 2', responsable: 'María Pérez', tipoActividad: 'TALLER CCD', actividadRecurrente: 'Sí' });
+  expect(save.mock.calls[0][0][0]).toMatchObject({ espacio: 'SALA 2', responsable: 'María Pérez', tipoActividad: 'TALLER JJV', tipoPrestamo: 'TALLER JJV', actividadRecurrente: 'Sí' });
+  expect(save.mock.calls[0][0].every((row: Reservation) => row.espacio === 'SALA 2' && row.tipoActividad === 'TALLER JJV')).toBe(true);
   await screen.findByText(/Se guardaron .* sesiones de talleres/);
 });
 
@@ -51,7 +53,7 @@ it('blocks saving during maintenance and clears a stale preview when the room ch
   await review();
   expect(screen.getByText(/BLOQUEADO por mantención/)).toBeTruthy();
   expect((screen.getByRole('button', { name: /Guardar \d+ sesiones/ }) as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'TATAMI' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Espacio para Danza (fila 2)' }), { target: { value: 'TATAMI' } });
   expect(screen.queryByLabelText('Resumen de importación')).toBeNull();
 });
 
@@ -65,7 +67,7 @@ it('reports malformed files without enabling import', async () => {
 
 it('opens the full reservation editor and keeps edits in the import draft until final confirmation', async () => {
   const save = await open();
-  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'SALA 2' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Espacio para Danza (fila 2)' }), { target: { value: 'SALA 2' } });
   fireEvent.click(screen.getByRole('button', { name: 'Editar todas las opciones (fila 2)' }));
   await screen.findByText('Editar taller antes de importar', {}, { timeout: 15000 });
   fireEvent.change(screen.getByLabelText(/Nombre de la Actividad/), { target: { value: 'Danza personalizada' } });
@@ -76,11 +78,42 @@ it('opens the full reservation editor and keeps edits in the import draft until 
   fireEvent.change(screen.getByLabelText('Instrucciones de montaje'), { target: { value: 'Siete sillas en círculo' } });
   fireEvent.click(screen.getByRole('button', { name: 'Aplicar cambios a la importación' }));
   await screen.findByText('Fila 2: Danza personalizada');
+  fireEvent.change(screen.getByLabelText('Categoría de actividad para Danza (fila 2)'), { target: { value: 'TALLER JJV' } });
   expect(save).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Revisar importación' }));
   await screen.findByLabelText('Resumen de importación');
   fireEvent.click(screen.getByRole('button', { name: /Guardar \d+ sesiones recurrentes/ }));
   await waitFor(() => expect(save).toHaveBeenCalledOnce());
-  expect(save.mock.calls[0][0].every((row: Reservation) => row.descripcion === 'Danza personalizada')).toBe(true);
+  expect(save.mock.calls[0][0].every((row: Reservation) => row.descripcion === 'Danza personalizada' && row.tipoActividad === 'TALLER JJV' && row.tipoPrestamo === 'TALLER JJV')).toBe(true);
   expect(save.mock.calls[0][0].every((row: Reservation) => row.emailContacto === 'profesor@example.com' && row.cantidadParticipantes === 7 && row.comentarios === 'Preparar la sala' && row.montaje?.instrucciones === 'Siete sillas en círculo')).toBe(true);
 }, 30000);
+
+
+it('invalidates the preview and requires a category before reviewing again', async () => {
+  const save = await open();
+  await review();
+  fireEvent.change(screen.getByLabelText('Categoría de actividad para Danza (fila 2)'), { target: { value: '' } });
+  expect(screen.queryByLabelText('Resumen de importación')).toBeNull();
+  expect((screen.getByRole('button', { name: 'Revisar importación' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Categoría de actividad para Danza (fila 2)'), { target: { value: 'TALLER MUNICIPAL' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Revisar importación' }));
+  await screen.findByLabelText('Resumen de importación');
+  fireEvent.click(screen.getByRole('button', { name: /Guardar \d+ sesiones recurrentes/ }));
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  expect(save.mock.calls[0][0].every((row: Reservation) => row.tipoActividad === 'TALLER MUNICIPAL')).toBe(true);
+});
+
+
+it('uses the configured category catalog for imported workshops', async () => {
+  const save = vi.fn().mockResolvedValue(undefined);
+  render(<WorkshopImport spaces={SPACES_LIST} spaceBlocks={[]} reservations={[]} onImportReservations={save}
+    source={{ rows: parseWorkshopRows(data), name: 'talleres.xlsx' }}
+    activityTypes={[{ id: 'custom', name: 'TALLER VECINAL', category: 'Vecinal', color: '#9333ea' }]} />);
+  const category = screen.getByLabelText('Categoría de actividad para Danza (fila 2)') as HTMLSelectElement;
+  expect(category.value).toBe('TALLER VECINAL');
+  expect(screen.queryByRole('option', { name: 'TALLER CCD' })).toBeNull();
+  await review();
+  fireEvent.click(screen.getByRole('button', { name: /Guardar \d+ sesiones recurrentes/ }));
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  expect(save.mock.calls[0][0].every((row: Reservation) => row.tipoActividad === 'TALLER VECINAL')).toBe(true);
+});
