@@ -28,6 +28,7 @@ import { registerBackupApi } from "../backupApi";
 import { registerBackupMaintenanceApi } from '../backupMaintenanceApi';
 import { claimDelivery, startDelivery, finishDelivery } from "../deliveryLease";
 import { backupChecksum } from "../../src/utils/backupIntegrity";
+import { isChileanHoliday } from "../../src/utils/holidayUtils";
 
 const enabled = process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:8087";
 describe.skipIf(!enabled)(
@@ -138,6 +139,34 @@ describe.skipIf(!enabled)(
       await db.terminate();
       await deleteApp(app);
     });
+    it('saves 75 recurring sessions from March to November 2027 and resumes without duplicates', async () => {
+      const dates: string[] = [];
+      for (let day = new Date('2027-03-01T12:00:00Z'); day <= new Date('2027-11-30T12:00:00Z'); day.setUTCDate(day.getUTCDate() + 1)) {
+        const date = day.toISOString().slice(0, 10);
+        if ([2, 4].includes(day.getUTCDay()) && !isChileanHoliday(date)) dates.push(date);
+      }
+      const rows = dates.slice(0, 75).map((date, i) => ({
+        ...row(`recurring-2027-${i}`, date), actividadRecurrente: 'Sí',
+        serieRecurrente: 'SER_2027_MAR_NOV', recurrenteId: 'SER_2027_MAR_NOV',
+      }));
+      expect(rows).toHaveLength(75);
+      expect(rows[0].fecha).toMatch(/^2027-03/);
+      expect(rows.at(-1)!.fecha).toMatch(/^2027-11/);
+      const payload = { reservations: rows, options: { operationId: 'recurring-2027', intent: 'create' } };
+      const saved = await post('/api/reservations/commit', payload);
+      expect(saved.error).toBeUndefined();
+      expect(saved.result.pendingIds).toEqual([]);
+      expect(saved.result.confirmedIds).toHaveLength(75);
+      const retry = await post('/api/reservations/commit', payload);
+      expect(retry.error).toBeUndefined();
+      expect(retry.result.confirmedIds).toHaveLength(75);
+      expect((await db.collection('reservas').get()).size).toBe(75);
+      expect((await db.collection('schedule_slots').get()).size).toBe(75);
+      for (const snapshot of (await db.collection('reservas').get()).docs)
+        expect(snapshot.data().version).toBe(1);
+      const audit = await readAudit(db, 'AUDIT_OP_recurring-2027');
+      expect(audit.newState).toHaveLength(75);
+    }, 30000);
     it("denies anonymous SDK/REST, forged authors and reader writes, but allows signed reads", async () => {
       await expect(
         setDoc(doc(sdk, "reservas", "forged"), row("forged")),

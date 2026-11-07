@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Reservation } from '../../types';
 import { buildReplacementBatch } from '../../utils/reservationReplacement';
+import { isChileanHoliday } from '../../utils/holidayUtils';
 
 const memory = vi.hoisted(() => ({ rows: new Map<string, any>(), fail: false, loseAck: false, beforeCommit: undefined as (() => void) | undefined, commits: 0, writes: [] as string[], reads: [] as string[] }));
 vi.mock('firebase/firestore', async original => {
@@ -124,6 +125,29 @@ function seed(row: Reservation) {
 }
 beforeEach(() => { localStorage.clear(); memory.rows.clear(); memory.fail = false; memory.loseAck = false; memory.beforeCommit = undefined; memory.commits = 0; memory.writes = []; memory.reads = []; seed(original); });
 describe('availability write quota', () => {
+    it('confirms 75 recurring sessions from March to November 2027 and retries without duplicates', async () => {
+      memory.rows.clear();
+      const dates: string[] = [];
+      for (let day = new Date('2027-03-01T12:00:00Z'); day <= new Date('2027-11-30T12:00:00Z'); day.setUTCDate(day.getUTCDate() + 1)) {
+        const date = day.toISOString().slice(0, 10);
+        if ([2, 4].includes(day.getUTCDay()) && !isChileanHoliday(date)) dates.push(date);
+      }
+      const rows = dates.slice(0, 75).map((fecha, i) => ({ ...original,
+        id: `recurring-2027-${i}`, fecha, version: 0, serieRecurrente: 'SER_2027_MAR_NOV',
+      }));
+      expect(rows).toHaveLength(75);
+      expect(rows[0].fecha).toMatch(/^2027-03/);
+      expect(rows.at(-1)!.fecha).toMatch(/^2027-11/);
+      const options = { operationId: 'recurring-2027', intent: 'create' as const };
+      const saved = await writeReservations({} as any, rows, clean, options);
+      expect(saved.confirmedIds).toHaveLength(75);
+      expect(saved.pendingIds).toEqual([]);
+      const retry = await writeReservations({} as any, rows, clean, options);
+      expect(retry.confirmedIds).toHaveLength(75);
+      expect([...memory.rows.keys()].filter(path => path.startsWith('reservas/'))).toHaveLength(75);
+      expect([...memory.rows.keys()].filter(path => path.startsWith('schedule_slots/'))).toHaveLength(75);
+      rows.forEach(row => expect(memory.rows.get(`reservas/${row.id}`).version).toBe(1));
+    });
   it('reads a linked reservation only once when it is also a version guard in the same transaction', async () => {
     const source = { ...original, estado: 'cancelada', reemplazadaPorReservaId: 'linked' };
     memory.rows.set('reservas/original', source);
