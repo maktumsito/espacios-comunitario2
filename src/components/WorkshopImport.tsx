@@ -1,13 +1,14 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActivityTypeItem, EquipmentItem, LoanType, Reservation, SpaceBlock, SpaceInfo } from '../types';
 import type { AuthUser } from '../services/authService';
-import { buildWorkshopImport, type WorkshopRow, type WorkshopImportPreview } from '../utils/workshopImport';
+import { buildWorkshopImport, getWorkshopSchedules, getWorkshopScheduleError, type WorkshopRow, type WorkshopScheduleChoice, type WorkshopImportPreview } from '../utils/workshopImport';
 import { readReservationImportFile } from '../utils/workshopImportFile';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import { detectBatchConflicts, findMaintenanceBlockConflicts, formatBlockConflictMessage } from '../utils/conflictDetector';
 import { getEnabledSpaces } from '../utils/spaceAvailability';
 import { DEFAULT_ACTIVITY_ITEMS } from '../data/activityTypes';
 const ReservationEditor = lazyWithRetry(() => import('./ReservationModal').then(module => ({ default: module.ReservationModal })), 'WorkshopReservationEditor');
+const dayNames = ['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'];
 
 interface Props {
   spaces: SpaceInfo[];
@@ -49,6 +50,8 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
       : !categories.some(item => item.name === effectiveActivityAssignments[row.row]);
   }).length;
   const missing = rows.filter(row => drafts[row.row] ? drafts[row.row].some(session => !enabledSpaces.some(space => space.name === session.espacio)) : !enabledSpaces.some(space => space.name === assignments[row.row])).length;
+  const scheduleErrors = new Map(rows.map(row => [row.row, drafts[row.row] ? undefined : getWorkshopScheduleError(getWorkshopSchedules(row))]));
+  const invalidSchedules = [...scheduleErrors.values()].some(Boolean);
   const conflicts = useMemo(() => preview ? detectBatchConflicts(preview.reservations, reservations) : [], [preview, reservations]);
   const blocks = useMemo(() => preview ? findMaintenanceBlockConflicts(preview.reservations, spaceBlocks) : [], [preview, spaceBlocks]);
 
@@ -72,7 +75,7 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
   }
 
   async function save() {
-    if (!preview || busy || missing || missingCategories || conflicts.length || blocks.length) return;
+    if (!preview || busy || missing || missingCategories || invalidSchedules || conflicts.length || blocks.length) return;
     setBusy(true); setError(''); setMessage('');
     try {
       // Recheck the latest catalog, known reservations and blocks before invoking the normal writer.
@@ -100,6 +103,15 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
     finally { setBusy(false); }
   }
 
+  function updateSchedule(rowNumber: number, index: number, change: Partial<WorkshopScheduleChoice>) {
+    setRows(previous => previous.map(row => {
+      if (row.row !== rowNumber) return row;
+      const choices = row.scheduleChoices ?? row.schedules.map(slot => ({ ...slot, enabled: true }));
+      return { ...row, scheduleChoices: choices.map((slot, position) => position === index ? { ...slot, ...change } : slot) };
+    }));
+    setPreview(null); setError(''); setMessage('');
+  }
+
   function remove(row: WorkshopRow) {
     if (busy) return;
     setRows(previous => previous.filter(item => item.row !== row.row));
@@ -119,7 +131,7 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
   return <section ref={section} aria-label="Importar talleres desde Excel" className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200 space-y-3">
     <h3 className="font-bold text-sm text-slate-900">Importar talleres desde Excel o CSV</h3>
     <p className="text-xs text-slate-600">Valores iniciales: reservas semanales del 01/03/2027 al 30/11/2027 y profesor como responsable. Elige el espacio y la categoría de actividad de cada taller antes de importar. Puedes cambiar los demás datos en Editar todas las opciones.</p>
-    <p className="text-xs text-slate-600">Columnas: NOMBRE TALLER, HORARIO 1, HORARIO 2 (opcional), PROFESOR. Reconoce LUN, MAR, MIE, JUE, VIE, SAB y DOM. Los feriados se omiten y se detallan antes de guardar.</p>
+    <p className="text-xs text-slate-600">Usa NOMBRE TALLER, PROFESOR y una columna numerada por horario (HORARIO 1, HORARIO 2, etc.). Al cargar el archivo se completan el día y las horas de inicio y fin de cada horario. Puedes editar las horas y desmarcar los horarios que quieras excluir. Los feriados omitidos aparecen en la revisión.</p>
     <label className="block text-xs font-semibold text-slate-800">Seleccionar Excel o CSV de talleres
       <input aria-label="Excel de talleres" type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy} className="block w-full mt-2 text-xs" onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; void load(file); }} />
     </label>
@@ -129,12 +141,34 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
       <button type="button" disabled={busy} onClick={undoRemove} className="min-h-11 px-3 rounded-lg border border-amber-300 bg-white text-xs font-semibold text-amber-900">Deshacer última eliminación</button>
     </div>}
     {rows.length > 0 && <>
-      <p className="text-xs font-semibold text-slate-700">{rows.length} talleres · {rows.reduce((count, row) => count + row.schedules.length, 0)} horarios semanales · {missing} espacios pendientes · {missingCategories} categorías pendientes</p>
+      <p className="text-xs font-semibold text-slate-700">{rows.length} talleres · {rows.reduce((count, row) => count + getWorkshopSchedules(row).length, 0)} horarios semanales seleccionados · {missing} espacios pendientes · {missingCategories} categorías pendientes</p>
       <div className="max-h-80 overflow-y-auto space-y-2">
         {rows.map(row => <div key={row.row} className="p-3 bg-white border border-slate-200 rounded-xl space-y-1">
           <p className="text-xs font-bold text-slate-900">Fila {row.row}: {drafts[row.row]?.[0]?.descripcion || row.name}</p>
           <p className="text-xs text-slate-600">{drafts[row.row]?.[0]?.responsable || row.teacher}</p>
-          {drafts[row.row] ? <p className="text-xs text-blue-800">Personalizado · {drafts[row.row].length} sesiones · {drafts[row.row][0].tipoActividad} · {drafts[row.row][0].fecha} al {drafts[row.row].at(-1)!.fecha} · {[...new Set(drafts[row.row].map(session => `${session.espacio} ${session.horaInicio}–${session.horaFin}`))].join(' · ')}</p> : <p className="text-xs text-slate-600">{row.schedules.map(slot => `${['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'][slot.day]} ${slot.start}–${slot.end}`).join(' · ')}</p>}
+          {drafts[row.row] ? <p className="text-xs text-blue-800">Personalizado · {drafts[row.row].length} sesiones · {drafts[row.row][0].tipoActividad} · {drafts[row.row][0].fecha} al {drafts[row.row].at(-1)!.fecha} · {[...new Set(drafts[row.row].map(session => `${session.espacio} ${session.horaInicio}–${session.horaFin}`))].join(' · ')}</p> : (
+            <fieldset disabled={busy} className="space-y-2">
+              <legend className="text-xs font-semibold text-slate-700">Horarios semanales</legend>
+              {(row.scheduleChoices ?? row.schedules.map(slot => ({ ...slot, enabled: true }))).map((slot, index) => {
+                const label = `horario ${index + 1} (${dayNames[slot.day]}, fila ${row.row})`;
+                return <div key={index} className="rounded-lg border border-slate-200 p-2">
+                  <label className="flex min-h-9 items-center gap-2 text-xs font-semibold text-slate-700">
+                    <input type="checkbox" checked={slot.enabled} aria-label={`Incluir ${label}`} onChange={event => updateSchedule(row.row, index, { enabled: event.target.checked })} />
+                    {dayNames[slot.day]} · Horario {index + 1}
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="min-w-0 text-xs text-slate-700">Inicio
+                      <input type="time" aria-label={`Inicio del ${label}`} value={slot.start} disabled={!slot.enabled} onChange={event => updateSchedule(row.row, index, { start: event.target.value })} className="block min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-sm" />
+                    </label>
+                    <label className="min-w-0 text-xs text-slate-700">Fin
+                      <input type="time" aria-label={`Fin del ${label}`} value={slot.end === '24:00' ? '00:00' : slot.end} disabled={!slot.enabled} onChange={event => updateSchedule(row.row, index, { end: event.target.value === '00:00' ? '24:00' : event.target.value })} className="block min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-sm" />
+                    </label>
+                  </div>
+                </div>;
+              })}
+              {scheduleErrors.get(row.row) && <p role="alert" className="text-xs text-red-800">{scheduleErrors.get(row.row)}</p>}
+            </fieldset>
+          )}
           <label className="block text-xs text-slate-700">Espacio para {row.name} (fila {row.row})
             <select value={assignments[row.row] || ''} disabled={busy} className="block w-full min-h-11 mt-1 border border-slate-300 rounded-lg bg-white px-2 text-sm" onChange={event => { const space = event.target.value; setAssignments(previous => ({ ...previous, [row.row]: space })); setDrafts(previous => previous[row.row] ? { ...previous, [row.row]: previous[row.row].map(session => ({ ...session, espacio: space })) } : previous); setPreview(null); setError(''); setMessage(''); }}>
               <option value="">Selecciona un espacio</option>
@@ -155,21 +189,21 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
               {activityAssignments[row.row] && !categories.some(item => item.name === activityAssignments[row.row]) && <option value={activityAssignments[row.row]}>{activityAssignments[row.row]} (no disponible)</option>}
             </select>
           </label>
-          <button type="button" disabled={busy || !enabledSpaces.length} onClick={() => void edit(row)} className="min-h-11 px-3 rounded-lg border border-slate-300 text-xs font-semibold text-blue-800">Editar todas las opciones (fila {row.row})</button>
+          <button type="button" disabled={busy || !enabledSpaces.length || Boolean(scheduleErrors.get(row.row))} onClick={() => void edit(row)} className="min-h-11 px-3 rounded-lg border border-slate-300 text-xs font-semibold text-blue-800">Editar todas las opciones (fila {row.row})</button>
           <button type="button" disabled={busy} onClick={() => remove(row)} aria-label={`Eliminar taller ${drafts[row.row]?.[0]?.descripcion || row.name} de la importación (fila ${row.row})`} className="min-h-11 px-3 rounded-lg border border-red-200 text-xs font-semibold text-red-800 sm:ml-2">Eliminar taller de la importación</button>
         </div>)}
       </div>
-      <button type="button" disabled={busy || missing > 0 || missingCategories > 0} onClick={() => void review()} className="min-h-11 px-4 rounded-xl bg-white border border-blue-300 text-sm font-semibold text-blue-800 disabled:opacity-50">Revisar importación</button>
+      <button type="button" disabled={busy || missing > 0 || missingCategories > 0 || invalidSchedules} onClick={() => void review()} className="min-h-11 px-4 rounded-xl bg-white border border-blue-300 text-sm font-semibold text-blue-800 disabled:opacity-50">Revisar importación</button>
     </>}
     {preview && <div className="space-y-2 text-xs text-slate-800" aria-label="Resumen de importación">
       <p className="font-semibold">{preview.reservations.length} sesiones nuevas · {preview.duplicates} ya ingresadas · {preview.omittedHolidays.reduce((sum, holiday) => sum + holiday.sessions, 0)} sesiones omitidas por feriados</p>
       {preview.omittedHolidays.length > 0 && <details><summary className="cursor-pointer">Ver feriados omitidos</summary><ul className="mt-2 space-y-1">{preview.omittedHolidays.map(holiday => <li key={holiday.date}>{holiday.date}: {holiday.name} ({holiday.sessions} sesiones)</li>)}</ul></details>}
       {(conflicts.length > 0 || blocks.length > 0) && <div role="alert" className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-        <p className="font-bold">Hay {conflicts.length + blocks.length} topamientos. Ajusta los espacios y vuelve a revisar.</p>
+        <p className="font-bold">Hay {conflicts.length + blocks.length} topamientos. Ajusta los espacios o los horarios y vuelve a revisar.</p>
         <ul className="mt-2 space-y-1">{conflicts.slice(0, 15).map((conflict, i) => <li key={`reservation-${i}`}>{conflict.fecha} · {conflict.espacio} · {conflict.overlap}: {conflict.reserva.descripcion} / {conflict.conflictingWith.descripcion}</li>)}{blocks.slice(0, 5).map((block, i) => <li key={`block-${i}`}>{formatBlockConflictMessage(block)}</li>)}</ul>
         {conflicts.length > 15 || blocks.length > 5 ? <p>Se muestran los primeros topamientos.</p> : null}
       </div>}
-      <button type="button" disabled={busy || missing > 0 || missingCategories > 0 || !preview.reservations.length || conflicts.length > 0 || blocks.length > 0} onClick={() => void save()} className="min-h-11 px-4 rounded-xl bg-blue-700 text-white text-sm font-semibold disabled:opacity-50">Guardar {preview.reservations.length} sesiones recurrentes</button>
+      <button type="button" disabled={busy || missing > 0 || missingCategories > 0 || invalidSchedules || !preview.reservations.length || conflicts.length > 0 || blocks.length > 0} onClick={() => void save()} className="min-h-11 px-4 rounded-xl bg-blue-700 text-white text-sm font-semibold disabled:opacity-50">Guardar {preview.reservations.length} sesiones recurrentes</button>
     </div>}
     {busy && <p role="status" className="text-xs text-blue-800">Procesando talleres…</p>}
     {error && <p role="alert" className="text-xs text-red-800">{error}</p>}

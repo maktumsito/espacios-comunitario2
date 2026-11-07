@@ -61,6 +61,33 @@ async function review() {
   await screen.findByLabelText('Resumen de importación');
 }
 
+it('saves edited times for the selected schedules and omits unchecked alternatives', async () => {
+  const save = vi.fn().mockResolvedValue(undefined);
+  const rows = parseWorkshopRows([
+    ['NOMBRE TALLER', 'HORARIO 1', 'HORARIO 2', 'HORARIO 3', 'HORARIO 4', 'PROFESOR'],
+    ['Danza', 'LUN 10:00-11:00', 'LUN 10:30-11:30', 'MIE 11:00-12:00', 'VIE 13:00-14:00', 'María Pérez'],
+  ]);
+  render(<WorkshopImport spaces={SPACES_LIST} spaceBlocks={[]} reservations={[]} onImportReservations={save} source={{ rows, name: 'talleres.xlsx' }} />);
+  expect((screen.getByLabelText('Inicio del horario 1 (LUN, fila 2)') as HTMLInputElement).value).toBe('10:00');
+  expect((screen.getByLabelText('Fin del horario 1 (LUN, fila 2)') as HTMLInputElement).value).toBe('11:00');
+  expect((screen.getByLabelText('Inicio del horario 4 (VIE, fila 2)') as HTMLInputElement).value).toBe('13:00');
+  expect((screen.getByLabelText('Fin del horario 4 (VIE, fila 2)') as HTMLInputElement).value).toBe('14:00');
+  await review();
+  expect(screen.getByText(/Hay .* topamientos/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Incluir horario 2 (LUN, fila 2)' }));
+  fireEvent.change(screen.getByLabelText('Inicio del horario 1 (LUN, fila 2)'), { target: { value: '12:00' } });
+  expect(screen.getByRole('alert').textContent).toMatch(/hora de fin/);
+  expect(screen.queryByLabelText('Resumen de importación')).toBeNull();
+  expect((screen.getByRole('button', { name: 'Revisar importación' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Inicio del horario 1 (LUN, fila 2)'), { target: { value: '09:00' } });
+  fireEvent.change(screen.getByLabelText('Fin del horario 1 (LUN, fila 2)'), { target: { value: '10:00' } });
+  await review();
+  fireEvent.click(screen.getByRole('button', { name: /Guardar \d+ sesiones recurrentes/ }));
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  const sessions: Reservation[] = save.mock.calls[0][0];
+  expect(new Set(sessions.map(session => `${session.horaInicio}-${session.horaFin}`))).toEqual(new Set(['09:00-10:00', '11:00-12:00', '13:00-14:00']));
+});
+
 it('assigns the selected room and activity category to every imported session', async () => {
   const save = await open();
   expect((screen.getByRole('button', { name: 'Revisar importación' }) as HTMLButtonElement).disabled).toBe(true);

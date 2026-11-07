@@ -8,7 +8,29 @@ export const WORKSHOP_END = '2027-11-30';
 const normalize = (value: unknown) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
 const weekdays: Record<string, number> = { DOM: 0, LUN: 1, MAR: 2, MIE: 3, JUE: 4, VIE: 5, SAB: 6 };
 export interface WorkshopSchedule { day: number; start: string; end: string }
-export interface WorkshopRow { row: number; name: string; teacher: string; schedules: WorkshopSchedule[] }
+export interface WorkshopScheduleChoice extends WorkshopSchedule { enabled: boolean }
+export interface WorkshopRow {
+  row: number;
+  name: string;
+  teacher: string;
+  schedules: WorkshopSchedule[];
+  scheduleChoices?: WorkshopScheduleChoice[];
+}
+
+export function getWorkshopSchedules(row: WorkshopRow): WorkshopSchedule[] {
+  if (!row.scheduleChoices) return row.schedules;
+  return row.scheduleChoices.filter(slot => slot.enabled).map(({ day, start, end }) => ({ day, start, end }));
+}
+
+export function getWorkshopScheduleError(schedules: readonly WorkshopSchedule[]): string | undefined {
+  if (!schedules.length) return 'Selecciona al menos un horario.';
+  const time = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+  if (schedules.some(({ start, end }) => !time.test(start) || (!time.test(end) && end !== '24:00') || end <= start)) {
+    return 'La hora de fin debe ser posterior a la de inicio en cada horario seleccionado.';
+  }
+  const keys = new Set(schedules.map(({ day, start, end }) => `${day}:${start}-${end}`));
+  if (keys.size !== schedules.length) return 'Hay horarios seleccionados repetidos.';
+}
 
 export function parseWorkshopSchedule(value: unknown): WorkshopSchedule {
   const match = normalize(value).match(/^(DOM|LUN|MAR|MIE|JUE|VIE|SAB)\.?\s+(\d{1,2}:[0-5]\d)\s*[-–—]\s*(\d{1,2}:[0-5]\d)$/);
@@ -76,8 +98,13 @@ export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignme
     const space = assignments[row.row];
     const draft = drafts[row.row];
     if (!draft && !enabledNames.has(space)) throw new Error(`Fila ${row.row}: selecciona un espacio activo.`);
-    const schedules = [...row.schedules].sort((a, b) => a.day - b.day || a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
-    const identity = JSON.stringify([normalize(row.name), normalize(row.teacher), schedules, WORKSHOP_START, WORKSHOP_END]);
+    const sortSchedules = (a: WorkshopSchedule, b: WorkshopSchedule) => a.day - b.day || a.start.localeCompare(b.start) || a.end.localeCompare(b.end);
+    const schedules = [...getWorkshopSchedules(row)].sort(sortSchedules);
+    if (!draft) {
+      const error = getWorkshopScheduleError(schedules);
+      if (error) throw new Error(`Fila ${row.row}: ${error}`);
+    }
+    const identity = JSON.stringify([normalize(row.name), normalize(row.teacher), [...row.schedules].sort(sortSchedules), WORKSHOP_START, WORKSHOP_END]);
     if (identities.has(identity)) throw new Error(`Fila ${row.row}: este taller y sus horarios ya aparecen en el archivo.`);
     identities.add(identity);
     // Independent of filename, row order and selected room: retrying cannot create another copy.
