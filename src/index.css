@@ -181,6 +181,30 @@ body {
     display: none !important;
   }
 
+  body:has(#space-availability-dialog:not([aria-hidden="true"])) {
+    overflow: visible !important;
+  }
+
+  #space-availability-dialog > [aria-hidden="true"] {
+    display: none !important;
+  }
+
+  .space-availability-paper,
+  .space-availability-body {
+    display: block !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  .space-availability-paper {
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    animation: none !important;
+  }
+
   #print-modal-dialog {
     border: none !important;
     box-shadow: none !important;
