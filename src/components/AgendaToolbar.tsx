@@ -1,5 +1,5 @@
 import React from "react";
-import { Filter, ChevronLeft, ChevronRight, CalendarDays, RefreshCw, ArrowLeft } from "lucide-react";
+import { Filter, ChevronLeft, ChevronRight, CalendarDays, RefreshCw, ArrowLeft, Clock } from "lucide-react";
 import { ViewMode } from "../types";
 
 interface AgendaToolbarProps {
@@ -9,6 +9,7 @@ interface AgendaToolbarProps {
   filtersOpen: boolean;
   hasActiveFilters: boolean;
   onToggleFilters: () => void;
+  onOpenAvailability?: () => void;
   onPrevPeriod?: () => void;
   onNextPeriod?: () => void;
   onGoToday?: () => void;
@@ -25,6 +26,7 @@ export const AgendaToolbar = React.memo(function AgendaToolbar({
   filtersOpen,
   hasActiveFilters,
   onToggleFilters,
+  onOpenAvailability,
   onPrevPeriod,
   onNextPeriod,
   onGoToday,
@@ -139,6 +141,13 @@ export const AgendaToolbar = React.memo(function AgendaToolbar({
             </button>
           ))}
         </div>
+        {onOpenAvailability && (
+          <button type="button" onClick={onOpenAvailability} aria-haspopup="dialog"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-800 hover:bg-blue-100">
+            <Clock aria-hidden="true" className="h-4 w-4" />
+            Ver disponibilidad
+          </button>
+        )}
         <button
           id="btn-agenda-filters"
           type="button"

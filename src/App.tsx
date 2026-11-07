@@ -21,6 +21,7 @@ import { ReservationContextMenu, CalendarContextTarget } from './components/comm
 import { getTopmostDialog } from './utils/dialogKeyboard';
 import { Navbar } from './components/Navbar';
 import { AgendaToolbar } from './components/AgendaToolbar';
+import { SpaceAvailabilityModal } from './components/SpaceAvailabilityModal';
 import { isAgendaView, getAgendaPeriodCount, getAgendaPeriodLabel } from './utils/agendaPeriod';
 import { FilterBar } from './components/FilterBar';
 import { CalendarView } from './components/CalendarView';
@@ -161,6 +162,7 @@ export default function App() {
   }), []);
   const [adminSubTab, setAdminSubTab] = useState<'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring' | 'health'>('spaces');
   const [selectedDailyDate, setSelectedDailyDate] = useState<Date>(() => new Date());
+  const [isSpaceAvailabilityOpen, setIsSpaceAvailabilityOpen] = useState(false);
   const [isDeleteDayModalOpen, setIsDeleteDayModalOpen] = useState(false);
   const [comparisonSpaces, setComparisonSpaces] = useState<string[] | null>(null);
   const [reservationFilters, setReservationFilters] = useState<FilterState>(INITIAL_FILTERS);
@@ -836,6 +838,7 @@ export default function App() {
     setIsNotificationCenterOpen(false);
     setIsGmailDispatchModalOpen(false);
     setIsDeleteDayModalOpen(false);
+    setIsSpaceAvailabilityOpen(false);
     setIsCommandPaletteOpen(false);
     setQuickRequestModalState({ isOpen: false });
     setPrefillParsedRequest(null);
@@ -963,7 +966,7 @@ export default function App() {
     !isInitialLoading && !isReservationModalOpen && !quickRequestModalState.isOpen && !isDetailModalOpen && !isDeleteModalOpen &&
     !isImportExportModalOpen && !isAuditLogOpen && !isPendingDeletionsModalOpen && !isChangePasswordOpen &&
     !isPasswordPromptOpen && !isRatingModalOpen && !isGlobalPrintModalOpen && !isGmailDispatchModalOpen &&
-    !isNotificationCenterOpen && !conflictReportData.isOpen && !pendingSeriesMove
+    !isNotificationCenterOpen && !isSpaceAvailabilityOpen && !conflictReportData.isOpen && !pendingSeriesMove
   );
   useEffect(() => {
     if (!currentUser && pendingSeriesMove) {
@@ -1129,6 +1132,7 @@ export default function App() {
           summary={`${visiblePeriodCounts.filtered} ${visiblePeriodCounts.filtered === 1 ? 'reserva' : 'reservas'} en ${visiblePeriodLabel}`}
           filtersOpen={isFilterBarOpen} hasActiveFilters={hasActiveFilters}
           onToggleFilters={() => setIsFilterBarOpen(open => !open)}
+          onOpenAvailability={() => setIsSpaceAvailabilityOpen(true)}
           onPrevPeriod={() => setSelectedDailyDate(d => currentView === 'calendar' ? subMonths(d, 1) : subDays(d, 1))}
           onNextPeriod={() => setSelectedDailyDate(d => currentView === 'calendar' ? addMonths(d, 1) : addDays(d, 1))}
           onGoToday={() => setSelectedDailyDate(new Date())}
@@ -1138,6 +1142,14 @@ export default function App() {
             const nextRep = dueReplacements[0];
             setSelectedReservation(nextRep);
             setIsDetailModalOpen(true);
+          } : undefined}
+        />}
+        {isSpaceAvailabilityOpen && <SpaceAvailabilityModal
+          initialDate={format(selectedDailyDate, 'yyyy-MM-dd')}
+          onClose={() => setIsSpaceAvailabilityOpen(false)}
+          onReserve={userCanCreateReservations(currentUser) ? params => {
+            setIsSpaceAvailabilityOpen(false);
+            openCreateModal(params);
           } : undefined}
         />}
         {/* Filter and Search Bar - Kept hidden by default, toggled via Navbar or active filter ribbon */}

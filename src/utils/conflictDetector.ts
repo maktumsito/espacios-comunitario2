@@ -352,6 +352,8 @@ export interface DetectedBlockConflictDetail {
   readonly fecha: string;
   readonly horaInicio?: string;
   readonly horaFin?: string;
+  readonly overlapStartMin: number;
+  readonly overlapEndMin: number;
   readonly overlap: string;
   readonly reason: string;
 }
@@ -425,6 +427,8 @@ export function findMaintenanceBlockConflicts(
             fecha: slot.date,
             horaInicio: formatMinutesToTime(slot.startMin),
             horaFin: formatMinutesToTime(slot.endMin),
+            overlapStartMin: slot.startMin,
+            overlapEndMin: slot.endMin,
             overlap: 'Todo el día',
             reason: `Bloqueo total por ${block.motivo}`
           });
@@ -444,6 +448,8 @@ export function findMaintenanceBlockConflicts(
             fecha: slot.date,
             horaInicio: formatMinutesToTime(slot.startMin),
             horaFin: formatMinutesToTime(slot.endMin),
+            overlapStartMin: overlapStart,
+            overlapEndMin: overlapEnd,
             overlap: `${formatMinutesToTime(overlapStart)} - ${formatMinutesToTime(overlapEnd)}`,
             reason: `Bloqueo parcial por ${block.motivo}`
           });

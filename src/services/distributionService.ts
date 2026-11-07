@@ -4,9 +4,10 @@ import { commitReservationChanges } from './reservationService';
 import { validateReservationWithZod } from '../schemas/reservationSchema';
 import { prepareReservation } from './reservationWriter';
 
-export async function loadDistributionSnapshot(fecha: string, signal?: AbortSignal): Promise<DistributionSnapshot> {
-  const response = await dataRequest('/api/reservations/planning-snapshot', { fecha }, signal);
-  if (response.snapshot?.fecha !== fecha || !Array.isArray(response.snapshot.reservations) ||
+export async function loadDistributionSnapshot(fecha: string, signal?: AbortSignal, fechaFin?: string): Promise<DistributionSnapshot> {
+  const response = await dataRequest('/api/reservations/planning-snapshot', { fecha, fechaFin }, signal);
+  if (response.snapshot?.fecha !== fecha || (fechaFin !== undefined && response.snapshot.fechaFin !== fechaFin) ||
+    !Array.isArray(response.snapshot.reservations) ||
     !Array.isArray(response.snapshot.blocks) || !Array.isArray(response.snapshot.spaces) || !Array.isArray(response.snapshot.equipment))
     throw new Error('No se pudo confirmar la lectura completa de la jornada. Reintenta.');
   return response.snapshot;
