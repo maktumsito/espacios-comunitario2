@@ -61,6 +61,29 @@ async function review() {
   await screen.findByLabelText('Resumen de importación');
 }
 
+it('prefills the weekly period and saves only selected weekdays within edited dates', async () => {
+  const save = await open();
+  const start = screen.getByLabelText<HTMLInputElement>('Fecha de inicio');
+  const end = screen.getByLabelText<HTMLInputElement>('Fecha de término');
+  expect(start.value).toBe('2027-03-01');
+  expect(end.value).toBe('2027-12-31');
+  await review();
+  fireEvent.change(start, { target: { value: '2027-12-20' } });
+  fireEvent.change(end, { target: { value: '2027-12-19' } });
+  expect(screen.getByRole('alert').textContent).toMatch(/fecha de término/);
+  expect(screen.queryByLabelText('Resumen de importación')).toBeNull();
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Revisar importación' }).disabled).toBe(true);
+
+  fireEvent.change(end, { target: { value: '2027-12-27' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Incluir horario 2 (MIE, fila 2)' }));
+  await review();
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar 2 sesiones recurrentes' }));
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  const sessions: Reservation[] = save.mock.calls[0][0];
+  expect(sessions.map(row => row.fecha)).toEqual(['2027-12-20', '2027-12-27']);
+  expect(sessions.every(row => row.fechaInicioRecurrencia === start.value && row.fechaFinRecurrencia === end.value && row.diasSemana === 'lun')).toBe(true);
+});
+
 it('saves edited times for the selected schedules and omits unchecked alternatives', async () => {
   const save = vi.fn().mockResolvedValue(undefined);
   const rows = parseWorkshopRows([

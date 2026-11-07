@@ -1,7 +1,7 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActivityTypeItem, EquipmentItem, LoanType, Reservation, SpaceBlock, SpaceInfo } from '../types';
 import type { AuthUser } from '../services/authService';
-import { buildWorkshopImport, getWorkshopSchedules, getWorkshopScheduleError, type WorkshopRow, type WorkshopScheduleChoice, type WorkshopImportPreview } from '../utils/workshopImport';
+import { buildWorkshopImport, DEFAULT_WORKSHOP_PERIOD, getWorkshopPeriodError, getWorkshopSchedules, getWorkshopScheduleError, type WorkshopRow, type WorkshopScheduleChoice, type WorkshopImportPreview } from '../utils/workshopImport';
 import { readReservationImportFile } from '../utils/workshopImportFile';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import { detectBatchConflicts, findMaintenanceBlockConflicts, formatBlockConflictMessage } from '../utils/conflictDetector';
@@ -27,6 +27,7 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
   const [removedRows, setRemovedRows] = useState<WorkshopRow[]>([]);
   const [assignments, setAssignments] = useState<Record<number, string>>({});
   const [activityAssignments, setActivityAssignments] = useState<Record<number, string>>({});
+  const [period, setPeriod] = useState(DEFAULT_WORKSHOP_PERIOD);
   const [preview, setPreview] = useState<WorkshopImportPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -37,7 +38,7 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
   const section = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!source) return;
-    setRows(source.rows); setRemovedRows([]); setEditor(null); setFilename(source.name); setAssignments({}); setActivityAssignments({}); setDrafts({}); setPreview(null); setError(''); setMessage('');
+    setRows(source.rows); setRemovedRows([]); setEditor(null); setFilename(source.name); setAssignments({}); setActivityAssignments({}); setPeriod(DEFAULT_WORKSHOP_PERIOD); setDrafts({}); setPreview(null); setError(''); setMessage('');
     section.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
   }, [source]);
   const enabledSpaces = getEnabledSpaces(spaces);
@@ -52,12 +53,13 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
   const missing = rows.filter(row => drafts[row.row] ? drafts[row.row].some(session => !enabledSpaces.some(space => space.name === session.espacio)) : !enabledSpaces.some(space => space.name === assignments[row.row])).length;
   const scheduleErrors = new Map(rows.map(row => [row.row, drafts[row.row] ? undefined : getWorkshopScheduleError(getWorkshopSchedules(row))]));
   const invalidSchedules = [...scheduleErrors.values()].some(Boolean);
+  const periodError = getWorkshopPeriodError(period);
   const conflicts = useMemo(() => preview ? detectBatchConflicts(preview.reservations, reservations) : [], [preview, reservations]);
   const blocks = useMemo(() => preview ? findMaintenanceBlockConflicts(preview.reservations, spaceBlocks) : [], [preview, spaceBlocks]);
 
   async function load(file?: File) {
     if (!file) return;
-    setBusy(true); setError(''); setMessage(''); setFilename(''); setPreview(null); setRows([]); setRemovedRows([]); setEditor(null); setAssignments({}); setActivityAssignments({}); setDrafts({});
+    setBusy(true); setError(''); setMessage(''); setFilename(''); setPreview(null); setRows([]); setRemovedRows([]); setEditor(null); setAssignments({}); setActivityAssignments({}); setPeriod(DEFAULT_WORKSHOP_PERIOD); setDrafts({});
     try {
       const result = await readReservationImportFile(file);
       if (!result.workshops) throw new Error('El archivo debe incluir NOMBRE TALLER, HORARIO 1 y PROFESOR. Para respaldos de reservas utiliza Importar Excel o CSV.');
@@ -69,17 +71,17 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
 
   async function review() {
     setBusy(true); setError(''); setMessage(''); setPreview(null);
-    try { setPreview(await buildWorkshopImport(rows, assignments, spaces, reservations, drafts, effectiveActivityAssignments)); }
+    try { setPreview(await buildWorkshopImport(rows, assignments, spaces, reservations, drafts, effectiveActivityAssignments, period)); }
     catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
   }
 
   async function save() {
-    if (!preview || busy || missing || missingCategories || invalidSchedules || conflicts.length || blocks.length) return;
+    if (!preview || busy || missing || missingCategories || invalidSchedules || periodError || conflicts.length || blocks.length) return;
     setBusy(true); setError(''); setMessage('');
     try {
       // Recheck the latest catalog, known reservations and blocks before invoking the normal writer.
-      const latest = await buildWorkshopImport(rows, assignments, spaces, reservations, drafts, effectiveActivityAssignments);
+      const latest = await buildWorkshopImport(rows, assignments, spaces, reservations, drafts, effectiveActivityAssignments, period);
       if (detectBatchConflicts(latest.reservations, reservations).length || findMaintenanceBlockConflicts(latest.reservations, spaceBlocks).length) {
         throw new Error('Cambió la disponibilidad. Revisa los topamientos antes de guardar.');
       }
@@ -96,11 +98,16 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
   async function edit(row: WorkshopRow) {
     setBusy(true); setError('');
     try {
-      const draft = await buildWorkshopImport([row], { [row.row]: assignments[row.row] || enabledSpaces[0]?.name }, spaces, [], drafts, effectiveActivityAssignments);
+      const draft = await buildWorkshopImport([row], { [row.row]: assignments[row.row] || enabledSpaces[0]?.name }, spaces, [], drafts, effectiveActivityAssignments, period);
       if (!draft.reservations.length) throw new Error('Este taller no tiene sesiones disponibles para editar.');
       setEditor({ row: row.row, sessions: draft.reservations });
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
+  }
+
+  function updatePeriod(field: keyof typeof DEFAULT_WORKSHOP_PERIOD, value: string) {
+    setPeriod(previous => ({ ...previous, [field]: value }));
+    setPreview(null); setError(''); setMessage('');
   }
 
   function updateSchedule(rowNumber: number, index: number, change: Partial<WorkshopScheduleChoice>) {
@@ -130,7 +137,7 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
 
   return <section ref={section} aria-label="Importar talleres desde Excel" className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200 space-y-3">
     <h3 className="font-bold text-sm text-slate-900">Importar talleres desde Excel o CSV</h3>
-    <p className="text-xs text-slate-600">Valores iniciales: reservas semanales del 01/03/2027 al 30/11/2027 y profesor como responsable. Elige el espacio y la categoría de actividad de cada taller antes de importar. Puedes cambiar los demás datos en Editar todas las opciones.</p>
+    <p className="text-xs text-slate-600">Las reservas se repiten semanalmente en los días seleccionados y el profesor queda como responsable. Elige el espacio y la categoría de actividad de cada taller antes de importar. Puedes cambiar los demás datos en Editar todas las opciones.</p>
     <p className="text-xs text-slate-600">Usa NOMBRE TALLER, PROFESOR y una columna numerada por horario (HORARIO 1, HORARIO 2, etc.). Al cargar el archivo se completan el día y las horas de inicio y fin de cada horario. Puedes editar las horas y desmarcar los horarios que quieras excluir. Los feriados omitidos aparecen en la revisión.</p>
     <label className="block text-xs font-semibold text-slate-800">Seleccionar Excel o CSV de talleres
       <input aria-label="Excel de talleres" type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy} className="block w-full mt-2 text-xs" onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; void load(file); }} />
@@ -141,6 +148,17 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
       <button type="button" disabled={busy} onClick={undoRemove} className="min-h-11 px-3 rounded-lg border border-amber-300 bg-white text-xs font-semibold text-amber-900">Deshacer última eliminación</button>
     </div>}
     {rows.length > 0 && <>
+      <fieldset disabled={busy || Boolean(editor)} className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2">
+        <legend className="px-1 text-xs font-semibold text-slate-800">Período de repetición semanal</legend>
+        <label className="min-w-0 text-xs text-slate-700">Fecha de inicio
+          <input type="date" required value={period.start} onChange={event => updatePeriod('start', event.target.value)} className="block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm" />
+        </label>
+        <label className="min-w-0 text-xs text-slate-700">Fecha de término
+          <input type="date" required min={period.start || undefined} value={period.end} onChange={event => updatePeriod('end', event.target.value)} className="block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm" />
+        </label>
+        {rows.some(row => drafts[row.row]) && <p className="text-xs text-blue-800 sm:col-span-2">Los talleres personalizados conservan sus fechas. Puedes cambiarlas en Editar todas las opciones.</p>}
+        {periodError && <p role="alert" className="text-xs text-red-800 sm:col-span-2">{periodError}</p>}
+      </fieldset>
       <p className="text-xs font-semibold text-slate-700">{rows.length} talleres · {rows.reduce((count, row) => count + getWorkshopSchedules(row).length, 0)} horarios semanales seleccionados · {missing} espacios pendientes · {missingCategories} categorías pendientes</p>
       <div className="max-h-80 overflow-y-auto space-y-2">
         {rows.map(row => <div key={row.row} className="p-3 bg-white border border-slate-200 rounded-xl space-y-1">
@@ -189,11 +207,11 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
               {activityAssignments[row.row] && !categories.some(item => item.name === activityAssignments[row.row]) && <option value={activityAssignments[row.row]}>{activityAssignments[row.row]} (no disponible)</option>}
             </select>
           </label>
-          <button type="button" disabled={busy || !enabledSpaces.length || Boolean(scheduleErrors.get(row.row))} onClick={() => void edit(row)} className="min-h-11 px-3 rounded-lg border border-slate-300 text-xs font-semibold text-blue-800">Editar todas las opciones (fila {row.row})</button>
+          <button type="button" disabled={busy || !enabledSpaces.length || Boolean(periodError || scheduleErrors.get(row.row))} onClick={() => void edit(row)} className="min-h-11 px-3 rounded-lg border border-slate-300 text-xs font-semibold text-blue-800">Editar todas las opciones (fila {row.row})</button>
           <button type="button" disabled={busy} onClick={() => remove(row)} aria-label={`Eliminar taller ${drafts[row.row]?.[0]?.descripcion || row.name} de la importación (fila ${row.row})`} className="min-h-11 px-3 rounded-lg border border-red-200 text-xs font-semibold text-red-800 sm:ml-2">Eliminar taller de la importación</button>
         </div>)}
       </div>
-      <button type="button" disabled={busy || missing > 0 || missingCategories > 0 || invalidSchedules} onClick={() => void review()} className="min-h-11 px-4 rounded-xl bg-white border border-blue-300 text-sm font-semibold text-blue-800 disabled:opacity-50">Revisar importación</button>
+      <button type="button" disabled={busy || missing > 0 || missingCategories > 0 || invalidSchedules || Boolean(periodError)} onClick={() => void review()} className="min-h-11 px-4 rounded-xl bg-white border border-blue-300 text-sm font-semibold text-blue-800 disabled:opacity-50">Revisar importación</button>
     </>}
     {preview && <div className="space-y-2 text-xs text-slate-800" aria-label="Resumen de importación">
       <p className="font-semibold">{preview.reservations.length} sesiones nuevas · {preview.duplicates} ya ingresadas · {preview.omittedHolidays.reduce((sum, holiday) => sum + holiday.sessions, 0)} sesiones omitidas por feriados</p>
@@ -203,7 +221,7 @@ export function WorkshopImport({ spaces, spaceBlocks, reservations, onImportRese
         <ul className="mt-2 space-y-1">{conflicts.slice(0, 15).map((conflict, i) => <li key={`reservation-${i}`}>{conflict.fecha} · {conflict.espacio} · {conflict.overlap}: {conflict.reserva.descripcion} / {conflict.conflictingWith.descripcion}</li>)}{blocks.slice(0, 5).map((block, i) => <li key={`block-${i}`}>{formatBlockConflictMessage(block)}</li>)}</ul>
         {conflicts.length > 15 || blocks.length > 5 ? <p>Se muestran los primeros topamientos.</p> : null}
       </div>}
-      <button type="button" disabled={busy || missing > 0 || missingCategories > 0 || invalidSchedules || !preview.reservations.length || conflicts.length > 0 || blocks.length > 0} onClick={() => void save()} className="min-h-11 px-4 rounded-xl bg-blue-700 text-white text-sm font-semibold disabled:opacity-50">Guardar {preview.reservations.length} sesiones recurrentes</button>
+      <button type="button" disabled={busy || missing > 0 || missingCategories > 0 || invalidSchedules || Boolean(periodError) || !preview.reservations.length || conflicts.length > 0 || blocks.length > 0} onClick={() => void save()} className="min-h-11 px-4 rounded-xl bg-blue-700 text-white text-sm font-semibold disabled:opacity-50">Guardar {preview.reservations.length} sesiones recurrentes</button>
     </div>}
     {busy && <p role="status" className="text-xs text-blue-800">Procesando talleres…</p>}
     {error && <p role="alert" className="text-xs text-red-800">{error}</p>}

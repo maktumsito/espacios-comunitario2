@@ -1,10 +1,9 @@
 import type { Reservation, SpaceInfo } from '../types';
 import { getChileanHolidayInfo, verifyHolidayOverrideKey } from './holidayUtils';
 import { getEnabledSpaces } from './spaceAvailability';
-import { ReservationSchema } from '../schemas/reservationSchema';
+import { DateStringSchema, ReservationSchema } from '../schemas/reservationSchema';
 
-export const WORKSHOP_START = '2027-03-01';
-export const WORKSHOP_END = '2027-11-30';
+export const DEFAULT_WORKSHOP_PERIOD = { start: '2027-03-01', end: '2027-12-31' };
 const normalize = (value: unknown) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
 const weekdays: Record<string, number> = { DOM: 0, LUN: 1, MAR: 2, MIE: 3, JUE: 4, VIE: 5, SAB: 6 };
 export interface WorkshopSchedule { day: number; start: string; end: string }
@@ -30,6 +29,13 @@ export function getWorkshopScheduleError(schedules: readonly WorkshopSchedule[])
   }
   const keys = new Set(schedules.map(({ day, start, end }) => `${day}:${start}-${end}`));
   if (keys.size !== schedules.length) return 'Hay horarios seleccionados repetidos.';
+}
+
+export function getWorkshopPeriodError({ start, end }: typeof DEFAULT_WORKSHOP_PERIOD): string | undefined {
+  if (!DateStringSchema.safeParse(start).success || !DateStringSchema.safeParse(end).success) {
+    return 'Ingresa una fecha de inicio y una fecha de término válidas.';
+  }
+  if (end < start) return 'La fecha de término debe ser igual o posterior a la fecha de inicio.';
 }
 
 export function parseWorkshopSchedule(value: unknown): WorkshopSchedule {
@@ -87,7 +93,12 @@ function sessionKey(row: Reservation): string {
   return JSON.stringify([row.fecha, row.horaInicio, row.horaFin, normalize(row.espacio), normalize(row.descripcion), normalize(row.responsable), normalize(row.tipoActividad)]);
 }
 
-export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignments: Record<number, string>, spaces: readonly SpaceInfo[], existing: readonly Reservation[], drafts: Record<number, Reservation[]> = {}, activityAssignments: Record<number, string> = {}): Promise<WorkshopImportPreview> {
+export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignments: Record<number, string>, spaces: readonly SpaceInfo[], existing: readonly Reservation[], drafts: Record<number, Reservation[]> = {}, activityAssignments: Record<number, string> = {}, period = DEFAULT_WORKSHOP_PERIOD): Promise<WorkshopImportPreview> {
+  const periodError = getWorkshopPeriodError(period);
+  if (periodError) throw new Error(periodError);
+  // Calendar dates must not drift across Chile's daylight-saving transitions.
+  const start = Date.parse(`${period.start}T12:00:00Z`);
+  const end = Date.parse(`${period.end}T12:00:00Z`);
   const enabledNames = new Set(getEnabledSpaces(spaces).map(space => space.name));
   const byId = new Map(existing.map(row => [row.id, row]));
   const existingKeys = new Set(existing.map(sessionKey));
@@ -104,17 +115,17 @@ export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignme
       const error = getWorkshopScheduleError(schedules);
       if (error) throw new Error(`Fila ${row.row}: ${error}`);
     }
-    const identity = JSON.stringify([normalize(row.name), normalize(row.teacher), [...row.schedules].sort(sortSchedules), WORKSHOP_START, WORKSHOP_END]);
+    const identity = JSON.stringify([normalize(row.name), normalize(row.teacher), [...row.schedules].sort(sortSchedules), period.start, period.end]);
     if (identities.has(identity)) throw new Error(`Fila ${row.row}: este taller y sus horarios ya aparecen en el archivo.`);
     identities.add(identity);
     // Independent of filename, row order and selected room: retrying cannot create another copy.
     const seriesId = `CCD_XLSX_${await digest(identity)}`;
     const series: Reservation[] = [];
-    // Calendar dates must not drift across Chile's daylight-saving transitions.
-    const end = Date.parse(`${WORKSHOP_END}T12:00:00Z`);
-    for (let timestamp = Date.parse(`${WORKSHOP_START}T12:00:00Z`); !draft && timestamp <= end; timestamp += 86_400_000) {
+    let hasScheduledDay = false;
+    for (let timestamp = start; !draft && timestamp <= end; timestamp += 86_400_000) {
       const date = new Date(timestamp);
       for (const slot of schedules.filter(slot => slot.day === date.getUTCDay())) {
+        hasScheduledDay = true;
         const iso = date.toISOString().slice(0, 10);
         const holiday = getChileanHolidayInfo(iso);
         if (holiday) {
@@ -127,11 +138,12 @@ export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignme
           espacio: space, responsable: row.teacher, descripcion: row.name, tipoActividad: activityAssignments[row.row] || 'TALLER CCD',
           ...(activityAssignments[row.row] ? { tipoPrestamo: activityAssignments[row.row] } : {}), actividadRecurrente: 'Sí',
           tipoRecurrencia: 'semanal', serieRecurrente: seriesId, recurrenteId: seriesId,
-          fechaInicioRecurrencia: WORKSHOP_START, fechaFinRecurrencia: WORKSHOP_END,
+          fechaInicioRecurrencia: period.start, fechaFinRecurrencia: period.end,
           diasSemana: [...new Set(schedules.map(slot => Object.keys(weekdays).find(key => weekdays[key] === slot.day)!.toLowerCase()))].join(','),
           estado: 'activa', realizada: 'No' });
       }
     }
+    if (!draft && !hasScheduledDay) throw new Error(`Fila ${row.row}: el período no incluye ninguno de los días seleccionados.`);
     if (draft) {
       if (!draft.length) throw new Error(`Fila ${row.row}: el taller debe tener al menos una sesión.`);
       const used = new Set<string>();

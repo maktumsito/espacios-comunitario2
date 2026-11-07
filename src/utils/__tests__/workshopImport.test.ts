@@ -23,12 +23,12 @@ describe('workshop Excel import', () => {
   it('preserves different weekday times, period boundaries, teacher and recurring metadata', async () => {
     const preview = await build();
     expect(preview.reservations[0].fecha).toBe('2027-03-01');
-    expect(preview.reservations.at(-1)!.fecha <= '2027-11-30').toBe(true);
+    expect(preview.reservations.at(-1)!.fecha).toBe('2027-12-29');
     expect(new Set(preview.reservations.map(row => row.serieRecurrente)).size).toBe(1);
     expect(new Set(preview.reservations.map(row => `${row.horaInicio}-${row.horaFin}`))).toEqual(new Set(['19:00-20:00', '18:00-19:00']));
     for (const [index, reservation] of preview.reservations.entries()) {
       expect(ReservationSchema.safeParse(reservation).success).toBe(true);
-      expect(reservation).toMatchObject({ responsable: 'María Pérez', tipoActividad: 'TALLER CCD', actividadRecurrente: 'Sí', indiceEnSerie: index + 1, totalEnSerie: preview.reservations.length });
+      expect(reservation).toMatchObject({ responsable: 'María Pérez', tipoActividad: 'TALLER CCD', actividadRecurrente: 'Sí', fechaInicioRecurrencia: '2027-03-01', fechaFinRecurrencia: '2027-12-31', indiceEnSerie: index + 1, totalEnSerie: preview.reservations.length });
     }
     expect(preview.omittedHolidays.length).toBeGreaterThan(0);
     expect(preview.omittedHolidays.every(holiday => !preview.reservations.some(row => row.fecha === holiday.date))).toBe(true);
@@ -46,6 +46,13 @@ describe('workshop Excel import', () => {
   it('detects equivalent sessions that predate this importer', async () => {
     const first = await build();
     expect((await build([{ ...first.reservations[0], id: 'legacy-session' }])).duplicates).toBe(1);
+  });
+  it('adds only December sessions when reimporting a series from the old default period', async () => {
+    const prior = await buildWorkshopImport(rows(), { 2: 'SALA 2' }, SPACES_LIST, [], {}, {}, { start: '2027-03-01', end: '2027-11-30' });
+    const extended = await build(prior.reservations);
+    expect(extended.duplicates).toBe(prior.reservations.length);
+    expect(extended.reservations.length).toBeGreaterThan(0);
+    expect(extended.reservations.every(row => row.fecha.startsWith('2027-12-'))).toBe(true);
   });
   it('rejects missing or disabled spaces', async () => {
     await expect(buildWorkshopImport(rows(), {}, SPACES_LIST, [])).rejects.toThrow('espacio activo');
@@ -72,10 +79,10 @@ describe('workshop Excel import', () => {
     const first = await buildWorkshopImport(parsed, { 2: 'SALA 2', 3: 'SALA 2' }, SPACES_LIST, []);
     const reordered = await buildWorkshopImport([...parsed].reverse(), { 2: 'SALA 2', 3: 'SALA 2' }, SPACES_LIST, first.reservations);
     expect(new Set(first.reservations.map(row => row.serieRecurrente)).size).toBe(2);
-    expect(first.reservations.at(-1)!.fecha).toBe('2027-11-30');
+    expect(first.reservations.at(-1)!.fecha).toBe('2027-12-28');
     const tuesdays = first.reservations.filter(row => row.serieRecurrente === first.reservations.at(-1)!.serieRecurrente).length;
     const omittedTuesdays = first.omittedHolidays.filter(holiday => new Date(`${holiday.date}T12:00:00Z`).getUTCDay() === 2).reduce((sum, holiday) => sum + holiday.sessions, 0);
-    expect(tuesdays + omittedTuesdays).toBe(40);
+    expect(tuesdays + omittedTuesdays).toBe(44);
     expect(reordered.reservations).toHaveLength(0);
     await expect(buildWorkshopImport([parsed[0], { ...parsed[0], row: 4 }], { 2: 'SALA 2', 4: 'SALA 2' }, SPACES_LIST, [])).rejects.toThrow('ya aparecen');
   });
