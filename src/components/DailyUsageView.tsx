@@ -1,3 +1,4 @@
+// Limpieza: se retiraron únicamente imports sin referencias.
 import { useReservationVisuals } from '../contexts/ReservationVisualsContext';
 import { CalendarDateInput } from './common/CalendarDateInput';
 import { NotificationPortal } from './common/NotificationPortal';
@@ -23,7 +24,6 @@ import {
   Trash2,
   GripVertical,
   Check,
-  CheckCircle2,
   Star,
   Copy,
   Filter,

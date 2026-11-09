@@ -102,3 +102,15 @@ it("maps the legacy daily presentation to Día and delegates view changes", () =
   fireEvent.click(screen.getByRole("button", { name: "Lista" }));
   expect(change).toHaveBeenCalledWith("mobile");
 });
+
+it("opens authorized daily deletion from mobile tools and closes the drawer", () => {
+  const remove = vi.fn();
+  const { rerender } = render(<Navbar {...props} onDeleteDay={remove} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Más' }));
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Navegación y herramientas' })).getByRole('button', { name: 'Eliminar reservas de un día' }));
+  expect(remove).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  rerender(<Navbar {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Más' }));
+  expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Eliminar reservas de un día' })).toBeNull();
+});

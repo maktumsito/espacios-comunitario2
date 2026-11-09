@@ -173,7 +173,11 @@ describe.skipIf(process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8087')('isola
         writeReservations(db2 as any,[make('client-two')],service.cleanReservationForFirestore),
       ]);
       expect(outcomes.filter(o=>o.status==='fulfilled')).toHaveLength(1);
-      expect((await getDocs(collection(context.db,'reservas'))).size).toBe(1);
+      const saved = await getDocs(collection(context.db,'reservas'));
+      expect(saved.size).toBe(1);
+      // El índice debe contener exactamente la reserva confirmada, sin perder ocupación.
+      const slot = await getDoc(doc(context.db, 'schedule_slots', '2026-10-06_SALA%202'));
+      expect(slot.data()?.bookings.map((booking: any) => booking.id)).toEqual([saved.docs[0].id]);
     } finally { await db2.terminate(); await deleteApp(app2); }
   }, 30000);
   it('accepts adjacent intervals and excludes historical conflicts consistently', async () => {
@@ -181,6 +185,22 @@ describe.skipIf(process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8087')('isola
     await service.saveReservationsBatch([make('historic-a',{fecha:'2026-08-26'}),make('historic-b',{fecha:'2026-08-26'})]);
     expect((await getDocs(collection(context.db,'reservas'))).size).toBe(4);
   });
+  it.each([false, true])('preserves concurrent adjacent reservations with an existing slot: %s', async existingSlot => {
+    if (existingSlot) await service.saveReservation(make('earlier', { horaInicio: '08:00', horaFin: '09:00' }));
+    const secondApp = initializeApp({ projectId: 'demo-espacios' }, 'adjacent-client');
+    const secondDb = getFirestore(secondApp);
+    const { writeReservations } = await import('../reservationWriter');
+    try {
+      const outcomes = await Promise.allSettled([
+        service.saveReservation(make('adjacent-first')),
+        writeReservations(secondDb as any, [make('adjacent-second', { horaInicio: '11:00', horaFin: '12:00' })], service.cleanReservationForFirestore),
+      ]);
+      expect(outcomes.every(outcome => outcome.status === 'fulfilled')).toBe(true);
+      const expected = ['adjacent-first', 'adjacent-second', ...(existingSlot ? ['earlier'] : [])].sort();
+      expect((await getDocs(collection(context.db, 'reservas'))).docs.map(d => d.id).sort()).toEqual(expected);
+      expect((await getDoc(doc(context.db, 'schedule_slots', '2026-10-06_SALA%202'))).data()?.bookings.map((booking: any) => booking.id).sort()).toEqual(expected);
+    } finally { await secondDb.terminate(); await deleteApp(secondApp); }
+  }, 30000);
   it('removes unavailable entries on cancellation and atomically deletes rooms and overnight slots', async () => {
     await service.saveReservation(make('inactive'));
     const original=(await getDoc(doc(context.db,'reservas','inactive'))).data() as Reservation;

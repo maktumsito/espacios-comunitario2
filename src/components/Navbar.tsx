@@ -264,6 +264,8 @@ const NavbarComponent: React.FC<NavbarProps> = ({
     <>
       {toolButton("Crear reserva desde solicitud escrita", onOpenQuickRequest, Sparkles, "btn-tools-quick-request")}
       {toolButton("Imprimir agenda diaria", onOpenPrintModal, Printer)}
+      {/* El padre solo proporciona esta acción cuando el usuario puede eliminar. */}
+      {toolButton("Eliminar reservas de un día", onDeleteDay, Trash2)}
       {toolButton(
         "Preparar envío por Gmail",
         onOpenGmailDispatch,

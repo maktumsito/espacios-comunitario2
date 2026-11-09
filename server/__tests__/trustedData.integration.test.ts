@@ -167,6 +167,18 @@ describe.skipIf(!enabled)(
       const audit = await readAudit(db, 'AUDIT_OP_recurring-2027');
       expect(audit.newState).toHaveLength(75);
     }, 30000);
+    it('allows only one of two concurrent clients through the authenticated API', async () => {
+      const outcomes = await Promise.all(['client-api-one', 'client-api-two'].map(id => post('/api/reservations/commit', {
+        reservations: [row(id)], options: { operationId: id, intent: 'create' },
+      })));
+      expect(outcomes.filter(result => !result.error && result.result?.confirmedIds.length === 1)).toHaveLength(1);
+      expect(outcomes.filter(result => result.error)).toHaveLength(1);
+      expect(outcomes.find(result => result.error)?.error).toMatch(/conflicto|reservó/i);
+      const saved = await db.collection('reservas').get();
+      expect(saved.size).toBe(1);
+      const slot = await db.doc('schedule_slots/2026-10-13_SALA%202').get();
+      expect(slot.data()?.bookings.map((booking: any) => booking.id)).toEqual([saved.docs[0].id]);
+    }, 30000);
     it("denies anonymous SDK/REST, forged authors and reader writes, but allows signed reads", async () => {
       await expect(
         setDoc(doc(sdk, "reservas", "forged"), row("forged")),

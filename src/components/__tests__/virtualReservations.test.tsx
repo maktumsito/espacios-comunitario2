@@ -8,6 +8,9 @@ import { intersectsViewport } from '../../hooks/useTimelineViewport';
 import type { Reservation } from '../../types';
 
 beforeEach(() => {
+  // El virtualizador mide el viewport por clientHeight/clientWidth.
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.offsetHeight; });
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) { return this.offsetWidth; });
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
     return this.dataset.index !== undefined ? 100 : 240;
   });

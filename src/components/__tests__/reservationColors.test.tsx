@@ -49,6 +49,9 @@ it('uses the same type color in the daily matrix and mobile agenda', () => {
   HTMLElement.prototype.scrollIntoView = vi.fn();
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(800);
   vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(1200);
+  // El virtualizador mide el viewport por clientHeight/clientWidth.
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(800);
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
   const { container } = render(
     <ReservationVisualsProvider activityTypes={types} reservations={[reservation]}>
       <DailyUsageView reservations={[reservation]} selectedDate={new Date(2026, 9, 26)}

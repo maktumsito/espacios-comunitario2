@@ -10,7 +10,18 @@ export function lazyWithRetry<T extends ComponentType<any>>(
 ): LazyExoticComponent<T> {
   return React.lazy(async () => {
     const storageKey = 'lazy_retry_reload_' + (componentName || 'chunk');
-    const alreadyReloaded = window.sessionStorage.getItem(storageKey);
+    // El almacenamiento bloqueado no debe impedir cargar una vista ni crear bucles de recarga.
+    let alreadyReloaded: string | null = null;
+    let canReadReloadFlag = true;
+    try { alreadyReloaded = window.sessionStorage.getItem(storageKey); } catch { canReadReloadFlag = false; }
+    const clearReloadFlag = () => {
+      try { window.sessionStorage.removeItem(storageKey); } catch { /* La vista ya se cargó correctamente. */ }
+    };
+    const markReload = () => {
+      if (!canReadReloadFlag) return false;
+      try { window.sessionStorage.setItem(storageKey, 'true'); return true; }
+      catch { return false; }
+    };
 
     const extractComponent = (module: any): { default: T } => {
       if (!module) {
@@ -31,7 +42,7 @@ export function lazyWithRetry<T extends ComponentType<any>>(
 
     try {
       const module = await factory();
-      window.sessionStorage.removeItem(storageKey);
+      clearReloadFlag();
       return extractComponent(module);
     } catch (primaryError: any) {
       console.warn(`[lazyWithRetry] Initial load failed for ${componentName || 'module'}:`, primaryError);
@@ -39,7 +50,7 @@ export function lazyWithRetry<T extends ComponentType<any>>(
       try {
         await new Promise((resolve) => setTimeout(resolve, 600));
         const module = await factory();
-        window.sessionStorage.removeItem(storageKey);
+        clearReloadFlag();
         return extractComponent(module);
       } catch (secondaryError: any) {
         console.warn(`[lazyWithRetry] Second attempt failed for ${componentName || 'module'}:`, secondaryError);
@@ -47,7 +58,7 @@ export function lazyWithRetry<T extends ComponentType<any>>(
         try {
           await new Promise((resolve) => setTimeout(resolve, 1200));
           const module = await factory();
-          window.sessionStorage.removeItem(storageKey);
+          clearReloadFlag();
           return extractComponent(module);
         } catch (finalError: any) {
           const isChunkError =
@@ -56,9 +67,8 @@ export function lazyWithRetry<T extends ComponentType<any>>(
               finalError?.message || ''
             );
 
-          if (isChunkError && !alreadyReloaded) {
+          if (isChunkError && !alreadyReloaded && markReload()) {
             console.warn(`[lazyWithRetry] Refreshing page to fetch updated chunks for ${componentName || 'module'}`);
-            window.sessionStorage.setItem(storageKey, 'true');
             window.location.reload();
             return new Promise<never>(() => {});
           }

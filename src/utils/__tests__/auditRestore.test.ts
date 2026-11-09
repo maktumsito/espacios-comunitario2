@@ -8,6 +8,22 @@ const log = (extra: Partial<AuditChangeLogEntry>): AuditChangeLogEntry => ({ id:
   user: 'Admin', action: 'UPDATE', description: 'Cambio', reservaId: 'a', snapshotVersion: 2, ...extra });
 
 describe('exact audit restoration scope', () => {
+  it.each(['REQUEST_DELETE', 'REJECT_DELETE_REQUEST'] as const)('restores %s only with both snapshots and guards later edits', action => {
+    const request = { solicitadoPor: 'lector', fechaSolicitud: '2026-10-08T14:00:00Z', motivo: 'Cambio de actividad' };
+    const before = { ...row('a'), solicitudEliminacion: action === 'REJECT_DELETE_REQUEST' ? request : undefined };
+    const after = { ...row('a', 2), solicitudEliminacion: action === 'REQUEST_DELETE' ? request : undefined };
+    const entry = log({ action, previousState: before, newState: after });
+    expect(canRestoreAuditEntry(entry)).toBe(true);
+    const plan = buildAuditRestorePlan(entry, new Map([['a', after]]));
+    expect(plan.reservations).toEqual([{ ...before, version: 2, restoredStateVersion: 1 }]);
+    expect(plan.deletedIds).toEqual([]);
+    expect(plan.expectedVersions).toEqual({ a: 2 });
+    expect(() => buildAuditRestorePlan(entry, new Map([['a', { ...after, version: 3 }]]))).toThrow(/posteriores/);
+    for (const incomplete of [{ ...entry, previousState: undefined }, { ...entry, newState: undefined }]) {
+      expect(canRestoreAuditEntry(incomplete)).toBe(false);
+      expect(() => buildAuditRestorePlan(incomplete, new Map([['a', after]]))).toThrow(/no admite restauración/);
+    }
+  });
   it('recovers every deleted reservation, resetting persistence versions and preserving attachments', () => {
     const rows = Array.from({ length: 60 }, (_, i) => row(String(i), 8));
     rows[0].cartaCompromisoAdjunta = { name: 'carta.pdf', dataUrl: 'data:application/pdf;base64,ABC', type: 'application/pdf', size: 3, uploadedAt: '2026-10-08' };

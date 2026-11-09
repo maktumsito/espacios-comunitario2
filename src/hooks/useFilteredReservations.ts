@@ -107,19 +107,22 @@ export function useFilteredReservations(reservations: Reservation[], controlled?
   const conflictReservationIds = conflictSummary.ids;
   const deferredSearch = useDeferredValue(filters.search);
 
+  // Dependencias primitivas: escribir no invalida la búsqueda diferida anterior.
+  const { espacio, tipoActividad, fechaDesde, fechaHasta, soloRecurrentes, soloImportantes, soloConTopamiento } = filters;
+
   // Filtered reservations list: apply cheap O(1) structural filters first, then run Fuse.js only on the surviving subset
   const filteredReservations = useMemo(() => {
     const rawSearch = deferredSearch ? deferredSearch.trim() : '';
     const hasSearch = Boolean(rawSearch);
 
-    const filterEspacio = filters.espacio ? filters.espacio.toUpperCase() : null;
-    const filterTipo = filters.tipoActividad || null;
+    const filterEspacio = espacio ? espacio.toUpperCase() : null;
+    const filterTipo = tipoActividad || null;
 
-    const filterDesde = normalizeFilterBoundary(filters.fechaDesde, 'start');
-    const filterHasta = normalizeFilterBoundary(filters.fechaHasta, 'end');
-    const filterRecurrentes = Boolean(filters.soloRecurrentes);
-    const filterImportantes = Boolean(filters.soloImportantes);
-    const filterTopamiento = Boolean(filters.soloConTopamiento);
+    const filterDesde = normalizeFilterBoundary(fechaDesde, 'start');
+    const filterHasta = normalizeFilterBoundary(fechaHasta, 'end');
+    const filterRecurrentes = Boolean(soloRecurrentes);
+    const filterImportantes = Boolean(soloImportantes);
+    const filterTopamiento = Boolean(soloConTopamiento);
 
     // If date range is invalid (Desde > Hasta), return empty array
     if (filterDesde && filterHasta && filterDesde > filterHasta) {
@@ -152,7 +155,7 @@ export function useFilteredReservations(reservations: Reservation[], controlled?
 
     const fuzzyMatchIds = getFuzzyMatchIds(candidates, rawSearch);
     return candidates.filter((r) => fuzzyMatchIds.has(r.id));
-  }, [activeReservations, filters, deferredSearch, conflictReservationIds]);
+  }, [activeReservations, espacio, tipoActividad, fechaDesde, fechaHasta, soloRecurrentes, soloImportantes, soloConTopamiento, deferredSearch, conflictReservationIds]);
 
   return {
     filters,

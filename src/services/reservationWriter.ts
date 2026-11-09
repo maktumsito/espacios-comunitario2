@@ -574,7 +574,9 @@ export async function writeReservations(
   const byId = new Map(items.map((r) => [r.id, r]));
   try {
     for (const chunk of chunks) {
-      const committed = await runTransaction(db, async (tx) => {
+      let guardsSlotWrite = false;
+      const commitChunk = () => runTransaction(db, async (tx) => {
+        guardsSlotWrite = false;
         // Share reads only inside this transaction attempt. Every retry gets a
         // fresh map, and unrelated server requests retain strong read semantics.
         const reservationReads = new Map<string, Promise<DocumentSnapshot>>();
@@ -828,10 +830,12 @@ export async function writeReservations(
         );
         const slots = new Map<string, ScheduleSlot>();
         const originalSlots = new Map<string, ScheduleSlot>();
+        const slotVersions = new Map<string, unknown>();
         const affected = new Set(chunk);
         slotSnapshots.forEach((s) => {
           const data = s.data();
           if (s.exists()) originalSlots.set(s.id, data as ScheduleSlot);
+          if ((s as any).__native?.updateTime) slotVersions.set(s.id, (s as any).__native.updateTime);
           slots.set(s.id, {
             fecha: data?.fecha || s.id.slice(0, 10),
             espacio: data?.espacio || decodeURIComponent(s.id.slice(11)),
@@ -949,10 +953,21 @@ export async function writeReservations(
             throw new Error(
               `El índice de ${slot.espacio} en ${slot.fecha} excede el tamaño seguro. Reduce las reservas simultáneas.`,
             );
-          tx.set(doc(db, "schedule_slots", key), {
+          const slotData = {
             ...slot,
             updatedAt: new Date().toISOString(),
-          });
+          };
+          // Exigir la ausencia o la versión leída del índice evita sobrescribir otro cliente.
+          const nativeTransaction = (tx as any).__native;
+          if (!original && nativeTransaction) {
+            guardsSlotWrite = true;
+            nativeTransaction.create(doc(db, "schedule_slots", key), slotData);
+          } else if (nativeTransaction && slotVersions.has(key)) {
+            guardsSlotWrite = true;
+            nativeTransaction.update(doc(db, "schedule_slots", key), slotData, { lastUpdateTime: slotVersions.get(key) });
+          } else {
+            tx.set(doc(db, "schedule_slots", key), slotData);
+          }
         }
         for (const id of chunk) {
           if (unchangedIds.has(id)) continue;
@@ -976,6 +991,16 @@ export async function writeReservations(
         }
         return saved;
       });
+      let committed: Reservation[];
+      for (let attempt = 0; ; attempt++) {
+        try {
+          committed = await commitChunk();
+          break;
+        } catch (error: any) {
+          // Índice creado, eliminado o modificado: releer y validar toda la transacción.
+          if (!guardsSlotWrite || ![5, 6, 9].includes(error?.code) || attempt >= 4) throw error;
+        }
+      }
       result.reservations.push(...committed);
       result.confirmedIds.push(...chunk);
       result.deletedIds.push(...chunk.filter((id) => !byId.has(id)));

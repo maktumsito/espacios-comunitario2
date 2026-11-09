@@ -10,6 +10,9 @@ const source: Reservation = { id: 'drag-source', fecha: date, espacio: 'AUDITORI
   responsable: 'Prueba', tipoActividad: 'Taller', descripcion: 'Prueba de arrastre', actividadRecurrente: 'No' };
 const spaces = SPACES_LIST.filter(s => ['AUDITORIO', 'SALA 2', 'SALA 3'].includes(s.name));
 beforeEach(() => {
+  // El virtualizador mide el viewport por clientHeight/clientWidth.
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.offsetHeight; });
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) { return this.offsetWidth; });
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(800);
   vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(1000);
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top: 100, bottom: 900, left: 0, right: 1000, width: 1000, height: 800, x: 0, y: 100, toJSON() {} });

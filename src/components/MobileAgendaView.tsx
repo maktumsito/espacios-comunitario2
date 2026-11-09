@@ -1,3 +1,4 @@
+// Limpieza: se retiraron únicamente imports sin referencias.
 import { useReservationVisuals } from '../contexts/ReservationVisualsContext';
 import { filterEnabledSpaceReservations, getEnabledSpaces } from '../utils/spaceAvailability';
 import { VirtualCardGrid } from './common/VirtualCardGrid';
@@ -30,7 +31,6 @@ import {
   Trash2,
   CheckCircle2,
   Circle,
-  XCircle,
   Wrench,
   Repeat,
   FileCheck,

@@ -34,6 +34,9 @@ function comparableState(row: Reservation): string {
 export const isDeletionAction = (action: string) => action.startsWith('DELETE') || action === 'AUTHORIZE_DELETE';
 export const auditStateRows = (state?: Reservation | Reservation[]) => state ? (Array.isArray(state) ? state : [state]) : [];
 export function canRestoreAuditEntry(entry: AuditChangeLogEntry): boolean {
+  // Una solicitud solo puede deshacerse si conserva los estados anterior y confirmado.
+  if (['REQUEST_DELETE', 'REJECT_DELETE_REQUEST'].includes(entry.action) &&
+      (!auditStateRows(entry.previousState).length || !auditStateRows(entry.newState).length)) return false;
   return !entry.isReverted && entry.affectedCount !== 0 && !entry.id.startsWith('AUDIT_BASELINE_') &&
     (isDeletionAction(entry.action) || ['UPDATE', 'CLEAR_PARTICIPANTS', 'TOGGLE_REALIZADA', 'CREATE', 'BULK_IMPORT', 'REQUEST_DELETE', 'REJECT_DELETE_REQUEST'].includes(entry.action));
 }
