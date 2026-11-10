@@ -156,12 +156,14 @@ describe.skipIf(process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8087')('isola
     await expect(service.saveReservation(make('rejected'))).rejects.toThrow();
     expect(service.getLocalCache().some(r => r.id === 'rejected')).toBe(false);
   });
-  it('removes the old slot when a batch moves a reservation', async () => {
+  it.each([{ fecha: '2026-10-07' }, { espacio: 'SALA 3' }, { horaInicio: '11:00', horaFin: '12:00' }])('allows an immediate booking in the slot freed by a move to %j', async target => {
     await service.saveReservation(make('move'));
     const initial = (await getDoc(doc(context.db, 'reservas', 'move'))).data() as Reservation;
-    await service.saveReservationsBatch([{ ...initial, fecha: '2026-10-07' }]);
+    await service.commitReservationChanges([{ ...initial, ...target }], { requireAtomic: true, intent: 'update' });
+    await service.saveReservation(make('new-booking'), { intent: 'create' });
     const slot = await getDoc(doc(context.db, 'schedule_slots', '2026-10-06_SALA%202'));
-    expect(slot.data()?.bookings.some((b: any) => b.id === 'move')).toBe(false);
+    expect(slot.data()?.bookings).toContainEqual(expect.objectContaining({ id: 'new-booking', horaInicio: '10:00', horaFin: '11:00' }));
+    expect(slot.data()?.bookings).not.toContainEqual(expect.objectContaining({ id: 'move', horaInicio: '10:00', horaFin: '11:00' }));
   });
   it('allows only one of two concurrent clients to reserve the same room', async () => {
     const app2 = initializeApp({ projectId: 'demo-espacios',  }, 'second-client');

@@ -4,8 +4,17 @@ const sdk = vi.hoisted(() => ({ next: undefined as any, stop: vi.fn(), hydrate: 
 vi.mock('../../firebase/sharedSnapshot', () => ({
   sharedOnSnapshot: (_query: unknown, next: any) => { sdk.next = next; return sdk.stop; },
 }));
+vi.mock('../../firebase/config', () => ({ getDb: () => ({}) }));
 vi.mock('../../utils/indexedDbStorage', () => ({
   getIndexedDbReservations: sdk.hydrate, setIndexedDbReservations: async () => {},
+}));
+vi.mock('../reservationWriter', async importOriginal => ({
+  ...await importOriginal<typeof import('../reservationWriter')>(),
+  writeReservations: vi.fn(async (_db, rows, _clean, options) => {
+    const result = { reservations: rows, deletedIds: [], confirmedIds: rows.map((r: any) => r.id), pendingIds: [] };
+    options.onProgress(result);
+    return result;
+  }),
 }));
 vi.mock('firebase/firestore', async importOriginal => ({
   ...await importOriginal<typeof import('firebase/firestore')>(),
@@ -68,5 +77,34 @@ it('reconciles additions, edits and removals inside a live date range while pres
   sdk.next(snapshot([]));
   expect(onData.mock.calls.at(-1)?.[0]).toEqual([]);
   expect(service.getLocalCache().map(r => r.id)).toEqual(['future']);
+  stop();
+});
+
+it.each(['active', 'date range'])('keeps the original slot available after a confirmed move and a late %s snapshot', async scope => {
+  const service = await import('../reservationService');
+  const { checkSingleConflict } = await import('../../utils/conflictDetector');
+  const original = { ...row('moved', '2026-10-07'), version: 1, createdAt: '2026-10-06T09:00:00Z' };
+  const moved = { ...original, espacio: 'SALA 2', version: 2 };
+  const onData = vi.fn();
+  const stop = scope === 'active'
+    ? service.subscribeToReservations(onData, vi.fn())
+    : service.subscribeToReservationsByDateRange('2026-10-01', '2026-10-31', onData, vi.fn());
+  sdk.next(snapshot([original]));
+
+  await service.commitReservationChanges([moved], { intent: 'update' });
+  sdk.next(snapshot([original]));
+
+  const latest = onData.mock.calls.at(-1)?.[0];
+  const booking = { ...original, id: 'new-booking' };
+  expect(checkSingleConflict(booking, latest)).toEqual([]);
+  expect(checkSingleConflict({ ...booking, espacio: moved.espacio }, latest).map(r => r.id)).toEqual([moved.id]);
+  expect(service.getLocalCache()).toMatchObject([{ id: moved.id, espacio: moved.espacio, version: moved.version }]);
+
+  sdk.next(snapshot([{ ...moved, espacio: 'SALA 3', version: 3 }]));
+  expect(onData.mock.calls.at(-1)?.[0]).toMatchObject([{ id: moved.id, espacio: 'SALA 3', version: 3 }]);
+  sdk.next(snapshot([{ ...original, createdAt: '2026-10-06T12:00:00Z' }]));
+  expect(onData.mock.calls.at(-1)?.[0]).toMatchObject([{ id: original.id, espacio: original.espacio, version: 1 }]);
+  sdk.next(snapshot([]));
+  expect(onData.mock.calls.at(-1)?.[0]).toEqual([]);
   stop();
 });

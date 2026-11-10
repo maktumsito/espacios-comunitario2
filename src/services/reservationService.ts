@@ -120,7 +120,7 @@ export function calculateReservationsHash(reservations: readonly Reservation[]):
           .join(',')
       : '';
 
-    rows[i] = `${r.id || ''}|${r.fecha || ''}|${r.horaInicio || ''}|${r.horaFin || ''}|${r.espacio || ''}|${r.tipoActividad || ''}|${r.tipoPrestamo || ''}|${r.responsable || ''}|${r.descripcion || ''}|${r.cantidadParticipantes || 0}|${r.importante || ''}|${r.serieRecurrente || r.recurrenteId || ''}|${equipStr}|${r.comentarios || ''}|${r.estado || ''}|${r.terminaDiaSiguiente ? '1' : '0'}|${r.rut || ''}|${r.telefonoContacto || ''}|${r.emailContacto || ''}|${r.updatedAt || ''}`;
+    rows[i] = `${r.id || ''}|${r.fecha || ''}|${r.horaInicio || ''}|${r.horaFin || ''}|${r.espacio || ''}|${r.tipoActividad || ''}|${r.tipoPrestamo || ''}|${r.responsable || ''}|${r.descripcion || ''}|${r.cantidadParticipantes || 0}|${r.importante || ''}|${r.serieRecurrente || r.recurrenteId || ''}|${equipStr}|${r.comentarios || ''}|${r.estado || ''}|${r.terminaDiaSiguiente ? '1' : '0'}|${r.rut || ''}|${r.telefonoContacto || ''}|${r.emailContacto || ''}|${r.updatedAt || ''}|${r.version || 0}`;
   }
 
   return fastHashRowStream(rows);
@@ -586,6 +586,26 @@ export function isCacheInSyncWithFirestore(): boolean {
 // REAL-TIME FIRESTORE SUBSCRIPTIONS (HASH-GATED SYNC)
 // ============================================================================
 
+function mergeReservationWindow(incoming: Reservation[], inWindow: (row: Reservation) => boolean) {
+  const current = getLocalCache();
+  const currentById = new Map(current.map(row => [row.id, row]));
+  const incomingIds = new Set<string>();
+  let hasOlderRows = false;
+  const reconciled = incoming.map(row => {
+    incomingIds.add(row.id);
+    const cached = currentById.get(row.id);
+    if (!cached || (cached.version || 0) <= (row.version || 0)) return row;
+    // A recreated reservation can restart its version with a new creation date.
+    if (row.createdAt && cached.createdAt && row.createdAt > cached.createdAt) return row;
+    // The live view can lag behind a confirmed write.
+    hasOlderRows = true;
+    return cached;
+  });
+  const merged = [...current.filter(row => !inWindow(row) && !incomingIds.has(row.id)), ...reconciled]
+    .sort(compareReservationsByDate);
+  return { merged, hasOlderRows };
+}
+
 export function subscribeToReservations(
   onData: (reservations: Reservation[], isFromFirestore: boolean, isRevalidating?: boolean, lastSyncTime?: number | null) => void,
   onError: (error: any) => void
@@ -650,19 +670,16 @@ export function subscribeToReservations(
             list.push(normalizeReservationFromFirestore(docSnap.id, rawData));
           });
 
-          // Non-destructively merge active window with historical cache
-          const currentCached = getLocalCache();
-          const historical = currentCached.filter(r => r.fecha < activeWindowStartDate);
-          const sorted = [...historical, ...list].sort(compareReservationsByDate);
+          const { merged: sorted, hasOlderRows } = mergeReservationWindow(list, r => r.fecha >= activeWindowStartDate);
 
           // Compute incoming snapshot hash
-          const incomingFirestoreHash = calculateReservationsHash(sorted);
+          const incomingFirestoreHash = hasOlderRows ? null : calculateReservationsHash(sorted);
           const currentMeta = getLocalCacheMetadata();
           const currentLocalHash = currentMeta?.dataHash ?? inMemoryDataHash ?? calculateReservationsHash(getLocalCache());
           const syncTimestamp = Date.now();
 
           // HASH CHECK: If Firestore payload hash matches local cache hash, skip redundant state churn
-          if (incomingFirestoreHash === currentLocalHash && inMemoryReservationsCache && inMemoryReservationsCache.length > 0) {
+          if (incomingFirestoreHash && incomingFirestoreHash === currentLocalHash && inMemoryReservationsCache && inMemoryReservationsCache.length > 0) {
             if (currentMeta) {
               setLocalCacheMetadata({
                 ...currentMeta,
@@ -720,10 +737,9 @@ export function subscribeToReservationsByDateRange(
   onData: (reservations: Reservation[], isFromFirestore: boolean, isRevalidating?: boolean) => void,
   onError: (error: any) => void
 ): Unsubscribe {
+  const inRange = (r: Reservation) => r.fecha >= startDate && r.fecha <= endDate;
   // Immediately emit filtered items from local versioned cache
-  const localData = getLocalCache();
-  const filteredLocal = localData.filter(r => r.fecha >= startDate && r.fecha <= endDate);
-  onData(filteredLocal, false, true);
+  onData(getLocalCache().filter(inRange), false, true);
 
   try {
     const db = getDb();
@@ -739,7 +755,7 @@ export function subscribeToReservationsByDateRange(
       rangeQuery,
       (snapshot) => {
         if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) {
-          onData(getLocalCache().filter(r => r.fecha >= startDate && r.fecha <= endDate), false, false);
+          onData(getLocalCache().filter(inRange), false, false);
           return;
         }
         const deletedSet = getDeletedIds();
@@ -756,15 +772,10 @@ export function subscribeToReservationsByDateRange(
           list.push(normalizeReservationFromFirestore(docSnap.id, rawData));
         });
 
-        const sorted = list.sort(compareReservationsByDate);
-
-        // Merge range slice back into global cache non-destructively
-        const currentCache = getLocalCache();
-        const otherDates = currentCache.filter(r => r.fecha < startDate || r.fecha > endDate);
-        const merged = [...otherDates, ...sorted].sort(compareReservationsByDate);
+        const { merged } = mergeReservationWindow(list, inRange);
 
         setLocalCache(merged, { lastSyncTime: Date.now() });
-        onData(sorted, true, false);
+        onData(merged.filter(inRange), true, false);
       },
       (error) => {
         console.warn('Firestore date-window query notice, falling back to local cache:', error);
@@ -789,7 +800,8 @@ export async function fetchReservationsByDateRange(
 ): Promise<Reservation[]> {
   if (!startDate || !endDate || startDate > endDate) return [];
   const key = `${startDate}:${endDate}`;
-  const local = () => getLocalCache().filter(r => r.fecha >= startDate && r.fecha <= endDate);
+  const inRange = (r: Reservation) => r.fecha >= startDate && r.fecha <= endDate;
+  const local = () => getLocalCache().filter(inRange);
   if (isDateRangeFresh(key)) return local();
   // A confirmed parent interval already contains every document needed by this request.
   for (const range of dateRangeSyncTimes.keys()) {
@@ -813,10 +825,9 @@ export async function fetchReservationsByDateRange(
           if (data.estado === 'eliminada' || data.eliminada === true) recordDeletedId(d.id);
           return !deletedSet.has(d.id) && !isReservationExplicitlyDeleted(data, deletedSet);
         })
-        .map(d => normalizeReservationFromFirestore(d.id, d.data()))
-        .sort(compareReservationsByDate);
-      const otherDates = getLocalCache().filter(r => r.fecha < startDate || r.fecha > endDate);
-      setLocalCache([...otherDates, ...list].sort(compareReservationsByDate));
+        .map(d => normalizeReservationFromFirestore(d.id, d.data()));
+      const { merged } = mergeReservationWindow(list, inRange);
+      setLocalCache(merged);
       dateRangeSyncTimes.set(key, Date.now());
       for (const [range, time] of dateRangeSyncTimes) {
         if (Date.now() - time >= firestoreReadPolicy.historicalCacheMs) dateRangeSyncTimes.delete(range);
@@ -829,7 +840,7 @@ export async function fetchReservationsByDateRange(
           }
         } catch { /* Storage unavailable: retain the in-memory cache. */ }
       }
-      return list;
+      return merged.filter(inRange);
     } catch (error) {
       console.warn('Date-range query failed, serving local cache:', error);
       return local();
