@@ -20,8 +20,7 @@ import {
   Calendar,
   Printer,
   Search,
-  Filter,
-  Sparkles
+  Filter
 } from 'lucide-react';
 import { Reservation, SpaceRating } from '../../types';
 import {
@@ -63,7 +62,6 @@ export interface ReservationContextMenuProps {
   onDelete?: (id: string, isSeries?: boolean, seriesId?: string) => void;
   onRequestDelete?: (reservation: Reservation) => void;
   onCreateReservation?: (params: { date: string; space?: string; startTime?: string; endTime?: string }) => void;
-  onOpenQuickRequest?: (params: { date: string; space?: string; startTime?: string; endTime?: string }) => void;
   onNavigateToDay?: (dateStr: string) => void;
   onSwitchToMonthView?: (dateStr: string) => void;
   onGoToday?: () => void;
@@ -94,7 +92,6 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
   onDelete,
   onRequestDelete,
   onCreateReservation,
-  onOpenQuickRequest,
   onNavigateToDay,
   onSwitchToMonthView,
   onGoToday,
@@ -494,27 +491,6 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
                 ? `Nueva reserva en ${formatDisplayTitle(targetSpaceName)}`
                 : `Nueva reserva en este día (${formatDateDDMMYYYY(targetDateStr)})`}
             </span>
-          </button>
-        )}
-
-        {canCreate && onOpenQuickRequest && (
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() =>
-              runAction(() =>
-                onOpenQuickRequest({
-                  date: targetDateStr,
-                  space: targetSpaceName,
-                  startTime: targetStartTime,
-                  endTime: targetEndTime
-                })
-              )
-            }
-            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-indigo-800 hover:bg-indigo-50 focus:bg-indigo-50 focus:outline-none transition cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
-            <span>Crear desde texto de solicitud...</span>
           </button>
         )}
 

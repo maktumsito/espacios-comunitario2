@@ -62,15 +62,10 @@ const GlobalCommandPalette = lazyWithRetry(
   () => import('./components/GlobalCommandPalette').then((m) => ({ default: m.GlobalCommandPalette })),
   'GlobalCommandPalette'
 );
-const QuickRequestCreatorModal = lazyWithRetry(
-  () => import('./components/QuickRequestCreatorModal').then((m) => ({ default: m.QuickRequestCreatorModal })),
-  'QuickRequestCreatorModal'
-);
 const QuickCheckInModal = lazyWithRetry(
   () => import('./components/QuickCheckInModal').then((m) => ({ default: m.QuickCheckInModal })),
   'QuickCheckInModal'
 );
-import type { ParsedReservationRequest } from './utils/requestTextParser';
 
 // Code-split heavy views & modals with resilient lazyWithRetry to reduce initial bundle size and boost reliability
 const SpaceDashboard = lazyWithRetry(
@@ -245,20 +240,12 @@ export default function App() {
     openGmailDispatchModal
   } = useReservationModals();
 
-  const [quickRequestModalState, setQuickRequestModalState] = useState<{
-    isOpen: boolean;
-    date?: string;
-    space?: string;
-    startTime?: string;
-    endTime?: string;
-  }>({ isOpen: false });
-  const [prefillParsedRequest, setPrefillParsedRequest] = useState<ParsedReservationRequest | null>(null);
   const [checkInReservation, setCheckInReservation] = useState<Reservation | null>(null);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
 
   const reservationReadScope = getReservationReadScope(
     currentUser, currentView, selectedDailyDate, reservationFilters,
-    isImportExportModalOpen || isGlobalPrintModalOpen || isGmailDispatchModalOpen || isReservationModalOpen || quickRequestModalState.isOpen,
+    isImportExportModalOpen || isGlobalPrintModalOpen || isGmailDispatchModalOpen || isReservationModalOpen,
   );
   const {
     reservations, setReservations, isFirebaseConnected, setIsFirebaseConnected,
@@ -295,7 +282,7 @@ export default function App() {
     handleResetUsers
   } = useAdminConfig(currentUser, triggerSyncToast, {
     enabled: Boolean(currentUser),
-    equipmentEnabled: Boolean(currentUser) && (isReservationModalOpen || quickRequestModalState.isOpen ||
+    equipmentEnabled: Boolean(currentUser) && (isReservationModalOpen ||
       (currentView === 'admin' && adminSubTab === 'equipment')),
   });
 
@@ -571,7 +558,6 @@ export default function App() {
       import('./components/ReservationModal');
       import('./components/ReservationDetailModal');
       import('./components/GlobalCommandPalette');
-      import('./components/QuickRequestCreatorModal');
     };
     if (typeof window !== 'undefined') {
       if ('requestIdleCallback' in window) {
@@ -840,8 +826,6 @@ export default function App() {
     setIsDeleteDayModalOpen(false);
     setIsSpaceAvailabilityOpen(false);
     setIsCommandPaletteOpen(false);
-    setQuickRequestModalState({ isOpen: false });
-    setPrefillParsedRequest(null);
     setConflictReportData(previous => ({ ...previous, isOpen: false }));
   };
 
@@ -937,33 +921,9 @@ export default function App() {
     }, 'crear una reserva en esta fecha');
   }, [filters.espacio, enabledSpaces, currentUser]);
 
-  const handleOpenQuickRequest = useCallback((params?: { date?: string; space?: string; startTime?: string; endTime?: string }) => {
-    requireAuth(() => {
-      if (!userCanCreateReservations(currentUser)) {
-        triggerSyncToast('Permiso denegado: No tienes autorización para registrar nuevas reservas (gestión controlada por Cristian Shute).', 'error');
-        return;
-      }
-      if (!enabledSpaces.length) {
-        triggerSyncToast('No hay espacios activos. Activa o crea un espacio en Administración.', 'warning');
-        return;
-      }
-      const fallbackDate = params?.date || format(selectedDailyDate || new Date(), 'yyyy-MM-dd');
-      const fallbackSpace =
-        (params?.space && enabledSpaces.some((s) => s.name === params.space) ? params.space : undefined) ||
-        (enabledSpaces.some((s) => s.name === filters.espacio) ? filters.espacio : enabledSpaces[0]?.name || '');
-      setQuickRequestModalState({
-        isOpen: true,
-        date: fallbackDate,
-        space: fallbackSpace,
-        startTime: params?.startTime || '10:00',
-        endTime: params?.endTime || '11:00'
-      });
-    }, 'crear reserva rápida desde solicitud');
-  }, [currentUser, enabledSpaces, filters.espacio, requireAuth, selectedDailyDate, triggerSyncToast]);
-
   const { reminder: replacementReminder, pendingCount: replacementReminderCount, acknowledge: acknowledgeReplacementReminder } = useReplacementReminders(
     reservations, currentUser?.username,
-    !isInitialLoading && !isReservationModalOpen && !quickRequestModalState.isOpen && !isDetailModalOpen && !isDeleteModalOpen &&
+    !isInitialLoading && !isReservationModalOpen && !isDetailModalOpen && !isDeleteModalOpen &&
     !isImportExportModalOpen && !isAuditLogOpen && !isPendingDeletionsModalOpen && !isChangePasswordOpen &&
     !isPasswordPromptOpen && !isRatingModalOpen && !isGlobalPrintModalOpen && !isGmailDispatchModalOpen &&
     !isNotificationCenterOpen && !isSpaceAvailabilityOpen && !conflictReportData.isOpen && !pendingSeriesMove
@@ -1051,11 +1011,9 @@ export default function App() {
             setPrefillSpace(initialSpace);
             setPrefillStartTime('10:00');
             setPrefillEndTime('11:00');
-            setPrefillParsedRequest(null);
             setIsReservationModalOpen(true);
           }, 'crear una nueva reserva');
         }}
-        onOpenQuickRequest={() => handleOpenQuickRequest()}
         onDeleteDay={userCanDeleteReservations(currentUser) ? () => setIsDeleteDayModalOpen(true) : undefined}
         onOpenImportExport={() => {
           requireAuth(() => setIsImportExportModalOpen(true), 'importar o exportar reservas');
@@ -1805,12 +1763,8 @@ export default function App() {
                 : (endTime || '10:00');
               setPrefillStartTime(safeStart);
               setPrefillEndTime(safeEnd);
-              setPrefillParsedRequest(null);
               setIsReservationModalOpen(true);
             }, 'crear una reserva en esta fecha');
-          }}
-          onOpenQuickRequest={({ date, space, startTime, endTime }) => {
-            handleOpenQuickRequest({ date, space, startTime, endTime });
           }}
           onNavigateToDay={(dateStr) => {
             const targetDate = parseDateToNoon(dateStr);
@@ -1890,7 +1844,6 @@ export default function App() {
               setPrefillRut('');
               setPrefillPhone('');
               setPrefillEmail('');
-              setPrefillParsedRequest(null);
             }}
             onSave={handleCreateOrUpdate}
             onDelete={handleDelete}
@@ -1914,57 +1867,6 @@ export default function App() {
             initialRut={prefillRut}
             initialPhone={prefillPhone}
             initialEmail={prefillEmail}
-            initialParsedRequest={prefillParsedRequest}
-            onOpenQuickRequest={() => {
-              setIsReservationModalOpen(false);
-              handleOpenQuickRequest({
-                date: prefillDate || format(selectedDailyDate || new Date(), 'yyyy-MM-dd'),
-                space: prefillSpace,
-                startTime: prefillStartTime,
-                endTime: prefillEndTime
-              });
-            }}
-          />
-        </Suspense>
-      )}
-
-      {quickRequestModalState.isOpen && (
-        <Suspense fallback={null}>
-          <QuickRequestCreatorModal
-            isOpen={quickRequestModalState.isOpen}
-            onClose={() => setQuickRequestModalState({ isOpen: false })}
-            allReservations={reservations}
-            availableSpaces={enabledSpaces}
-            availableActivityTypes={activityTypes}
-            availableLoanTypes={loanTypes}
-            availableEquipment={equipment}
-            spaceBlocks={spaceBlocks}
-            defaultDate={quickRequestModalState.date}
-            defaultSpace={quickRequestModalState.space}
-            defaultStartTime={quickRequestModalState.startTime}
-            defaultEndTime={quickRequestModalState.endTime}
-            onCreateDirectly={async (reserva, generateSeries, seriesDates) => {
-              let saved = false;
-              await requireAuth(async () => {
-                saved = await handleCreateOrUpdate(reserva, generateSeries, seriesDates);
-              }, 'crear reserva desde solicitud rápida');
-              return saved;
-            }}
-            onOpenInFullForm={(parsed) => {
-              setQuickRequestModalState({ isOpen: false });
-              setEditingReservation(null);
-              setIsDuplicating(false);
-              setPrefillDate(parsed.fecha);
-              setPrefillSpace(parsed.espacio);
-              setPrefillStartTime(parsed.horaInicio);
-              setPrefillEndTime(parsed.horaFin);
-              setPrefillResponsable(parsed.responsable);
-              setPrefillRut(parsed.rut);
-              setPrefillPhone(parsed.telefonoContacto);
-              setPrefillEmail(parsed.emailContacto);
-              setPrefillParsedRequest(parsed);
-              setIsReservationModalOpen(true);
-            }}
           />
         </Suspense>
       )}

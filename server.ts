@@ -3,7 +3,6 @@ import { registerBackupMaintenanceApi } from './server/backupMaintenanceApi';
 import { APP_BUILD_INFO } from './src/buildInfo';
 import { claimDelivery,startDelivery,finishDelivery } from './server/deliveryLease';
 import { registerReservationApi } from './server/reservationApi';
-import { registerRequestAiApi } from './server/requestAiApi';
 import { getServerDatabase, serverAuth } from './server/database';
 import { registerDataApi } from './server/dataApi';
 import { isPurgeableScheduleSlot, guardedSlotCleanup } from './server/scheduleSlotCleanup';
@@ -780,7 +779,6 @@ async function startServer() {
   });
   registerDataApi(app, getServerDatabase(), appSessions);
   registerReservationApi(app,getServerDatabase(),appSessions);
-  registerRequestAiApi(app, appSessions);
   registerBackupApi(app,getServerDatabase(),appSessions);
   registerBackupMaintenanceApi(app,getServerDatabase(),appSessions, () => purgeExpiredSlotsServer.status());
   const requireAuth = appSessions.requireAuth;

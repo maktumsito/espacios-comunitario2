@@ -12,5 +12,3 @@
 
 
 La guía de [correcciones y operación gratuita](docs/correcciones-gratuitas-2026-10-08.md) describe el acceso autenticado, la preparación de cuentas individuales, recuperación y validación local.
-
-La guía de [IA gratuita para reservas](docs/ia-reservas-gratuita.md) explica cómo activar Gemini Free y continuar con el detector local cuando la IA no esté disponible.

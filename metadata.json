@@ -2,5 +2,5 @@
   "name": "Gestión de Espacios Comunitarios",
   "description": "Sistema moderno para la gestión de reservas, talleres, ocupación de espacios y aprobación de actividades comunitarias con sincronización en Firebase.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

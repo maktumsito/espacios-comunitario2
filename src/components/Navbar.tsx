@@ -30,7 +30,6 @@ import {
   Search,
   X,
   Trash2,
-  Sparkles,
 } from "lucide-react";
 
 interface NavbarProps {
@@ -39,7 +38,6 @@ interface NavbarProps {
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
   onNewReservation: () => void;
-  onOpenQuickRequest?: () => void;
   onOpenImportExport: () => void;
   onOpenPrintModal?: () => void;
   onOpenGmailDispatch?: () => void;
@@ -74,7 +72,6 @@ const NavbarComponent: React.FC<NavbarProps> = ({
   currentView,
   onViewChange,
   onNewReservation,
-  onOpenQuickRequest,
   onOpenImportExport,
   onOpenPrintModal,
   onOpenGmailDispatch,
@@ -262,7 +259,6 @@ const NavbarComponent: React.FC<NavbarProps> = ({
     );
   const tools = () => (
     <>
-      {toolButton("Crear reserva desde solicitud escrita", onOpenQuickRequest, Sparkles, "btn-tools-quick-request")}
       {toolButton("Imprimir agenda diaria", onOpenPrintModal, Printer)}
       {/* El padre solo proporciona esta acción cuando el usuario puede eliminar. */}
       {toolButton("Eliminar reservas de un día", onDeleteDay, Trash2)}
@@ -563,18 +559,6 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                 className={iconButton}
               >
                 <KeyRound className="h-5 w-5" />
-              </button>
-            )}
-            {onOpenQuickRequest && (
-              <button
-                id="btn-quick-request-reservation"
-                type="button"
-                onClick={onOpenQuickRequest}
-                title="Pegar o escribir los datos de la persona y su solicitud para crear la reserva automáticamente"
-                className="ml-1 hidden min-h-11 items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-xs font-bold text-indigo-800 hover:bg-indigo-100 lg:inline-flex cursor-pointer transition-colors"
-              >
-                <Sparkles className="h-4 w-4 text-indigo-600" />
-                <span>Solicitud rápida</span>
               </button>
             )}
             <button
