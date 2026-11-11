@@ -24,7 +24,8 @@ import {
   deleteAllHolidayReservations,
   getDeletedIds,
   hasReservationMaterialChange,
-  hasReservationOccupancyChange
+  hasReservationOccupancyChange,
+  compareReservationsByDate
 } from '../services/reservationService';
 import { recordAuditEntry, computeReservationDiff } from '../services/auditLogService';
 import { notifyTopamiento, notifyImportantActivity, notifyReplacementActivity } from '../services/notificationService';
@@ -146,8 +147,14 @@ export function useReservationCrud({
       const map = new Map(prev.map(r=>[r.id,r]));
       result.deletedIds.forEach(id=>map.delete(id));
       result.reservations.forEach(r=>map.set(r.id,r));
-      return [...map.values()].sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.horaInicio.localeCompare(b.horaInicio));
+      return [...map.values()].sort(compareReservationsByDate);
     });
+    if (selectedReservation) {
+      const updatedSelected = result.reservations.find(r => r.id === selectedReservation.id);
+      if (updatedSelected) {
+        setSelectedReservation(updatedSelected);
+      }
+    }
   };
 
   const handleRequestDelete = useCallback((reserva: Reservation) => {
@@ -1308,12 +1315,12 @@ export function useReservationCrud({
       if (err instanceof ReservationWriteError && err.cause instanceof ReservationVersionError && err.cause.current) {
         const current = err.cause.current;
         window.dispatchEvent(new CustomEvent('reservation-version-conflict', {detail:current}));
-        setReservations(prev=>prev.map(r=>r.id===current.id ? current : r));
+        setReservations(prev=>prev.map(r=>r.id===current.id ? current : r).sort(compareReservationsByDate));
       }
       if (err instanceof ReservationWriteError && err.result.confirmedIds.length) {
         const confirmed = new Map(getLocalCache().map(r => [r.id,r]));
         const ids = new Set(err.result.confirmedIds);
-        setReservations(prev => { const map = new Map(prev.map(r=>[r.id,r])); ids.forEach(id=> { if(confirmed.has(id)) map.set(id,confirmed.get(id)!); else map.delete(id); }); return [...map.values()]; });
+        setReservations(prev => { const map = new Map(prev.map(r=>[r.id,r])); ids.forEach(id=> { if(confirmed.has(id)) map.set(id,confirmed.get(id)!); else map.delete(id); }); return [...map.values()].sort(compareReservationsByDate); });
       }
       triggerSyncToast(`Error al guardar: ${err?.message || 'Error de conexión'}. Tus datos se conservaron.`, 'error');
       return false;

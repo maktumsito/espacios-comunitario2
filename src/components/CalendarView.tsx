@@ -18,7 +18,8 @@ import {
   Flame,
   ArrowRight,
   Sparkles,
-  Hammer
+  Hammer,
+  Pencil
 } from 'lucide-react';
 import {
   format,
@@ -417,6 +418,7 @@ interface AgendaReservationCardProps {
   reservation: Reservation;
   spaceColor: string;
   onSelectReservation: (reserva: Reservation) => void;
+  onEditReservation?: (reserva: Reservation) => void;
 }
 
 /**
@@ -425,11 +427,17 @@ interface AgendaReservationCardProps {
 const AgendaReservationCard = memo<AgendaReservationCardProps>(({
   reservation,
   spaceColor,
-  onSelectReservation
+  onSelectReservation,
+  onEditReservation
 }) => {
   const handleClick = useCallback(() => {
     onSelectReservation(reservation);
   }, [onSelectReservation, reservation]);
+
+  const handleEditClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEditReservation?.(reservation);
+  }, [onEditReservation, reservation]);
 
   const { getReservationTypeVisual } = useReservationVisuals();
   const isImportant = reservation.importante === 'Sí';
@@ -438,6 +446,7 @@ const AgendaReservationCard = memo<AgendaReservationCardProps>(({
   const displayTitle = formatDisplayTitle(reservation.descripcion || reservation.tipoActividad);
 
   return (
+    <div className="relative group">
     <button
       type="button"
       onClick={handleClick}
@@ -496,13 +505,26 @@ const AgendaReservationCard = memo<AgendaReservationCardProps>(({
       </div>
 
       {/* Space */}
-      <div className="pl-1 pt-1.5 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-600 gap-2 min-w-0">
+      <div className={`pl-1 pt-1.5 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-600 gap-2 min-w-0 ${onEditReservation ? 'pr-16' : ''}`}>
         <div className="flex items-center space-x-1 min-w-0 flex-1 font-medium text-slate-800">
           <MapPin className="w-3 h-3 shrink-0" style={{ color: spaceColor }} />
           <span className="truncate">{formatDisplayTitle(reservation.espacio)}</span>
         </div>
       </div>
     </button>
+    {onEditReservation && (
+      <button
+        type="button"
+        onClick={handleEditClick}
+        aria-label={`Editar reserva: ${displayTitle}`}
+        title="Editar reserva"
+        className="absolute bottom-2 right-2.5 z-10 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/90 hover:bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs text-[11px] font-bold transition cursor-pointer"
+      >
+        <Pencil className="w-3 h-3" />
+        <span>Editar</span>
+      </button>
+    )}
+    </div>
   );
 });
 AgendaReservationCard.displayName = 'AgendaReservationCard';
@@ -514,6 +536,7 @@ interface SelectedDayAgendaProps {
   holidayInfo: ChileanHoliday | null;
   getSpaceColor: (spaceName: string) => string;
   onSelectReservation: (reserva: Reservation) => void;
+  onEditReservation?: (reserva: Reservation) => void;
   onNewReservationForDate: (dateStr: string) => void;
   onNavigateToDay?: (day: Date) => void;
 }
@@ -528,6 +551,7 @@ const SelectedDayAgenda = memo<SelectedDayAgendaProps>(({
   holidayInfo,
   getSpaceColor,
   onSelectReservation,
+  onEditReservation,
   onNewReservationForDate,
   onNavigateToDay
 }) => {
@@ -641,6 +665,7 @@ const SelectedDayAgenda = memo<SelectedDayAgendaProps>(({
                 reservation={res}
                 spaceColor={getSpaceColor(res.espacio)}
                 onSelectReservation={onSelectReservation}
+                onEditReservation={onEditReservation}
               />
             )}
           />
@@ -662,6 +687,7 @@ interface CalendarViewProps {
   spaceBlocks?: SpaceBlock[];
   onNavigateToDay?: (day: Date) => void;
   onSelectReservation: (reserva: Reservation) => void;
+  onEditReservation?: (reserva: Reservation) => void;
   onNewReservationForDate: (dateStr: string) => void;
   onLoadHistoricalMonth?: (year: number, month: number) => Promise<any>;
   onVisibleMonthChange?: (date: Date) => void;
@@ -676,6 +702,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   spaceBlocks: suppliedBlocks = [],
   onNavigateToDay,
   onSelectReservation,
+  onEditReservation,
   onNewReservationForDate,
   onLoadHistoricalMonth,
   onVisibleMonthChange,
@@ -851,6 +878,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
         holidayInfo={selectedDayHolidayInfo}
         getSpaceColor={getSpaceColor}
         onSelectReservation={onSelectReservation}
+        onEditReservation={onEditReservation}
         onNewReservationForDate={onNewReservationForDate}
         onNavigateToDay={onNavigateToDay}
       />

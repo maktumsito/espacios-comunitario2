@@ -90,3 +90,42 @@ it('does not deliver or schedule work after the last view is removed during a re
   expect(p.request).toHaveBeenCalledOnce();
   expect(p.next).not.toHaveBeenCalled();
 });
+
+it('reconciles cached reservation views in place when reservation write progress arrives', async () => {
+  const query: DataViewQuery = {
+    path: 'reservas',
+    kind: 'query',
+    constraints: [
+      { type: 'where', field: 'fecha', op: '>=', value: '2026-10-01' },
+      { type: 'where', field: 'fecha', op: '<=', value: '2026-10-31' },
+    ],
+  };
+  const request = vi.fn(async () => ({
+    results: [{
+      docs: [
+        { id: 'r1', data: { id: 'r1', fecha: '2026-10-10', horaInicio: '10:00', descripcion: 'Inicial' } },
+        { id: 'r2', data: { id: 'r2', fecha: '2026-10-12', horaInicio: '09:00', descripcion: 'Mantener' } },
+      ],
+      version: 'v1',
+    }],
+  }));
+  const poller = new DataViewPoller(request, () => 'session', () => true);
+  const next = vi.fn();
+  const stop = poller.subscribe(query, next, vi.fn());
+  await vi.advanceTimersByTimeAsync(25);
+  expect(next).toHaveBeenCalledTimes(1);
+
+  poller.applyReservationProgress({
+    reservations: [
+      { id: 'r1', fecha: '2026-10-15', horaInicio: '11:00', descripcion: 'Editada' },
+    ],
+    deletedIds: ['r2'],
+  });
+
+  expect(next).toHaveBeenCalledTimes(2);
+  expect(next.mock.calls[1][0].docs).toEqual([
+    { id: 'r1', data: { id: 'r1', fecha: '2026-10-15', horaInicio: '11:00', descripcion: 'Editada' } },
+  ]);
+  expect(request).toHaveBeenCalledTimes(1);
+  stop();
+});

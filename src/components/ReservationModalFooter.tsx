@@ -16,6 +16,7 @@ interface ReservationModalFooterProps {
   editingReservation?: Reservation | null;
   isDuplicating: boolean;
   canModifyReservation: boolean;
+  canDeleteReservation?: boolean;
   handleDuplicateReservation: () => void;
   handleDeleteFromModal: () => void;
   hasDeleteHandler: boolean;
@@ -59,6 +60,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
   editingReservation,
   isDuplicating,
   canModifyReservation,
+  canDeleteReservation = canModifyReservation,
   handleDuplicateReservation,
   handleDeleteFromModal,
   hasDeleteHandler,
@@ -136,7 +138,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
           )}
 
           {editingReservation && !isDuplicating && (
-            canModifyReservation ? (
+            canDeleteReservation ? (
               hasDeleteHandler && (
                 <button
                   type="button"

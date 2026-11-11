@@ -22,6 +22,42 @@ interface Entry {
   blocked: boolean;
 }
 
+function matchesQueryConstraints(data: Record<string, any> | undefined, id: string, constraints?: unknown[]): boolean {
+  if (!data) return false;
+  if (!Array.isArray(constraints) || !constraints.length) return true;
+  for (const raw of constraints) {
+    const c = raw as { type?: string; field?: string; op?: string; value?: any } | undefined;
+    if (!c || c.type !== 'where' || !c.field) continue;
+    const fieldVal = c.field === '__name__' ? id : data[c.field];
+    switch (c.op) {
+      case '==':
+        if (fieldVal !== c.value) return false;
+        break;
+      case '!=':
+        if (fieldVal === c.value) return false;
+        break;
+      case '>=':
+        if (!(fieldVal >= c.value)) return false;
+        break;
+      case '>':
+        if (!(fieldVal > c.value)) return false;
+        break;
+      case '<=':
+        if (!(fieldVal <= c.value)) return false;
+        break;
+      case '<':
+        if (!(fieldVal < c.value)) return false;
+        break;
+      case 'in':
+        if (!Array.isArray(c.value) || !c.value.includes(fieldVal)) return false;
+        break;
+      default:
+        break;
+    }
+  }
+  return true;
+}
+
 /** One authenticated request serves all live views in this browser tab. */
 export class DataViewPoller {
   private entries = new Map<string, Entry>();
@@ -37,6 +73,55 @@ export class DataViewPoller {
     private token: () => string,
     private visible: () => boolean,
   ) {}
+
+  applyReservationProgress(detail: { reservations?: any[]; deletedIds?: string[] }) {
+    const reservations = Array.isArray(detail?.reservations) ? detail.reservations : [];
+    const deletedIds = new Set(Array.isArray(detail?.deletedIds) ? detail.deletedIds : []);
+    if (!reservations.length && !deletedIds.size) return;
+
+    for (const entry of this.entries.values()) {
+      if (entry.query.path !== 'reservas' || !entry.last?.docs) continue;
+      const byId = new Map<string, { id: string; data: any }>(
+        entry.last.docs.map((doc: any) => [doc.id, doc]),
+      );
+      let changed = false;
+
+      for (const delId of deletedIds) {
+        if (byId.delete(delId)) changed = true;
+      }
+
+      for (const res of reservations) {
+        if (!res?.id) continue;
+        if (matchesQueryConstraints(res, res.id, entry.query.constraints)) {
+          byId.set(res.id, { id: res.id, data: res });
+          changed = true;
+        } else if (byId.delete(res.id)) {
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        const nextDocs = [...byId.values()].sort((a, b) => {
+          const fa = a.data?.fecha || '';
+          const fb = b.data?.fecha || '';
+          if (fa !== fb) return fa < fb ? -1 : 1;
+          const ha = a.data?.horaInicio || '';
+          const hb = b.data?.horaInicio || '';
+          return ha < hb ? -1 : ha > hb ? 1 : 0;
+        });
+        const nextMessage: DataViewMessage = {
+          ...entry.last,
+          unchanged: false,
+          docs: nextDocs,
+        };
+        entry.last = nextMessage;
+        entry.query.version = undefined;
+        for (const listener of entry.listeners) {
+          listener.next(nextMessage);
+        }
+      }
+    }
+  }
 
   subscribe(query: DataViewQuery, next: Listener['next'], error: Listener['error']) {
     const key = JSON.stringify(query);

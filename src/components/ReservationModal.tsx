@@ -8,7 +8,7 @@ import { SPACES_LIST, ACTIVITY_TYPES } from '../data/spacesData';
 import { DEFAULT_LOAN_TYPES } from '../services/adminConfigService';
 import { getStoredEquipment } from '../services/equipmentService';
 import { checkSingleConflict, timeToMinutes, formatMinutesToTime, findMaintenanceBlockConflicts, formatBlockConflictMessage } from '../utils/conflictDetector';
-import { AuthUser, isCoordinatorOrAdmin } from '../services/authService';
+import { AuthUser, userCanEditReservations, userCanDeleteReservations } from '../services/authService';
 import { verifyHolidayOverrideKey } from '../utils/holidayUtils';
 import { AlertTriangle } from 'lucide-react';
 import { useReservationAutosave, AutosavedReservationDraft } from '../hooks/useReservationAutosave';
@@ -229,9 +229,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setWizardStep(1);
-      if (!editingReservation || isDuplicating) {
-        setIsWizardMode(true);
-      }
+      setIsWizardMode(!editingReservation || isDuplicating);
     }
   }, [isOpen, editingReservation, isDuplicating]);
 
@@ -825,6 +823,13 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       } catch (e) {
         // ignore
       }
+    } else if (newDate && (bookingMode === 'single' || updateScope === 'single')) {
+      setSpecificDates([newDate]);
+      try {
+        setCurrentCalendarMonth(parseISO(newDate));
+      } catch (e) {
+        // ignore
+      }
     }
   };
 
@@ -919,7 +924,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   };
 
   const isEditingExisting = Boolean(editingReservation && !isDuplicating);
-  const canModifyReservation = isCoordinatorOrAdmin(currentUser);
+  const canModifyReservation = currentUser ? userCanEditReservations(currentUser) : true;
+  const canDeleteReservation = currentUser ? userCanDeleteReservations(currentUser) : true;
 
   // Conflict resolution and smart recommendations hook
   const {
@@ -1226,7 +1232,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       return;
     }
 
-    if (!canModifyReservation) {
+    if (!canDeleteReservation) {
       showFormFeedback('Permiso denegado: Solo usuarios con perfil Administrador o Coordinador están autorizados para eliminar reservas directamente.');
       return;
     }
@@ -1693,6 +1699,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
             editingReservation={editingReservation}
             isDuplicating={isDuplicating}
             canModifyReservation={canModifyReservation}
+            canDeleteReservation={canDeleteReservation}
             handleDuplicateReservation={handleDuplicateReservation}
             handleDeleteFromModal={handleDeleteFromModal}
             hasDeleteHandler={Boolean(onDelete)}

@@ -103,6 +103,35 @@ describe('changing the main reservation space', () => {
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: 'Alerta de Topamiento Detectado' })).toBeTruthy();
   });
+
+  it('allows non-admin users with canEditReservations permission to edit reservations directly', async () => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    openForm({
+      editingReservation: source,
+      allReservations: [source],
+      onSave,
+      currentUser: {
+        username: 'recepcion1',
+        name: 'Recepción',
+        role: 'Recepción',
+        initials: 'R',
+        avatarColor: 'teal',
+        canCreateReservations: true,
+        canEditReservations: true,
+        canDeleteReservations: false
+      }
+    });
+    const submitBtn = screen.getByRole('button', { name: 'Confirmar y guardar reserva de espacio' }) as HTMLButtonElement;
+    expect(submitBtn.disabled).toBe(false);
+    expect(submitBtn.textContent).toContain('Guardar Cambios');
+    fireEvent.change(screen.getByLabelText(/Nombre de la Actividad/), { target: { value: 'Taller actualizado' } });
+    await act(async () => { fireEvent.click(submitBtn); });
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0][4].updatedReservations[0]).toMatchObject({
+      id: source.id,
+      descripcion: 'Taller actualizado'
+    });
+  });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 

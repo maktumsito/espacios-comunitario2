@@ -456,10 +456,15 @@ function getDataViewPoller() {
   const focus = () => {
     if (document.visibilityState === "visible") poller.refresh();
   };
+  const reservationProgress = (e: Event) => {
+    const detail = (e as CustomEvent)?.detail;
+    if (detail) poller.applyReservationProgress(detail);
+  };
   channel?.addEventListener("message", focus);
   window.addEventListener("auth-session-changed", changed);
   window.addEventListener("storage", changed);
   window.addEventListener("data-changed", focus);
+  window.addEventListener("reservation-write-progress", reservationProgress);
   window.addEventListener("focus", focus);
   document.addEventListener("visibilitychange", focus);
   return poller;

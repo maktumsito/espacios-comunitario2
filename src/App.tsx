@@ -5,7 +5,8 @@ import { Reservation, ViewMode, FilterState, SpaceRating } from './types';
 import {
   saveReservation,
   purgeExpiredScheduleSlots,
-  getLocalCache
+  getLocalCache,
+  compareReservationsByDate
 } from './services/reservationService';
 import { fetchReservationById } from './services/reservationService';
 import { queryReservationsBySeries } from './services/reservationService';
@@ -887,23 +888,39 @@ export default function App() {
   const prepareReservationEditor = async (reservation: Reservation) => {
     if (!userCanEditReservations(currentUser)) { triggerSyncToast('No tienes permiso para editar reservas.','error'); return; }
     const request=++editorLoadRequest.current;
-    try {
-      let current=reservation;
-      if (isRecurringSeriesReservation(reservation)) {
-        triggerSyncToast('Cargando las sesiones pendientes de la serie…','info');
-        const rows=await queryReservationsBySeries(reservation.serieRecurrente||reservation.recurrenteId||'',getChileLocalDateString());
-        if(request!==editorLoadRequest.current)return;
-        setReservations(previous=>[...new Map([...previous,...rows].map(r=>[r.id,r])).values()]);
-        current=rows.find(r=>r.id===reservation.id)||reservation;
+    const initialCurrent = reservationsRef.current.find(r => r.id === reservation.id) || reservation;
+    setReplacementSource(null);
+    setIsDetailModalOpen(false);
+    setEditingReservation(initialCurrent);
+    setIsDuplicating(false);
+    setPrefillDate(initialCurrent.fecha);
+    setPrefillSpace(initialCurrent.espacio);
+    setPrefillStartTime(initialCurrent.horaInicio);
+    setPrefillEndTime(initialCurrent.horaFin);
+    setIsReservationModalOpen(true);
+
+    if (isRecurringSeriesReservation(initialCurrent)) {
+      try {
+        const rows = await queryReservationsBySeries(
+          initialCurrent.serieRecurrente || initialCurrent.recurrenteId || '',
+          getChileLocalDateString()
+        );
+        if (request !== editorLoadRequest.current) return;
+        if (rows.length > 0) {
+          setReservations(previous =>
+            [...new Map([...previous, ...rows].map(r => [r.id, r])).values()].sort(compareReservationsByDate)
+          );
+          const refreshed = rows.find(r => r.id === initialCurrent.id);
+          if (refreshed) {
+            setEditingReservation(refreshed);
+          }
+        }
+      } catch (error: any) {
+        console.warn('No se pudieron sincronizar sesiones remotas de la serie, usando caché local:', error);
       }
-      if(request!==editorLoadRequest.current)return;
-      setEditingReservation(current);setIsDuplicating(false);
-      setPrefillDate(current.fecha);setPrefillSpace(current.espacio);
-      setPrefillStartTime(current.horaInicio);setPrefillEndTime(current.horaFin);
-      setIsReservationModalOpen(true);
-    }catch(error:any){triggerSyncToast(error?.message||'No se pudo cargar la serie. Intenta nuevamente.','error');}
+    }
   };
-  useEffect(()=>{if(isReservationModalOpen)editorLoadRequest.current++;},[isReservationModalOpen]);
+  useEffect(()=>{if(!isReservationModalOpen)editorLoadRequest.current++;},[isReservationModalOpen]);
 
   const handleCalendarNewReservationForDate = useCallback((dateStr: string) => {
     requireAuth(() => {
@@ -1327,6 +1344,11 @@ export default function App() {
                 }
               }}
               onSelectReservation={handleCalendarSelectReservation}
+              onEditReservation={
+                !currentUser || userCanEditReservations(currentUser)
+                  ? (r) => { requireAuth(() => void prepareReservationEditor(r), 'editar esta reserva'); }
+                  : undefined
+              }
               onNewReservationForDate={handleCalendarNewReservationForDate}
             />
           )
@@ -1496,7 +1518,7 @@ export default function App() {
                 setReservations(previous => {
                   const merged = new Map(previous.map(row => [row.id, row]));
                   rows.forEach(row => merged.set(row.id, row));
-                  return [...merged.values()];
+                  return [...merged.values()].sort(compareReservationsByDate);
                 });
                 triggerSyncToast(`Distribución confirmada: ${rows.length} actividades guardadas.`, 'success');
               }}
@@ -1848,7 +1870,13 @@ export default function App() {
             onSave={handleCreateOrUpdate}
             onDelete={handleDelete}
             onRequestDelete={handleRequestDelete}
-            editingReservation={editingReservation}
+            editingReservation={
+              editingReservation
+                ? (!isDuplicating
+                    ? (reservations.find(r => r.id === editingReservation.id) || editingReservation)
+                    : editingReservation)
+                : null
+            }
             isDuplicating={isDuplicating}
             onDuplicateReservation={handleDuplicateReservation}
             allReservations={replacementSource ? reservations.filter(r => r.id !== replacementSource.id) : reservations}
@@ -1900,7 +1928,11 @@ export default function App() {
               }
             }}
             isOpen={isDetailModalOpen}
-            reservation={selectedReservation}
+            reservation={
+              selectedReservation
+                ? (reservations.find(r => r.id === selectedReservation.id) || selectedReservation)
+                : null
+            }
             allReservations={reservations}
             onMergeReservations={handleMergeReservations}
             currentUser={currentUser}
@@ -1923,7 +1955,9 @@ export default function App() {
               try {
                 const result = await saveReservation(updated);
                 const confirmed = result.reservations[0];
-                setReservations((prev) => prev.map((r) => (r.id === confirmed.id ? confirmed : r)));
+                setReservations((prev) =>
+                  prev.map((r) => (r.id === confirmed.id ? confirmed : r)).sort(compareReservationsByDate)
+                );
                 setSelectedReservation(confirmed);
               } catch (error: any) {
                 triggerSyncToast(error.message || 'No se pudo actualizar la reserva.', 'error');
