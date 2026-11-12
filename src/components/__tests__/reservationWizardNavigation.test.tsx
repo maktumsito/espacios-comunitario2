@@ -170,6 +170,30 @@ describe('reservation wizard navigation', () => {
     expect(screen.queryByLabelText(unitLabel)).toBeNull();
   });
 
+  it.each([undefined, '', 'Dirección de Cultura'])('saves the municipal unit for a new or existing reservation (%s)', async previousUnit => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    const editingReservation: Reservation | undefined = previousUnit === undefined ? undefined : {
+      id: 'municipal-workshop', fecha: '2026-10-14', horaInicio: '10:00', horaFin: '11:00',
+      espacio: 'SALA 2', responsable: 'Contacto municipal', descripcion: 'Taller municipal de prueba',
+      tipoActividad: 'TALLER MUNICIPAL', actividadRecurrente: 'No', unidadMunicipal: previousUnit || undefined,
+    };
+    openForm({ editingReservation, allReservations: editingReservation ? [editingReservation] : [], onSave });
+    if (!editingReservation) {
+      fireEvent.change(screen.getByLabelText(/Tipo de actividad/), { target: { value: 'TALLER MUNICIPAL' } });
+      fillActivity();
+    }
+    const unit = screen.getByLabelText<HTMLInputElement>('¿A qué dirección o departamento pertenece?');
+    expect(unit.value).toBe(previousUnit || '');
+    fireEvent.change(unit, { target: { value: ' Departamento de Deportes ' } });
+    if (!editingReservation) selectStep(5);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar y guardar reserva de espacio' }));
+    });
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0][0]).toMatchObject({ tipoActividad: 'TALLER MUNICIPAL', unidadMunicipal: 'Departamento de Deportes' });
+    if (editingReservation) expect(onSave.mock.calls[0][0].id).toBe(editingReservation.id);
+  });
+
   it('corrects impossible dates before review and blocks incomplete or invalid dates', () => {
     openForm(); fillActivity(); selectStep(2);
     let input = screen.getByRole('textbox', { name: 'Fecha de la reserva' }) as HTMLInputElement;
