@@ -158,6 +158,18 @@ function expectStep(step: number) {
 }
 
 describe('reservation wizard navigation', () => {
+  it('shows the municipal unit field only when Taller Municipal is selected', () => {
+    openForm();
+    const activityType = screen.getByLabelText(/Tipo de actividad/);
+    const unitLabel = '¿A qué dirección o departamento pertenece?';
+    expect(screen.queryByLabelText(unitLabel)).toBeNull();
+    fireEvent.change(activityType, { target: { value: 'TALLER MUNICIPAL' } });
+    fireEvent.change(screen.getByLabelText(unitLabel), { target: { value: 'Departamento de Deportes' } });
+    expect(screen.getByDisplayValue('Departamento de Deportes')).toBeTruthy();
+    fireEvent.change(activityType, { target: { value: 'TALLER CCD' } });
+    expect(screen.queryByLabelText(unitLabel)).toBeNull();
+  });
+
   it('corrects impossible dates before review and blocks incomplete or invalid dates', () => {
     openForm(); fillActivity(); selectStep(2);
     let input = screen.getByRole('textbox', { name: 'Fecha de la reserva' }) as HTMLInputElement;

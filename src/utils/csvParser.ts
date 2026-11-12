@@ -257,6 +257,7 @@ export function parseRawCsvRows(csvContent: string): Reservation[] {
       emailContacto: rowRecord.emailContacto?.trim() || '',
       tipoActividad: rowRecord.tipoActividad?.trim() || DEFAULT_FALLBACK_ACTIVITY,
       tipoPrestamo: rowRecord.tipoPrestamo?.trim() || '',
+      unidadMunicipal: rowRecord.unidadMunicipal?.trim() || undefined,
       descripcion: rowRecord.descripcion?.trim() || '',
       actividadRecurrente: (rowRecord.actividadRecurrente === RECURRING_YES ? RECURRING_YES : RECURRING_NO) as 'Sí' | 'No',
       comentarios: rowRecord.comentarios?.trim() || '',

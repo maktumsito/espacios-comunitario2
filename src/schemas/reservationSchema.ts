@@ -112,6 +112,7 @@ export const ReservationSchema = z
     motivoReemplazo: z.string().max(2000).optional(),
     diasAvisoReemplazo: z.number().int().min(1).max(30).optional(),
     tipoPrestamo: z.string().optional(),
+    unidadMunicipal: z.string().max(200).optional(),
     domicilio: z.string().optional(),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional()

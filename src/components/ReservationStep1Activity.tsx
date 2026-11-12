@@ -12,6 +12,7 @@ import {
 import { Reservation, ActivityTypeItem } from '../types';
 import { MAX_ACTIVITY_DESCRIPTION_LENGTH } from '../utils/validationUtils';
 import { isCommitmentLetterEligible } from '../utils/commitmentLetterPdf';
+import { normalizeActivityType } from '../utils/reservationVisuals';
 
 interface ReservationStep1ActivityProps {
   isWizardMode: boolean;
@@ -121,6 +122,22 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
         </p>
 
       </div>
+
+      {normalizeActivityType(formData.tipoActividad || effectiveActivityNames[0]) === 'TALLER MUNICIPAL' && (
+        <div className="space-y-1.5">
+          <label htmlFor="input-reserva-unidad-municipal" className="block font-semibold text-slate-700">
+            ¿A qué dirección o departamento pertenece?
+          </label>
+          <input
+            id="input-reserva-unidad-municipal"
+            type="text"
+            maxLength={200}
+            value={formData.unidadMunicipal || ''}
+            onChange={(e) => setFormData((prev) => ({ ...prev, unidadMunicipal: e.target.value }))}
+            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+          />
+        </div>
+      )}
 
       {/* Early notice for Carta de Compromiso if applicable */}
       {requiresLetter ? (

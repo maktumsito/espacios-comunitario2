@@ -947,6 +947,7 @@ export function useReservationCrud({
               telefonoContacto: reserva.telefonoContacto,
               emailContacto: reserva.emailContacto,
               tipoPrestamo: reserva.tipoPrestamo,
+              unidadMunicipal: reserva.unidadMunicipal,
               importante: reserva.importante,
               comentarios: reserva.comentarios,
               rut: reserva.rut,

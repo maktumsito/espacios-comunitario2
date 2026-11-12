@@ -691,6 +691,13 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
           </div>
         )}
 
+        {reservation.unidadMunicipal && (
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-0.5">
+            <div className="text-[10px] font-bold text-slate-500 uppercase">Dirección o departamento</div>
+            <p className="text-slate-800 font-semibold">{reservation.unidadMunicipal}</p>
+          </div>
+        )}
+
         {/* Equipamiento y Recursos Solicitados */}
         {reservation.equipamientoSolicitado && reservation.equipamientoSolicitado.length > 0 && (
           <div className="p-3.5 bg-indigo-50/70 rounded-2xl border border-indigo-200/80 text-xs space-y-2">

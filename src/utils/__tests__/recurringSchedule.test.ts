@@ -5,6 +5,13 @@ import { scheduleSlotsForDate, scopedScheduleSlots, schedulesFromReservations, a
 import { preserveReplacementExceptions } from '../reservationReplacement';
 const first:Reservation={id:'first',fecha:'2026-10-13',horaInicio:'10:00',horaFin:'11:00',espacio:'SALA 2',responsable:'Vecino',descripcion:'Taller',tipoActividad:'Taller',actividadRecurrente:'Sí',serieRecurrente:'series',estado:'activa'};
 const second={...first,id:'second',horaInicio:'12:00',horaFin:'13:00',espacio:'SALA 3'};
+it('applies municipal unit edits to the selected series occurrences', () => {
+  const baseline = { ...first, tipoActividad: 'Taller Municipal' };
+  const occurrence = { ...second, tipoActividad: baseline.tipoActividad, unidadMunicipal: 'Cultura' };
+  expect(applyChangedSeriesFields(occurrence, baseline, baseline).unidadMunicipal).toBe('Cultura');
+  expect(applyChangedSeriesFields(occurrence, { ...baseline, unidadMunicipal: ' Deportes ' }, baseline).unidadMunicipal).toBe('Deportes');
+  expect(applyChangedSeriesFields(occurrence, { ...baseline, tipoActividad: 'Taller CCD' }, baseline).unidadMunicipal).toBe('');
+});
 beforeEach(()=>localStorage.clear());
 it('initializes both schedules of a day instead of overwriting the primary',()=>{
   const {dates,days}=schedulesFromReservations([second,first]);

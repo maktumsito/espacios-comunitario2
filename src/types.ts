@@ -24,6 +24,7 @@ export interface Reservation {
   emailContacto?: string;
   tipoActividad: string;
   tipoPrestamo?: string;
+  unidadMunicipal?: string;
   descripcion: string;
   actividadRecurrente: 'Sí' | 'No' | 'Múltiples' | string;
   comentarios?: string;

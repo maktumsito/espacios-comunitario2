@@ -147,6 +147,7 @@ const OPTIONAL_EMPTY_STRING_KEYS = new Set([
   "telefonoContacto",
   "emailContacto",
   "tipoPrestamo",
+  "unidadMunicipal",
   "comentarios",
   "rut",
   "domicilio",

@@ -3,6 +3,7 @@ import { getChileLocalDateString, getDayOfWeekFromDateString } from './dateUtils
 import { getSeriesEditStartDate } from './recurringEdits';
 import { isReservationActiveForAvailability, timeToMinutes } from './conflictDetector';
 import { normalizeSpaceName } from '../data/spacesData';
+import { normalizeActivityType } from './reservationVisuals';
 
 export interface ScheduleSlot {
   fecha: string; espacio: string; horaInicio: string; horaFin: string;
@@ -124,6 +125,12 @@ export function applyChangedSeriesFields(row: Reservation, form: Partial<Reserva
   const next = { ...row };
   for (const field of editableFields) if (JSON.stringify(form[field]) !== JSON.stringify(baseline[field])) {
     (next as any)[field] = form[field];
+  }
+  const unit = form.unidadMunicipal?.trim() || '';
+  if (normalizeActivityType(next.tipoActividad) !== 'TALLER MUNICIPAL') {
+    if (row.unidadMunicipal) next.unidadMunicipal = '';
+  } else if (unit !== (baseline.unidadMunicipal?.trim() || '')) {
+    next.unidadMunicipal = unit;
   }
   return next;
 }

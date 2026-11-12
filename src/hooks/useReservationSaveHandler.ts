@@ -33,6 +33,7 @@ import { filterOutChileanHolidays, verifyHolidayOverrideKey } from '../utils/hol
 import { getSeriesEditStartDate } from '../utils/recurringEdits';
 import { getChileLocalDateString } from '../utils/dateUtils';
 import { scheduleSlotsForDate, scopedScheduleSlots, sameScheduleSlot, applyChangedSeriesFields, type ScheduleSlot } from '../utils/recurringSchedule';
+import { normalizeActivityType } from '../utils/reservationVisuals';
 import { validateTimeRange, checkLoanScheduleLimit } from '../utils/validationUtils';
 
 export interface SeriesItemSlot {
@@ -555,6 +556,9 @@ export function useReservationSaveHandler({
       emailContacto: effectiveFormData.emailContacto || '',
       tipoActividad: effectiveFormData.tipoActividad || 'OTROS',
       tipoPrestamo: effectiveFormData.tipoPrestamo || '',
+      unidadMunicipal: normalizeActivityType(effectiveFormData.tipoActividad) === 'TALLER MUNICIPAL'
+        ? effectiveFormData.unidadMunicipal?.trim() || ''
+        : '',
       descripcion: effectiveFormData.descripcion || '',
       actividadRecurrente: isEditingSingleOccurrence
         ? editingReservation?.actividadRecurrente || 'No'
@@ -832,6 +836,7 @@ export function useReservationSaveHandler({
                     ? effectiveFormData.emailContacto
                     : match.emailContacto,
                 tipoPrestamo: effectiveFormData.tipoPrestamo || match.tipoPrestamo,
+                unidadMunicipal: finalReserva.unidadMunicipal,
                 cantidadParticipantes:
                   effectiveFormData.cantidadParticipantes !== undefined &&
                   effectiveFormData.cantidadParticipantes !== ('' as any) &&
@@ -898,6 +903,7 @@ export function useReservationSaveHandler({
                     ? effectiveFormData.emailContacto
                     : (baseRef.emailContacto || ''),
                 tipoPrestamo: effectiveFormData.tipoPrestamo || baseRef.tipoPrestamo || '',
+                unidadMunicipal: finalReserva.unidadMunicipal,
                 cantidadParticipantes:
                   effectiveFormData.cantidadParticipantes !== undefined &&
                   effectiveFormData.cantidadParticipantes !== ('' as any) &&
@@ -969,6 +975,7 @@ export function useReservationSaveHandler({
             if (existing && initialFormData && !draftMode) {
               const changed=applyChangedSeriesFields(existing,effectiveFormData,initialFormData);
               for (const field of ['tipoActividad','descripcion','responsable','telefonoContacto','emailContacto','tipoPrestamo','cantidadParticipantes','equipamientoSolicitado','montaje','importante','comentarios','rut','domicilio','requiereCartaCompromiso','cartaCompromisoAdjunta','realizada'] as const) (r as any)[field]=changed[field];
+              r.unidadMunicipal = changed.unidadMunicipal;
             }
             if (existing && sameScheduleSlot(existing,r)) {
               r.horarioExtendidoAutorizado = existing.horarioExtendidoAutorizado;
