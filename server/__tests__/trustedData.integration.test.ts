@@ -195,10 +195,10 @@ describe.skipIf(!enabled)(
       expect(await cakeStock()).toMatchObject({ available: 0 });
       const send = vi.fn(async () => ({ success: true }));
       await dispatchCakeNotices(db, send);
-      expect(send).toHaveBeenCalledTimes(3);
+      expect(send).toHaveBeenCalledTimes(5);
     });
 
-    it('reports increases only, retries definite failures and holds uncertain deliveries for review', async () => {
+    it('reports cake assignment changes, retries definite failures and holds uncertain deliveries for review', async () => {
       const original = cake('moving_cakes', '2027-11-10', 2);
       const moved = { ...original, fecha: '2027-11-11', version: 1 };
       expect(await commit('assign_cakes', [original])).not.toHaveProperty('error');
@@ -209,22 +209,49 @@ describe.skipIf(!enabled)(
       const saved = await db.doc('reservas/moving_cakes').get();
       expect(saved.data()).not.toHaveProperty('cantidadTortas');
 
-      const retry = db.doc('_reservation_cake_mail/assign_cakes');
-      const uncertain = db.doc('_reservation_cake_mail/increase_cakes');
+      const retry = db.doc('_reservation_cake_mail/reservation-assign_cakes');
+      const uncertain = db.doc('_reservation_cake_mail/reservation-increase_cakes');
       const send = vi.fn(async (email: ReturnType<typeof cakeEmail>) => ({
         success: false, safeToRetry: email.bodyText.includes('10/11/2027'),
       }));
       await dispatchCakeNotices(db, send);
-      expect(send).toHaveBeenCalledTimes(2);
+      expect(send).toHaveBeenCalledTimes(3);
       expect((await retry.get()).data()).toMatchObject({ state: 'pending', available: 13 });
       expect((await uncertain.get()).data()).toMatchObject({ state: 'needs_reconciliation', available: 11 });
-      expect(send.mock.calls.find(([email]) => email.bodyText.includes('11/11/2027'))?.[0].bodyText)
+      expect(send.mock.calls.find(([email]) => email.bodyText.includes('11/11/2027') && email.bodyText.includes('Tortas solicitadas'))?.[0].bodyText)
         .toContain('11/11/2027\nReserva creada por: Editor\nTortas solicitadas en este registro: 2');
+      expect(send.mock.calls.find(([email]) => email.bodyText.includes('Tortas devueltas al stock'))?.[0].bodyText)
+        .toContain('Tortas devueltas al stock: 4\nTortas asignadas antes: 4\nTortas asignadas ahora: 0');
       await retry.update({ nextAttemptAt: 0 });
       const deliver = vi.fn(async () => ({ success: true }));
       await dispatchCakeNotices(db, deliver);
       expect(deliver).toHaveBeenCalledTimes(1);
       expect((await retry.get()).data()).toMatchObject({ state: 'sent' });
+    });
+
+    it('updates administrative cake stock immediately and queues one email per addition or removal', async () => {
+      const adjust = (operationId: string, delta: number, token = editor) =>
+        post('/api/reservations/cake-stock/adjust', { operationId, delta, reason: '' }, token);
+      expect(await adjust('denied', 5, reader)).toMatchObject({ status: 403 });
+      expect(await adjust('added', 5)).toMatchObject({ capacity: 20, available: 20 });
+      expect(await adjust('added', 5)).toMatchObject({ capacity: 20, available: 20 });
+      expect(await commit('use_added', [cake('large_cake_order', '2027-11-12', 17)])).not.toHaveProperty('error');
+      expect(await cakeStock()).toMatchObject({ capacity: 20, available: 3 });
+      expect(await adjust('too_many', -4)).toMatchObject({ status: 409 });
+      expect(await adjust('removed', -2)).toMatchObject({ capacity: 18, available: 1 });
+      expect(await cakeStock()).toMatchObject({ capacity: 18, available: 1 });
+      const send = vi.fn(async (_email: ReturnType<typeof cakeEmail>) => ({ success: true }));
+      await dispatchCakeNotices(db, send);
+      const emails = send.mock.calls.map(([email]) => email);
+      expect(emails).toHaveLength(3);
+      expect(emails).toContainEqual(expect.objectContaining({
+        subject: 'Ajuste de stock de tortas',
+        bodyText: 'Ajuste de stock realizado por: Editor\nTortas agregadas al stock: 5\nTortas que quedan en stock: 20 de 20.',
+      }));
+      expect(emails).toContainEqual(expect.objectContaining({
+        subject: 'Ajuste de stock de tortas',
+        bodyText: 'Ajuste de stock realizado por: Editor\nTortas retiradas del stock: 2\nTortas que quedan en stock: 1 de 18.',
+      }));
     });
 
     it('saves 75 recurring sessions from March to November 2027 and resumes without duplicates', async () => {

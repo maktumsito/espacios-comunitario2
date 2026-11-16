@@ -8,12 +8,41 @@ import { ApiFailure } from './dataApi';
 const STOCK_PATH = '_reservation_inventory/cakes_2026_2027';
 const OUTBOX = '_reservation_cake_mail';
 type Allocation = { quantity: number; date: string; series: string | null };
-type Addition = { title: string; date: string; quantity: number; createdBy?: string };
-type CakeNotice = { additions: Addition[]; available: number };
+type Addition = { title: string; date: string; quantity: number; createdBy?: string; previous?: number; assigned?: number };
+type StockAdjustment = { delta: number; actor: string; reason: string };
+type CakeNotice = { additions: Addition[]; available: number; capacity?: number; adjustment?: StockAdjustment; editedBy?: string };
 
 export async function readCakeStock(db: Firestore) {
   const stock = (await db.doc(STOCK_PATH).get()).data();
-  return { capacity: CAKE_CAPACITY, available: stock?.available ?? CAKE_CAPACITY, start: CAKE_START, end: CAKE_END };
+  return { capacity: stock?.capacity ?? CAKE_CAPACITY, available: stock?.available ?? CAKE_CAPACITY, start: CAKE_START, end: CAKE_END };
+}
+
+export async function adjustCakeStock(
+  db: Firestore, operationId: string, adjustment: StockAdjustment,
+  authorize: (tx: Transaction) => Promise<void>,
+) {
+  const ref = db.doc(STOCK_PATH);
+  const receipt = db.doc(`${OUTBOX}/stock-${operationId}`);
+  return db.runTransaction(async tx => {
+    await authorize(tx);
+    const [stockSnap, receiptSnap] = await Promise.all([tx.get(ref), tx.get(receipt)]);
+    const stock = stockSnap.data();
+    const capacity = stock?.capacity ?? CAKE_CAPACITY;
+    const available = stock?.available ?? CAKE_CAPACITY;
+    const previous = receiptSnap.data()?.adjustment;
+    if (previous) {
+      if (previous.delta !== adjustment.delta || previous.actor !== adjustment.actor || previous.reason !== adjustment.reason)
+        throw new ApiFailure(409, 'Ya se registró otro ajuste con este identificador.');
+      return { capacity, available };
+    }
+    const next = { capacity: capacity + adjustment.delta, available: available + adjustment.delta };
+    if (next.available < 0)
+      throw new ApiFailure(409, `Solo quedan ${available} tortas disponibles para retirar.`);
+    if (!Number.isSafeInteger(next.capacity)) throw new ApiFailure(400, 'El total de tortas excede el límite permitido.');
+    tx.set(ref, { ...next, allocations: stock?.allocations || {} });
+    tx.create(receipt, { ...next, adjustment, additions: [], state: 'pending', nextAttemptAt: Date.now() });
+    return next;
+  });
 }
 
 export async function cakeOperationNeedsAtomic(db: Firestore, rows: Reservation[], deletedIds: string[]) {
@@ -25,19 +54,19 @@ export async function cakeOperationNeedsAtomic(db: Firestore, rows: Reservation[
 
 export async function prepareCakeAllocation(
   db: Firestore, tx: Transaction, current: Map<string, Reservation>, saved: Reservation[],
-  ids: string[], operationId: string, atomic: boolean, restoring: boolean,
+  ids: string[], operationId: string, atomic: boolean, restoring: boolean, editedBy: string,
 ) {
   if (![...current.values(), ...saved].some(row => row.cantidadTortas !== undefined && row.cantidadTortas !== 0)) return;
   const stockRef = db.doc(STOCK_PATH);
   const stock = (await tx.get(stockRef)).data();
+  const capacity = stock?.capacity ?? CAKE_CAPACITY;
   const before = new Map<string, Allocation>(Object.entries(stock?.allocations || {}));
   const next = new Map(before);
-  const additions: Addition[] = [];
   ids.forEach(id => next.delete(id));
   for (const row of saved) {
     const quantity = row.cantidadTortas === undefined ? 0 : row.cantidadTortas;
-    if (!Number.isInteger(quantity) || quantity < 0 || quantity > CAKE_CAPACITY)
-      throw new ApiFailure(400, 'Ingresa una cantidad entera de tortas entre 0 y 15.');
+    if (!Number.isSafeInteger(quantity) || quantity < 0)
+      throw new ApiFailure(400, 'Ingresa una cantidad entera de tortas igual o mayor que cero.');
     if (!quantity) continue;
     if (!isReservationActiveForAvailability(row, new Set())) {
       if (!restoring && quantity !== current.get(row.id)?.cantidadTortas)
@@ -52,12 +81,6 @@ export async function prepareCakeAllocation(
       throw new ApiFailure(400, 'Las tortas solo se asignan a actividades municipales dentro del período.');
     }
     next.set(row.id, { quantity, date: row.fecha, series: row.serieRecurrente || row.recurrenteId || null });
-    const added = quantity - (before.get(row.id)?.quantity || 0);
-    const existing = current.get(row.id);
-    if (added > 0) additions.push({
-      title: row.descripcion, date: row.fecha, quantity: added,
-      createdBy: (existing ? existing.createdBy : row.createdBy) || 'No registrado',
-    });
   }
   const dates = new Set<string>();
   let used = 0;
@@ -71,33 +94,52 @@ export async function prepareCakeAllocation(
   const changed = ids.some(id => JSON.stringify(before.get(id)) !== JSON.stringify(next.get(id)));
   if (!changed) return;
   if (!atomic) throw new ApiFailure(409, 'Cambió la asignación de tortas. Recarga las reservas y vuelve a guardar.');
-  const available = CAKE_CAPACITY - used;
-  if (available < 0) throw new ApiFailure(409, `No hay tortas suficientes. Saldo actual: ${stock?.available ?? CAKE_CAPACITY}.`);
+  const available = capacity - used;
+  if (available < 0) throw new ApiFailure(409, `No hay tortas suficientes. Saldo actual: ${stock?.available ?? capacity}.`);
+  const savedById = new Map(saved.map(row => [row.id, row]));
+  const additions = ids.flatMap(id => {
+    const previous = before.get(id)?.quantity || 0;
+    const assigned = next.get(id)?.quantity || 0;
+    const existing = current.get(id);
+    const row = (assigned ? savedById.get(id) : existing);
+    if (previous === assigned || !row) return [];
+    return [{
+      title: row.descripcion, date: row.fecha, quantity: assigned - previous, previous, assigned,
+      createdBy: (existing ? existing.createdBy : row.createdBy) || 'No registrado',
+    }];
+  });
   return () => {
-    tx.set(stockRef, { available, allocations: Object.fromEntries(next) });
-    if (additions.length) tx.create(db.doc(`${OUTBOX}/${operationId}`), {
+    tx.set(stockRef, { capacity, available, allocations: Object.fromEntries(next) });
+    if (additions.length) tx.create(db.doc(`${OUTBOX}/reservation-${operationId}`), {
       additions: additions.sort((a, b) => a.date.localeCompare(b.date)),
-      available, state: 'pending', nextAttemptAt: Date.now(),
+      capacity, available, editedBy, state: 'pending', nextAttemptAt: Date.now(),
     });
   };
 }
 
-export function cakeEmail({ additions, available }: CakeNotice) {
+export function cakeEmail({ additions, available, capacity = CAKE_CAPACITY, adjustment, editedBy }: CakeNotice) {
+  const isEdit = additions.some(({ previous }) => Boolean(previous));
   const total = additions.reduce((sum, addition) => sum + addition.quantity, 0);
   const bodyText = [
-    ...additions.flatMap(({ title, date, quantity, createdBy }) => [
+    ...(adjustment ? [
+      `Ajuste de stock realizado por: ${adjustment.actor}`,
+      `${adjustment.delta > 0 ? 'Tortas agregadas al stock' : 'Tortas retiradas del stock'}: ${Math.abs(adjustment.delta)}`,
+      ...(adjustment.reason ? [`Motivo: ${adjustment.reason}`] : []),
+    ] : additions.flatMap(({ title, date, quantity, createdBy, previous, assigned }) => [
       `Actividad municipal: ${title}`,
       `Fecha del evento: ${date.split('-').reverse().join('/')}`,
       `Reserva creada por: ${createdBy || 'No registrado'}`,
-      `Tortas solicitadas en este registro: ${quantity}`,
+      quantity > 0 ? `Tortas solicitadas en este registro: ${quantity}` : `Tortas devueltas al stock: ${Math.abs(quantity)}`,
+      ...(previous ? [`Tortas asignadas antes: ${previous}`, `Tortas asignadas ahora: ${assigned}`] : []),
       '',
-    ]),
-    ...(additions.length > 1 ? [`Total solicitado en este registro: ${total}`] : []),
-    `Tortas que quedan en stock: ${available} de ${CAKE_CAPACITY}.`,
+    ])),
+    ...(isEdit && editedBy ? [`Cambio realizado por: ${editedBy}`] : []),
+    ...(additions.length > 1 && !isEdit ? [`Total solicitado en este registro: ${total}`] : []),
+    `Tortas que quedan en stock: ${available} de ${capacity}.`,
   ].join('\n');
   return {
     to: ['p.flores@lascondes.cl', 'cshute@lascondes.cl', 'magomez@lascondes.cl'],
-    subject: 'Solicitud de tortas para actividad municipal',
+    subject: adjustment ? 'Ajuste de stock de tortas' : isEdit ? 'Cambio de tortas para actividad municipal' : 'Solicitud de tortas para actividad municipal',
     bodyText,
     html: bodyText.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>'),
     purpose: 'reservation_cakes',

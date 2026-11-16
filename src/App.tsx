@@ -156,7 +156,7 @@ export default function App() {
     try { localStorage.setItem('cc_sidebar_hidden_v1', next ? '1' : '0'); } catch {}
     return next;
   }), []);
-  const [adminSubTab, setAdminSubTab] = useState<'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring' | 'health'>('spaces');
+  const [adminSubTab, setAdminSubTab] = useState<import('./components/AdminView').AdminTab>('spaces');
   const [selectedDailyDate, setSelectedDailyDate] = useState<Date>(() => new Date());
   const [isSpaceAvailabilityOpen, setIsSpaceAvailabilityOpen] = useState(false);
   const [isDeleteDayModalOpen, setIsDeleteDayModalOpen] = useState(false);

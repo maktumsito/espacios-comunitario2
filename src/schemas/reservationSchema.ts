@@ -85,7 +85,7 @@ export const ReservationSchema = z
     espacio: z.string().min(1, 'El espacio o sala es obligatorio.').max(150),
     responsable: z.string().min(2, 'El nombre del solicitante o responsable debe tener al menos 2 caracteres.').max(200),
     tipoActividad: z.string().min(1, 'El tipo de actividad es obligatorio.').max(100),
-    cantidadTortas: z.number().int().min(0).max(15).optional(),
+    cantidadTortas: z.number().int().min(0).optional(),
     descripcion: z.string().min(1, 'La descripción o nombre de la actividad es obligatorio.').max(2000),
     actividadRecurrente: z.string().default('No'),
     rut: RutSchema,

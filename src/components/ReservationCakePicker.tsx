@@ -1,11 +1,11 @@
 import { useId } from 'react';
 import { Cake, Minus, Plus } from 'lucide-react';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
-import { CAKE_CAPACITY } from '../utils/reservationCakes';
 
 interface ReservationCakePickerProps {
   dates: string[];
   stock: number | null;
+  capacity: number;
   stockFailed: boolean;
   requested: number;
   estimatedStock: number | null;
@@ -17,7 +17,7 @@ interface ReservationCakePickerProps {
 const stepButton = 'grid size-11 place-items-center text-slate-700 transition-colors enabled:hover:bg-amber-50 enabled:active:bg-amber-100 focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-700 disabled:text-slate-300';
 
 export function ReservationCakePicker({
-  dates, stock, stockFailed, requested, estimatedStock, quantityForDate, onQuantityChange, onRefresh,
+  dates, stock, capacity, stockFailed, requested, estimatedStock, quantityForDate, onQuantityChange, onRefresh,
 }: ReservationCakePickerProps) {
   const titleId = useId();
   return (
@@ -40,7 +40,7 @@ export function ReservationCakePicker({
           ) : stock === null ? (
             <span>Consultando stock…</span>
           ) : (
-            <><strong className="text-lg tabular-nums">{stock} de {CAKE_CAPACITY}</strong> disponibles</>
+            <><strong className="text-lg tabular-nums">{stock} de {capacity}</strong> disponibles</>
           )}
         </div>
       </header>
@@ -57,15 +57,15 @@ export function ReservationCakePicker({
                   aria-label={`Quitar una torta para el ${displayDate}`} onClick={() => onQuantityChange(date, quantity - 1)}>
                   <Minus size={17} aria-hidden="true" />
                 </button>
-                <input id={inputId} type="number" min={0} max={CAKE_CAPACITY} step={1} inputMode="numeric"
+                <input id={inputId} type="number" min={0} max={Math.max(quantity, capacity)} step={1} inputMode="numeric"
                   aria-label={`Tortas para el ${displayDate}`} value={quantity}
                   className="h-11 w-12 appearance-none border-x border-slate-200 bg-white text-center text-base font-bold tabular-nums text-slate-950 focus:z-10 focus:outline-2 focus:-outline-offset-2 focus:outline-amber-700 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield]"
                   onChange={event => {
                     const value = event.target.value === '' ? 0 : event.target.valueAsNumber;
-                    if (Number.isInteger(value) && value >= 0 && value <= CAKE_CAPACITY) onQuantityChange(date, value);
+                    if (Number.isInteger(value) && value >= 0 && value <= Math.max(quantity, capacity)) onQuantityChange(date, value);
                   }}
                 />
-                <button type="button" className={`${stepButton} rounded-r-lg`} disabled={quantity === CAKE_CAPACITY}
+                <button type="button" className={`${stepButton} rounded-r-lg`} disabled={quantity >= capacity}
                   aria-label={`Agregar una torta para el ${displayDate}`} onClick={() => onQuantityChange(date, quantity + 1)}>
                   <Plus size={17} aria-hidden="true" />
                 </button>

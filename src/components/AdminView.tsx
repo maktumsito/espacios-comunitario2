@@ -73,7 +73,9 @@ import {
   CalendarPlus
 } from 'lucide-react';
 
-export type AdminTab = 'spaces' | 'activities' | 'equipment' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring' | 'health';
+import { AdminCakeStock } from './AdminCakeStock';
+
+export type AdminTab = 'spaces' | 'activities' | 'equipment' | 'cakes' | 'users' | 'maintenance' | 'applicants' | 'gmail' | 'recurring' | 'health';
 
 interface AdminViewProps {
   spaces: SpaceInfo[];
@@ -1054,7 +1056,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       <label className="block text-sm font-medium text-slate-700 sm:hidden">Sección de administración
         <select value={activeTab} onChange={event => handleTabChange(event.target.value as AdminTab)} className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">
           <optgroup label="Catálogos"><option value="spaces">Espacios y salas</option><option value="activities">Tipos de actividad</option><option value="equipment">Equipamiento y recursos</option></optgroup>
-          <optgroup label="Operación"><option value="maintenance">Bloqueos y Obras de Salas</option><option value="recurring">Actividades recurrentes</option></optgroup>
+          <optgroup label="Operación"><option value="maintenance">Bloqueos y Obras de Salas</option><option value="recurring">Actividades recurrentes</option>{showCategories && <option value="cakes">Tortas</option>}</optgroup>
           <optgroup label="Personas"><option value="applicants">Registro de solicitantes</option><option value="users">Usuarios y accesos</option></optgroup>
           <optgroup label="Sistema"><option value="gmail">Despacho Gmail</option>{showCategories && <option value="health">Copias y Mantenimiento Técnico</option>}</optgroup>
         </select>
@@ -1069,6 +1071,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
           { label: 'Operación', items: [
             { tab: 'maintenance', label: `Bloqueos y Obras de Salas (${(spaceBlocks || []).length})` },
             { tab: 'recurring', label: 'Actividades recurrentes' },
+            ...(showCategories ? [{ tab: 'cakes' as AdminTab, label: 'Tortas' }] : []),
           ] },
           { label: 'Personas', items: [
             { tab: 'applicants', label: 'Registro de solicitantes' },
@@ -1084,6 +1087,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
       {activeTab === 'health' && showCategories && <Suspense fallback={<p role="status" className="p-6 text-sm text-slate-500">Cargando herramientas de mantención…</p>}>
         <SystemMaintenanceView currentUser={currentUser} reservations={reservations} lastSyncTime={lastSyncTime} onReviewReservation={onSelectReservation || onEditReservation} onOpenBackups={onOpenImportExport} />
       </Suspense>}
+
+      {activeTab === 'cakes' && showCategories && <AdminCakeStock />}
 
       {/* TAB 1: SPACES MANAGEMENT */}
       {activeTab === 'spaces' && (

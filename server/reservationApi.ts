@@ -32,7 +32,7 @@ import {
 } from "../src/utils/conflictDetector";
 import { isChileanHoliday } from "../src/utils/holidayUtils";
 import { prepareEquipmentAllocation } from './equipmentAllocation';
-import { cakeOperationNeedsAtomic, prepareCakeAllocation, readCakeStock } from './reservationCakes';
+import { adjustCakeStock, cakeOperationNeedsAtomic, prepareCakeAllocation, readCakeStock } from './reservationCakes';
 import { registerDistributionPlanningApi, validateDistributionDate } from './distributionPlanning';
 import { SPACES_LIST } from '../src/data/spacesData';
 import { REGULAR_LOAN_START_MINUTES, REGULAR_LOAN_END_MINUTES } from '../src/utils/validationUtils';
@@ -283,7 +283,7 @@ export async function commitTrusted(
           r.createdBy =
             current.get(r.id)?.createdBy || actor.name || actor.username;
         });
-        const commitCakes = await prepareCakeAllocation(db, tx.__native || tx, current, saved, chunk, operationId, atomic, Boolean(options.auditRestore));
+        const commitCakes = await prepareCakeAllocation(db, tx.__native || tx, current, saved, chunk, operationId, atomic, Boolean(options.auditRestore), fresh.name || actor.username);
         const changedSaved = saved.filter((r) => {
           const orig = current.get(r.id);
           return (
@@ -484,6 +484,25 @@ export function registerReservationApi(
   app.post('/api/reservations/cake-stock', sessions.requireAuth, async (_req, res) => {
     try {
       res.set('Cache-Control', 'no-store').json(await readCakeStock(db));
+    } catch (error) {
+      apiError(res, error);
+    }
+  });
+  app.post('/api/reservations/cake-stock/adjust', sessions.requireAuth, async (req, res) => {
+    try {
+      const actor = (req as any).user;
+      requireManager(actor);
+      const { delta, operationId, reason } = req.body || {};
+      if (!Number.isSafeInteger(delta) || delta === 0 || typeof operationId !== 'string' ||
+          !/^[\w-]{1,100}$/.test(operationId) || typeof reason !== 'string' || reason.trim().length > 300)
+        throw new ApiFailure(400, 'Indica una cantidad entera y escribe un motivo de hasta 300 caracteres si corresponde.');
+      const stock = await adjustCakeStock(db, operationId, { delta, reason: reason.trim(), actor: actor.name || actor.username }, async tx => {
+        const account = (await tx.get(db.doc(`usuarios_sistema/${accountId(actor.username)}`))).data();
+        if (!sessions.acceptsAccount(req.get('authorization') || '', account as any))
+          throw new ApiFailure(401, 'La sesión cambió. Vuelve a iniciar sesión.');
+        requireManager(account);
+      });
+      res.set('Cache-Control', 'no-store').json(stock);
     } catch (error) {
       apiError(res, error);
     }

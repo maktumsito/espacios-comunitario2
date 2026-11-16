@@ -46,7 +46,7 @@ import { buildReplacementBatch } from '../utils/reservationReplacement';
 import { getSeriesEditStartDate, isRecurringSeriesReservation } from '../utils/recurringEdits';
 import { getChileLocalDateString } from '../utils/dateUtils';
 import { belongsToSeries, isDateInSeriesScope, schedulesFromReservations } from '../utils/recurringSchedule';
-import { CAKE_CAPACITY, isCakeDate, isMunicipalActivity } from '../utils/reservationCakes';
+import { CAKE_CAPACITY, CAKE_STOCK_CHANGED, isCakeDate, isMunicipalActivity, type CakeStock } from '../utils/reservationCakes';
 import { dataRequest } from '../firebase/gateway';
 import { isReservationActiveForAvailability } from '../utils/conflictDetector';
 
@@ -175,13 +175,15 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
   // Booking mode: 'single' (una fecha), 'specific' (fechas específicas elegidas a gusto), 'pattern' (serie semanal por días)
   const [cakeOverrides, setCakeOverrides] = useState<Record<string, number>>({});
-  const [cakeStock, setCakeStock] = useState<number | null>(null);
+  const [cakeInventory, setCakeInventory] = useState<CakeStock | null>(null);
+  const cakeStock = cakeInventory?.available ?? null;
+  const cakeCapacity = cakeInventory?.capacity ?? CAKE_CAPACITY;
   const [cakeStockFailed, setCakeStockFailed] = useState(false);
   const municipal = isMunicipalActivity(formData.tipoActividad);
   const refreshCakeStock = useCallback(async () => {
     try {
       const result = await dataRequest('/api/reservations/cake-stock', {});
-      setCakeStock(result.available);
+      setCakeInventory(result);
       setCakeStockFailed(false);
     } catch {
       setCakeStockFailed(true);
@@ -189,11 +191,19 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   }, []);
   useEffect(() => {
     setCakeOverrides({});
-    setCakeStock(null);
+    setCakeInventory(null);
     setCakeStockFailed(false);
   }, [isOpen, editingReservation?.id, isDuplicating]);
   useEffect(() => {
-    if (isOpen && municipal) void refreshCakeStock();
+    if (!isOpen || !municipal) return;
+    const onStockChange = () => void refreshCakeStock();
+    onStockChange();
+    window.addEventListener(CAKE_STOCK_CHANGED, onStockChange);
+    window.addEventListener('focus', onStockChange);
+    return () => {
+      window.removeEventListener(CAKE_STOCK_CHANGED, onStockChange);
+      window.removeEventListener('focus', onStockChange);
+    };
   }, [isOpen, municipal, refreshCakeStock]);
 
   const [bookingMode, setBookingMode] = useState<'single' | 'specific' | 'pattern'>('single');
@@ -1218,6 +1228,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       }
       const result = await onSave(...args);
       if (result === false && (municipal || previousCakes)) void refreshCakeStock();
+      if (result !== false && (previousCakes || requestedCakes)) window.dispatchEvent(new Event(CAKE_STOCK_CHANGED));
       return result;
     },
     clearDraft: replacementSource ? () => {} : clearDraft,
@@ -1643,6 +1654,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               <ReservationCakePicker
                 dates={cakeDates}
                 stock={cakeStock}
+                capacity={cakeCapacity}
                 stockFailed={cakeStockFailed}
                 requested={requestedCakes}
                 estimatedStock={estimatedCakeStock}
@@ -1674,7 +1686,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               ))}
               {previousCakes > requestedCakes && <p>Se devolverán {previousCakes - requestedCakes} al stock.</p>}
               {estimatedCakeStock !== null && <p>{estimatedCakeStock < 0 ? 'El saldo actual no alcanza para esta asignación.' :
-                `Saldo estimado después de guardar: ${estimatedCakeStock} de ${CAKE_CAPACITY} tortas.`}</p>}
+                `Saldo estimado después de guardar: ${estimatedCakeStock} de ${cakeCapacity} tortas.`}</p>}
             </section>
           )}
           {replacementSource && (!isWizardMode || wizardStep === 1 || wizardStep === 5) && (
