@@ -279,11 +279,11 @@ export async function commitTrusted(
             throw new ApiFailure(409, 'Conflicto en la agenda actual. Recalcula la distribución.');
         }
         const commitEquipment = await prepareEquipmentAllocation(db, tx.__native || tx, current, saved, chunk);
-        const commitCakes = await prepareCakeAllocation(db, tx.__native || tx, current, saved, chunk, operationId, atomic, Boolean(options.auditRestore));
         saved.forEach((r) => {
           r.createdBy =
             current.get(r.id)?.createdBy || actor.name || actor.username;
         });
+        const commitCakes = await prepareCakeAllocation(db, tx.__native || tx, current, saved, chunk, operationId, atomic, Boolean(options.auditRestore));
         const changedSaved = saved.filter((r) => {
           const orig = current.get(r.id);
           return (

@@ -22,6 +22,7 @@ import { ReservationStep1Activity } from './ReservationStep1Activity';
 import { ReservationStep2DateTime } from './ReservationStep2DateTime';
 import { ReservationStep3Applicant } from './ReservationStep3Applicant';
 import { ReservationStep4ResourcesDocs } from './ReservationStep4ResourcesDocs';
+import { ReservationCakePicker } from './ReservationCakePicker';
 import { ReservationStep5Review } from './ReservationStep5Review';
 import { RecurringSeriesScopeSelector } from './RecurringSeriesScopeSelector';
 import { ReservationModalFooter } from './ReservationModalFooter';
@@ -1639,28 +1640,16 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
           {/* Paso 4: Recursos y Documentación */}
           <ReservationStep4ResourcesDocs
             cakes={municipal && cakeDates.length > 0 && (
-              <section className="space-y-2 rounded-xl border border-slate-200 p-4">
-                <h3 className="font-bold">Tortas</h3>
-                <p className="text-sm text-slate-700" aria-live="polite">
-                  {cakeStock === null ? (cakeStockFailed ? 'No se pudo consultar el saldo.' : 'Consultando saldo…') :
-                    `${cakeStock} de ${CAKE_CAPACITY} tortas disponibles`}
-                </p>
-                {cakeStockFailed && <button type="button" className="text-sm font-semibold underline" onClick={() => void refreshCakeStock()}>Actualizar saldo</button>}
-                {cakeDates.map(date => (
-                  <label key={date} className="flex items-center justify-between gap-3 text-sm">
-                    <span>{formatDateDDMMYYYY(date)}</span>
-                    <input type="number" min={0} max={CAKE_CAPACITY} step={1} className="w-20 rounded-lg border border-slate-300 p-2"
-                      aria-label={`Tortas para el ${formatDateDDMMYYYY(date)}`}
-                      value={cakeQuantityForDate(date)}
-                      onChange={event => {
-                        const value = event.target.value === '' ? 0 : event.target.valueAsNumber;
-                        if (Number.isInteger(value) && value >= 0 && value <= CAKE_CAPACITY)
-                          setCakeOverrides(previous => ({ ...previous, [date]: value }));
-                      }}
-                    />
-                  </label>
-                ))}
-              </section>
+              <ReservationCakePicker
+                dates={cakeDates}
+                stock={cakeStock}
+                stockFailed={cakeStockFailed}
+                requested={requestedCakes}
+                estimatedStock={estimatedCakeStock}
+                quantityForDate={cakeQuantityForDate}
+                onQuantityChange={(date, quantity) => setCakeOverrides(previous => ({ ...previous, [date]: quantity }))}
+                onRefresh={() => void refreshCakeStock()}
+              />
             )}
             isWizardMode={isWizardMode}
             wizardStep={wizardStep}

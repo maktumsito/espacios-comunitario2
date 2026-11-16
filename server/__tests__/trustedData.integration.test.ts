@@ -170,7 +170,7 @@ describe.skipIf(!enabled)(
       expect(send).toHaveBeenCalledTimes(1);
       expect(send.mock.calls[0][0]).toMatchObject({
         to: ['p.flores@lascondes.cl', 'cshute@lascondes.cl', 'magomez@lascondes.cl'],
-        bodyText: expect.stringMatching(/15\/11\/2026.*2 tortas[\s\S]*15\/11\/2027.*3 tortas[\s\S]*10 de 15/),
+        bodyText: expect.stringMatching(/15\/11\/2026\nReserva creada por: Editor\nTortas solicitadas en este registro: 2[\s\S]*15\/11\/2027\nReserva creada por: Editor\nTortas solicitadas en este registro: 3[\s\S]*Total solicitado en este registro: 5\nTortas que quedan en stock: 10 de 15/),
       });
     });
 
@@ -219,7 +219,7 @@ describe.skipIf(!enabled)(
       expect((await retry.get()).data()).toMatchObject({ state: 'pending', available: 13 });
       expect((await uncertain.get()).data()).toMatchObject({ state: 'needs_reconciliation', available: 11 });
       expect(send.mock.calls.find(([email]) => email.bodyText.includes('11/11/2027'))?.[0].bodyText)
-        .toContain('11/11/2027 · Celebración municipal · 2 tortas');
+        .toContain('11/11/2027\nReserva creada por: Editor\nTortas solicitadas en este registro: 2');
       await retry.update({ nextAttemptAt: 0 });
       const deliver = vi.fn(async () => ({ success: true }));
       await dispatchCakeNotices(db, deliver);

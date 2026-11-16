@@ -8,7 +8,7 @@ import { ApiFailure } from './dataApi';
 const STOCK_PATH = '_reservation_inventory/cakes_2026_2027';
 const OUTBOX = '_reservation_cake_mail';
 type Allocation = { quantity: number; date: string; series: string | null };
-type Addition = { title: string; date: string; quantity: number };
+type Addition = { title: string; date: string; quantity: number; createdBy?: string };
 type CakeNotice = { additions: Addition[]; available: number };
 
 export async function readCakeStock(db: Firestore) {
@@ -53,7 +53,11 @@ export async function prepareCakeAllocation(
     }
     next.set(row.id, { quantity, date: row.fecha, series: row.serieRecurrente || row.recurrenteId || null });
     const added = quantity - (before.get(row.id)?.quantity || 0);
-    if (added > 0) additions.push({ title: row.descripcion, date: row.fecha, quantity: added });
+    const existing = current.get(row.id);
+    if (added > 0) additions.push({
+      title: row.descripcion, date: row.fecha, quantity: added,
+      createdBy: (existing ? existing.createdBy : row.createdBy) || 'No registrado',
+    });
   }
   const dates = new Set<string>();
   let used = 0;
@@ -79,15 +83,21 @@ export async function prepareCakeAllocation(
 }
 
 export function cakeEmail({ additions, available }: CakeNotice) {
+  const total = additions.reduce((sum, addition) => sum + addition.quantity, 0);
   const bodyText = [
-    'Se asignaron tortas a las siguientes actividades municipales:',
-    ...additions.map(({ title, date, quantity }) => `• ${date.split('-').reverse().join('/')} · ${title} · ${quantity} ${quantity === 1 ? 'torta' : 'tortas'}`),
-    '',
-    `Stock disponible al guardar: ${available} de ${CAKE_CAPACITY} tortas.`,
+    ...additions.flatMap(({ title, date, quantity, createdBy }) => [
+      `Actividad municipal: ${title}`,
+      `Fecha del evento: ${date.split('-').reverse().join('/')}`,
+      `Reserva creada por: ${createdBy || 'No registrado'}`,
+      `Tortas solicitadas en este registro: ${quantity}`,
+      '',
+    ]),
+    ...(additions.length > 1 ? [`Total solicitado en este registro: ${total}`] : []),
+    `Tortas que quedan en stock: ${available} de ${CAKE_CAPACITY}.`,
   ].join('\n');
   return {
     to: ['p.flores@lascondes.cl', 'cshute@lascondes.cl', 'magomez@lascondes.cl'],
-    subject: 'Tortas asignadas a actividad municipal',
+    subject: 'Solicitud de tortas para actividad municipal',
     bodyText,
     html: bodyText.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\n', '<br>'),
     purpose: 'reservation_cakes',
