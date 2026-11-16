@@ -699,6 +699,9 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         )}
 
         {/* Equipamiento y Recursos Solicitados */}
+        {Boolean(reservation.cantidadTortas) && (
+          <p className="text-sm"><strong>Tortas:</strong> {reservation.cantidadTortas}</p>
+        )}
         {reservation.equipamientoSolicitado && reservation.equipamientoSolicitado.length > 0 && (
           <div className="p-3.5 bg-indigo-50/70 rounded-2xl border border-indigo-200/80 text-xs space-y-2">
             <div className="flex items-center justify-between text-[11px] font-bold text-indigo-900 uppercase tracking-wide">

@@ -1,6 +1,6 @@
 import express from "express";
 import type { AddressInfo } from "node:net";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { initializeApp, deleteApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import {
@@ -29,6 +29,7 @@ import { registerBackupMaintenanceApi } from '../backupMaintenanceApi';
 import { claimDelivery, startDelivery, finishDelivery } from "../deliveryLease";
 import { backupChecksum } from "../../src/utils/backupIntegrity";
 import { isChileanHoliday } from "../../src/utils/holidayUtils";
+import { cakeEmail, dispatchCakeNotices } from '../reservationCakes';
 
 const enabled = process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:8087";
 describe.skipIf(!enabled)(
@@ -139,6 +140,93 @@ describe.skipIf(!enabled)(
       await db.terminate();
       await deleteApp(app);
     });
+    const cake = (id: string, date: string, cantidadTortas: number) => ({
+      ...row(id, date), tipoActividad: 'ACTIVIDAD MUNICIPAL', descripcion: 'Celebración municipal', cantidadTortas,
+    });
+    const commit = (operationId: string, reservations: any[], options = {}) =>
+      post('/api/reservations/commit', { reservations, options: { operationId, ...options } });
+    const cakeStock = () => post('/api/reservations/cake-stock', {});
+
+    it('checks the type, integer quantity and inclusive dates, and sends one notice for several dates and spaces', async () => {
+      expect(await cakeStock()).toMatchObject({ available: 15 });
+      for (const invalid of [
+        cake('too_early', '2026-11-14', 1),
+        cake('too_late', '2027-11-16', 1),
+        cake('decimal', '2027-11-15', 1.5),
+        { ...cake('wrong_type', '2027-11-15', 1), tipoActividad: 'TALLER MUNICIPAL' },
+      ]) {
+        expect(await commit(invalid.id, [invalid])).toHaveProperty('error', expect.any(String));
+      }
+      const first = { ...cake('cake_first', '2026-11-15', 2), serieRecurrente: 'cakes' };
+      const last = { ...cake('cake_last', '2027-11-15', 3), serieRecurrente: 'cakes' };
+      const otherSpace = { ...first, id: 'cake_other_space', espacio: 'SALA 3', cantidadTortas: 0 };
+      expect(await commit('duplicated_date', [first, { ...otherSpace, cantidadTortas: 1 }])).toHaveProperty('error', expect.stringContaining('esta fecha'));
+      expect(await cakeStock()).toMatchObject({ available: 15 });
+      expect(await commit('cake_dates', [first, otherSpace, last])).not.toHaveProperty('error');
+      expect(await commit('cake_dates', [first, otherSpace, last])).not.toHaveProperty('error');
+      expect(await cakeStock()).toMatchObject({ available: 10 });
+      const send = vi.fn(async (_email: ReturnType<typeof cakeEmail>) => ({ success: true, messageId: 'simulated-gmail-id' }));
+      await Promise.all([dispatchCakeNotices(db, send), dispatchCakeNotices(db, send)]);
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send.mock.calls[0][0]).toMatchObject({
+        to: ['p.flores@lascondes.cl', 'cshute@lascondes.cl', 'magomez@lascondes.cl'],
+        bodyText: expect.stringMatching(/15\/11\/2026.*2 tortas[\s\S]*15\/11\/2027.*3 tortas[\s\S]*10 de 15/),
+      });
+    });
+
+    it('serializes competing assignments, returns cakes and rejects a restore without stock', async () => {
+      const assigned = cake('initial_cakes', '2026-11-15', 14);
+      expect(await commit('reserve_14', [assigned])).not.toHaveProperty('error');
+      const results = await Promise.all([
+        commit('compete_one', [cake('competitor_one', '2027-11-15', 1)]),
+        commit('compete_two', [{ ...cake('competitor_two', '2027-11-15', 1), espacio: 'SALA 3' }]),
+      ]);
+      expect(results.filter(result => result.error)).toEqual([
+        expect.objectContaining({ error: expect.stringContaining('Saldo actual: 0') }),
+      ]);
+      expect(await cakeStock()).toMatchObject({ available: 0 });
+      expect(await commit('reduce_cakes', [{ ...assigned, cantidadTortas: 13, version: 1 }])).not.toHaveProperty('error');
+      expect(await cakeStock()).toMatchObject({ available: 1 });
+      expect(await commit('cancel_cakes', [{ ...assigned, cantidadTortas: 13, estado: 'cancelada', version: 2 }])).not.toHaveProperty('error');
+      expect(await cakeStock()).toMatchObject({ available: 14 });
+      expect(await commit('assign_returned_cakes', [cake('replacement_cakes', '2027-11-12', 14)])).not.toHaveProperty('error');
+      expect(await commit('restore_without_stock', [], { restoreLogId: 'AUDIT_OP_cancel_cakes' }))
+        .toHaveProperty('error', expect.stringContaining('Saldo actual: 0'));
+      expect(await cakeStock()).toMatchObject({ available: 0 });
+      const send = vi.fn(async () => ({ success: true }));
+      await dispatchCakeNotices(db, send);
+      expect(send).toHaveBeenCalledTimes(3);
+    });
+
+    it('reports increases only, retries definite failures and holds uncertain deliveries for review', async () => {
+      const original = cake('moving_cakes', '2027-11-10', 2);
+      const moved = { ...original, fecha: '2027-11-11', version: 1 };
+      expect(await commit('assign_cakes', [original])).not.toHaveProperty('error');
+      expect(await commit('move_cakes', [moved])).not.toHaveProperty('error');
+      expect(await commit('increase_cakes', [{ ...moved, version: 2, cantidadTortas: 4 }])).not.toHaveProperty('error');
+      expect(await commit('move_past_campaign', [{ ...moved, version: 3, fecha: '2027-11-16', cantidadTortas: 4 }])).not.toHaveProperty('error');
+      expect(await cakeStock()).toMatchObject({ available: 15 });
+      const saved = await db.doc('reservas/moving_cakes').get();
+      expect(saved.data()).not.toHaveProperty('cantidadTortas');
+
+      const retry = db.doc('_reservation_cake_mail/assign_cakes');
+      const uncertain = db.doc('_reservation_cake_mail/increase_cakes');
+      const send = vi.fn(async (email: ReturnType<typeof cakeEmail>) => ({
+        success: false, safeToRetry: email.bodyText.includes('10/11/2027'),
+      }));
+      await dispatchCakeNotices(db, send);
+      expect(send).toHaveBeenCalledTimes(2);
+      expect((await retry.get()).data()).toMatchObject({ state: 'pending', available: 13 });
+      expect((await uncertain.get()).data()).toMatchObject({ state: 'needs_reconciliation', available: 11 });
+      expect(send.mock.calls.find(([email]) => email.bodyText.includes('11/11/2027'))?.[0].bodyText)
+        .toContain('11/11/2027 · Celebración municipal · 2 tortas');
+      await retry.update({ nextAttemptAt: 0 });
+      const deliver = vi.fn(async () => ({ success: true }));
+      await dispatchCakeNotices(db, deliver);
+      expect(deliver).toHaveBeenCalledTimes(1);
+      expect((await retry.get()).data()).toMatchObject({ state: 'sent' });
+    });
+
     it('saves 75 recurring sessions from March to November 2027 and resumes without duplicates', async () => {
       const dates: string[] = [];
       for (let day = new Date('2027-03-01T12:00:00Z'); day <= new Date('2027-11-30T12:00:00Z'); day.setUTCDate(day.getUTCDate() + 1)) {

@@ -32,6 +32,7 @@ export interface ReservationStep4ResourcesDocsProps {
   setShowCommitmentLetterModal: (show: boolean) => void;
   effectiveFormDataForLetter?: any;
   effectiveSeriesSlotsForLetter?: any;
+  cakes?: React.ReactNode;
 }
 
 export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDocsProps> = React.memo(({
@@ -46,7 +47,8 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
   setDescargarCartaAlCrear,
   setShowCommitmentLetterModal,
   effectiveFormDataForLetter,
-  effectiveSeriesSlotsForLetter
+  effectiveSeriesSlotsForLetter,
+  cakes
 }) => {
   const requiresLetter = isCommitmentLetterEligible(formData.tipoActividad, formData.tipoPrestamo) || Boolean(formData.requiereCartaCompromiso);
   const [showAiAssistant, setShowAiAssistant] = useState(false);
@@ -97,6 +99,7 @@ export const ReservationStep4ResourcesDocs: React.FC<ReservationStep4ResourcesDo
 
   return (
     <div id="reservation-step-4-container" className="space-y-4">
+      {cakes}
       {/* Step Header */}
       <ReservationSectionHeader title="4. Recursos y documentos" description="Agrega los equipos que necesitas. Si se requiere una carta, revísala aquí." icon={<Package className="h-4 w-4" />} />
 

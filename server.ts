@@ -13,6 +13,7 @@ import { migrateAccountPassword } from './server/accountPasswordMigration';
 import { SharedServerDocument } from './server/sharedDocument';
 import { GmailConnection } from './server/gmailConnection';
 import { registerScheduledCheck, scheduledRetryGate } from './server/scheduledDispatch';
+import { dispatchCakeNotices } from './server/reservationCakes';
 import { selectDispatchReservations, isDispatchLoan as isLoan, isDispatchableReservation } from './src/utils/activityDispatchSelection';
 import express from 'express';
 import path from 'path';
@@ -153,6 +154,7 @@ export interface EmailSendOptions {
   purpose?: string;
   attachments?: EmailAttachmentServer[];
   gmailAccessToken?: string | null;
+  gmailOnly?: boolean;
 }
 
 interface EmailSendResult {
@@ -163,6 +165,7 @@ interface EmailSendResult {
   error?: string;
   attachmentsCount?: number;
   reauthorize?: boolean;
+  safeToRetry?: boolean;
 }
 
 async function sendEmailServer(options: EmailSendOptions): Promise<EmailSendResult> {
@@ -172,6 +175,7 @@ async function sendEmailServer(options: EmailSendOptions): Promise<EmailSendResu
   const nowIso = new Date().toISOString();
 
   // Server-side OAuth renews Gmail authorization without an open browser.
+  let gmailSubmitted = false;
   try {
     let accessToken = options.gmailAccessToken || await gmailConnection.getAccessToken();
     if (accessToken) {
@@ -180,14 +184,21 @@ async function sendEmailServer(options: EmailSendOptions): Promise<EmailSendResu
         htmlBody: html || bodyText, textBody: bodyText,
         attachments: attachments.map(attachment => ({ filename: attachment.filename, contentType: attachment.contentType || 'application/pdf', contentBase64: attachment.content }))
       });
-      const deliver = (token: string) => fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw })
-      });
+      const deliver = (token: string) => {
+        gmailSubmitted = true;
+        return fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+          method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw }),
+          signal: AbortSignal.timeout(30_000),
+        });
+      };
       let response = await deliver(accessToken);
       if (response.status === 401) {
+        gmailSubmitted = false;
         accessToken = await gmailConnection.getAccessToken(true);
         if (accessToken) response = await deliver(accessToken);
       }
+      if (options.gmailOnly && [401, 403, 429].includes(response.status))
+        return { success: false, mode: 'gmail_api', safeToRetry: true, timestamp: nowIso };
       const data = await response.json();
       if (response.status === 401) return { success: false, mode: 'gmail_api', reauthorize: true, error: 'La autorización de Gmail venció. Vuelve a conectar con Google.', timestamp: nowIso };
       if (!response.ok) throw new Error(data.error?.message || 'Gmail no pudo enviar el correo.');
@@ -195,8 +206,9 @@ async function sendEmailServer(options: EmailSendOptions): Promise<EmailSendResu
       return { success: true, mode: 'gmail_api', messageId: data.id, attachmentsCount: attachments.length, timestamp: nowIso };
     }
   } catch (error) {
-    return { success: false, mode: 'gmail_api', reauthorize: (error as Error).name === 'GmailAuthorizationExpired', error: (error as Error).message, timestamp: nowIso };
+    return { success: false, mode: 'gmail_api', safeToRetry: !gmailSubmitted, reauthorize: (error as Error).name === 'GmailAuthorizationExpired', error: (error as Error).message, timestamp: nowIso };
   }
+  if (options.gmailOnly) return { success: false, mode: 'unconfigured', safeToRetry: true, timestamp: nowIso };
 
   // 1. Automatic Gmail SMTP & Custom SMTP config
   const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'cristianshute@gmail.com';
@@ -833,7 +845,15 @@ async function startServer() {
   });
 
   // Trigger scheduled automated dispatch manually / on-demand
-  registerScheduledCheck(app, () => process.env.EMAIL_SCHEDULER_SECRET, executeScheduledDispatchServer);
+  registerScheduledCheck(app, () => process.env.EMAIL_SCHEDULER_SECRET, async force => {
+    const [scheduled, cakes] = await Promise.allSettled([
+      executeScheduledDispatchServer(force),
+      dispatchCakeNotices(getServerDatabase(), email => sendEmailServer({ ...email, gmailOnly: true })),
+    ]);
+    if (cakes.status === 'rejected' || scheduled.status === 'rejected')
+      return { success: false, message: 'No se pudo completar la comprobación del correo programado.' };
+    return scheduled.value;
+  });
 
   app.post('/api/email/trigger-scheduled', requireAuth, requireReservationWriter, async (req, res) => {
     try {

@@ -35,6 +35,7 @@ import { getChileLocalDateString } from '../utils/dateUtils';
 import { scheduleSlotsForDate, scopedScheduleSlots, sameScheduleSlot, applyChangedSeriesFields, type ScheduleSlot } from '../utils/recurringSchedule';
 import { normalizeActivityType } from '../utils/reservationVisuals';
 import { validateTimeRange, checkLoanScheduleLimit } from '../utils/validationUtils';
+import { isCakeDate, isMunicipalActivity } from '../utils/reservationCakes';
 
 export interface SeriesItemSlot {
   fecha: string;
@@ -42,6 +43,7 @@ export interface SeriesItemSlot {
   horaFin?: string;
   espacio?: string;
   terminaDiaSiguiente?: boolean;
+  cantidadTortas?: number;
 }
 
 interface UseReservationSaveHandlerProps {
@@ -49,6 +51,7 @@ interface UseReservationSaveHandlerProps {
   scheduleChanged?: boolean;
   initialFormData?: Partial<Reservation>;
   initialReservations?: Reservation[];
+  cakeOverrides?: Record<string, number>;
   formData: Partial<Reservation>;
   setFormData: React.Dispatch<React.SetStateAction<Partial<Reservation>>>;
   isSubmittingRef: MutableRefObject<boolean>;
@@ -137,6 +140,7 @@ export function useReservationSaveHandler({
   scheduleChanged = true,
   initialFormData,
   initialReservations,
+  cakeOverrides = {},
   formData,
   setFormData,
   isSubmittingRef,
@@ -519,7 +523,14 @@ export function useReservationSaveHandler({
     const seriesId = `SER_${effectiveFormData.id || editingReservation?.id || 'draft'}`.slice(0,128);
 
     // Validation and persistence share the exact same scoped schedule.
-    const finalSeriesPayload: (string | SeriesItemSlot)[] = plannedSlots;
+    const cakeQuantity = (type: string | undefined, date: string, quantity?: number) =>
+      isMunicipalActivity(type) && isCakeDate(date) ? quantity || undefined : undefined;
+    const cakeDates = new Set<string>();
+    const finalSeriesPayload: SeriesItemSlot[] = plannedSlots.map(slot => {
+      const first = !cakeDates.has(slot.fecha);
+      cakeDates.add(slot.fecha);
+      return { ...slot, cantidadTortas: first ? cakeQuantity(effectiveFormData.tipoActividad, slot.fecha, cakeOverrides[slot.fecha]) : undefined };
+    });
 
     const firstDate =
       isEditingSingleOccurrence && effectiveFormData.fecha
@@ -548,6 +559,7 @@ export function useReservationSaveHandler({
           ? editingReservation.id
           : effectiveFormData.id || `RSV_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
       fecha: firstDate,
+      cantidadTortas: cakeQuantity(effectiveFormData.tipoActividad, firstDate, cakeOverrides[firstDate] ?? (isDuplicating ? undefined : editingReservation?.cantidadTortas)),
       horaInicio: firstSlot.horaInicio || effectiveFormData.horaInicio || '10:00',
       horaFin: firstSlot.horaFin || effectiveFormData.horaFin || '11:00',
       espacio: firstSlot.espacio || normalizedSpace,
@@ -992,6 +1004,15 @@ export function useReservationSaveHandler({
               }
             }
           });
+          for (const row of updatedList) {
+            const old = cleanAffected.find(item => item.id === row.id);
+            row.cantidadTortas = cakeQuantity(row.tipoActividad, row.fecha, old?.cantidadTortas);
+          }
+          for (const [date, quantity] of Object.entries(cakeOverrides)) {
+            const rowsForDate = updatedList.filter(row => row.fecha === date);
+            const owner = rowsForDate.find(row => row.cantidadTortas) || rowsForDate[0];
+            if (owner) owner.cantidadTortas = cakeQuantity(owner.tipoActividad, date, quantity);
+          }
 
           const scopeLabels: Record<UpdateScope, string> = {
             single: 'Solo esta reserva',

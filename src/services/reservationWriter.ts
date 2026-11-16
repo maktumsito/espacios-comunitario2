@@ -53,6 +53,7 @@ export interface WriteOptions {
   activateSpaceIds?: string[];
   distributionDate?: string;
   requireAtomic?: boolean;
+  allowAtomicCreatesWithDeletes?: boolean;
   expectedVersions?: Record<string, number>;
   intent?: "create" | "update";
   actor?: string;
@@ -872,6 +873,7 @@ export async function writeReservations(
           if (
             (options.intent === "update" ||
               (options.requireAtomic &&
+                !options.allowAtomicCreatesWithDeletes &&
                 deletedIds.length > 0 &&
                 !options.auditRestore)) &&
             !existing

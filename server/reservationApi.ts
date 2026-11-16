@@ -32,6 +32,7 @@ import {
 } from "../src/utils/conflictDetector";
 import { isChileanHoliday } from "../src/utils/holidayUtils";
 import { prepareEquipmentAllocation } from './equipmentAllocation';
+import { cakeOperationNeedsAtomic, prepareCakeAllocation, readCakeStock } from './reservationCakes';
 import { registerDistributionPlanningApi, validateDistributionDate } from './distributionPlanning';
 import { SPACES_LIST } from '../src/data/spacesData';
 import { REGULAR_LOAN_START_MINUTES, REGULAR_LOAN_END_MINUTES } from '../src/utils/validationUtils';
@@ -146,8 +147,12 @@ export async function commitTrusted(
     createdBy: r.createdBy,
     editadoPor: actor.name || actor.username,
   }));
+  const atomic = Boolean(options.requireAtomic || trustedRows.length + deletions.length <= 1 ||
+    await cakeOperationNeedsAtomic(db, trustedRows, deletions));
   const result = await writeReservations(db as any, trustedRows, clean, {
     ...options,
+    requireAtomic: atomic,
+    allowAtomicCreatesWithDeletes: atomic && !options.requireAtomic,
     expectedVersions: Object.fromEntries(
       Object.entries(options.expectedVersions || {}).filter(
         ([id]) => !acknowledged.has(id),
@@ -274,6 +279,7 @@ export async function commitTrusted(
             throw new ApiFailure(409, 'Conflicto en la agenda actual. Recalcula la distribución.');
         }
         const commitEquipment = await prepareEquipmentAllocation(db, tx.__native || tx, current, saved, chunk);
+        const commitCakes = await prepareCakeAllocation(db, tx.__native || tx, current, saved, chunk, operationId, atomic, Boolean(options.auditRestore));
         saved.forEach((r) => {
           r.createdBy =
             current.get(r.id)?.createdBy || actor.name || actor.username;
@@ -388,6 +394,7 @@ export async function commitTrusted(
           );
         return () => {
           commitEquipment();
+          commitCakes?.();
           if (activatedSpaces.length) tx.set(db.doc('configuracion_sistema/espacios'), {
             data: configuredSpaces.map((space: SpaceInfo) => activationSet.has(space.id) ? { ...space, activo: true } : space),
             updatedAt: new Date().toISOString(),
@@ -474,6 +481,13 @@ export function registerReservationApi(
       }
     },
   );
+  app.post('/api/reservations/cake-stock', sessions.requireAuth, async (_req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store').json(await readCakeStock(db));
+    } catch (error) {
+      apiError(res, error);
+    }
+  });
   app.post(
     "/api/reservations/commit",
     sessions.requireAuth,

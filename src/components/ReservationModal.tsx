@@ -45,13 +45,11 @@ import { buildReplacementBatch } from '../utils/reservationReplacement';
 import { getSeriesEditStartDate, isRecurringSeriesReservation } from '../utils/recurringEdits';
 import { getChileLocalDateString } from '../utils/dateUtils';
 import { belongsToSeries, isDateInSeriesScope, schedulesFromReservations } from '../utils/recurringSchedule';
+import { CAKE_CAPACITY, isCakeDate, isMunicipalActivity } from '../utils/reservationCakes';
+import { dataRequest } from '../firebase/gateway';
+import { isReservationActiveForAvailability } from '../utils/conflictDetector';
 
-interface SeriesItemSlot {
-  fecha: string;
-  horaInicio?: string;
-  horaFin?: string;
-  espacio?: string;
-}
+import type { SeriesItemSlot } from '../hooks/useReservationSaveHandler';
 
 interface ReservationModalProps {
   draftMode?: boolean;
@@ -175,6 +173,28 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   });
 
   // Booking mode: 'single' (una fecha), 'specific' (fechas específicas elegidas a gusto), 'pattern' (serie semanal por días)
+  const [cakeOverrides, setCakeOverrides] = useState<Record<string, number>>({});
+  const [cakeStock, setCakeStock] = useState<number | null>(null);
+  const [cakeStockFailed, setCakeStockFailed] = useState(false);
+  const municipal = isMunicipalActivity(formData.tipoActividad);
+  const refreshCakeStock = useCallback(async () => {
+    try {
+      const result = await dataRequest('/api/reservations/cake-stock', {});
+      setCakeStock(result.available);
+      setCakeStockFailed(false);
+    } catch {
+      setCakeStockFailed(true);
+    }
+  }, []);
+  useEffect(() => {
+    setCakeOverrides({});
+    setCakeStock(null);
+    setCakeStockFailed(false);
+  }, [isOpen, editingReservation?.id, isDuplicating]);
+  useEffect(() => {
+    if (isOpen && municipal) void refreshCakeStock();
+  }, [isOpen, municipal, refreshCakeStock]);
+
   const [bookingMode, setBookingMode] = useState<'single' | 'specific' | 'pattern'>('single');
   const [selectedSpecificDates, setSpecificDates] = useState<string[]>([
     initialDate || format(new Date(), 'yyyy-MM-dd')
@@ -1096,7 +1116,30 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   };
 
   // Modular save handler hook
+  const editingCakes = isDuplicating ? [] : replacementSource ? [replacementSource] :
+    editingReservation ? (isEditingRecurring && updateScope !== 'single' ? affectedReservations : [editingReservation]) : [];
+  const activeCakeRows = editingCakes.filter(row => isReservationActiveForAvailability(row));
+  const previousCakes = activeCakeRows.reduce((sum, row) => sum + (row.cantidadTortas || 0), 0);
+  const cakeSlots = isEditingSingleOccurrence || replacementSource || !reviewSlots.length
+    ? [formData.fecha || ''] : reviewSlots.map(slot => slot.fecha);
+  const editedCakeIds = new Set(editingCakes.map(row => row.id));
+  const datesAssignedOutsideScope = new Set(
+    editingReservation && !isDuplicating && (editingReservation.serieRecurrente || editingReservation.recurrenteId)
+      ? allReservations.filter(row => row.cantidadTortas && !editedCakeIds.has(row.id) &&
+        belongsToSeries(row, editingReservation) && isReservationActiveForAvailability(row)).map(row => row.fecha)
+      : [],
+  );
+  const cakeDates = municipal ? [...new Set(cakeSlots)].filter(date => isCakeDate(date) &&
+    !datesAssignedOutsideScope.has(date)
+  ).sort() : [];
+  const cakeQuantityForDate = (date: string) => cakeOverrides[date] ??
+    (replacementSource ? 0 : (cakeSlots.length === 1 && activeCakeRows.length === 1
+      ? activeCakeRows[0].cantidadTortas
+      : activeCakeRows.find(row => row.fecha === date && row.cantidadTortas)?.cantidadTortas)) ?? 0;
+  const requestedCakes = cakeDates.reduce((sum, date) => sum + cakeQuantityForDate(date), 0);
+  const estimatedCakeStock = cakeStock === null ? null : cakeStock + previousCakes - requestedCakes;
   const { executeSave } = useReservationSaveHandler({
+    cakeOverrides,
     draftMode,
     scheduleChanged: !initialFormBaseline || initialFormBaseline.schedule !== scheduleFingerprint,
     initialFormData: initialFormBaseline?.form,
@@ -1165,12 +1208,17 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     rangeEndDate,
     descargarCartaAlCrear,
     effectiveSeriesSlotsForLetter,
-    onSave: replacementSource ? async (replacement) => {
-      const batch = buildReplacementBatch(replacementSource, replacement, replacementId.current, formData.motivoReemplazo || '', formData.diasAvisoReemplazo);
-      const blocks = findMaintenanceBlockConflicts([batch.updatedReservations[1]], spaceBlocks);
-      if (blocks.length) throw new Error(formatBlockConflictMessage(blocks[0]));
-      return onSave(batch.updatedReservations[1], false, undefined, false, batch, false);
-    } : onSave,
+    onSave: async (...args) => {
+      if (replacementSource) {
+        const batch = buildReplacementBatch(replacementSource, args[0], replacementId.current, formData.motivoReemplazo || '', formData.diasAvisoReemplazo);
+        const blocks = findMaintenanceBlockConflicts([batch.updatedReservations[1]], spaceBlocks);
+        if (blocks.length) throw new Error(formatBlockConflictMessage(blocks[0]));
+        args = [batch.updatedReservations[1], false, undefined, false, batch, false];
+      }
+      const result = await onSave(...args);
+      if (result === false && (municipal || previousCakes)) void refreshCakeStock();
+      return result;
+    },
     clearDraft: replacementSource ? () => {} : clearDraft,
     onClose,
     showFormFeedback
@@ -1590,6 +1638,30 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
           {/* Paso 4: Recursos y Documentación */}
           <ReservationStep4ResourcesDocs
+            cakes={municipal && cakeDates.length > 0 && (
+              <section className="space-y-2 rounded-xl border border-slate-200 p-4">
+                <h3 className="font-bold">Tortas</h3>
+                <p className="text-sm text-slate-700" aria-live="polite">
+                  {cakeStock === null ? (cakeStockFailed ? 'No se pudo consultar el saldo.' : 'Consultando saldo…') :
+                    `${cakeStock} de ${CAKE_CAPACITY} tortas disponibles`}
+                </p>
+                {cakeStockFailed && <button type="button" className="text-sm font-semibold underline" onClick={() => void refreshCakeStock()}>Actualizar saldo</button>}
+                {cakeDates.map(date => (
+                  <label key={date} className="flex items-center justify-between gap-3 text-sm">
+                    <span>{formatDateDDMMYYYY(date)}</span>
+                    <input type="number" min={0} max={CAKE_CAPACITY} step={1} className="w-20 rounded-lg border border-slate-300 p-2"
+                      aria-label={`Tortas para el ${formatDateDDMMYYYY(date)}`}
+                      value={cakeQuantityForDate(date)}
+                      onChange={event => {
+                        const value = event.target.value === '' ? 0 : event.target.valueAsNumber;
+                        if (Number.isInteger(value) && value >= 0 && value <= CAKE_CAPACITY)
+                          setCakeOverrides(previous => ({ ...previous, [date]: value }));
+                      }}
+                    />
+                  </label>
+                ))}
+              </section>
+            )}
             isWizardMode={isWizardMode}
             wizardStep={wizardStep}
             formData={formData}
@@ -1605,6 +1677,17 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
           />
 
           {/* Paso 5: Resumen y Confirmación */}
+          {(!isWizardMode || wizardStep === 5) && (requestedCakes > 0 || previousCakes > 0) && (
+            <section className="space-y-1 rounded-xl border border-slate-200 p-4 text-sm">
+              <h3 className="font-bold">{isWizardMode ? 'Tortas' : 'Resumen de tortas'}</h3>
+              {cakeDates.filter(date => cakeQuantityForDate(date) > 0).map(date => (
+                <p key={date}>{formatDateDDMMYYYY(date)} · {cakeQuantityForDate(date)} {cakeQuantityForDate(date) === 1 ? 'torta' : 'tortas'}</p>
+              ))}
+              {previousCakes > requestedCakes && <p>Se devolverán {previousCakes - requestedCakes} al stock.</p>}
+              {estimatedCakeStock !== null && <p>{estimatedCakeStock < 0 ? 'El saldo actual no alcanza para esta asignación.' :
+                `Saldo estimado después de guardar: ${estimatedCakeStock} de ${CAKE_CAPACITY} tortas.`}</p>}
+            </section>
+          )}
           {replacementSource && (!isWizardMode || wizardStep === 1 || wizardStep === 5) && (
             <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-3">
               <h3 className="font-bold">{wizardStep === 5 ? 'Confirmar reemplazo' : 'Motivo del reemplazo'}</h3>

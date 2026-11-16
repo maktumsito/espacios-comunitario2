@@ -78,7 +78,7 @@ export interface UseReservationCrudReturn {
   handleCreateOrUpdate: (
     reserva: Reservation,
     generateSeries?: boolean,
-    seriesDates?: (string | { fecha: string; horaInicio?: string; horaFin?: string; espacio?: string; terminaDiaSiguiente?: boolean })[],
+    seriesDates?: (string | { fecha: string; horaInicio?: string; horaFin?: string; espacio?: string; terminaDiaSiguiente?: boolean; cantidadTortas?: number })[],
     updateWholeSeries?: boolean,
     batchUpdateInfo?: BatchUpdateInfo,
     allowConflictOverride?: boolean
@@ -620,7 +620,7 @@ export function useReservationCrud({
   const handleCreateOrUpdate = useCallback(async (
     reserva: Reservation,
     generateSeries?: boolean,
-    seriesDates?: (string | { fecha: string; horaInicio?: string; horaFin?: string; espacio?: string; terminaDiaSiguiente?: boolean })[],
+    seriesDates?: (string | { fecha: string; horaInicio?: string; horaFin?: string; espacio?: string; terminaDiaSiguiente?: boolean; cantidadTortas?: number })[],
     updateWholeSeries?: boolean,
     batchUpdateInfo?: BatchUpdateInfo,
     allowConflictOverride?: boolean
@@ -804,7 +804,7 @@ export function useReservationCrud({
       }
 
       // Normalize incoming series dates / multi-space segments into explicit independent slots
-      const explicitSlots: Array<{ fecha: string; horaInicio: string; horaFin: string; espacio: string; terminaDiaSiguiente?: boolean }> = (seriesDates || []).map((item) => {
+      const explicitSlots: Array<{ fecha: string; horaInicio: string; horaFin: string; espacio: string; terminaDiaSiguiente?: boolean; cantidadTortas?: number }> = (seriesDates || []).map((item) => {
         if (typeof item === 'string') {
           return {
             fecha: item,
@@ -816,6 +816,7 @@ export function useReservationCrud({
         }
         return {
           fecha: item.fecha,
+          cantidadTortas: item.cantidadTortas,
           horaInicio: item.horaInicio || reserva.horaInicio || '10:00',
           horaFin: item.horaFin || reserva.horaFin || '11:00',
           espacio: item.espacio || reserva.espacio || 'GIMNASIO',
@@ -1072,7 +1073,7 @@ export function useReservationCrud({
           ? (reserva.serieRecurrente || reserva.recurrenteId || `DBL_${reserva.id}`.slice(0,128))
           : (reserva.serieRecurrente || reserva.recurrenteId || `SER_${reserva.id}`.slice(0,128));
 
-        let itemsToGenerate: Array<{ fecha: string; horaInicio: string; horaFin: string; espacio: string; terminaDiaSiguiente?: boolean }> = [];
+        let itemsToGenerate: typeof explicitSlots = [];
         if (explicitSlots.length > 0) {
           itemsToGenerate = explicitSlots;
         } else {
@@ -1106,6 +1107,7 @@ export function useReservationCrud({
             version: 0,
             id: uniqueId,
             fecha: item.fecha.trim().split('T')[0],
+            cantidadTortas: item.cantidadTortas,
             horaInicio: item.horaInicio.trim(),
             horaFin: item.horaFin.trim(),
             terminaDiaSiguiente: item.terminaDiaSiguiente !== undefined ? Boolean(item.terminaDiaSiguiente) : Boolean(reserva.terminaDiaSiguiente),

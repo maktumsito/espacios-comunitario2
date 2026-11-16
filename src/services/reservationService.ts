@@ -124,7 +124,7 @@ export function calculateReservationsHash(reservations: readonly Reservation[]):
       ? `${r.solicitudEliminacion.solicitadoPor || ''}:${r.solicitudEliminacion.fechaSolicitud || ''}:${r.solicitudEliminacion.motivo || ''}:${r.solicitudEliminacion.esSerie ? '1' : '0'}`
       : '';
     const letterStr = r.cartaCompromisoAdjunta
-      ? `${r.cartaCompromisoAdjunta.fileName || ''}:${r.cartaCompromisoAdjunta.uploadedAt || ''}`
+      ? `${r.cartaCompromisoAdjunta.name || ''}:${r.cartaCompromisoAdjunta.uploadedAt || ''}`
       : '';
 
     rows[i] = `${r.id || ''}|${r.version ?? 0}|${r.fecha || ''}|${r.horaInicio || ''}|${r.horaFin || ''}|${r.espacio || ''}|${r.tipoActividad || ''}|${r.tipoPrestamo || ''}|${r.responsable || ''}|${r.descripcion || ''}|${r.cantidadParticipantes || 0}|${r.importante || ''}|${r.realizada || ''}|${r.serieRecurrente || r.recurrenteId || ''}|${equipStr}|${r.comentarios || ''}|${r.estado || ''}|${r.terminaDiaSiguiente ? '1' : '0'}|${r.rut || ''}|${r.telefonoContacto || ''}|${r.emailContacto || ''}|${r.domicilio || ''}|${r.montaje || ''}|${r.reemplazaReservaId || ''}|${r.reemplazadaPorReservaId || ''}|${r.motivoReemplazo || ''}|${r.horarioExtendidoAutorizado ? '1' : '0'}|${delReqStr}|${letterStr}|${r.updatedAt || ''}`;

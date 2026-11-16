@@ -39,6 +39,7 @@ export interface Reservation {
   fechaInicioRecurrencia?: string;
   fechaFinRecurrencia?: string;
   cantidadParticipantes?: number;
+  cantidadTortas?: number;
   realizada?: 'Sí' | 'No' | 'Pendiente' | string;
   checkInRegistro?: CheckInRecord;
   rut?: string;
