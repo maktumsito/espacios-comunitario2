@@ -13,6 +13,12 @@ export function AdminCakeStock() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const pending = useRef<{ key: string; id: string } | null>(null);
+  const count = Number(quantity);
+  const delta = Number.isSafeInteger(count) && count > 0 ? (direction === 'add' ? count : -count) : 0;
+  const proposedCapacity = stock ? stock.capacity + delta : 0;
+  const exceedsStock = Boolean(stock && stock.available + delta < 0);
+  const exceedsLimit = !Number.isSafeInteger(proposedCapacity);
+  const showEstimate = Boolean(stock && delta && !exceedsStock && !exceedsLimit);
   const refresh = useCallback(async () => {
     try {
       setStock(await dataRequest('/api/reservations/cake-stock', {}));
@@ -34,9 +40,7 @@ export function AdminCakeStock() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const count = Number(quantity);
-    if (!stock || saving || !Number.isSafeInteger(count) || count < 1) return;
-    const delta = direction === 'add' ? count : -count;
+    if (!stock || saving || !delta || exceedsStock || exceedsLimit) return;
     const key = JSON.stringify([delta, reason.trim()]);
     const operationId = pending.current?.key === key ? pending.current.id : crypto.randomUUID();
     pending.current = { key, id: operationId };
@@ -68,7 +72,10 @@ export function AdminCakeStock() {
         </div>
       </header>
       <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950" aria-live="polite">
-        {stock ? <><strong className="text-lg tabular-nums">{stock.available} de {stock.capacity}</strong> tortas disponibles · {stock.capacity - stock.available} asignadas</> :
+        {stock ? <>
+          <strong className="text-lg tabular-nums">{stock.available + (showEstimate ? delta : 0)} de {showEstimate ? proposedCapacity : stock.capacity}</strong> tortas disponibles · {stock.capacity - stock.available} asignadas
+          {showEstimate && <span className="block text-xs">Saldo estimado al guardar</span>}
+        </> :
           error ? <button type="button" className="font-semibold underline" onClick={() => void refresh()}>Volver a consultar el stock</button> : 'Consultando stock…'}
       </div>
       <form onSubmit={submit} className="space-y-4">
@@ -87,9 +94,11 @@ export function AdminCakeStock() {
             <input className="min-h-11 rounded-lg border border-slate-300 px-3" maxLength={300} value={reason} onChange={e => setReason(e.target.value)} />
           </label>
         </fieldset>
-        {error && <p role="alert" className="text-sm font-medium text-rose-800">{error}</p>}
+        {(exceedsStock || exceedsLimit || error) && <p role="alert" className="text-sm font-medium text-rose-800">
+          {exceedsStock ? 'La cantidad a retirar supera el stock disponible.' : exceedsLimit ? 'La cantidad supera el límite permitido.' : error}
+        </p>}
         {notice && <p role="status" className="text-sm font-medium text-emerald-800">{notice}</p>}
-        <button type="submit" disabled={!stock || saving || !quantity} className="min-h-11 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white disabled:opacity-50">
+        <button type="submit" disabled={!stock || saving || !delta || exceedsStock || exceedsLimit} className="min-h-11 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white disabled:opacity-50">
           {saving ? 'Guardando…' : 'Guardar ajuste'}
         </button>
       </form>

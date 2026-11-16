@@ -20,6 +20,8 @@ export function ReservationCakePicker({
   dates, stock, capacity, stockFailed, requested, estimatedStock, quantityForDate, onQuantityChange, onRefresh,
 }: ReservationCakePickerProps) {
   const titleId = useId();
+  const available = estimatedStock ?? stock;
+  const isEstimate = stock !== null && available !== stock;
   return (
     <section aria-labelledby={titleId} className="overflow-hidden rounded-xl border border-amber-200 bg-white">
       <header className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 border-b border-amber-200 bg-amber-50 px-4 py-3.5">
@@ -37,10 +39,13 @@ export function ReservationCakePicker({
             <button type="button" className="min-h-11 font-semibold underline underline-offset-4" onClick={onRefresh}>
               Reintentar consulta de stock
             </button>
-          ) : stock === null ? (
+          ) : available === null ? (
             <span>Consultando stock…</span>
           ) : (
-            <><strong className="text-lg tabular-nums">{stock} de {capacity}</strong> disponibles</>
+            <>
+              <strong className="text-lg tabular-nums">{Math.max(0, available)} de {capacity}</strong> disponibles
+              {isEstimate && <span className="block text-xs">Saldo estimado al guardar</span>}
+            </>
           )}
         </div>
       </header>
@@ -77,9 +82,8 @@ export function ReservationCakePicker({
       {(requested > 0 || (estimatedStock !== null && estimatedStock < 0)) && (
         <footer className="flex flex-wrap justify-between gap-x-4 gap-y-1 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-sm" aria-live="polite">
           <span className="font-semibold text-slate-900">{requested} {requested === 1 ? 'torta seleccionada' : 'tortas seleccionadas'}</span>
-          {estimatedStock !== null && (estimatedStock < 0
-            ? <span className="font-semibold text-rose-800">El stock no alcanza para esta selección.</span>
-            : <span className="text-slate-700">Saldo estimado al guardar: {estimatedStock}</span>)}
+          {estimatedStock !== null && estimatedStock < 0 &&
+            <span className="font-semibold text-rose-800">El stock no alcanza para esta selección.</span>}
         </footer>
       )}
     </section>
