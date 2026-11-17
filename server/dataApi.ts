@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import type { Firestore } from "firebase-admin/firestore";
+import type { DocumentSnapshot, Firestore } from "firebase-admin/firestore";
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { gzipSync } from "node:zlib";
@@ -200,34 +200,59 @@ function registerInventoryApi(app: Express, db: Firestore, sessions: AppSessions
     return locations().doc(id);
   }
 
+  function activeLocation(snapshot: DocumentSnapshot, generation: unknown): string {
+    if (!snapshot.exists || snapshot.get('archivedAt')) throw new ApiFailure(404, 'El lugar ya no está en el inventario.');
+    const current = snapshot.get('generation') ?? '';
+    if (current !== generation) throw new ApiFailure(409, 'El lugar cambió. Vuelve a abrir Inventario.');
+    return current;
+  }
+
   managerRoute('lugares', async (_req, res) => {
     const snapshot = await locations().orderBy('name').get();
-    res.json({ success: true, locations: snapshot.docs.map(doc => ({ id: doc.id, name: doc.get('name') })) });
+    res.json({ success: true, locations: snapshot.docs.filter(doc => !doc.get('archivedAt')).map(doc => ({
+      id: doc.id, name: doc.get('name'), generation: doc.get('generation') ?? '',
+    })) });
   });
 
   managerRoute('crear-lugar', async (req, res) => {
     const name = inventoryName(req.body?.name);
     const ref = locations().doc(inventoryId(name));
-    const storedName = await db.runTransaction(async tx => {
+    const place = await db.runTransaction(async tx => {
       const existing = await tx.get(ref);
-      if (existing.exists) return existing.get('name');
-      tx.create(ref, { name });
-      return name;
+      if (existing.exists && !existing.get('archivedAt')) {
+        return { name: existing.get('name'), generation: existing.get('generation') ?? '' };
+      }
+      // A recreated name starts empty. The previous articles remain in their original collection.
+      const data = { name, generation: existing.exists ? randomUUID() : '' };
+      tx.set(ref, data);
+      return data;
     });
-    res.json({ success: true, location: { id: ref.id, name: storedName } });
+    res.json({ success: true, location: { id: ref.id, ...place } });
+  });
+
+  managerRoute('eliminar-lugar', async (req, res) => {
+    const { locationId, generation } = req.body || {};
+    const ref = location(locationId);
+    await db.runTransaction(async tx => {
+      const snapshot = await tx.get(ref);
+      if (!snapshot.exists || (snapshot.get('archivedAt') && (snapshot.get('generation') ?? '') === generation)) return;
+      activeLocation(snapshot, generation);
+      tx.update(ref, { archivedAt: new Date().toISOString() });
+    });
+    res.json({ success: true });
   });
 
   managerRoute('articulos', async (req, res) => {
     const ref = location(req.body?.locationId);
-    if (!(await ref.get()).exists) throw new ApiFailure(404, 'El lugar no existe.');
-    const snapshot = await ref.collection('articulos').orderBy('name').get();
+    const generation = activeLocation(await ref.get(), req.body?.generation ?? '');
+    const snapshot = await ref.collection(generation ? `articulos_${generation}` : 'articulos').orderBy('name').get();
     res.json({ success: true, items: snapshot.docs.map(doc => ({
       id: doc.id, name: doc.get('name'), quantity: doc.get('quantity'),
     })) });
   });
 
   managerRoute('guardar-articulo', async (req, res) => {
-    const { locationId, quantity, previousQuantity } = req.body || {};
+    const { locationId, generation = '', quantity, previousQuantity } = req.body || {};
     const name = inventoryName(req.body?.name);
     const validQuantity = (value: unknown): value is number =>
       typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
@@ -235,10 +260,10 @@ function registerInventoryApi(app: Express, db: Firestore, sessions: AppSessions
       throw new ApiFailure(400, 'La cantidad debe ser un número entero mayor o igual a cero.');
     }
     const place = location(locationId);
-    const ref = place.collection('articulos').doc(inventoryId(name));
     const item = await db.runTransaction(async tx => {
-      const [parent, existing] = await tx.getAll(place, ref);
-      if (!parent.exists) throw new ApiFailure(404, 'El lugar no existe.');
+      const currentGeneration = activeLocation(await tx.get(place), generation);
+      const ref = place.collection(currentGeneration ? `articulos_${currentGeneration}` : 'articulos').doc(inventoryId(name));
+      const existing = await tx.get(ref);
       const current = existing.exists ? existing.get('quantity') : null;
       const item = { id: ref.id, name: existing.exists ? existing.get('name') : name, quantity };
       if (current === quantity) return item;

@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { dataRequest } from '../firebase/gateway';
+import { ConfirmationModal } from './common/ConfirmationModal';
 
-type Location = { id: string; name: string };
+type Location = { id: string; name: string; generation: string };
 type Article = { id: string; name: string; quantity: number };
 
 const field = 'min-h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3';
@@ -12,16 +13,17 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'No se pudo completar la operación. Vuelve a intentar.';
 }
 
-function includeRecord<T extends Location>(records: T[], record: T) {
+function includeRecord<T extends { id: string; name: string }>(records: T[], record: T) {
   return [...records.filter(entry => entry.id !== record.id), record]
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 }
 
-function InventoryArticles({ location, locked, saving, setSaving }: {
+function InventoryArticles({ location, locked, saving, setSaving, onRemove }: {
   location: Location;
   locked: boolean;
   saving: boolean;
   setSaving: (saving: boolean) => void;
+  onRemove: (location: Location) => Promise<void>;
 }) {
   const [items, setItems] = useState<Article[] | null>(null);
   const [revision, setRevision] = useState(0);
@@ -31,15 +33,16 @@ function InventoryArticles({ location, locked, saving, setSaving }: {
   const [editing, setEditing] = useState<Article | null>(null);
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [confirmRemoval, setConfirmRemoval] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
-    dataRequest('/api/inventario/articulos', { locationId: location.id }, controller.signal)
+    dataRequest('/api/inventario/articulos', { locationId: location.id, generation: location.generation }, controller.signal)
       .then(result => { if (!controller.signal.aborted) setItems(result.items); })
       .catch(error => { if (!controller.signal.aborted) setError(errorMessage(error)); })
       .finally(() => { if (!controller.signal.aborted) setReading(false); });
     return () => controller.abort();
-  }, [location.id, revision]);
+  }, [location.id, location.generation, revision]);
 
   function reload() {
     setEditing(null);
@@ -59,7 +62,8 @@ function InventoryArticles({ location, locked, saving, setSaving }: {
     setNotice('');
     try {
       const { item } = await dataRequest('/api/inventario/guardar-articulo', {
-        locationId: location.id, name, quantity: Number(quantity), previousQuantity: editing?.quantity ?? null,
+        locationId: location.id, generation: location.generation, name,
+        quantity: Number(quantity), previousQuantity: editing?.quantity ?? null,
       });
       setItems(current => includeRecord(current ?? [], item));
       setEditing(null);
@@ -76,7 +80,12 @@ function InventoryArticles({ location, locked, saving, setSaving }: {
   return <div className="space-y-4 border-t border-slate-200 pt-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h3 className="font-semibold text-slate-900">Artículos de {location.name}</h3>
-      <button type="button" className={secondary} disabled={reading || saving} onClick={reload}>Actualizar listado</button>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={secondary} disabled={reading || saving || locked} onClick={reload}>Actualizar listado</button>
+        <button type="button" disabled={reading || saving || locked || !items}
+          className="min-h-11 rounded-lg border border-rose-200 px-3 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+          onClick={() => setConfirmRemoval(true)}>Eliminar lugar</button>
+      </div>
     </div>
     <form onSubmit={save} className="space-y-3">
       <fieldset disabled={reading || saving || locked || !items} className="grid gap-3 sm:grid-cols-[1fr_10rem_auto] sm:items-end">
@@ -120,6 +129,10 @@ function InventoryArticles({ location, locked, saving, setSaving }: {
           }}>Editar</button></td>
       </tr>)}</tbody>
     </table>}
+    <ConfirmationModal isOpen={confirmRemoval} title={`¿Eliminar ${location.name}?`}
+      message={`${items?.length === 1 ? 'Hay 1 artículo' : `Hay ${items?.length ?? 0} artículos`} en el listado. El lugar y sus artículos se archivarán y dejarán de aparecer en Inventario.`}
+      variant="danger" confirmLabel="Eliminar lugar"
+      onConfirm={() => onRemove(location)} onCancel={() => setConfirmRemoval(false)} />
   </div>;
 }
 
@@ -132,6 +145,7 @@ export function AdminInventory() {
   const [articleSaving, setArticleSaving] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const location = locations?.find(place => place.id === selected) ?? locations?.[0];
 
   useEffect(() => {
@@ -148,6 +162,7 @@ export function AdminInventory() {
     if (saving || articleSaving || reading || !name.trim()) return;
     setSaving(true);
     setError('');
+    setNotice('');
     try {
       const { location } = await dataRequest('/api/inventario/crear-lugar', { name });
       setLocations(current => includeRecord(current ?? [], location));
@@ -155,6 +170,20 @@ export function AdminInventory() {
       setName('');
     } catch (error) {
       setError(errorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeLocation(place: Location) {
+    setSaving(true);
+    setNotice('');
+    try {
+      await dataRequest('/api/inventario/eliminar-lugar', { locationId: place.id, generation: place.generation });
+      setLocations(current => current?.filter(entry => entry.id !== place.id) ?? null);
+      setSelected('');
+      setError('');
+      setNotice(`Lugar eliminado del inventario. ${place.name} quedó archivado.`);
     } finally {
       setSaving(false);
     }
@@ -173,6 +202,7 @@ export function AdminInventory() {
     </form>
     {reading && <p role="status" className="text-sm text-slate-600">Cargando lugares…</p>}
     {error && <p role="alert" className="text-sm text-rose-800">{error}</p>}
+    {notice && <p role="status" className="text-sm text-emerald-800">{notice}</p>}
     {!locations && !reading && <button type="button" className={secondary} onClick={() => {
       setError('');
       setReading(true);
@@ -184,7 +214,7 @@ export function AdminInventory() {
         {locations?.map(place => <option key={place.id} value={place.id}>{place.name}</option>)}
       </select>
     </label>}
-    {location && <InventoryArticles key={location.id} location={location} locked={saving || reading}
-      saving={articleSaving} setSaving={setArticleSaving} />}
+    {location && <InventoryArticles key={`${location.id}:${location.generation}`} location={location} locked={saving || reading}
+      saving={articleSaving} setSaving={setArticleSaving} onRemove={removeLocation} />}
   </section>;
 }

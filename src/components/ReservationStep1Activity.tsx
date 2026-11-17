@@ -116,28 +116,26 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
             </option>
           ))}
         </select>
+        {normalizeActivityType(formData.tipoActividad || effectiveActivityNames[0]) === 'TALLER MUNICIPAL' && (
+          <div className="space-y-1.5 pt-2">
+            <label htmlFor="input-reserva-unidad-municipal" className="block font-semibold text-slate-700">
+              ¿A qué dirección o departamento pertenece?
+            </label>
+            <input
+              id="input-reserva-unidad-municipal"
+              type="text"
+              maxLength={200}
+              value={formData.unidadMunicipal || ''}
+              onChange={(e) => setFormData((prev) => ({ ...prev, unidadMunicipal: e.target.value }))}
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+            />
+          </div>
+        )}
         <p className="flex items-center gap-2 text-sm text-slate-600">
           <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: typeVisual.accent }} aria-hidden="true" />
           Así se verá {typeVisual.label} en la agenda.
         </p>
-
       </div>
-
-      {normalizeActivityType(formData.tipoActividad || effectiveActivityNames[0]) === 'TALLER MUNICIPAL' && (
-        <div className="space-y-1.5">
-          <label htmlFor="input-reserva-unidad-municipal" className="block font-semibold text-slate-700">
-            ¿A qué dirección o departamento pertenece?
-          </label>
-          <input
-            id="input-reserva-unidad-municipal"
-            type="text"
-            maxLength={200}
-            value={formData.unidadMunicipal || ''}
-            onChange={(e) => setFormData((prev) => ({ ...prev, unidadMunicipal: e.target.value }))}
-            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
-          />
-        </div>
-      )}
 
       {/* Early notice for Carta de Compromiso if applicable */}
       {requiresLetter ? (

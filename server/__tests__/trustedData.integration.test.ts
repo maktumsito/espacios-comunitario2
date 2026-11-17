@@ -169,6 +169,25 @@ describe.skipIf(!enabled)(
         .toMatchObject({ items: [{ name: 'Sillas', quantity: 0 }] });
       expect(await post('/api/inventario/articulos', { locationId: office.id }))
         .toMatchObject({ items: [{ name: 'Sillas', quantity: 4 }] });
+
+      const removal = { locationId: storage.id, generation: storage.generation };
+      expect(await post('/api/inventario/eliminar-lugar', removal, reader)).toMatchObject({ status: 403 });
+      expect(await post('/api/inventario/eliminar-lugar', removal)).toMatchObject({ status: 200 });
+      expect(await post('/api/inventario/eliminar-lugar', removal)).toMatchObject({ status: 200 });
+      expect(await post('/api/inventario/lugares', {})).toMatchObject({ locations: [office] });
+      expect(await post('/api/inventario/articulos', removal)).toMatchObject({ status: 404 });
+      expect(await save(2, 0)).toMatchObject({ status: 404 });
+      const { location: recreated } = await create('Bodega principal');
+      const newPlace = { locationId: recreated.id, generation: recreated.generation };
+      expect(recreated.generation).not.toBe(storage.generation);
+      expect(await post('/api/inventario/eliminar-lugar', removal)).toMatchObject({ status: 409 });
+      expect(await save(2, 0)).toMatchObject({ status: 409 });
+      expect(await post('/api/inventario/articulos', newPlace)).toMatchObject({ status: 200, items: [] });
+      expect(await post('/api/inventario/guardar-articulo', {
+        ...newPlace, name: 'Sillas', quantity: 5, previousQuantity: null,
+      })).toMatchObject({ status: 200, item: { quantity: 5 } });
+      expect(await post('/api/inventario/articulos', newPlace))
+        .toMatchObject({ items: [{ name: 'Sillas', quantity: 5 }] });
     });
 
     it('checks the type, integer quantity and inclusive dates, and sends one notice for several dates and spaces', async () => {
