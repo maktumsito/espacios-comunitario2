@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import type { Firestore } from "firebase-admin/firestore";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { gzipSync } from "node:zlib";
 import type { AppSessions } from "./appSession";
@@ -176,6 +176,82 @@ const wrap =
     void fn(req, res).catch((error) => apiError(res, error));
   };
 
+function inventoryName(value: unknown): string {
+  const name = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
+  if (!name || name.length > 120) throw new ApiFailure(400, 'Escribe un nombre de hasta 120 caracteres.');
+  return name;
+}
+
+function inventoryId(name: string): string {
+  return createHash('sha256').update(name.normalize('NFC').toLocaleLowerCase('es')).digest('hex');
+}
+
+function registerInventoryApi(app: Express, db: Firestore, sessions: AppSessions) {
+  const locations = () => db.collection('inventario_lugares');
+  const managerRoute = (path: string, handler: (req: Request, res: Response) => Promise<unknown>) =>
+    app.post(`/api/inventario/${path}`, sessions.requireAuth, wrap(async (req, res) => {
+      requireManager((req as any).user);
+      res.set('Cache-Control', 'no-store');
+      await handler(req, res);
+    }));
+
+  function location(id: unknown) {
+    if (typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id)) throw new ApiFailure(400, 'Lugar no válido.');
+    return locations().doc(id);
+  }
+
+  managerRoute('lugares', async (_req, res) => {
+    const snapshot = await locations().orderBy('name').get();
+    res.json({ success: true, locations: snapshot.docs.map(doc => ({ id: doc.id, name: doc.get('name') })) });
+  });
+
+  managerRoute('crear-lugar', async (req, res) => {
+    const name = inventoryName(req.body?.name);
+    const ref = locations().doc(inventoryId(name));
+    const storedName = await db.runTransaction(async tx => {
+      const existing = await tx.get(ref);
+      if (existing.exists) return existing.get('name');
+      tx.create(ref, { name });
+      return name;
+    });
+    res.json({ success: true, location: { id: ref.id, name: storedName } });
+  });
+
+  managerRoute('articulos', async (req, res) => {
+    const ref = location(req.body?.locationId);
+    if (!(await ref.get()).exists) throw new ApiFailure(404, 'El lugar no existe.');
+    const snapshot = await ref.collection('articulos').orderBy('name').get();
+    res.json({ success: true, items: snapshot.docs.map(doc => ({
+      id: doc.id, name: doc.get('name'), quantity: doc.get('quantity'),
+    })) });
+  });
+
+  managerRoute('guardar-articulo', async (req, res) => {
+    const { locationId, quantity, previousQuantity } = req.body || {};
+    const name = inventoryName(req.body?.name);
+    const validQuantity = (value: unknown): value is number =>
+      typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+    if (!validQuantity(quantity) || (previousQuantity !== null && !validQuantity(previousQuantity))) {
+      throw new ApiFailure(400, 'La cantidad debe ser un número entero mayor o igual a cero.');
+    }
+    const place = location(locationId);
+    const ref = place.collection('articulos').doc(inventoryId(name));
+    const item = await db.runTransaction(async tx => {
+      const [parent, existing] = await tx.getAll(place, ref);
+      if (!parent.exists) throw new ApiFailure(404, 'El lugar no existe.');
+      const current = existing.exists ? existing.get('quantity') : null;
+      const item = { id: ref.id, name: existing.exists ? existing.get('name') : name, quantity };
+      if (current === quantity) return item;
+      if (current !== previousQuantity) {
+        throw new ApiFailure(409, 'El artículo ya existe o su cantidad cambió. Actualiza el listado antes de editar.');
+      }
+      tx.set(ref, { name: item.name, quantity });
+      return item;
+    });
+    res.json({ success: true, item });
+  });
+}
+
 /** Shared native listeners and short conditional responses: no permanent HTTP
  * connection, no read/poll of the reservation collection for each browser tick. */
 function stripVolatileTimestamps(val: any): any {
@@ -194,6 +270,7 @@ export function registerDataApi(
   db: Firestore,
   sessions: AppSessions,
 ) {
+  registerInventoryApi(app, db, sessions);
   const VIEW_IDLE_TTL_MS = 300000;
   const views = new Map<
     string,

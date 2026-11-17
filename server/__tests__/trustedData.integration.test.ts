@@ -147,6 +147,30 @@ describe.skipIf(!enabled)(
       post('/api/reservations/commit', { reservations, options: { operationId, ...options } });
     const cakeStock = () => post('/api/reservations/cake-stock', {});
 
+    it('stores physical stock by location and protects entered quantities', async () => {
+      expect(await post('/api/inventario/lugares', {}, reader)).toMatchObject({ status: 403 });
+      expect(await post('/api/inventario/lugares', {})).toMatchObject({ locations: [] });
+      const create = (name: string) => post('/api/inventario/crear-lugar', { name });
+      const { location: storage } = await create('Bodega principal');
+      const { location: office } = await create('Oficina');
+      expect(await create(' BODEGA  PRINCIPAL ')).toMatchObject({ status: 200, location: storage });
+      expect(await post('/api/inventario/lugares', {})).toMatchObject({ locations: [storage, office] });
+
+      const save = (quantity: number, previousQuantity: number | null, locationId = storage.id) =>
+        post('/api/inventario/guardar-articulo', { locationId, name: 'Sillas', quantity, previousQuantity });
+      expect(await save(-1, null)).toMatchObject({ status: 400 });
+      expect(await save(12, null, 'f'.repeat(64))).toMatchObject({ status: 404 });
+      expect(await save(12, null)).toMatchObject({ status: 200, item: { name: 'Sillas', quantity: 12 } });
+      expect(await save(12, null)).toMatchObject({ status: 200 });
+      expect(await save(4, null, office.id)).toMatchObject({ status: 200 });
+      expect(await save(0, 12)).toMatchObject({ status: 200 });
+      expect(await save(3, 12)).toMatchObject({ status: 409 });
+      expect(await post('/api/inventario/articulos', { locationId: storage.id }))
+        .toMatchObject({ items: [{ name: 'Sillas', quantity: 0 }] });
+      expect(await post('/api/inventario/articulos', { locationId: office.id }))
+        .toMatchObject({ items: [{ name: 'Sillas', quantity: 4 }] });
+    });
+
     it('checks the type, integer quantity and inclusive dates, and sends one notice for several dates and spaces', async () => {
       expect(await cakeStock()).toMatchObject({ available: 15 });
       for (const invalid of [
