@@ -3,7 +3,7 @@ import { dataRequest } from '../firebase/gateway';
 import { ConfirmationModal } from './common/ConfirmationModal';
 
 type Location = { id: string; name: string; generation: string };
-type Article = { id: string; name: string; quantity: number };
+type Article = { id: string; name: string; quantity: number; minimumQuantity: number | null };
 
 const field = 'min-h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3';
 const button = 'min-h-11 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white disabled:opacity-50';
@@ -33,6 +33,7 @@ function InventoryArticles({ location, locked, saving, setSaving, onRemove }: {
   const [editing, setEditing] = useState<Article | null>(null);
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [minimumQuantity, setMinimumQuantity] = useState('');
   const [confirmRemoval, setConfirmRemoval] = useState(false);
 
   useEffect(() => {
@@ -48,6 +49,7 @@ function InventoryArticles({ location, locked, saving, setSaving, onRemove }: {
     setEditing(null);
     setName('');
     setQuantity('');
+    setMinimumQuantity('');
     setError('');
     setNotice('');
     setReading(true);
@@ -64,12 +66,15 @@ function InventoryArticles({ location, locked, saving, setSaving, onRemove }: {
       const { item } = await dataRequest('/api/inventario/guardar-articulo', {
         locationId: location.id, generation: location.generation, name,
         quantity: Number(quantity), previousQuantity: editing?.quantity ?? null,
+        minimumQuantity: minimumQuantity === '' ? null : Number(minimumQuantity),
+        previousMinimumQuantity: editing?.minimumQuantity ?? null,
       });
       setItems(current => includeRecord(current ?? [], item));
       setEditing(null);
       setName('');
       setQuantity('');
-      setNotice('Cantidad guardada.');
+      setMinimumQuantity('');
+      setNotice('Artículo guardado.');
     } catch (error) {
       setError(errorMessage(error));
     } finally {
@@ -88,7 +93,7 @@ function InventoryArticles({ location, locked, saving, setSaving, onRemove }: {
       </div>
     </div>
     <form onSubmit={save} className="space-y-3">
-      <fieldset disabled={reading || saving || locked || !items} className="grid gap-3 sm:grid-cols-[1fr_10rem_auto] sm:items-end">
+      <fieldset disabled={reading || saving || locked || !items} className="grid gap-3 sm:grid-cols-2 sm:items-end lg:grid-cols-[1fr_9rem_11rem_auto]">
         <label className="grid gap-1 text-sm font-medium text-slate-700">Nombre del artículo
           <input className={field} required maxLength={120} readOnly={Boolean(editing)}
             value={name} onChange={event => setName(event.target.value)} />
@@ -97,12 +102,17 @@ function InventoryArticles({ location, locked, saving, setSaving, onRemove }: {
           <input className={field} type="number" min={0} step={1} required
             value={quantity} onChange={event => setQuantity(event.target.value)} />
         </label>
-        <button type="submit" className={button}>{saving ? 'Guardando…' : editing ? 'Guardar cantidad' : 'Agregar artículo'}</button>
+        <label className="grid gap-1 text-sm font-medium text-slate-700">Mínimo de alerta (opcional)
+          <input className={field} type="number" min={0} step={1} placeholder="Sin alerta"
+            value={minimumQuantity} onChange={event => setMinimumQuantity(event.target.value)} />
+        </label>
+        <button type="submit" className={button}>{saving ? 'Guardando…' : editing ? 'Guardar artículo' : 'Agregar artículo'}</button>
       </fieldset>
       {editing && <button type="button" className={secondary} disabled={saving} onClick={() => {
         setEditing(null);
         setName('');
         setQuantity('');
+        setMinimumQuantity('');
         setError('');
       }}>Cancelar edición</button>}
     </form>
@@ -117,13 +127,22 @@ function InventoryArticles({ location, locked, saving, setSaving, onRemove }: {
         <th scope="col" className="w-28 p-2"><span className="sr-only">Acción</span></th>
       </tr></thead>
       <tbody>{items?.map(item => <tr key={item.id} className="border-b border-slate-200">
-        <th scope="row" className="break-words p-2 font-medium text-slate-900">{item.name}</th>
-        <td className="break-all p-2 text-right tabular-nums">{item.quantity}</td>
+        <th scope="row" className="break-words p-2 font-medium text-slate-900">
+          {item.name}
+          {item.minimumQuantity != null && item.quantity <= item.minimumQuantity && (
+            <span className="mt-1 block w-fit rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Stock bajo</span>
+          )}
+        </th>
+        <td className="break-all p-2 text-right tabular-nums">
+          {item.quantity}
+          {item.minimumQuantity != null && <span className="block text-xs text-slate-600">Mín. {item.minimumQuantity}</span>}
+        </td>
         <td className="p-2 text-right"><button type="button" disabled={saving || reading} className={secondary}
-          aria-label={`Editar cantidad de ${item.name}`} onClick={() => {
+          aria-label={`Editar ${item.name}`} onClick={() => {
             setEditing(item);
             setName(item.name);
             setQuantity(String(item.quantity));
+            setMinimumQuantity(item.minimumQuantity == null ? '' : String(item.minimumQuantity));
             setNotice('');
             setError('');
           }}>Editar</button></td>

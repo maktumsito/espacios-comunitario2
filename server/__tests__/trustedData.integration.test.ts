@@ -188,6 +188,22 @@ describe.skipIf(!enabled)(
       })).toMatchObject({ status: 200, item: { quantity: 5 } });
       expect(await post('/api/inventario/articulos', newPlace))
         .toMatchObject({ items: [{ name: 'Sillas', quantity: 5 }] });
+
+      const alert = (minimumQuantity: number | null, previousMinimumQuantity: number | null, quantity = 5) =>
+        post('/api/inventario/guardar-articulo', {
+          ...newPlace, name: 'Sillas', quantity, previousQuantity: quantity,
+          minimumQuantity, previousMinimumQuantity,
+        });
+      expect(await alert(-1, null)).toMatchObject({ status: 400 });
+      expect(await alert(5, null)).toMatchObject({ status: 200, item: { minimumQuantity: 5 } });
+      expect(await alert(0, null)).toMatchObject({ status: 409 });
+      expect(await alert(0, 5)).toMatchObject({ status: 200, item: { minimumQuantity: 0 } });
+      expect(await post('/api/inventario/guardar-articulo', {
+        ...newPlace, name: 'Sillas', quantity: 0, previousQuantity: 5,
+      })).toMatchObject({ status: 200, item: { quantity: 0, minimumQuantity: 0 } });
+      expect(await post('/api/inventario/articulos', newPlace))
+        .toMatchObject({ items: [{ quantity: 0, minimumQuantity: 0 }] });
+      expect(await alert(null, 0, 0)).toMatchObject({ status: 200, item: { minimumQuantity: null } });
     });
 
     it('checks the type, integer quantity and inclusive dates, and sends one notice for several dates and spaces', async () => {

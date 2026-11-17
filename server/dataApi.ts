@@ -248,16 +248,24 @@ function registerInventoryApi(app: Express, db: Firestore, sessions: AppSessions
     const snapshot = await ref.collection(generation ? `articulos_${generation}` : 'articulos').orderBy('name').get();
     res.json({ success: true, items: snapshot.docs.map(doc => ({
       id: doc.id, name: doc.get('name'), quantity: doc.get('quantity'),
+      minimumQuantity: doc.get('minimumQuantity') ?? null,
     })) });
   });
 
   managerRoute('guardar-articulo', async (req, res) => {
-    const { locationId, generation = '', quantity, previousQuantity } = req.body || {};
+    const { locationId, generation = '', quantity, previousQuantity, minimumQuantity, previousMinimumQuantity } = req.body || {};
     const name = inventoryName(req.body?.name);
     const validQuantity = (value: unknown): value is number =>
       typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
     if (!validQuantity(quantity) || (previousQuantity !== null && !validQuantity(previousQuantity))) {
       throw new ApiFailure(400, 'La cantidad debe ser un número entero mayor o igual a cero.');
+    }
+    const changesMinimum = minimumQuantity !== undefined;
+    if (changesMinimum && (
+      (minimumQuantity !== null && !validQuantity(minimumQuantity))
+      || (previousMinimumQuantity !== null && !validQuantity(previousMinimumQuantity))
+    )) {
+      throw new ApiFailure(400, 'El mínimo de alerta debe ser un número entero mayor o igual a cero.');
     }
     const place = location(locationId);
     const item = await db.runTransaction(async tx => {
@@ -265,12 +273,14 @@ function registerInventoryApi(app: Express, db: Firestore, sessions: AppSessions
       const ref = place.collection(currentGeneration ? `articulos_${currentGeneration}` : 'articulos').doc(inventoryId(name));
       const existing = await tx.get(ref);
       const current = existing.exists ? existing.get('quantity') : null;
-      const item = { id: ref.id, name: existing.exists ? existing.get('name') : name, quantity };
-      if (current === quantity) return item;
-      if (current !== previousQuantity) {
-        throw new ApiFailure(409, 'El artículo ya existe o su cantidad cambió. Actualiza el listado antes de editar.');
+      const currentMinimum = existing.get('minimumQuantity') ?? null;
+      const nextMinimum = changesMinimum ? minimumQuantity : currentMinimum;
+      const item = { id: ref.id, name: existing.exists ? existing.get('name') : name, quantity, minimumQuantity: nextMinimum };
+      if (current === quantity && currentMinimum === nextMinimum) return item;
+      if (current !== previousQuantity || (changesMinimum && currentMinimum !== previousMinimumQuantity)) {
+        throw new ApiFailure(409, 'El artículo ya existe o cambió. Actualiza el listado antes de editar.');
       }
-      tx.set(ref, { name: item.name, quantity });
+      tx.set(ref, { name: item.name, quantity, minimumQuantity: nextMinimum });
       return item;
     });
     res.json({ success: true, item });
