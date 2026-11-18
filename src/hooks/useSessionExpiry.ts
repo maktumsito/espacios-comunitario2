@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { SESSION_REJECTED_EVENT } from '../services/browserSession';
 import { getSessionRemainingMs, getSessionTokenRemainingMs, hasBrowserSessionChanged, isSessionExpired,
   recordSessionActivity, refreshSession, SESSION_DURATION_MS } from '../services/authService';
 
@@ -53,12 +54,19 @@ export function useSessionExpiry(enabled: boolean, onExpire: (reason: 'expired' 
       recordSessionActivity();
       check();
     };
+    const reject = () => {
+      if (expired || disposed) return;
+      expired = true;
+      clearTimeout(timer);
+      callback.current('expired');
+    };
     check();
     for (const event of activityEvents) window.addEventListener(event, activity, { capture: true, passive: true });
     window.addEventListener('focus', check);
     window.addEventListener('pageshow', check);
     window.addEventListener('storage', check);
     window.addEventListener('auth-session-changed', check);
+    window.addEventListener(SESSION_REJECTED_EVENT, reject);
     document.addEventListener('visibilitychange', check);
     return () => {
       disposed = true;
@@ -68,6 +76,7 @@ export function useSessionExpiry(enabled: boolean, onExpire: (reason: 'expired' 
       window.removeEventListener('pageshow', check);
       window.removeEventListener('storage', check);
       window.removeEventListener('auth-session-changed', check);
+      window.removeEventListener(SESSION_REJECTED_EVENT, reject);
       document.removeEventListener('visibilitychange', check);
     };
   }, [enabled]);

@@ -3,7 +3,12 @@
 export const SESSION_TOKEN_STORAGE_KEY = 'espacios_auth_token_v2';
 export const AUTH_SESSION_ID_KEY = 'espacios_auth_session_id_v1';
 export const SESSION_CREDENTIAL_STORAGE_KEY = 'espacios_auth_credential_v1';
+export const SESSION_REJECTED_EVENT = 'auth-session-rejected';
 let boundIdentity: string | null | undefined;
+
+export function isSupportedBrowserSessionToken(token: string): boolean {
+  return !token.startsWith('cookie.') && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
+}
 
 function sharedIdentity(): string | null {
   try {

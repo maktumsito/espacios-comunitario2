@@ -1,3 +1,4 @@
+import { SESSION_REJECTED_EVENT } from '../services/browserSession';
 import * as sdk from "firebase/firestore";
 import { DataViewPoller } from './dataViewPoller';
 import { readBrowserSessionToken } from '../services/browserSession';
@@ -29,7 +30,8 @@ export async function dataRequest(
   body: unknown,
   signal?: AbortSignal,
 ): Promise<any> {
-  if (!sessionToken())
+  const sentToken = sessionToken();
+  if (!sentToken)
     throw new DataApiError(
       "Inicia sesión para acceder a los datos.",
       401,
@@ -40,10 +42,14 @@ export async function dataRequest(
     signal,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${sessionToken()}`,
+      Authorization: `Bearer ${sentToken}`,
     },
     body: JSON.stringify(body),
   });
+  if (response.status === 401 && path === '/api/data/listen-batch' &&
+      sentToken === sessionToken() && typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(SESSION_REJECTED_EVENT));
+  }
   const result = await response.json();
   if (!response.ok || result.success === false)
     throw responseFailure(response, result);

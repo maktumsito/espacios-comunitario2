@@ -1,3 +1,4 @@
+import { isSupportedBrowserSessionToken } from './services/browserSession';
 import { ReservationVisualsProvider } from './contexts/ReservationVisualsContext';
 import { NotificationPortal } from './components/common/NotificationPortal';
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
@@ -132,11 +133,11 @@ export default function App() {
     x: number;
     y: number;
   } | null>(null);
-  const [sessionExpired, setSessionExpired] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(() => getAuthSessionToken().startsWith('cookie.'));
   const [sessionChanged, setSessionChanged] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     const stored = getStoredAuthUser();
-    if (stored && !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(getAuthSessionToken())) {
+    if (stored && !isSupportedBrowserSessionToken(getAuthSessionToken())) {
       clearAuthUser();
       return null;
     }
@@ -1081,7 +1082,7 @@ export default function App() {
 
       {/* Revalidation Banner for cloud synchronization feedback */}
       <RevalidationBanner isRevalidating={isFirebaseSyncing} />
-      {generalDataPending && (
+      {(generalDataPending || readError) && (
         <div role="status" className="p-4 text-center text-slate-600">
           {readError ? 'No se pudieron cargar las reservas. Comprueba tu conexión.' : 'Cargando reservas para esta vista...'}
           {readError && <button type="button" onClick={retryRead} className="ml-3 text-blue-600 underline">Reintentar</button>}

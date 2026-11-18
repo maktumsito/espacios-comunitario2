@@ -5,8 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useSessionExpiry } from '../useSessionExpiry';
 import { AUTH_SESSION_EXPIRY_KEY, AUTH_SESSION_START_KEY, AUTH_SESSION_TOKEN_EXPIRY_KEY, clearAuthUser, getAuthSessionToken, getSessionRemainingMs,
   AUTH_SESSION_STORAGE_KEY, getStoredAuthUser, isSessionExpired, refreshSession, saveAuthUser, SESSION_DURATION_MS, updateStoredAuthUser } from '../../services/authService';
-import { AUTH_SESSION_ID_KEY, SESSION_CREDENTIAL_STORAGE_KEY } from '../../services/browserSession';
-import { sessionToken } from '../../firebase/gateway';
+import { AUTH_SESSION_ID_KEY, isSupportedBrowserSessionToken, SESSION_CREDENTIAL_STORAGE_KEY } from '../../services/browserSession';
+import { dataRequest, sessionToken } from '../../firebase/gateway';
 import { LoginScreen } from '../../components/LoginScreen';
 
 const account = { username: 'ana', name: 'Ana', role: 'Coordinador', initials: 'A', avatarColor: 'blue' };
@@ -16,6 +16,34 @@ beforeEach(() => {
   clearAuthUser(); localStorage.clear(); sessionStorage.clear();
 });
 afterEach(() => { cleanup(); clearAuthUser(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+it('requires a fresh login for cookie markers left by the later version', () => {
+  expect(isSupportedBrowserSessionToken('cookie.12345678-0000-0000-0000-123456789abc')).toBe(false);
+  expect(isSupportedBrowserSessionToken('signed.token')).toBe(true);
+});
+
+it('expires the current session when the server rejects agenda synchronization', async () => {
+  saveAuthUser(account, SESSION_DURATION_MS, { token: 'signed.token' });
+  const expire = vi.fn();
+  renderHook(() => useSessionExpiry(true, expire));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'Sesión vencida' }), { status: 401 })));
+  await expect(dataRequest('/api/data/listen-batch', { queries: [] })).rejects.toMatchObject({ status: 401 });
+  expect(expire).toHaveBeenCalledExactlyOnceWith('expired');
+});
+
+it('ignores a delayed rejection from a previous session', async () => {
+  saveAuthUser(account, SESSION_DURATION_MS, { token: 'old.token' });
+  const expire = vi.fn();
+  renderHook(() => useSessionExpiry(true, expire));
+  let finish!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { finish = resolve; })));
+  const pending = dataRequest('/api/data/listen-batch', { queries: [] });
+  act(() => saveAuthUser(account, SESSION_DURATION_MS, { token: 'new.token' }));
+  finish(new Response(JSON.stringify({ error: 'Sesión vencida' }), { status: 401 }));
+  await expect(pending).rejects.toMatchObject({ status: 401 });
+  expect(expire).not.toHaveBeenCalled();
+  expect(getAuthSessionToken()).toBe('new.token');
+});
 
 it('automatically clears credentials and requires selecting an account again at the exact deadline', () => {
   saveAuthUser(account);

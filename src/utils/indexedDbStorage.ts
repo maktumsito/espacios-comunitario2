@@ -28,10 +28,9 @@ function getDbInstance(): Promise<IDBDatabase> {
     return Promise.reject(new Error('IndexedDB is not supported in this environment'));
   }
 
-  dbPromise = new Promise((resolve, reject) => {
-    try {
-      const request = window.indexedDB.open(DB_NAME, DB_VERSION);
-
+  dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+    const open = (version?: number) => {
+      const request = version === undefined ? window.indexedDB.open(DB_NAME) : window.indexedDB.open(DB_NAME, version);
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -44,6 +43,11 @@ function getDbInstance(): Promise<IDBDatabase> {
 
       request.onsuccess = () => {
         const db = request.result;
+        if (!db.objectStoreNames.contains(STORE_NAME) || !db.objectStoreNames.contains(AUDIT_STORE_NAME)) {
+          db.close();
+          reject(new Error('La caché existente no contiene los almacenes de reservas y auditoría.'));
+          return;
+        }
         db.onclose = () => {
           dbPromise = null;
         };
@@ -55,14 +59,17 @@ function getDbInstance(): Promise<IDBDatabase> {
       };
 
       request.onerror = () => {
-        dbPromise = null;
-        console.warn('Error opening IndexedDB:', request.error);
+        if (version !== undefined && request.error?.name === 'VersionError') {
+          try { open(); } catch (error) { reject(error); }
+          return;
+        }
         reject(request.error);
       };
-    } catch (err) {
-      dbPromise = null;
-      reject(err);
-    }
+    };
+    open(DB_VERSION);
+  }).catch((error) => {
+    dbPromise = null;
+    throw error;
   });
 
   return dbPromise;
