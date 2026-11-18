@@ -33,7 +33,6 @@ import {
 import {
   getLocalCache,
   seedAllToFirestore,
-  reloadAllFromFirestore,
   normalizeReservationFromFirestore,
 } from "./reservationService";
 import {
@@ -101,16 +100,6 @@ export interface DatabaseBackupData {
   usuarios: Array<Omit<UserAccount, "passwordHash">>;
   calificaciones: SpaceRating[];
   bloqueos?: import("../types").SpaceBlock[];
-  inventario?: Array<{
-    id: string;
-    data: { name: string; generation?: string; archivedAt?: string };
-    articulos: Array<{ id: string; data: { name: string; quantity: number; minimumQuantity?: number } }>;
-  }>;
-  stockTortas?: {
-    capacity: number;
-    available: number;
-    allocations: Record<string, { quantity: number; date: string; series: string | null }>;
-  } | null;
 }
 
 export interface DatabaseBackupRecord extends DatabaseBackupMetadata {
@@ -1008,16 +997,15 @@ export async function restoreDatabaseFromBackup(
 
   try {
     await validateBackupRecord(recordToRestore);
+    if (usesDataApi())
+      await dataRequest("/api/backups/validate", { record: recordToRestore });
     const reservationsToRestore = recordToRestore.data.reservas;
-    if (usesDataApi()) {
-      const restored = await dataRequest('/api/backups/restore', { record: recordToRestore });
-      const restoredReservations = await reloadAllFromFirestore().catch(() => undefined);
-      return { success: true, count: restored.count, restoredReservations };
-    }
     const res = await seedAllToFirestore(reservationsToRestore, true);
     if (res.error) return { success: false, count: 0, error: res.error };
 
-    await restoreBackupEntitiesLocally(recordToRestore.data);
+    if (usesDataApi())
+      await dataRequest("/api/backups/entities", { record: recordToRestore });
+    else await restoreBackupEntitiesLocally(recordToRestore.data);
     await recordAuditEntry({
       reservaId: recordToRestore.id,
       action: "BACKUP_RESTORED",

@@ -6,7 +6,7 @@
 import { Reservation, AuditChangeLogEntry } from '../types';
 
 const DB_NAME = 'EspaciosComunitariosDB';
-const DB_VERSION = 3;
+const DB_VERSION = 2;
 const STORE_NAME = 'reservas_store';
 const CACHE_KEY = 'all_reservations';
 const AUDIT_STORE_NAME = 'audit_logs_store';
@@ -36,8 +36,6 @@ function getDbInstance(): Promise<IDBDatabase> {
         const db = (event.target as IDBOpenDBRequest).result;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
           db.createObjectStore(STORE_NAME);
-        } else if (event.oldVersion < 3) {
-          request.transaction?.objectStore(STORE_NAME).delete(CACHE_KEY);
         }
         if (!db.objectStoreNames.contains(AUDIT_STORE_NAME)) {
           db.createObjectStore(AUDIT_STORE_NAME);

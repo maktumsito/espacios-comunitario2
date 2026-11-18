@@ -80,12 +80,6 @@ export function SystemMaintenanceView({ currentUser, reservations, lastSyncTime,
         {onOpenBackups && <button className={buttonClass} onClick={onOpenBackups}>Crear o recuperar un respaldo</button>}</div>
       <p className="mt-2 text-sm text-slate-600">La rotación conserva las cinco copias automáticas recientes. Las copias manuales y protegidas se conservan. Puedes verificar el contenido antes de necesitar una restauración.</p>
       {remote && !remote.backups.length && <p role="status" className="mt-4 text-sm text-amber-800">No hay copias confirmadas. Crea un respaldo antes de realizar cambios importantes.</p>}
-      {remote?.backupSchedule?.confirmedAt && <p className="mt-2 text-sm text-slate-700">
-        Última copia confirmada: {date(remote.backupSchedule.confirmedAt)}
-      </p>}
-      {remote?.backupSchedule?.overdue && remote.backups.length > 0 && <p role="status" className="mt-2 text-sm text-amber-800">
-        El respaldo automático está atrasado. Revisa la ejecución del programador.
-      </p>}
       <div className="mt-4 divide-y divide-slate-200">{remote?.backups.map(backup => <div key={backup.id} className="flex flex-col justify-between gap-3 py-4 sm:flex-row">
         <div className="min-w-0"><p className="text-sm font-medium text-slate-800">{date(backup.timestamp)} · {backup.tipo === 'manual' ? 'Manual' : 'Automática'}</p>
           <p className="mt-1 text-xs text-slate-500">{backup.totalReservas} reservas · {backup.protected ? 'Protegida' : backup.tipo === 'manual' ? 'Conservada por ser manual' : 'Sujeta a rotación'}</p></div>

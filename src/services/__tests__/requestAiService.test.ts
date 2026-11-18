@@ -25,7 +25,7 @@ it('times out after 20 seconds and aborts the request without retries', async ()
     options.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
   }));
   vi.stubGlobal('fetch', fetcher);
-  const promise = analyzeReservationRequest('yoga', { ...parseReservationRequestText('yoga'), fecha: '2026-11-20' }, {}, new AbortController().signal);
+  const promise = analyzeReservationRequest('yoga', parseReservationRequestText('yoga'), {}, new AbortController().signal);
   const assertion = expect(promise).rejects.toThrow('20 segundos');
   await vi.advanceTimersByTimeAsync(20000);
   await assertion;

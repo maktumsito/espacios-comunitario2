@@ -28,7 +28,7 @@ interface RatingsDashboardViewProps {
   reservations: Reservation[];
   currentUser?: { name?: string; role?: string; email?: string; [key: string]: any } | null;
   onOpenRatingModal: (reservation: Reservation, rating?: SpaceRating) => void;
-  onDeleteRating?: (ratingId: string) => void;
+  onDeleteRating: (ratingId: string) => void;
 }
 
 export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
@@ -473,13 +473,13 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
                           </button>
                         )}
 
-                        {onDeleteRating && <button
+                        <button
                           onClick={() => setRatingToDelete(rating.id)}
                           className="min-h-[44px] min-w-[44px] p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer flex items-center justify-center"
                           title="Eliminar calificación"
                         >
                           <Trash2 className="w-4 h-4" />
-                        </button>}
+                        </button>
                       </div>
                     </div>
 
@@ -552,7 +552,7 @@ export const RatingsDashboardView: React.FC<RatingsDashboardViewProps> = ({
           variant="danger"
           confirmLabel="Eliminar Calificación"
           onConfirm={() => {
-            onDeleteRating?.(ratingToDelete);
+            onDeleteRating(ratingToDelete);
             setRatingToDelete(null);
           }}
           onCancel={() => setRatingToDelete(null)}

@@ -1,11 +1,8 @@
 import type { Express, Request, Response } from "express";
 import type { DocumentSnapshot, Firestore } from "firebase-admin/firestore";
-import { FieldPath } from 'firebase-admin/firestore';
 import { createHash, randomUUID } from "node:crypto";
-import { isDeepStrictEqual, promisify } from "node:util";
-import { canReadReservationPersonalData, isAgendaQueryField, projectAgendaRecord } from '../src/utils/reservationPrivacy';
-import { gzip } from "node:zlib";
-import { serializeReservationsCsv } from '../src/utils/csvExportImport';
+import { isDeepStrictEqual } from "node:util";
+import { gzipSync } from "node:zlib";
 import type { AppSessions } from "./appSession";
 import { hashPassword, publicProfile, verifyPassword } from "./passwords";
 import { defaultNewUserPermissions, isReservationPermissionAdmin, reservationPermission, reservationPermissionKeys, RESERVATION_PERMISSION_ADMIN_USERNAME } from '../src/utils/userPermissions';
@@ -61,8 +58,6 @@ const collections = new Set([
   "copias_seguridad",
   "_connection_test",
 ]);
-const maximumReservationRead = 10000;
-const maximumBatchResponseBytes = 24 * 1024 * 1024;
 export function requireManager(user: any) {
   if (!manager(user))
     throw new ApiFailure(
@@ -91,7 +86,7 @@ export function validatePath(path: unknown): string[] {
   return p;
 }
 function readAccess(user: any, path: string[]) {
-  if (["audit_logs", "copias_seguridad", "fcm_tokens", "schedule_slots"].includes(path[0]))
+  if (["audit_logs", "copias_seguridad", "fcm_tokens"].includes(path[0]))
     requireManager(user);
   if (
     path[0] === "configuracion_sistema" &&
@@ -117,10 +112,7 @@ function reference(db: Firestore, body: any, user: any): any {
     (body.constraints || []).length > 12
   )
     throw new ApiFailure(400, "Consulta demasiado compleja.");
-  const constraints = body.constraints || [];
-  for (const c of constraints) {
-    if (limitedAgenda(p[0], user) && ['where', 'orderBy'].includes(c.type) && !isAgendaQueryField(p[0], c.field))
-      throw new ApiFailure(403, 'Campo de consulta no autorizado.');
+  for (const c of body.constraints || []) {
     if (c.type === "where") {
       if (
         typeof c.field !== "string" ||
@@ -147,35 +139,18 @@ function reference(db: Firestore, body: any, user: any): any {
         !["asc", "desc"].includes(c.direction)
       )
         throw new ApiFailure(400, "Orden no válido.");
-      query = query.orderBy(c.field === '__name__' ? FieldPath.documentId() : c.field, c.direction);
+      query = query.orderBy(c.field, c.direction);
     } else if (c.type === "limit") {
       if (!Number.isInteger(c.count) || c.count < 1 || c.count > 10000)
         throw new ApiFailure(400, "Límite no válido.");
       query = query.limit(c.count);
-    } else if (c.type === 'startAfter') {
-      const order = constraints.filter((constraint: any) => constraint.type === 'orderBy').map((constraint: any) => constraint.field);
-      if (p[0] !== 'reservas' || order.join(':') !== 'fecha:__name__' || !Array.isArray(c.values) || c.values.length !== 2 ||
-        typeof c.values[0] !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(c.values[0]) ||
-        typeof c.values[1] !== 'string' || !c.values[1] || c.values[1].length > 128 || c.values[1].includes('/')) {
-        throw new ApiFailure(400, 'Cursor de agenda no válido.');
-      }
-      query = query.startAfter(...c.values);
     } else throw new ApiFailure(400, "Restricción no soportada.");
   }
-  if (p[0] === 'reservas' && !constraints.some((c: any) => c.type === 'limit') && typeof query.limit === 'function')
-    query = query.limit(maximumReservationRead + 1);
   return query;
 }
-function limitedAgenda(collection: string, user: any) {
-  return ['reservas', 'calificaciones_espacios'].includes(collection) && !canReadReservationPersonalData(user);
-}
-function records(snapshot: any, path: string, user: any) {
-  const collection = path.split('/')[0];
-  if (collection === 'reservas' && snapshot.size > maximumReservationRead)
-    throw new ApiFailure(413, 'La consulta es demasiado amplia. Selecciona un período de agenda menor.');
+function records(snapshot: any, path: string) {
   const sanitize = (data: any) =>
-    collection === "usuarios_sistema" ? publicProfile(data) :
-      limitedAgenda(collection, user) ? projectAgendaRecord(collection, data) : data;
+    path.startsWith("usuarios_sistema") ? publicProfile(data) : data;
   return typeof snapshot.exists === "boolean"
     ? [
         {
@@ -200,7 +175,6 @@ const wrap =
   (req: Request, res: Response) => {
     void fn(req, res).catch((error) => apiError(res, error));
   };
-const compress = promisify(gzip);
 
 function inventoryName(value: unknown): string {
   const name = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
@@ -332,27 +306,6 @@ export function registerDataApi(
   sessions: AppSessions,
 ) {
   registerInventoryApi(app, db, sessions);
-  app.post('/api/reservations/export-csv', sessions.requireAuth, wrap(async (req, res) => {
-    const actor = (req as any).user;
-    requireManager(actor);
-    const ids = req.body?.ids;
-    if (!Array.isArray(ids) || !ids.length || ids.length > 10000 ||
-      ids.some(id => typeof id !== 'string' || !id || id.length > 128 || id.includes('/') || id === '.' || id === '..')) {
-      throw new ApiFailure(400, 'Selecciona entre 1 y 10.000 reservas para exportar.');
-    }
-    const uniqueIds = [...new Set<string>(ids)];
-    const rows = [];
-    for (let offset = 0; offset < uniqueIds.length; offset += 200) {
-      const snapshots = await db.getAll(...uniqueIds.slice(offset, offset + 200).map(id => db.collection('reservas').doc(id)));
-      for (const snap of snapshots) if (snap.exists) rows.push({ ...snap.data(), id: snap.id } as any);
-    }
-    if (rows.length !== uniqueIds.length) throw new ApiFailure(409, 'Las reservas cambiaron. Actualiza la agenda antes de exportar.');
-    const dates = rows.map(row => row.fecha).filter(Boolean).sort();
-    const audit = db.collection('audit_logs').doc();
-    await audit.create({ id: audit.id, action: 'RESERVATIONS_EXPORTED', user: actor.username,
-      timestamp: new Date().toISOString(), affectedCount: rows.length, from: dates[0] || null, to: dates.at(-1) || null });
-    res.set('Cache-Control', 'no-store').json({ success: true, csv: serializeReservationsCsv(rows) });
-  }));
   const VIEW_IDLE_TTL_MS = 300000;
   const views = new Map<
     string,
@@ -381,7 +334,7 @@ export function registerDataApi(
       const snapshot = await ref.get();
       res
         .set("Cache-Control", "no-store")
-        .json({ success: true, docs: records(snapshot, req.body.path, (req as any).user) });
+        .json({ success: true, docs: records(snapshot, req.body.path) });
     }),
   );
   const readView = async (body: any, user: any) => {
@@ -391,7 +344,6 @@ export function registerDataApi(
           path: body.path,
           kind: body.kind,
           constraints: body.constraints || [],
-          agendaOnly: limitedAgenda(body.path.split('/')[0], user),
         });
       for (const [id, v] of views)
         if (Date.now() - v.lastUse > VIEW_IDLE_TTL_MS) {
@@ -422,15 +374,8 @@ export function registerDataApi(
         const current = view;
         current.stop = ref.onSnapshot(
           (snapshot: any) => {
-            try {
-              current.docs = records(snapshot, body.path, user);
-            } catch (error) {
-              views.delete(key);
-              current.stop();
-              fail(error);
-              return;
-            }
             current.snapshot = snapshot;
+            current.docs = records(snapshot, body.path);
             current.version = `${epoch}:${++sequence}`;
             ready();
           },
@@ -468,7 +413,7 @@ export function registerDataApi(
         req.get("accept-encoding")?.includes("gzip")
       ) {
         res.set("Content-Encoding", "gzip");
-        res.end(await compress(content));
+        res.end(gzipSync(content));
       } else res.end(content);
     }),
   );
@@ -485,12 +430,10 @@ export function registerDataApi(
       }
     }));
     const content = Buffer.from(JSON.stringify({ success: true, results }));
-    if (content.byteLength > maximumBatchResponseBytes)
-      throw new ApiFailure(413, 'El lote supera el tamaño máximo. Reduce el período de agenda.');
     res.set({ 'Cache-Control': 'no-store', 'Content-Type': 'application/json' });
     if (content.length > 2048 && req.get('accept-encoding')?.includes('gzip')) {
       res.set('Content-Encoding', 'gzip');
-      res.end(await compress(content));
+      res.end(gzipSync(content));
     } else res.end(content);
   }));
   app.post(
@@ -541,7 +484,6 @@ export function registerDataApi(
             "reservas",
             "schedule_slots",
             "usuarios_sistema",
-            "calificaciones_espacios",
             "audit_logs",
             "_connection_test",
           ].includes(p[0])
@@ -738,8 +680,6 @@ export function registerDataApi(
         const all = await tx.get(db.collection("usuarios_sistema")),
           target = all.docs.find((d) => d.id === accountId(username));
         if (!target) return all.docs.map(d => publicProfile(d.data()));
-        if (target.get("username")?.trim().toLowerCase() !== username)
-          throw new ApiFailure(409, "El identificador coincide con otra cuenta existente.");
         if (target.get("isMasterAdmin") || username === RESERVATION_PERMISSION_ADMIN_USERNAME)
           throw new ApiFailure(403, "El perfil maestro está protegido.");
         if (
@@ -804,9 +744,7 @@ export function registerDataApi(
       requireManager((req as any).user);
       res.json({
         success: true,
-        claim: process.env.BACKUP_SCHEDULER_AUDIENCE && process.env.BACKUP_SCHEDULER_SUBJECT
-          ? { config: { ...req.body.config, enabled: false }, busy: false }
-          : await claimScheduledBackup(db as any, req.body.config),
+        claim: await claimScheduledBackup(db as any, req.body.config),
       });
     }),
   );

@@ -6,10 +6,13 @@ import type { AppSessions } from '../appSession';
 import { requestAiSchema } from '../../src/utils/requestAiSchema';
 
 const extraction = {
+  descripcion: 'Yoga', tipoActividad: 'TALLER', tipoPrestamo: null, espacio: 'AUDITORIO',
   fecha: '2026-11-20', horaInicio: '18:00', horaFin: '20:00', cantidadParticipantes: 30,
   bookingMode: 'single', selectedDays: null, recurrenceStartDate: null, recurrenceEndDate: null,
+  equipamientoSolicitado: null, montaje: null,
 };
-const body = extraction;
+const body = { text: 'Solicitante: María Soto, correo maria@example.com, RUT 12.345.678-5, tel +56912345678, yoga mañana',
+  defaultDate: '2026-11-20', spaces: ['AUDITORIO'], activityTypes: ['TALLER'], loanTypes: [], equipment: [] };
 const success = (value: unknown = extraction) => new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(value) }] } }] }));
 
 async function scenario(run: (post: (body?: unknown, auth?: string) => Promise<Response>, gemini: ReturnType<typeof vi.fn>) => Promise<void>,
@@ -44,7 +47,7 @@ it('extracts structured data with Santiago context and redacts identifiers witho
     const response = await post();
     expect(response.status).toBe(200);
     const result = await response.json();
-    expect(result.extraction).toMatchObject(extraction);
+    expect(result.extraction).toEqual(extraction);
     expect(JSON.stringify(result)).not.toContain('test-server-key');
     const [url, config] = gemini.mock.calls[0] as any;
     expect(url).toContain('gemini-3.5-flash-lite:generateContent');
@@ -52,8 +55,7 @@ it('extracts structured data with Santiago context and redacts identifiers witho
     for (const personal of ['María Soto', 'maria@example.com', '12.345.678-5', '912345678']) expect(config.body).not.toContain(personal);
     const prompt = JSON.parse(JSON.parse(config.body).contents[0].parts[0].text);
     expect(prompt.referenceDate).toBe(new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Santiago' }).format(new Date()));
-    expect(prompt).toMatchObject(extraction);
-    expect(prompt).not.toHaveProperty('text');
+    expect(prompt.text).toContain('yoga mañana');
   });
 });
 
@@ -110,14 +112,14 @@ it('aborts a stalled provider request at its deadline', async () => {
 });
 
 it('supports a schema with explicit nulls for missing information', () => {
-  expect(requestAiSchema.safeParse({ ...Object.fromEntries(Object.keys(extraction).map(key => [key, null])),
-    descripcion: null, tipoActividad: null, tipoPrestamo: null, espacio: null, equipamientoSolicitado: null, montaje: null }).success).toBe(true);
+  expect(requestAiSchema.safeParse(Object.fromEntries(Object.keys(extraction).map(key => [key, null]))).success).toBe(true);
 });
 
 it('keeps the provider grammar small while retaining strict validation locally', () => {
   const schema = requestAiGenerationSchema() as any;
   expect(schema.properties.fecha.type).toEqual(['string', 'null']);
-  expect(schema.properties.equipamientoSolicitado).toBeUndefined();
+  expect(schema.properties.equipamientoSolicitado.type).toEqual(['array', 'null']);
+  expect(schema.properties.equipamientoSolicitado.maxItems).toBeUndefined();
   expect(schema.properties.bookingMode.enum).toEqual(['single', 'pattern', null]);
   expect(requestAiSchema.safeParse({ ...extraction, cantidadParticipantes: -1 }).success).toBe(false);
 });

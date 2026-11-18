@@ -7,7 +7,6 @@ export interface MaintenanceStatus {
   checkedAt: string;
   backups: DatabaseBackupMetadata[];
   limited: boolean;
-  backupSchedule?: { confirmedAt: string | null; overdue: boolean };
   slotCleanup?: { checkedAt: string; daysOld: number; purgedCount: number; ok: boolean } | null;
   logs: { id: string; timestamp: string; actor: string; action: string; backupId: string }[];
 }

@@ -1,15 +1,13 @@
 import { registerBackupApi } from './server/backupApi';
-import { registerScheduledBackup } from './server/scheduledBackup';
-import { registerRestoreWriteGuard } from './server/restoreLock';
 import { registerBackupMaintenanceApi } from './server/backupMaintenanceApi';
 import { APP_BUILD_INFO } from './src/buildInfo';
 import { claimDelivery,startDelivery,finishDelivery } from './server/deliveryLease';
 import { registerReservationApi } from './server/reservationApi';
 import { getServerDatabase, serverAuth } from './server/database';
-import { accountId, registerDataApi } from './server/dataApi';
-import { registerRatingApi } from './server/ratingApi';
+import { registerDataApi } from './server/dataApi';
 import { isPurgeableScheduleSlot, guardedSlotCleanup } from './server/scheduleSlotCleanup';
 import { fetchDispatchReservations, fetchOldSlotPage } from './server/firestoreQueries';
+import { buildConfirmedRating, reservationEndDate } from './server/ratingValidation';
 import { AppSessions, requireReservationWriter } from './server/appSession';
 import { migrateAccountPassword } from './server/accountPasswordMigration';
 import { SharedServerDocument } from './server/sharedDocument';
@@ -81,7 +79,7 @@ const gmailConnection = new GmailConnection({
 const appSessions = new AppSessions(async username => {
   const db = getServerDb();
   if (!db) throw new Error('Firestore no disponible.');
-  const id = accountId(username);
+  const id = encodeURIComponent(username.trim().toLowerCase()).replace(/\./g, '_');
   const snapshot = await getDocFromServer(doc(db, 'usuarios_sistema', id));
   return snapshot.exists() ? snapshot.data() as UserAccount : null;
 }, process.env.AUTH_SESSION_SECRET || ((process.env.GMAIL_TOKEN_ENCRYPTION_KEY || process.env.GMAIL_OAUTH_CLIENT_SECRET)
@@ -92,16 +90,7 @@ async token => {
     return identity.email_verified === true && identity.firebase.sign_in_provider === 'google.com' ? identity.email || null : null;
   } catch { return null; }
 },
-(account, password) => migrateAccountPassword(getServerDatabase(), account, password),
-localTestMode ? undefined : {
-  async check(id) {
-    const snapshot = await getServerDatabase().collection('_revoked_sessions').doc(id).get();
-    return Boolean(snapshot.get('expiresAt')?.toMillis() > Date.now());
-  },
-  async revoke(id, expiresAt) {
-    await getServerDatabase().collection('_revoked_sessions').doc(id).set({ expiresAt: new Date(expiresAt) });
-  },
-},
+(account, password) => migrateAccountPassword(getServerDatabase(), account, password)
 );
 
 // Helper to get time in America/Santiago
@@ -800,11 +789,9 @@ async function startServer() {
       .select('username', 'name', 'role', 'initials', 'avatarColor').get();
     return snapshot.docs.map(doc => doc.data() as UserAccount);
   });
-  registerRestoreWriteGuard(app, getServerDatabase(), appSessions);
   registerDataApi(app, getServerDatabase(), appSessions);
   registerReservationApi(app,getServerDatabase(),appSessions);
   registerBackupApi(app,getServerDatabase(),appSessions);
-  registerScheduledBackup(app, getServerDatabase());
   registerBackupMaintenanceApi(app,getServerDatabase(),appSessions, () => purgeExpiredSlotsServer.status());
   const requireAuth = appSessions.requireAuth;
   if (!localTestMode) gmailConnection.register(app, (req, res, next) => {
@@ -955,8 +942,93 @@ async function startServer() {
   // -------------------------------------------------------------
   // VALIDATION & RATINGS API (Rechaza evaluación de eventos futuros con datos oficiales de Firestore)
   // -------------------------------------------------------------
-  registerRatingApi(app, getServerDatabase(), appSessions, getSantiagoTime);
+  app.post('/api/ratings/validate-and-save', requireAuth, requireReservationWriter, async (req, res) => {
+    try {
+      const { rating, reservation } = req.body;
+      if (!rating) {
+        return res.status(400).json({
+          success: false,
+          error: 'Faltan datos obligatorios: rating es requerido.'
+        });
+      }
 
+      const reservationId = String(rating.reservaId || rating.reservationId || reservation?.id || '').trim();
+      if (!reservationId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Identificador de reserva (reservaId) obligatorio para emitir una evaluación.'
+        });
+      }
+
+      const db = getServerDb();
+      let dbReservation: any = null;
+
+      // Consultar reserva autoritativa directamente desde Firestore para evitar manipulación del cliente
+      if (db) {
+        try {
+          const snap = await getDocFromServer(doc(db, 'reservas', reservationId));
+          if (snap.exists()) {
+            dbReservation = snap.data();
+          }
+        } catch (dbErr) {
+          console.warn('[Server] Error fetching authoritative reservation from Firestore:', dbErr);
+          return res.status(503).json({ success: false, error: 'No se pudo verificar la reserva oficial. Intenta nuevamente.' });
+        }
+      }
+
+      // Si no se encontró en la base de datos, fallback o error
+      if (!dbReservation) {
+        if (localTestMode && reservation && reservation.fecha && reservation.horaFin) {
+          dbReservation = reservation;
+        } else {
+          return res.status(404).json({
+            success: false,
+            error: `La reserva "${reservationId}" no fue encontrada en los registros autoritativos de Firestore.`
+          });
+        }
+      }
+
+      const santiago = getSantiagoTime();
+      const eventDate = reservationEndDate(dbReservation);
+      const eventEndTime = String(dbReservation.horaFin || '23:59').trim();
+
+      // Comparación estricta de tiempo de finalización contra hora de Santiago (Chile)
+      const isFuture = (eventDate > santiago.dateStr) || (eventDate === santiago.dateStr && eventEndTime > santiago.timeFormatted);
+      if (isFuture) {
+        return res.status(400).json({
+          success: false,
+          code: 'FUTURE_EVENT_BLOCKED',
+          error: `Bloqueo de seguridad: No es posible calificar un evento futuro o antes de su hora de término. La actividad oficial concluye a las ${eventEndTime} del ${eventDate} (Hora actual: ${santiago.timeFormatted} del ${santiago.dateStr}).`,
+          santiagoTime: `${santiago.dateStr} ${santiago.timeFormatted}`,
+          eventEnd: `${eventDate} ${eventEndTime}`
+        });
+      }
+
+      // Sanitizar payload estricto antes de guardar en Firestore
+      const cleanRatingId = String(rating.id || `calif_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`).trim().slice(0, 128);
+      const cleanRating = buildConfirmedRating(rating, { ...dbReservation, id: reservationId },
+        cleanRatingId, String((req as any).user?.u || 'Administrador').slice(0, 100), new Date().toISOString());
+
+      if (db) {
+        await setDoc(doc(db, 'calificaciones_espacios', cleanRating.id), cleanRating, { merge: true });
+      }
+
+      return res.json({
+        success: true,
+        valid: true,
+        message: 'Calificación validada contra reserva oficial y guardada en Firestore.',
+        ratingId: cleanRating.id,
+        rating: cleanRating
+      });
+    } catch (e: any) {
+      console.error('[Server] Error validating rating:', e);
+      return res.status(500).json({ success: false, error: e?.message || 'Error validando calificación' });
+    }
+  });
+
+  // -------------------------------------------------------------
+  // ADMIN CLEANUP & MAINTENANCE API (Executed safely from backend)
+  // -------------------------------------------------------------
   app.post('/api/admin/purge-expired-slots', requireAuth, requireReservationWriter, async (req, res) => {
     try {
       const daysOld = Number(req.body?.daysOld) || 30;

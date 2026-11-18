@@ -56,6 +56,7 @@ interface MobileAgendaViewProps {
   onRequestDelete?: (reservation: Reservation) => void;
   onNewReservationForDate?: (dateStr: string, space?: string) => void;
   onToggleRealizada?: (reservation: Reservation) => void;
+  onOpenCheckIn?: (reservation: Reservation) => void;
   onOpenRating?: (reservation: Reservation, rating?: SpaceRating) => void;
   ratings?: SpaceRating[];
   currentUser?: AuthUser | null;
@@ -84,6 +85,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
   onRequestDelete,
   onNewReservationForDate,
   onToggleRealizada,
+  onOpenCheckIn,
   onOpenRating,
   ratings = [],
   currentUser,
@@ -485,8 +487,20 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                     className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    {/* Left: Asistencia / Realizada / Check-in */}
                     {canEdit ? (
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        {onOpenCheckIn && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenCheckIn(res)}
+                            className="min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 shadow-2xs"
+                            title="Abrir check-in de asistencia y novedades"
+                          >
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>Check-in</span>
+                          </button>
+                        )}
                         {onToggleRealizada && (
                           <button
                             type="button"

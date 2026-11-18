@@ -29,8 +29,7 @@ export async function dataRequest(
   body: unknown,
   signal?: AbortSignal,
 ): Promise<any> {
-  const token = sessionToken();
-  if (!token)
+  if (!sessionToken())
     throw new DataApiError(
       "Inicia sesión para acceder a los datos.",
       401,
@@ -41,13 +40,11 @@ export async function dataRequest(
     signal,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${sessionToken()}`,
     },
     body: JSON.stringify(body),
   });
   const result = await response.json();
-  if (sessionToken() !== token)
-    throw new DataApiError('La sesión cambió durante la consulta.', 401, 'session-changed');
   if (!response.ok || result.success === false)
     throw responseFailure(response, result);
   if (!["/api/data/read", "/api/data/listen", "/api/data/listen-batch", "/api/maintenance/status", "/api/reservations/planning-snapshot", "/api/reservations/cake-stock"].includes(path))
