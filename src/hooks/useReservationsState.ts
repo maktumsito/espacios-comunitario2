@@ -1,3 +1,4 @@
+import { projectAgendaRecord } from '../utils/reservationPrivacy';
 import { useState, useEffect, useCallback } from 'react';
 import { Reservation } from '../types';
 import {
@@ -32,19 +33,22 @@ export interface UseReservationsStateReturn {
   loadHistoricalRange: (startDate: string, endDate: string) => Promise<Reservation[]>;
 }
 
-export function useReservationsState({ enabled = true, dateRange, allowMaintenance = true }: {
+export function useReservationsState({ enabled = true, dateRange, allowMaintenance = true, viewerKey, personalDetails = true }: {
   enabled?: boolean;
   dateRange?: ReservationDateRange;
   allowMaintenance?: boolean;
+  viewerKey?: string;
+  personalDetails?: boolean;
 } = {}): UseReservationsStateReturn {
   const startDate = dateRange?.startDate;
   const endDate = dateRange?.endDate;
-  const scopeKey = `${enabled}:${startDate ?? 'active'}:${endDate ?? ''}`;
+  const scopeKey = `${enabled}:${startDate ?? 'active'}:${endDate ?? ''}:${viewerKey ?? ''}`;
   const [confirmedScope, setConfirmedScope] = useState<string | null>(null);
   const [readError, setReadError] = useState(false);
   const [readAttempt, setReadAttempt] = useState(0);
   const retryRead = useCallback(() => setReadAttempt(attempt => attempt + 1), []);
   const [reservations, setReservations] = useState<Reservation[]>(() => getLocalCache());
+  const [reservationViewer, setReservationViewer] = useState(viewerKey);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
   const [isFirebaseSyncing, setIsFirebaseSyncing] = useState(false);
   const [isHistoricalLoading, setIsHistoricalLoading] = useState(false);
@@ -124,7 +128,8 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
 
     const onData = (data: Reservation[], isLiveFromFirestore: boolean, isRevalidating?: boolean, syncTime?: number | null) => {
         if (!isMounted) return;
-        setReservations(data);
+      setReservationViewer(viewerKey);
+      setReservations(personalDetails ? data : data.map(row => projectAgendaRecord('reservas', { ...row }) as unknown as Reservation));
         setIsInitialLoading(false);
         setIsFirebaseConnected(isLiveFromFirestore);
         if (isLiveFromFirestore) { setConfirmedScope(scopeKey); setReadError(false); }
@@ -158,13 +163,13 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
         unsubscribe();
       }
     };
-  }, [enabled, startDate, endDate, scopeKey, readAttempt]);
+  }, [enabled, startDate, endDate, scopeKey, readAttempt, viewerKey, personalDetails]);
 
   return {
     isReadScopeReady: enabled && confirmedScope === scopeKey,
     readError,
     retryRead,
-    reservations,
+    reservations: reservationViewer === viewerKey ? reservations : [],
     setReservations,
     isFirebaseConnected,
     setIsFirebaseConnected,

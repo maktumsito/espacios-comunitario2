@@ -131,13 +131,17 @@ export function exportToCsv(
     return;
   }
 
-  const csvHeaderRow = CSV_EXPORT_HEADERS.join(',');
-  const csvDataRows = reservations.map((reservation) =>
-    mapReservationToCsvColumns(reservation).join(',')
-  );
+  downloadReservationsCsv(serializeReservationsCsv(reservations), exportFilename);
+}
 
-  const fullCsvContent = `${UTF8_BOM_HEADER}${[csvHeaderRow, ...csvDataRows].join(CRLF_LINE_DELIMITER)}`;
-  const fileBlob = new Blob([fullCsvContent], { type: CSV_MIME_TYPE });
+export function serializeReservationsCsv(reservations: readonly Reservation[]): string {
+  const header = CSV_EXPORT_HEADERS.join(',');
+  const rows = reservations.map(reservation => mapReservationToCsvColumns(reservation).join(','));
+  return `${UTF8_BOM_HEADER}${[header, ...rows].join(CRLF_LINE_DELIMITER)}`;
+}
+
+export function downloadReservationsCsv(csv: string, exportFilename: string): void {
+  const fileBlob = new Blob([csv], { type: CSV_MIME_TYPE });
   const objectDownloadUrl = URL.createObjectURL(fileBlob);
 
   const anchorElement = document.createElement('a');

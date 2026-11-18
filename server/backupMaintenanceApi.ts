@@ -10,13 +10,19 @@ export function registerBackupMaintenanceApi(app: Express, db: Firestore, sessio
   app.post('/api/maintenance/status', sessions.requireAuth, async (req, res) => {
     try {
       requireManager((req as any).user);
-      const [backups, logs] = await Promise.all([
+      const [backups, logs, schedule] = await Promise.all([
         db.collection('copias_seguridad').select('timestamp', 'fecha', 'tipo', 'totalReservas', 'tamanoBytes', 'checksum', 'protected')
           .orderBy('timestamp', 'desc').limit(50).get(),
         db.collection('maintenance_logs').orderBy('timestamp', 'desc').limit(10).get(),
+        db.doc('configuracion_sistema/backup_schedule_config').get(),
       ]);
+      const config = schedule.get('data');
+      const confirmedAt = backups.docs[0]?.get('timestamp') ?? null;
+      const intervalDays = Number(config?.intervalDays) || 15;
       res.set('Cache-Control', 'no-store').json({ success: true, checkedAt: new Date().toISOString(),
         slotCleanup: slotStatus?.() ?? null,
+        backupSchedule: { confirmedAt, overdue: config?.enabled !== false &&
+          (!confirmedAt || Date.now() - Date.parse(confirmedAt) > (intervalDays + 1) * 86_400_000) },
         backups: backups.docs.map(doc => ({ ...doc.data(), id: doc.id, storageStatus: 'firestore_confirmed' })),
         limited: backups.size === 50, logs: logs.docs.map(doc => ({ ...doc.data(), id: doc.id })) });
     } catch (error) { apiError(res, error); }

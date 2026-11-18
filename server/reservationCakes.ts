@@ -55,11 +55,12 @@ export async function cakeOperationNeedsAtomic(db: Firestore, rows: Reservation[
 export async function prepareCakeAllocation(
   db: Firestore, tx: Transaction, current: Map<string, Reservation>, saved: Reservation[],
   ids: string[], operationId: string, atomic: boolean, restoring: boolean, editedBy: string,
+  backupRestore?: { capacity?: number },
 ) {
   if (![...current.values(), ...saved].some(row => row.cantidadTortas !== undefined && row.cantidadTortas !== 0)) return;
   const stockRef = db.doc(STOCK_PATH);
   const stock = (await tx.get(stockRef)).data();
-  const capacity = stock?.capacity ?? CAKE_CAPACITY;
+  const capacity = backupRestore?.capacity ?? stock?.capacity ?? CAKE_CAPACITY;
   const before = new Map<string, Allocation>(Object.entries(stock?.allocations || {}));
   const next = new Map(before);
   ids.forEach(id => next.delete(id));
@@ -110,7 +111,7 @@ export async function prepareCakeAllocation(
   });
   return () => {
     tx.set(stockRef, { capacity, available, allocations: Object.fromEntries(next) });
-    if (additions.length) tx.create(db.doc(`${OUTBOX}/reservation-${operationId}`), {
+    if (!backupRestore && additions.length) tx.create(db.doc(`${OUTBOX}/reservation-${operationId}`), {
       additions: additions.sort((a, b) => a.date.localeCompare(b.date)),
       capacity, available, editedBy, state: 'pending', nextAttemptAt: Date.now(),
     });

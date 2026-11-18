@@ -1,10 +1,10 @@
+import { canReadReservationPersonalData } from './utils/reservationPrivacy';
 import { ReservationVisualsProvider } from './contexts/ReservationVisualsContext';
 import { NotificationPortal } from './components/common/NotificationPortal';
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { Reservation, ViewMode, FilterState, SpaceRating } from './types';
 import {
   saveReservation,
-  purgeExpiredScheduleSlots,
   getLocalCache,
   compareReservationsByDate
 } from './services/reservationService';
@@ -105,6 +105,7 @@ import {
   getAuthSessionToken,
   updateStoredAuthUser,
   clearAuthUser,
+  revokeCurrentSession,
   getAllAuthorizedUsers,
   isCoordinatorOrAdmin,
   userCanCreateReservations,
@@ -114,7 +115,7 @@ import {
 import { LoginScreen } from './components/LoginScreen';
 import { AppFooter } from './components/AppFooter';
 import { Wifi, WifiOff, Clock, ShieldCheck, Filter, RotateCcw, AlertTriangle } from 'lucide-react';
-import { checkAndRunScheduledBackup } from './services/backupService';
+import { useBackupMaintenance } from './hooks/useBackupMaintenance';
 import { getActiveDraftSummary, removeStoredDraft, ActiveDraftSummary } from './hooks/useReservationAutosave';
 
 export default function App() {
@@ -250,6 +251,8 @@ export default function App() {
     isReadScopeReady, readError, retryRead,
   } = useReservationsState({
     enabled: Boolean(currentUser), dateRange: reservationReadScope, allowMaintenance: canWrite,
+    viewerKey: currentUser ? JSON.stringify([currentUser.username, canReadReservationPersonalData(currentUser)]) : undefined,
+    personalDetails: canReadReservationPersonalData(currentUser),
   });
   const generalDataPending = !canWrite && !reservationReadScope && !isReadScopeReady;
 
@@ -309,7 +312,7 @@ export default function App() {
     await saveRating(rating, target);
   };
   const handleDeleteRating = async (id: string) => {
-    if (!canWrite) throw new Error('Esta cuenta tiene acceso de solo lectura.');
+    if (!isCoordinatorOrAdmin(currentUser)) throw new Error('Esta cuenta no puede eliminar evaluaciones.');
     await deleteRating(id);
   };
   const { auditLogs } = useAuditLogs(isAuditLogOpen);
@@ -417,12 +420,7 @@ export default function App() {
   };
 
   // Automated 15-Day Database Backup Cycle & Periodic Slot Purge
-  const [backupToast, setBackupToast] = useState<{
-    show: boolean;
-    title: string;
-    message: string;
-    backupId?: string;
-  } | null>(null);
+  const { backup, dismissBackup } = useBackupMaintenance(canWrite && reservations.length > 0);
 
   const reservationsRef = useRef(reservations);
   reservationsRef.current = reservations;
@@ -562,55 +560,6 @@ export default function App() {
       }
     }
   }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const executeScheduledBackupCheck = async () => {
-      if (!canWrite) return;
-      try {
-        const currentResList = reservationsRef.current;
-        if (!currentResList || currentResList.length === 0) return;
-        const check = await checkAndRunScheduledBackup();
-        if (isMounted && check.triggered && check.backup) {
-          console.log(`[Copia Automática 15 Días] Ejecutada con éxito: ${check.backup.id} (${check.backup.totalReservas} reservas)`);
-          setBackupToast({
-            show: true,
-            title: 'Copia de Seguridad Automática Realizada',
-            message: `Se ha generado automáticamente la copia de seguridad de la base de datos (ciclo de 15 días: ${check.backup.totalReservas} reservas respaldadas en Firebase).`,
-            backupId: check.backup.id
-          });
-
-          // Auto-hide toast after 9 seconds
-          setTimeout(() => {
-            if (isMounted) {
-              setBackupToast(null);
-            }
-          }, 9000);
-        }
-      } catch (err) {
-        console.warn('[Copia Automática 15 Días] Error durante la verificación periódica:', err);
-      }
-    };
-
-    if (canWrite && reservations.length > 0) {
-      executeScheduledBackupCheck();
-      // Purge expired concurrency schedule_slots (> 30 days old, throttled to run at most once a week)
-      purgeExpiredScheduleSlots(30).catch((purgeErr) => {
-        console.warn('[ScheduleSlotsPurge] Error purgando slots expirados:', purgeErr);
-      });
-    }
-
-    // Check periodically every 4 hours while the app is active
-    const intervalId = setInterval(() => {
-      executeScheduledBackupCheck();
-    }, 4 * 60 * 60 * 1000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(intervalId);
-    };
-  }, [reservations.length > 0, canWrite]);
 
   const handleOpenRatingModal = (reservation: Reservation, rating?: SpaceRating) => {
     if (!rating) {
@@ -797,6 +746,7 @@ export default function App() {
     if (closingSession.current) return;
     closingSession.current = true;
     editorLoadRequest.current++;
+    revokeCurrentSession();
     clearAuthUser();
     setCurrentUser(null);
     setPendingAuthAction(null);
@@ -1530,7 +1480,7 @@ export default function App() {
               ratings={ratings}
               currentUser={currentUser}
               onOpenRatingModal={handleOpenRatingModal}
-              onDeleteRating={handleDeleteRating}
+              onDeleteRating={isCoordinatorOrAdmin(currentUser) ? handleDeleteRating : undefined}
             />
           </Suspense>
         )}
@@ -1985,6 +1935,7 @@ export default function App() {
         }}
         onRestoreFromBackup={(restored) => {
           setReservations(restored);
+          retryRead();
         }}
         isAuditLogOpen={isAuditLogOpen}
         auditLogs={auditLogs}
@@ -2145,7 +2096,7 @@ export default function App() {
       )}
 
       {/* Floating Notification Toast for Automated 15-day Backups */}
-      {backupToast && backupToast.show && (
+      {backup && (
         <NotificationPortal><div
           id="auto-backup-toast"
           className="fixed bottom-5 right-5 z-50 max-w-md bg-slate-900 text-white rounded-2xl p-4 shadow-2xl border border-emerald-500/40 flex items-start space-x-3 animate-in fade-in slide-in-from-bottom-5"
@@ -2155,19 +2106,19 @@ export default function App() {
           </div>
           <div className="flex-1 min-w-0">
             <h4 className="text-xs font-bold text-emerald-300 flex items-center space-x-1.5">
-              <span>{backupToast.title}</span>
+              <span>Copia automática realizada</span>
             </h4>
             <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
-              {backupToast.message}
+              {backup.totalReservas} reservas respaldadas en Firebase.
             </p>
-            {backupToast.backupId && (
+            {backup.id && (
               <div className="text-[10px] font-mono text-emerald-400/80 mt-1">
-                ID Respaldo: {backupToast.backupId}
+                ID Respaldo: {backup.id}
               </div>
             )}
           </div>
           <button
-            onClick={() => setBackupToast(null)}
+            onClick={dismissBackup}
             className="text-slate-400 hover:text-white p-1 rounded-lg transition cursor-pointer"
           >
             &times;

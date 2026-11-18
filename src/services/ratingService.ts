@@ -1,9 +1,10 @@
 import { sharedOnSnapshot as onSnapshot } from '../firebase/sharedSnapshot';
-import { collection, doc, deleteDoc, Unsubscribe, query, orderBy, limit } from '../firebase/gateway';
+import { collection, dataRequest, Unsubscribe, query, orderBy, limit } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
 import { SpaceRating, Reservation } from '../types';
 import { formatDateDDMMYYYY, formatDateYYYYMMDD } from '../utils/dateUtils';
-import { getAuthSessionToken } from './authService';
+import { getAuthSessionToken, getStoredAuthUser } from './authService';
+import { projectAgendaRecord } from '../utils/reservationPrivacy';
 import { getLocalCache } from './reservationService';
 
 // ==========================================
@@ -11,7 +12,7 @@ import { getLocalCache } from './reservationService';
 // ==========================================
 
 const COLLECTION_NAME = 'calificaciones_espacios';
-const LOCAL_STORAGE_KEY = 'espacios_calificaciones_cache_v1';
+const LOCAL_STORAGE_KEY = 'espacios_calificaciones_cache_v2';
 const AUTO_EMAIL_LOG_KEY = 'espacios_monday_email_sent_log_v1';
 const PENDING_RATINGS_QUEUE_KEY = 'pending_ratings_sync_v1';
 
@@ -19,7 +20,8 @@ export const RECIPIENT_EMAILS: readonly string[] = Object.freeze([
   'cristianshute@gmail.com'
 ]);
 
-const BIRTHDAY_KEYWORDS_REGEX = /(cumple|cumplea[nñ]os?|bday|fiesta infantil)/i;
+export { isCamOrMunicipalActivity, isBirthdayReservation, isEligibleForRating } from '../utils/ratingEligibility';
+import { isEligibleForRating } from '../utils/ratingEligibility';
 
 // Offline retry queue helpers
 export function getPendingRatingsQueue(): SpaceRating[] {
@@ -158,64 +160,6 @@ export function isWeekend(dateStr: string): boolean {
 }
 
 /**
- * Rule: Exclude Municipal Activities and any loan mentioning 'CAM'
- * (e.g. Centro de Atención Municipal, actividades municipales) from birthday evaluations.
- */
-export function isCamOrMunicipalActivity(r: Reservation): boolean {
-  if (!r) return false;
-  const desc = r.descripcion || '';
-  const resp = r.responsable || '';
-  const act = r.tipoActividad || '';
-  const prest = r.tipoPrestamo || '';
-  const comentarios = r.comentarios || '';
-
-  // Exclude Municipal activities
-  if (
-    act.toUpperCase().includes('MUNICIPAL') ||
-    prest.toUpperCase().includes('MUNICIPAL') ||
-    desc.toUpperCase().includes('ACTIVIDAD MUNICIPAL') ||
-    desc.toUpperCase().includes('ACTIVIDADES MUNICIPALES')
-  ) {
-    return true;
-  }
-
-  // Exclude CAM (case-insensitive word boundary or standalone acronym)
-  const camRegex = /\bCAM\b/i;
-  if (
-    camRegex.test(desc) ||
-    camRegex.test(resp) ||
-    camRegex.test(act) ||
-    camRegex.test(prest) ||
-    camRegex.test(comentarios)
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Determines whether a reservation matches Birthday Loan criteria using optimized regex matching.
- * Excludes municipal activities and CAM loans.
- */
-export function isBirthdayReservation(r: Reservation): boolean {
-  if (!r) return false;
-  if (isCamOrMunicipalActivity(r)) return false;
-
-  const combinedText = `${r.descripcion || ''} ${r.tipoActividad || ''} ${r.tipoPrestamo || ''} ${r.comentarios || ''}`;
-  return BIRTHDAY_KEYWORDS_REGEX.test(combinedText);
-}
-
-/**
- * Single source of truth: Only Birthday Loans are eligible for rating.
- * Excludes CAM loans and Municipal activities per business rules.
- */
-export function isEligibleForRating(r: Reservation): boolean {
-  if (isCamOrMunicipalActivity(r)) return false;
-  return isBirthdayReservation(r);
-}
-
-/**
  * Returns the Sunday of the current week (YYYY-MM-DD) for a reference date.
  */
 export function getCurrentWeekendEndStr(referenceDate: Date = new Date()): string {
@@ -275,6 +219,7 @@ export function getLocalRatingsCache(): SpaceRating[] {
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
       return [];
     }
+    localStorage.removeItem('espacios_calificaciones_cache_v1');
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
@@ -293,7 +238,10 @@ export function setLocalRatingsCache(ratings: readonly SpaceRating[]): void {
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
       return;
     }
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(ratings));
+    const data = getStoredAuthUser()
+      ? ratings.map(rating => projectAgendaRecord(COLLECTION_NAME, { ...rating }))
+      : ratings;
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
     console.warn('Unable to persist ratings to local cache:', e);
   }
@@ -386,17 +334,9 @@ export async function saveSpaceRating(rating: SpaceRating, reservation?: Reserva
  * Removes a rating from cache and Firestore.
  */
 export async function deleteSpaceRating(ratingId: string): Promise<void> {
-  const current = getLocalRatingsCache();
-  const filtered = current.filter((r) => r.id !== ratingId);
-  try {
-    const db = getDb();
-    const docRef = doc(db, COLLECTION_NAME, ratingId);
-    await deleteDoc(docRef);
-    setLocalRatingsCache(filtered);
-    dequeuePendingRating(ratingId);
-  } catch (err) {
-    throw err;
-  }
+  await dataRequest('/api/ratings/delete', { ratingId });
+  setLocalRatingsCache(getLocalRatingsCache().filter(row => row.id !== ratingId));
+  dequeuePendingRating(ratingId);
 }
 
 // ==========================================

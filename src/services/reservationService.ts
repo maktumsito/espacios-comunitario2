@@ -8,6 +8,10 @@ import {
   query,
   where,
   orderBy,
+  documentId,
+  limit,
+  startAfter,
+  usesDataApi,
   Unsubscribe
 } from '../firebase/gateway';
 import { getDb } from '../firebase/config';
@@ -27,6 +31,7 @@ import {
 } from '../utils/indexedDbStorage';
 import { validateStrictCalendarDate } from '../utils/validationUtils';
 import { recordFirestoreRead } from '../utils/firestoreTracker';
+import { canReadReservationPersonalData, projectAgendaRecord } from '../utils/reservationPrivacy';
 
 // ============================================================================
 // CACHE VERSIONING & CONFIGURATION
@@ -66,6 +71,36 @@ export interface CacheVersionMetadata {
 let inMemoryReservationsCache: Reservation[] | null = null;
 let inMemoryDataHash: string | null = null;
 let inMemoryLastFirestoreHash: string | null = null;
+let previousCacheScope: string | null = null;
+
+function enforceCacheScope() {
+  if (!isBrowser) return;
+  const user = getStoredAuthUser();
+  const scope = user ? JSON.stringify([user.username, canReadReservationPersonalData(user)]) : '';
+  const storageKey = 'espacios_reservation_cache_scope';
+  if (previousCacheScope !== null && scope !== previousCacheScope) {
+    inMemoryReservationsCache = null;
+    inMemoryDataHash = null;
+    inMemoryLastFirestoreHash = null;
+    dateRangeSyncTimes.clear();
+  }
+  previousCacheScope = scope;
+  try {
+    const storedScope = localStorage.getItem(storageKey);
+    if (storedScope === scope || (!storedScope && !scope)) return;
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    localStorage.removeItem(CACHE_METADATA_KEY);
+    localStorage.removeItem(DATE_RANGE_SYNC_KEY);
+    cleanupLegacyStorageKeys();
+    localStorage.setItem(storageKey, scope);
+  } catch { /* Persistent storage may be unavailable. */ }
+}
+
+function cacheProjection(data: Reservation[]): Reservation[] {
+  const user = getStoredAuthUser();
+  if (!user || canReadReservationPersonalData(user)) return data;
+  return data.map(row => projectAgendaRecord('reservas', { ...row }) as unknown as Reservation);
+}
 
 // ============================================================================
 // DETERMINISTIC DATA HASHING ENGINE (CYRB53)
@@ -445,6 +480,7 @@ export function isReservationExplicitlyDeleted(
  * Reads reservations from the versioned LocalStorage cache (with automatic legacy fallback & migration).
  */
 export function getLocalCache(): Reservation[] {
+  enforceCacheScope();
   const deletedSet = getDeletedIds();
 
   // Fast path: In-memory cache is valid
@@ -462,9 +498,9 @@ export function getLocalCache(): Reservation[] {
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        const filtered = parsed.filter(
+        const filtered = cacheProjection(parsed.filter(
           r => !isReservationExplicitlyDeleted(r, deletedSet)
-        );
+        ));
         inMemoryReservationsCache = filtered;
         inMemoryDataHash = calculateReservationsHash(filtered);
         return filtered;
@@ -509,10 +545,11 @@ export function setLocalCache(
   options?: { lastFirestoreHash?: string | null; lastSyncTime?: number | null }
 ): void {
   try {
+    enforceCacheScope();
     const deletedSet = getDeletedIds();
-    const cleanData = data.filter(
+    const cleanData = cacheProjection(data.filter(
       r => !isReservationExplicitlyDeleted(r, deletedSet)
-    );
+    ));
 
     const newDataHash = calculateReservationsHash(cleanData);
     const existingMeta = getLocalCacheMetadata();
@@ -525,12 +562,15 @@ export function setLocalCache(
     }
 
     // Persist full dataset to IndexedDB (asynchronously handles large datasets without quota limit)
-    setIndexedDbReservations(cleanData).catch(err => {
+    const diskData = getStoredAuthUser()
+      ? cleanData.map(row => projectAgendaRecord('reservas', { ...row }) as unknown as Reservation)
+      : cleanData;
+    setIndexedDbReservations(diskData).catch(err => {
       console.warn('Error persisting reservations to IndexedDB:', err);
     });
 
     // Write versioned payload to LocalStorage safely (stripping heavy base64 attachments to prevent QuotaExceededError)
-    const localStoragePayload = cleanData.map(r => {
+    const localStoragePayload = diskData.map(r => {
       if (r.cartaCompromisoAdjunta?.dataUrl && r.cartaCompromisoAdjunta.dataUrl.length > 500) {
         return {
           ...r,
@@ -630,9 +670,9 @@ export function subscribeToReservations(
       if (!subscribed || serverConfirmed) return;
       if (idbData && idbData.length > 0) {
         const deletedSet = getDeletedIds();
-        const filtered = idbData.filter(
+        const filtered = cacheProjection(idbData.filter(
           r => !deletedSet.has(r.id)
-        );
+        ));
         inMemoryReservationsCache = filtered;
         inMemoryDataHash = calculateReservationsHash(filtered);
         const curMeta = getLocalCacheMetadata();
@@ -682,7 +722,7 @@ export function subscribeToReservations(
           // Compute incoming snapshot hash
           const incomingFirestoreHash = hasOlderRows ? null : calculateReservationsHash(sorted);
           const currentMeta = getLocalCacheMetadata();
-          const currentLocalHash = currentMeta?.dataHash ?? inMemoryDataHash ?? calculateReservationsHash(getLocalCache());
+          const currentLocalHash = inMemoryDataHash ?? calculateReservationsHash(getLocalCache());
           const syncTimestamp = Date.now();
 
           // HASH CHECK: If Firestore payload hash matches local cache hash, skip redundant state churn
@@ -820,19 +860,28 @@ export async function fetchReservationsByDateRange(
 
   const request = (async () => {
     try {
-      const rangeQuery = query(collection(getDb(), COLLECTION_NAME),
-        where('fecha', '>=', startDate), where('fecha', '<=', endDate), orderBy('fecha', 'asc'));
-      const snapshot = await getDocs(rangeQuery);
-      if (snapshot.metadata.fromCache) return local();
-      recordFirestoreRead('reservas_historicas', Math.max(1, snapshot.size));
       const deletedSet = getDeletedIds();
-      const list = snapshot.docs
-        .filter(d => {
+      const rows = collection(getDb(), COLLECTION_NAME);
+      const bounds = [where('fecha', '>=', startDate), where('fecha', '<=', endDate), orderBy('fecha', 'asc')];
+      const pageSize = 250;
+      const pageThroughApi = usesDataApi();
+      const order = pageThroughApi ? [...bounds, orderBy(documentId()), limit(pageSize)] : bounds;
+      const list: Reservation[] = [];
+      let cursor: { date: string; id: string } | undefined;
+      do {
+        const snapshot = await getDocs(query(rows, ...order, ...(cursor ? [startAfter(cursor.date, cursor.id)] : [])));
+        if (snapshot.metadata.fromCache) return local();
+        recordFirestoreRead('reservas_historicas', Math.max(1, snapshot.size));
+        for (const d of snapshot.docs) {
           const data = d.data();
           if (data.estado === 'eliminada' || data.eliminada === true) recordDeletedId(d.id);
-          return !deletedSet.has(d.id) && !isReservationExplicitlyDeleted(data, deletedSet);
-        })
-        .map(d => normalizeReservationFromFirestore(d.id, d.data()));
+          if (!deletedSet.has(d.id) && !isReservationExplicitlyDeleted(data, deletedSet)) {
+            list.push(normalizeReservationFromFirestore(d.id, data));
+          }
+        }
+        const last = pageThroughApi && snapshot.size === pageSize ? snapshot.docs.at(-1) : undefined;
+        cursor = last ? { date: last.data().fecha, id: last.id } : undefined;
+      } while (cursor);
       const { merged } = mergeReservationWindow(list, inRange);
       setLocalCache(merged);
       dateRangeSyncTimes.set(key, Date.now());

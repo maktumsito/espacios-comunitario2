@@ -62,7 +62,11 @@ export interface WriteOptions {
   allowConflictOverride?: boolean;
   onProgress?: (result: WriteResult) => void;
   auditRestore?: AuditRestoreContext;
+  backupRestoreId?: string;
+  backupRestoreAttempt?: string;
+  backupRestoreCakeCapacity?: number;
   serverHooks?: {
+    projectUpdate?: (current: Reservation, proposed: Reservation) => Reservation;
     before: (
       tx: any,
       chunk: string[],
@@ -573,7 +577,7 @@ export async function writeReservations(
     ...(options.activateSpaceIds?.length ? { activateSpaceIds: options.activateSpaceIds } : {}),
   };
   await journalUpdate(operation);
-  const byId = new Map(items.map((r) => [r.id, r]));
+  const requestedById = new Map(items.map((r) => [r.id, r]));
   try {
     for (const chunk of chunks) {
       let guardsSlotWrite = false;
@@ -608,7 +612,7 @@ export async function writeReservations(
           }
         }
         const guards = Object.entries(options.expectedVersions || {}).filter(
-          ([id]) => !operation.confirmedIds.includes(id),
+          ([id]) => !operation.confirmedIds.includes(id) && (!options.backupRestoreId || chunk.includes(id)),
         );
         const [snapshots, guardSnapshots] = await Promise.all([
           Promise.all(chunk.map(readReservation)),
@@ -622,6 +626,14 @@ export async function writeReservations(
         snapshots.forEach((s) => {
           if (s.exists()) current.set(s.id, {...s.data(),id:s.id} as Reservation);
         });
+        const byId = options.serverHooks?.projectUpdate ? new Map(requestedById) : requestedById;
+        if (options.serverHooks?.projectUpdate) {
+          for (const id of chunk) {
+            const existing = current.get(id);
+            const proposed = byId.get(id);
+            if (existing && proposed) byId.set(id, options.serverHooks.projectUpdate(existing, proposed));
+          }
+        }
         const guarded = new Map(current);
         guardSnapshots.forEach((s) => {
           if (s.exists())
@@ -1006,7 +1018,7 @@ export async function writeReservations(
       }
       result.reservations.push(...committed);
       result.confirmedIds.push(...chunk);
-      result.deletedIds.push(...chunk.filter((id) => !byId.has(id)));
+      result.deletedIds.push(...chunk.filter((id) => !requestedById.has(id)));
       result.pendingIds = ids.filter((id) => !result.confirmedIds.includes(id));
       operation.confirmedIds = [
         ...new Set([...operation.confirmedIds, ...result.confirmedIds]),

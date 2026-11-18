@@ -3,7 +3,8 @@ import { ActivityTypeItem, EquipmentItem, LoanType, Reservation, SpaceInfo, Spac
 import { WorkshopImport } from './WorkshopImport';
 import { readReservationImportFile } from '../utils/workshopImportFile';
 import type { WorkshopRow } from '../utils/workshopImport';
-import { exportToCsv } from '../utils/csvExportImport';
+import { downloadReservationsCsv } from '../utils/csvExportImport';
+import { dataRequest } from '../firebase/gateway';
 import { parseCsvRows } from '../utils/csvParser';
 import { INITIAL_RESERVATIONS } from '../data/initialData';
 import { AuthUser, canPerformMassDataSync, getRoleDisplayName, isCristianShute } from '../services/authService';
@@ -14,6 +15,7 @@ import {
   saveBackupScheduleConfig,
   createDatabaseBackup,
   getDatabaseBackupsList,
+  fetchFullBackupRecord,
   downloadBackupFile,
   restoreDatabaseFromBackup,
   deleteDatabaseBackup,
@@ -126,6 +128,22 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
   if (!isOpen) return null;
 
   const canManageSync = canPerformMassDataSync(currentUser);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const exportDates = canManageSync ? reservations.map(row => row.fecha).filter(Boolean).sort() : [];
+
+  const exportLoadedReservations = async () => {
+    setExporting(true);
+    setExportError('');
+    try {
+      const result = await dataRequest('/api/reservations/export-csv', { ids: reservations.map(row => row.id) });
+      downloadReservationsCsv(result.csv, `reservas_${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'No se pudo descargar el CSV.');
+    } finally {
+      setExporting(false);
+    }
+  };
   const roleName = getRoleDisplayName(currentUser?.role);
 
   const handleManualBackup = async () => {
@@ -160,11 +178,21 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
       });
       return;
     }
+    setRestoringBackupId(backupMeta.id);
+    const record = await fetchFullBackupRecord(backupMeta.id, backupMeta);
+    setRestoringBackupId(null);
+    if (!record?.data) {
+      setBackupMessage({ type: 'error', text: 'No se pudo verificar el contenido del respaldo.' });
+      return;
+    }
+    const scope = record.data.inventario === undefined
+      ? 'Esta copia conserva el inventario actual y solo admite asignaciones de tortas compatibles.'
+      : `Incluye el stock de tortas y ${record.data.inventario.length} lugares de inventario con sus artículos.`;
 
     setConfirmDialog({
       isOpen: true,
       title: 'Restaurar Copia de Seguridad',
-      message: `¿Está seguro de restaurar la base de datos a la copia del ${backupMeta.fecha} (${backupMeta.id})? Se restablecerán las ${backupMeta.totalReservas} reservas contenidas en este respaldo.`,
+      message: `Restaurar la copia del ${backupMeta.fecha} aplicará ${backupMeta.totalReservas} reservas, catálogos, perfiles y calificaciones. ${scope}`,
       variant: 'warning',
       confirmLabel: 'Restaurar Respaldo',
       onConfirm: async () => {
@@ -173,7 +201,7 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
         setBackupMessage(null);
         try {
           // Fetch full payload and restore
-          const res = await restoreDatabaseFromBackup(backupMeta as DatabaseBackupRecord, currentUser);
+          const res = await restoreDatabaseFromBackup(record, currentUser);
           if (res.success) {
             setBackupMessage({
               type: 'success',
@@ -883,23 +911,28 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
               <div className="flex items-center justify-between">
                 <span className="font-bold text-xs text-slate-800 flex items-center space-x-1.5">
                   <Download className="w-4 h-4 text-emerald-600" />
-                  <span>Exportar Respaldo CSV</span>
+                  <span>Exportar reservas cargadas</span>
                 </span>
                 <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-semibold">
                   Lectura y Descarga
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                Descarga un archivo CSV compatible con Excel y Google Sheets con los {reservations.length} registros actualmente disponibles.
+                {canManageSync
+                  ? `${reservations.length} registros cargados${exportDates.length ? ` · ${exportDates[0]} a ${exportDates.at(-1)}` : ''}`
+                  : 'La descarga de datos personales está disponible para Administración y Coordinación.'}
               </p>
-              <button
+              {exportError && <p role="alert" className="text-xs text-rose-700">{exportError}</p>}
+              {canManageSync && <button
                 id="btn-modal-export-csv"
-                onClick={() => exportToCsv(reservations, `respaldo_reservas_${new Date().toISOString().slice(0, 10)}.csv`)}
+                type="button"
+                disabled={exporting || !reservations.length}
+                onClick={exportLoadedReservations}
                 className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 shadow-2xs flex items-center justify-center space-x-2 transition cursor-pointer"
               >
                 <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                <span>Descargar Archivo CSV ({reservations.length} registros)</span>
-              </button>
+                <span>{exporting ? 'Preparando CSV…' : 'Descargar CSV'}</span>
+              </button>}
             </div>
 
             {/* CSV Import */}

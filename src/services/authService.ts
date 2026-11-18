@@ -221,6 +221,16 @@ export function getAuthSessionToken(): string {
   return readBrowserSessionToken();
 }
 
+export function revokeCurrentSession(): void {
+  const authorization = getAuthSessionToken();
+  if (!authorization) return;
+  void fetch('/api/auth/session/logout', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${authorization}` },
+    keepalive: true,
+  }).catch(() => {});
+}
+
 // In-memory cache for fast synchronous lookup
 let inMemoryUsers: UserAccount[] = [];
 

@@ -9,9 +9,9 @@ const account = { username: 'reader', name: 'Usuario Lector', role: 'Auxiliar', 
   passwordHash: 'scrypt$'+'01'.repeat(16)+'$'+crypto.scryptSync('password','01'.repeat(16),64).toString('hex'),
   canCreateReservations: false, canEditReservations: false, canDeleteReservations: false } as UserAccount;
 afterEach(() => vi.useRealTimers());
-async function withSession(run: (base: string, read: ReturnType<typeof vi.fn>) => Promise<void>, google?: (token: string) => Promise<string | null>, directory = vi.fn(async () => [account]), migrate?: (account: UserAccount, password: string) => Promise<UserAccount>) {
+async function withSession(run: (base: string, read: ReturnType<typeof vi.fn>) => Promise<void>, google?: (token: string) => Promise<string | null>, directory = vi.fn(async () => [account]), migrate?: (account: UserAccount, password: string) => Promise<UserAccount>, revocations?: ConstructorParameters<typeof AppSessions>[4]) {
   const read = vi.fn(async () => account);
-  const sessions = new AppSessions(read, 'test-session-key-at-least-32-characters', google, migrate);
+  const sessions = new AppSessions(read, 'test-session-key-at-least-32-characters', google, migrate, revocations);
   const app = express(); app.use(express.json()); sessions.register(app, directory);
   app.get('/protected', sessions.requireAuth, (req, res) => res.json((req as any).user));
   app.post('/write', sessions.requireAuth, requireReservationWriter, (_req, res) => res.json({ success: true }));
@@ -25,6 +25,23 @@ const login = async (base: string, password = 'password') => {
     headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'reader', password, role: 'Administrador' }) });
   return { status: response.status, ...await response.json() };
 };
+
+it('uses an HttpOnly session cookie and revokes it on logout', async () => {
+  const revoked = new Set<string>();
+  await withSession(async base => {
+    const response = await fetch(`${base}/api/auth/session`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'reader', password: 'password' }) });
+    const cookie = response.headers.get('set-cookie')!;
+    expect(cookie).toMatch(/HttpOnly; Secure; SameSite=Strict/);
+    const session = await response.json();
+    expect(session.token).toMatch(/^cookie\./);
+    const headers = { Authorization: `Bearer ${session.token}`, Cookie: cookie.split(';')[0] };
+    expect((await fetch(`${base}/protected`, { headers })).status).toBe(200);
+    expect((await fetch(`${base}/protected`, { headers: { ...headers, 'Sec-Fetch-Site': 'cross-site' } })).status).toBe(403);
+    expect((await fetch(`${base}/api/auth/session/logout`, { method: 'POST', headers })).status).toBe(200);
+    expect((await fetch(`${base}/protected`, { headers })).status).toBe(401);
+  }, undefined, undefined, undefined, { check: async id => revoked.has(id), revoke: async id => { revoked.add(id); } });
+});
 
 it('lists selectable users without a session while withholding secrets and permissions', async () => {
   await withSession(async base => {

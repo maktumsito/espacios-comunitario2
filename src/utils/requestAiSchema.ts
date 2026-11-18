@@ -32,3 +32,9 @@ export const requestAiSchema = z.strictObject({
 });
 
 export type RequestAiExtraction = z.infer<typeof requestAiSchema>;
+
+
+export const requestAiScheduleSchema = requestAiSchema.pick({
+  fecha: true, horaInicio: true, horaFin: true, cantidadParticipantes: true,
+  bookingMode: true, selectedDays: true, recurrenceStartDate: true, recurrenceEndDate: true,
+});

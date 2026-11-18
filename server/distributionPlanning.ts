@@ -7,6 +7,7 @@ import { getChileLocalDateString } from '../src/utils/dateUtils';
 import { SPACES_LIST } from '../src/data/spacesData';
 import { DEFAULT_EQUIPMENT_ITEMS } from '../src/data/equipmentData';
 import { isSpaceAvailabilityRangeValid, MAX_SPACE_AVAILABILITY_DAYS } from '../src/utils/spaceAvailability';
+import { canReadReservationPersonalData, projectAgendaRecord } from '../src/utils/reservationPrivacy';
 
 export function validateDistributionDate(date: unknown): asserts date is string {
   if (!DateStringSchema.safeParse(date).success || (date as string) < getChileLocalDateString()) throw new ApiFailure(400, 'Elige una fecha válida desde hoy.');
@@ -30,10 +31,13 @@ export function registerDistributionPlanningApi(app: Express, db: Firestore, ses
         db.doc('configuracion_sistema/espacios').get(),
         db.doc('configuracion_sistema/equipamiento').get(),
       ]);
-      res.json({ success: true, snapshot: {
+      const withDetails = canReadReservationPersonalData((req as any).user);
+      res.set('Cache-Control', 'no-store').json({ success: true, snapshot: {
         fecha: date, loadedAt: new Date().toISOString(),
         ...(requestedEnd === undefined ? {} : { fechaFin: end }),
-        reservations: reservations.docs.map(doc => ({ ...doc.data(), id: doc.id })),
+        reservations: reservations.docs.map(doc => ({
+          ...(withDetails ? doc.data() : projectAgendaRecord('reservas', doc.data())), id: doc.id,
+        })),
         blocks: blocks.docs.map(doc => ({ ...doc.data(), id: doc.id })).filter((b: any) => b.fechaInicio <= end),
         spaces: spaces.exists && Array.isArray(spaces.get('data')) ? spaces.get('data') : SPACES_LIST,
         equipment: equipment.exists && Array.isArray(equipment.get('items')) ? equipment.get('items') : DEFAULT_EQUIPMENT_ITEMS,

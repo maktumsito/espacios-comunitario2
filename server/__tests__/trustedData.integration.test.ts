@@ -26,6 +26,8 @@ import { accountId, registerDataApi } from "../dataApi";
 import { registerReservationApi, readAudit, commitTrusted } from "../reservationApi";
 import { registerBackupApi } from "../backupApi";
 import { registerBackupMaintenanceApi } from '../backupMaintenanceApi';
+import { createScheduledBackup } from '../scheduledBackup';
+import { registerRatingApi } from '../ratingApi';
 import { claimDelivery, startDelivery, finishDelivery } from "../deliveryLease";
 import { backupChecksum } from "../../src/utils/backupIntegrity";
 import { isChileanHoliday } from "../../src/utils/holidayUtils";
@@ -57,6 +59,7 @@ describe.skipIf(!enabled)(
     registerReservationApi(api, db, accounts);
     registerBackupApi(api, db, accounts);
     registerBackupMaintenanceApi(api, db, accounts);
+    registerRatingApi(api, db, accounts, () => ({ dateStr: '2026-10-14', timeFormatted: '02:00' }));
     let server: ReturnType<typeof api.listen>,
       base: string,
       editor: string,
@@ -470,13 +473,14 @@ describe.skipIf(!enabled)(
         options: { operationId: 'ana-create', intent: 'create' } }, ana.token);
       expect(created.status).toBe(200);
       const original = created.result.reservations[0];
-      const edit = { reservations: [{ ...original, descripcion: 'Editada por Ana' }], options: { operationId: 'ana-edit', intent: 'update' } };
+      const edit = { reservations: [{ ...original, horaFin: '11:30' }], options: { operationId: 'ana-edit', intent: 'update' } };
       expect((await post('/api/reservations/commit', edit, ana.token)).error).toMatch(/permiso/);
       expect((await db.doc('reservas/ana-reservation').get()).get('version')).toBe(1);
       expect((await post('/api/users/save', { user: { ...user, canEditReservations: true } }, editor)).status).toBe(403);
       expect((await post('/api/users/save', { user: { ...user, canEditReservations: true } }, master.token)).status).toBe(200);
       expect((await post('/api/reservations/commit', edit, ana.token)).error).toBeUndefined();
       expect((await db.doc('reservas/ana-reservation').get()).get('version')).toBe(2);
+      expect((await db.doc('reservas/ana-reservation').get()).get('responsable')).toBe('Synthetic');
       const remove = { reservations: [], options: { operationId: 'ana-delete', deletedIds: ['ana-reservation'], expectedVersions: { 'ana-reservation': 2 } } };
       expect((await post('/api/reservations/commit', remove, ana.token)).error).toMatch(/permiso/);
       expect((await db.doc('reservas/ana-reservation').get()).exists).toBe(true);
@@ -997,6 +1001,61 @@ describe.skipIf(!enabled)(
         (await db.doc("configuracion_sistema/espacios").get()).get("data")[0]
           .name,
       ).toBe("Restored space");
+    });
+    it('publishes one scheduled backup with inventory and restores it with a verified recovery copy', async () => {
+      await Promise.all([
+        db.doc('configuracion_sistema/espacios').set({ data: [{ id: 'space', name: 'SALA 2' }] }),
+        db.doc('configuracion_sistema/tipos_prestamo').set({ data: ['Cumpleaños'] }),
+        db.doc('configuracion_sistema/tipos_actividad').set({ data: ['Taller'] }),
+        db.doc('configuracion_sistema/equipamiento').set({ items: [] }),
+      ]);
+      const placeId = 'a'.repeat(64);
+      const item = db.doc(`inventario_lugares/${placeId}/articulos/${'b'.repeat(64)}`);
+      await item.parent.parent!.set({ name: 'Aula', generation: '' });
+      await item.set({ name: 'Mesa', quantity: 3 });
+      const backedUp = row('backed-up');
+      expect((await post('/api/reservations/commit', { reservations: [backedUp], options: { operationId: 'before-backup' } })).status).toBe(200);
+      const results = await Promise.all([createScheduledBackup(db), createScheduledBackup(db)]);
+      const [id] = results.filter((value): value is string => value !== null);
+      expect(results.filter(Boolean)).toHaveLength(1);
+      const ref = db.doc(`copias_seguridad/${id}`);
+      const [metadata, parts] = await Promise.all([ref.get(), ref.collection('partes').orderBy('index').get()]);
+      const data = JSON.parse(parts.docs.map(doc => doc.get('payload')).join(''));
+      expect(data.inventario[0].articulos[0].data.quantity).toBe(3);
+      await item.update({ quantity: 7 });
+      await db.doc('reservas/backed-up').update({ descripcion: 'Editada después del respaldo', version: 2 });
+      const result = await post('/api/backups/restore', { record: { ...metadata.data(), data } });
+      expect(result).toMatchObject({ success: true, status: 200, count: 1 });
+      expect((await db.doc('reservas/backed-up').get()).get('descripcion')).toBe(backedUp.descripcion);
+      expect((await item.get()).get('quantity')).toBe(3);
+      expect((await db.doc(`copias_seguridad/${result.recoveryId}`).get()).exists).toBe(true);
+      expect((await db.doc('_maintenance/backup_restore').get()).get('active')).toBe(false);
+
+      const lock = db.doc('_maintenance/backup_restore');
+      await item.update({ quantity: 9 });
+      await lock.update({ active: true, expiresAt: 0, stage: 'entities' });
+      const resumed = await post('/api/backups/restore', { record: { ...metadata.data(), data } });
+      expect(resumed).toMatchObject({ success: true, recoveryId: result.recoveryId });
+      expect((await item.get()).get('quantity')).toBe(3);
+      expect((await lock.get()).get('active')).toBe(false);
+    });
+    it('serves the basic agenda and saves ratings only against eligible official reservations', async () => {
+      const eligible = { ...row('birthday'), tipoPrestamo: 'Cumpleaños', rut: 'fixture-only', emailContacto: 'fixture@example.invalid' };
+      await db.doc('reservas/birthday').set(eligible);
+      await db.doc('reservas/workshop').set(row('workshop'));
+      const basic = await post('/api/data/read', { path: 'reservas/birthday', kind: 'document' }, reader);
+      expect(basic.docs[0].data).not.toHaveProperty('rut');
+      expect(basic.docs[0].data).not.toHaveProperty('emailContacto');
+      const detail = await post('/api/data/read', { path: 'reservas/birthday', kind: 'document' });
+      expect(detail.docs[0].data).toHaveProperty('emailContacto', eligible.emailContacto);
+      const page = await post('/api/data/read', { path: 'reservas', kind: 'query', constraints: [
+        { type: 'orderBy', field: 'fecha', direction: 'asc' }, { type: 'orderBy', field: '__name__', direction: 'asc' },
+        { type: 'limit', count: 1 }, { type: 'startAfter', values: [eligible.fecha, eligible.id] },
+      ] }, reader);
+      expect(page.docs.map((item: any) => item.id)).toEqual(['workshop']);
+      expect(await post('/api/ratings/validate-and-save', { rating: { id: 'grade', reservationId: 'workshop' } })).toMatchObject({ status: 400 });
+      expect(await post('/api/ratings/validate-and-save', { rating: { id: 'grade', reservationId: 'birthday', puntajeGeneral: 3 } }))
+        .toMatchObject({ status: 200, rating: { puntajeGeneral: 3, reservationId: 'birthday' } });
     });
   },
 );

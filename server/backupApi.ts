@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { isDeepStrictEqual } from "node:util";
+import { randomUUID } from 'node:crypto';
 import type { AppSessions } from "./appSession";
 import {
   accountId,
@@ -12,6 +13,13 @@ import {
 } from "./dataApi";
 import { validateBackupRecord } from "../src/utils/backupIntegrity";
 import { isReservationPermissionAdmin, RESERVATION_PERMISSION_ADMIN_USERNAME } from '../src/utils/userPermissions';
+import { isReservationActiveForAvailability } from '../src/utils/conflictDetector';
+import type { Reservation } from '../src/types';
+import { commitTrusted } from './reservationApi';
+import { createScheduledBackup } from './scheduledBackup';
+import { restoreLockPath } from './restoreLock';
+import { hasReservationMaterialChange } from '../src/services/reservationWriter';
+import { cleanReservationForFirestore } from '../src/services/reservationService';
 
 /** Catalog/profile restoration is atomic and preserves credentials, private
  * configuration and append-only audit history. Large restores fail before the
@@ -31,6 +39,24 @@ async function prepareEntities(
   const snapshots = await Promise.all(
     names.map((n) => tx.get(db.collection(n))),
   );
+  const stockRef = db.doc('_reservation_inventory/cakes_2026_2027');
+  const stock = await tx.get(stockRef);
+  const expectedAllocations = Object.fromEntries((d.reservas as Reservation[])
+    .filter(row => row.cantidadTortas && isReservationActiveForAvailability(row, new Set()))
+    .map(row => [row.id, { quantity: row.cantidadTortas, date: row.fecha, series: row.serieRecurrente || row.recurrenteId || null }]));
+  const stockToValidate = d.stockTortas === undefined ? stock.data() : d.stockTortas;
+  if (!isDeepStrictEqual(stockToValidate?.allocations ?? {}, expectedAllocations)) {
+    throw new ApiFailure(409, 'Las asignaciones de tortas de las reservas no concuerdan con el stock disponible para restaurar.');
+  }
+  const inventorySnapshots = [];
+  if (d.inventario !== undefined) {
+    const places = await tx.get(db.collection('inventario_lugares'));
+    inventorySnapshots.push(places);
+    for (const place of places.docs) {
+      const generation = place.get('generation');
+      inventorySnapshots.push(await tx.get(place.ref.collection(generation ? `articulos_${generation}` : 'articulos')));
+    }
+  }
   const accounts = new Map(snapshots[0].docs.map((s) => [s.id, s.data()]));
   if (
     new Set(d.usuarios.map((u: any) => accountId(u.username || ""))).size !==
@@ -108,6 +134,13 @@ async function prepareEntities(
     candidateWrites.push([`calificaciones_espacios/${rating.id}`, rating]);
   for (const block of d.bloqueos || [])
     candidateWrites.push([`bloqueos_espacios/${block.id}`, block]);
+  for (const place of d.inventario || []) {
+    const path = `inventario_lugares/${place.id}`;
+    const articles = place.data.generation ? `articulos_${place.data.generation}` : 'articulos';
+    candidateWrites.push([path, place.data]);
+    for (const item of place.articulos) candidateWrites.push([`${path}/${articles}/${item.id}`, item.data]);
+  }
+  if (d.stockTortas) candidateWrites.push([stockRef.path, d.stockTortas]);
   const targetPaths = new Set(candidateWrites.map((w) => w[0]));
   const existingByPath = new Map<string, any>();
   for (const snap of snapshots) {
@@ -115,12 +148,15 @@ async function prepareEntities(
       existingByPath.set(docSnap.ref.path, docSnap.data());
     }
   }
+  for (const snapshot of inventorySnapshots) for (const doc of snapshot.docs) existingByPath.set(doc.ref.path, doc.data());
+  if (stock.exists) existingByPath.set(stockRef.path, stock.data());
   const writes = candidateWrites.filter(
     ([path, data]) => !existingByPath.has(path) || !isDeepStrictEqual(existingByPath.get(path), data),
   );
-  const deletes = snapshots.flatMap((s) =>
+  const deletes = [...snapshots, ...inventorySnapshots].flatMap((s) =>
     s.docs.filter((doc) => !targetPaths.has(doc.ref.path)).map((doc) => doc.ref),
   );
+  if (d.stockTortas === null && stock.exists) deletes.push(stockRef);
   if (writes.length + deletes.length > 440)
     throw new ApiFailure(
       413,
@@ -141,6 +177,93 @@ export function registerBackupApi(
   db: Firestore,
   sessions: AppSessions,
 ) {
+  app.post('/api/backups/restore', sessions.requireAuth, async (req, res) => {
+    const actor = (req as any).user;
+    const token = req.get('authorization') || '';
+    const lock = db.doc(restoreLockPath);
+    const attempt = randomUUID();
+    let jobId = '';
+    let recoveryId = '';
+    try {
+      requireManager(actor);
+      const record = req.body?.record;
+      if (!record?.data) throw new ApiFailure(400, 'Selecciona un respaldo válido.');
+      try { await validateBackupRecord(record); }
+      catch (error) { throw new ApiFailure(400, (error as Error).message); }
+      const claim = await db.runTransaction(async tx => {
+        const job = (await tx.get(lock)).data();
+        if (job?.active && job.expiresAt > Date.now()) throw new ApiFailure(409, 'Ya hay una restauración ejecutándose.');
+        const rollingBack = job?.active && job.recoveryId === record.id;
+        if (job?.active && !rollingBack && job.checksum !== record.checksum) {
+          throw new ApiFailure(409, 'Reanuda el respaldo pendiente o selecciona su copia previa.');
+        }
+        const data = {
+          id: job?.active ? job.id : randomUUID(),
+          backupId: record.id, checksum: record.checksum, active: true, attempt,
+          expiresAt: Date.now() + 15 * 60_000,
+          stage: job?.active && !rollingBack ? job.stage : 'prepare',
+          recoveryId: job?.active ? job.recoveryId || '' : '',
+        };
+        await prepareEntities(db, tx, record, actor);
+        tx.set(lock, data);
+        return data;
+      });
+      jobId = claim.id;
+      recoveryId = claim.recoveryId;
+      const checkpoint = async (change: { stage: 'reservations' | 'entities'; recoveryId?: string }) => db.runTransaction(async tx => {
+        if ((await tx.get(lock)).get('attempt') !== attempt) throw new ApiFailure(409, 'La restauración cambió de sesión.');
+        tx.update(lock, change);
+      });
+      if (!recoveryId) {
+        recoveryId = await createScheduledBackup(db, true) || '';
+        if (!recoveryId) throw new ApiFailure(503, 'No se confirmó una copia previa. Reintenta la restauración.');
+        await checkpoint({ recoveryId, stage: 'reservations' });
+      }
+      if (claim.stage !== 'entities') {
+        const current = (await db.collection('reservas').get()).docs;
+        const byId = new Map(current.map(doc => [doc.id, { ...doc.data(), id: doc.id } as Reservation]));
+        const desired = (record.data.reservas as Reservation[]).map(row => ({ ...row, version: byId.get(row.id)?.version ?? 0 }));
+        const keep = new Set(desired.map(row => row.id));
+        const deletedIds = current.map(doc => doc.id).filter(id => !keep.has(id));
+        const changed = desired.filter(row => hasReservationMaterialChange(byId.get(row.id), row, cleanReservationForFirestore));
+        if (changed.length || deletedIds.length) {
+          await commitTrusted(db, sessions, token, actor, changed, {
+            operationId: `backup_${attempt}`, backupRestoreId: jobId, backupRestoreAttempt: attempt,
+            backupRestoreCakeCapacity: record.data.stockTortas?.capacity,
+            deletedIds, expectedVersions: Object.fromEntries(current.map(doc => [doc.id, doc.get('version') ?? 0])),
+            allowConflictOverride: true,
+          });
+        }
+        await checkpoint({ stage: 'entities' });
+      }
+      await db.runTransaction(async tx => {
+        if ((await tx.get(lock)).get('attempt') !== attempt) throw new ApiFailure(409, 'La restauración cambió de sesión.');
+        const account = (await tx.get(db.doc(`usuarios_sistema/${accountId(actor.username)}`))).data();
+        if (!sessions.acceptsAccount(token, account as any)) throw new ApiFailure(401, 'La sesión cambió.');
+        requireManager(account);
+        const { writes, deletes } = await prepareEntities(db, tx, record, account);
+        deletes.forEach(ref => tx.delete(ref));
+        writes.forEach(([path, data]) => tx.set(db.doc(path), data));
+        tx.update(lock, { active: false, expiresAt: 0, stage: 'complete' });
+        const audit = db.collection('audit_logs').doc();
+        tx.create(audit, { id: audit.id, action: 'BACKUP_RESTORED', user: actor.username,
+          timestamp: new Date().toISOString(), backupId: record.id, recoveryId, affectedCount: record.totalReservas });
+      });
+      res.set('Cache-Control', 'no-store').json({ success: true, recoveryId, count: record.totalReservas });
+    } catch (error) {
+      if (jobId) {
+        await db.runTransaction(async tx => {
+          if ((await tx.get(lock)).get('attempt') !== attempt) return;
+          tx.update(lock, { active: Boolean(recoveryId), expiresAt: 0 });
+        }).catch(() => {});
+      }
+      if (recoveryId) {
+        const reason = error instanceof ApiFailure ? error.message : 'No se completó la restauración.';
+        res.status(error instanceof ApiFailure ? error.status : 503).json({ success: false, recoveryId,
+          error: `${reason} Vuelve a elegir el mismo respaldo para reanudar o restaura la copia previa ${recoveryId}.` });
+      } else apiError(res, error);
+    }
+  });
   for (const stage of ["validate", "entities"])
     app.post(
       `/api/backups/${stage}`,

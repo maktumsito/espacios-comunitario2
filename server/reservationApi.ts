@@ -1,3 +1,4 @@
+import { canReadReservationPersonalData, preserveReservationPersonalData, projectAgendaRecord } from '../src/utils/reservationPrivacy';
 import { applyIndependentReservationGroup } from "../src/services/migrations/groupIndependentReservations";
 import type { Express, Request, Response } from "express";
 import type { Firestore } from "firebase-admin/firestore";
@@ -16,6 +17,7 @@ import {
   hasReservationMaterialChange,
   hasReservationOccupancyChange,
   type WriteOptions,
+  type WriteResult,
 } from "../src/services/reservationWriter";
 import type { Reservation, AuditChangeLogEntry, SpaceInfo } from "../src/types";
 import {
@@ -38,10 +40,17 @@ import { SPACES_LIST } from '../src/data/spacesData';
 import { REGULAR_LOAN_START_MINUTES, REGULAR_LOAN_END_MINUTES } from '../src/utils/validationUtils';
 import { getDisabledSpaceNames } from '../src/utils/spaceAvailability';
 import { getConstituentSpaces } from '../src/utils/conflictDetector';
+import { reservationWritesPaused, restoreLockPath, restorePauseMessage } from './restoreLock';
 
 const clean = (value: any): any => JSON.parse(JSON.stringify(value));
 const hash = (value: any) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
+function projectWriteResult(result: WriteResult, actor: any) {
+  if (canReadReservationPersonalData(actor)) return result;
+  return { ...result, reservations: result.reservations.map(row =>
+    projectAgendaRecord('reservas', { ...row })) };
+}
+
 export async function readAudit(
   db: Firestore,
   id: string,
@@ -161,7 +170,10 @@ export async function commitTrusted(
     deletedIds: deletions,
     actor: actor.username,
     serverHooks: {
+      projectUpdate: canReadReservationPersonalData(actor) ? undefined : preserveReservationPersonalData,
       before: async (tx, chunk, current, saved) => {
+        if (await reservationWritesPaused(db, tx.__native || tx, options.backupRestoreId, options.backupRestoreAttempt))
+          throw new ApiFailure(409, restorePauseMessage);
         const [account, manifest] = await Promise.all([
           tx.get(db.doc(`usuarios_sistema/${accountId(actor.username)}`)),
           tx.get(auditRef),
@@ -283,7 +295,9 @@ export async function commitTrusted(
           r.createdBy =
             current.get(r.id)?.createdBy || actor.name || actor.username;
         });
-        const commitCakes = await prepareCakeAllocation(db, tx.__native || tx, current, saved, chunk, operationId, atomic, Boolean(options.auditRestore), fresh.name || actor.username);
+        const commitCakes = await prepareCakeAllocation(db, tx.__native || tx, current, saved, chunk, operationId,
+          atomic, Boolean(options.auditRestore || options.backupRestoreId), fresh.name || actor.username,
+          options.backupRestoreId ? { capacity: options.backupRestoreCakeCapacity } : undefined);
         const changedSaved = saved.filter((r) => {
           const orig = current.get(r.id);
           return (
@@ -405,6 +419,11 @@ export async function commitTrusted(
             }),
           );
           tx.set(auditRef, clean(entry));
+          if (options.backupRestoreId) tx.update(db.doc(restoreLockPath), {
+            lastConfirmedReservation: chunk.at(-1),
+            lastConfirmedAt: new Date().toISOString(),
+            expiresAt: Date.now() + 15 * 60_000,
+          });
           confirmedAudit = clean(entry);
         };
       },
@@ -613,7 +632,7 @@ export function registerReservationApi(
           if (res.destroyed && progress.pendingIds.length)
             throw new Error("La conexión se cerró. Reanuda el guardado.");
           if (streaming && !res.destroyed)
-            res.write(JSON.stringify({ progress }) + "\n");
+            res.write(JSON.stringify({ progress: projectWriteResult(progress, actor) }) + "\n");
         };
         const { auditEntry, ...result } = await commitTrusted(
           db,
@@ -625,12 +644,12 @@ export function registerReservationApi(
         );
         reply({
           success: true,
-          result,
-          auditEntry,
+          result: projectWriteResult(result, actor),
+          auditEntry: canReadReservationPersonalData(actor) ? auditEntry : null,
         });
       } catch (error) {
         if (error instanceof ReservationWriteError) {
-          reply({ success: true, error: error.message, result: error.result, discardPending: error.discardPending });
+          reply({ success: true, error: error.message, result: projectWriteResult(error.result, (req as any).user), discardPending: error.discardPending });
         } else if (streaming && res.headersSent)
           reply({ success: false, error: (error as Error).message, status: (error as any).status || 500 });
         else apiError(res, error);

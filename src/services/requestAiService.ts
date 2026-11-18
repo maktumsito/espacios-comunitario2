@@ -1,12 +1,23 @@
 import { getAuthSessionToken } from './authService';
-import { ACTIVITY_TYPES } from '../data/spacesData';
-import { DEFAULT_LOAN_TYPES } from './adminConfigService';
-import { requestAiSchema } from '../utils/requestAiSchema';
-import { redactRequestPersonalData } from '../utils/requestAiPrivacy';
+import { requestAiSchema, requestAiScheduleSchema } from '../utils/requestAiSchema';
 import type { ParsedRequestOptions, ParsedReservationRequest } from '../utils/requestTextParser';
 
-export async function analyzeReservationRequest(text: string, parsed: ParsedReservationRequest,
-  options: ParsedRequestOptions, signal: AbortSignal) {
+export async function analyzeReservationRequest(_text: string, parsed: ParsedReservationRequest,
+  _options: ParsedRequestOptions, signal: AbortSignal) {
+  const schedule = requestAiScheduleSchema.parse({
+    fecha: parsed.fecha || null,
+    horaInicio: parsed.horaInicio || null,
+    horaFin: parsed.horaFin || null,
+    cantidadParticipantes: parsed.cantidadParticipantes || null,
+    bookingMode: parsed.bookingMode,
+    selectedDays: parsed.selectedDays.length ? parsed.selectedDays : null,
+    recurrenceStartDate: parsed.recurrenceStartDate || null,
+    recurrenceEndDate: parsed.recurrenceEndDate || null,
+  });
+  if (![schedule.fecha, schedule.horaInicio, schedule.horaFin, schedule.recurrenceStartDate,
+    schedule.recurrenceEndDate, schedule.selectedDays, schedule.cantidadParticipantes].some(Boolean)) {
+    throw new Error('El detector local no encontró datos de agenda suficientes para el análisis asistido.');
+  }
   const controller = new AbortController();
   const cancel = () => controller.abort();
   signal.addEventListener('abort', cancel, { once: true });
@@ -17,14 +28,7 @@ export async function analyzeReservationRequest(text: string, parsed: ParsedRese
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthSessionToken()}` },
       signal: controller.signal,
-      body: JSON.stringify({
-        text: redactRequestPersonalData(text, parsed),
-        defaultDate: options.defaultDate || undefined,
-        spaces: (options.availableSpaces || []).map(item => item.name),
-        activityTypes: options.availableActivityTypes?.length ? options.availableActivityTypes.map(item => item.name) : [...ACTIVITY_TYPES],
-        loanTypes: (options.availableLoanTypes?.length ? options.availableLoanTypes : DEFAULT_LOAN_TYPES).map(item => item.name),
-        equipment: (options.availableEquipment || []).map(({ id, name }) => ({ id, name })),
-      }),
+      body: JSON.stringify(schedule),
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'No se pudo analizar la solicitud. Puedes continuar con el detector local.');
