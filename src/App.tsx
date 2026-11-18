@@ -63,10 +63,6 @@ const GlobalCommandPalette = lazyWithRetry(
   () => import('./components/GlobalCommandPalette').then((m) => ({ default: m.GlobalCommandPalette })),
   'GlobalCommandPalette'
 );
-const QuickCheckInModal = lazyWithRetry(
-  () => import('./components/QuickCheckInModal').then((m) => ({ default: m.QuickCheckInModal })),
-  'QuickCheckInModal'
-);
 
 // Code-split heavy views & modals with resilient lazyWithRetry to reduce initial bundle size and boost reliability
 const SpaceDashboard = lazyWithRetry(
@@ -241,8 +237,6 @@ export default function App() {
     openGmailDispatchModal
   } = useReservationModals();
 
-  const [checkInReservation, setCheckInReservation] = useState<Reservation | null>(null);
-  const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
 
   const reservationReadScope = getReservationReadScope(
     currentUser, currentView, selectedDailyDate, reservationFilters,
@@ -842,28 +836,6 @@ export default function App() {
     setIsDetailModalOpen(true);
   }, [setSelectedReservation, setIsDetailModalOpen]);
 
-  const handleOpenCheckIn = useCallback((reservation: Reservation) => {
-    requireAuth(() => {
-      setCheckInReservation(reservation);
-      setIsCheckInModalOpen(true);
-    }, 'registrar asistencia de la reserva');
-  }, [requireAuth]);
-
-  const handleSaveCheckIn = useCallback(async (updated: Reservation) => {
-    try {
-      const confirmed = await saveReservation(updated);
-      const savedRes = confirmed.reservations[0] || updated;
-      setReservations((prev) => prev.map((r) => (r.id === savedRes.id ? savedRes : r)));
-      if (selectedReservation?.id === savedRes.id) {
-        setSelectedReservation(savedRes);
-      }
-      triggerSyncToast('Asistencia guardada correctamente.', 'success');
-    } catch (err: any) {
-      triggerSyncToast(err?.message || 'No se pudo guardar la asistencia.', 'error');
-      throw err;
-    }
-  }, [selectedReservation, setReservations, setSelectedReservation, triggerSyncToast]);
-
   const handleStartReplacement = useCallback((r: Reservation) => {
     requireAuth(() => {
       if (!userCanCreateReservations(currentUser) || !userCanEditReservations(currentUser) || !canReplaceOccurrence(r)) {
@@ -1391,7 +1363,6 @@ export default function App() {
                 setSelectedReservation(r);
                 setIsDetailModalOpen(true);
               }}
-              onOpenCheckIn={handleOpenCheckIn}
               onDuplicateReservation={(r) => {
                 handleDuplicateReservation(r);
               }}
@@ -1487,16 +1458,7 @@ export default function App() {
                   setIsReservationModalOpen(true);
                 }, 'crear una reserva en esta fecha');
               }}
-              onToggleRealizada={(r) => {
-                if (!currentUser) {
-                  setPendingAuthAction(() => () => handleQuickToggleRealizada(r));
-                  setAuthActionDescription('actualizar estado de asistencia');
-                  setIsPasswordPromptOpen(true);
-                  return;
-                }
-                requireAuth(() => handleQuickToggleRealizada(r), 'actualizar asistencia de reserva');
-              }}
-              onOpenCheckIn={handleOpenCheckIn}
+              onToggleRealizada={handleQuickToggleRealizada}
               onOpenRating={(r, rating) => {
                 handleOpenRatingModal(r, rating);
               }}
@@ -1729,14 +1691,7 @@ export default function App() {
           onDuplicate={(r) => {
             handleDuplicateReservation(r);
           }}
-          onToggleRealizada={(r) => {
-            if (!userCanEditReservations(currentUser)) {
-              triggerSyncToast('Permiso denegado: No tienes autorización para modificar reservas (gestión controlada por Cristian Shute).', 'error');
-              return;
-            }
-            requireAuth(() => handleQuickToggleRealizada(r), 'actualizar asistencia de reserva');
-          }}
-          onOpenCheckIn={handleOpenCheckIn}
+          onToggleRealizada={handleQuickToggleRealizada}
           onOpenRating={(r, rating) => {
             handleOpenRatingModal(r, rating);
           }}
@@ -1942,7 +1897,6 @@ export default function App() {
                 : null
             }
             onOpenRatingModal={handleOpenRatingModal}
-            onOpenCheckIn={handleOpenCheckIn}
             onClose={() => {
               setIsDetailModalOpen(false);
               setSelectedReservation(null);
@@ -1980,37 +1934,7 @@ export default function App() {
             }}
             onAuthorizeDelete={handleAuthorizeDelete}
             onRejectDeleteRequest={handleRejectDeleteRequest}
-            onToggleRealizada={(reserva) => {
-              if (!userCanEditReservations(currentUser)) {
-                triggerSyncToast('Permiso denegado: No tienes autorización para modificar reservas (gestión controlada por Cristian Shute).', 'error');
-                return;
-              }
-              requireAuth(() => {
-                handleQuickToggleRealizada(reserva);
-                if (selectedReservation && selectedReservation.id === reserva.id) {
-                  setSelectedReservation({
-                    ...selectedReservation,
-                    realizada: selectedReservation.realizada === 'Sí' ? 'No' : 'Sí'
-                  });
-                }
-              }, 'actualizar asistencia de reserva');
-            }}
-          />
-        </Suspense>
-      )}
-
-      {/* Modal de Registro Rápido de Asistencia / Check-in */}
-      {isCheckInModalOpen && (
-        <Suspense fallback={null}>
-          <QuickCheckInModal
-            isOpen={isCheckInModalOpen}
-            onClose={() => {
-              setIsCheckInModalOpen(false);
-              setCheckInReservation(null);
-            }}
-            reservation={checkInReservation}
-            currentUser={currentUser}
-            onSaveCheckIn={handleSaveCheckIn}
+            onToggleRealizada={handleQuickToggleRealizada}
           />
         </Suspense>
       )}

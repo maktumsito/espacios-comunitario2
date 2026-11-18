@@ -55,7 +55,6 @@ interface ReservationDetailModalProps {
   onDelete?: (id: string, isSeries?: boolean, seriesId?: string) => void | Promise<void>;
   onRequestDelete?: (reserva: Reservation) => void;
   onToggleRealizada?: (reserva: Reservation) => void;
-  onOpenCheckIn?: (reserva: Reservation) => void;
   onUpdateReservation?: (updated: Reservation) => void;
   onMergeReservations?: (targetReservationId: string, sourceReservationIds: string[]) => Promise<boolean | void> | boolean | void;
   existingRating?: SpaceRating | null;
@@ -77,7 +76,6 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   onDelete,
   onRequestDelete,
   onToggleRealizada,
-  onOpenCheckIn,
   onUpdateReservation,
   onMergeReservations: _onMergeReservations,
   existingRating,
@@ -495,20 +493,6 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                 <Users className="w-3 h-3 text-blue-600" />
                 <span>Participantes & Asistencia</span>
               </span>
-              {onOpenCheckIn && (
-                <button
-                  type="button"
-                  id="btn-detail-quick-checkin-link"
-                  onClick={() => {
-                    onClose();
-                    onOpenCheckIn(reservation);
-                  }}
-                  className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer flex items-center gap-1"
-                >
-                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  <span>Registrar Check-in</span>
-                </button>
-              )}
             </div>
             <div className="font-bold text-slate-900">{reservation.cantidadParticipantes || 0} personas</div>
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
@@ -516,11 +500,6 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (onOpenCheckIn) {
-                    onClose();
-                    onOpenCheckIn(reservation);
-                    return;
-                  }
                   if (!onToggleRealizada) return;
                   const isCurrentlyAttended = reservation.realizada === 'Sí';
                   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -571,7 +550,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
             </div>
             {reservation.checkInRegistro && (
               <div className="mt-1 pt-1 border-t border-slate-200/60 text-[10px] text-slate-500">
-                <span>Check-in: </span>
+                <span>Asistencia registrada por </span>
                 <strong className="text-slate-700">{reservation.checkInRegistro.registradoPor}</strong>
                 {reservation.checkInRegistro.notas && (
                   <span className="italic block text-slate-600 mt-0.5">"{reservation.checkInRegistro.notas}"</span>
@@ -912,21 +891,6 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                   >
                     <Ban className="w-3.5 h-3.5" />
                     <span>{reservation.estado === 'cancelada' ? 'Reactivar' : 'Cancelar Reserva'}</span>
-                  </button>
-                )}
-                {onOpenCheckIn && (
-                  <button
-                    id="btn-detail-checkin"
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onOpenCheckIn(reservation);
-                    }}
-                    className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold shadow-xs transition cursor-pointer"
-                    title="Registrar asistencia y novedades de la actividad (Check-in rápido)"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Check-in / Asistencia</span>
                   </button>
                 )}
                 <button

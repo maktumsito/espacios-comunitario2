@@ -69,7 +69,6 @@ interface DailyUsageViewProps {
   selectedDate?: Date;
   initialDate?: Date;
   onSelectReservation: (reserva: Reservation) => void;
-  onOpenCheckIn?: (reserva: Reservation) => void;
   onEditReservation?: (reserva: Reservation) => void;
   onDuplicateReservation?: (reserva: Reservation) => void;
   onReplaceReservation?: (reserva: Reservation) => void;
@@ -98,7 +97,6 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   selectedDate: propSelectedDate,
   initialDate,
   onSelectReservation,
-  onOpenCheckIn,
   onEditReservation,
   onDuplicateReservation,
   onReplaceReservation,
