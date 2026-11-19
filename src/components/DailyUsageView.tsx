@@ -137,7 +137,6 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   const selectedDate = currentDate;
   const [searchQuery, setSearchQuery] = useState<string>(() => globalFilters?.search || '');
   const [dateErrorMessage, setDateErrorMessage] = useState<string | null>(null);
-  const [, setHoveredSlot] = useState<{ space: string; hour: number } | null>(null);
   const [hoveredCardInfo, setHoveredCardInfo] = useState<{
     res: Reservation;
     rect: DOMRect;
@@ -540,7 +539,6 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     e.stopPropagation();
     if (!onUpdateReservation || moveInProgress.current) { e.preventDefault(); return; }
     setHoveredCardInfo(null);
-    setHoveredSlot(null);
     previewCache.current = null;
     const timing = getDragTiming(res, dateStr);
     grabOffsetMinutes.current = Math.max(0, (e.clientY - e.currentTarget.getBoundingClientRect().top) / HOUR_HEIGHT * 60)
@@ -1526,8 +1524,6 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                               }
                             }}
                             onClick={() => onNewReservationWithSlot(space.name, dateStr, startH, endH)}
-                            onMouseEnter={() => setHoveredSlot({ space: space.name, hour: h })}
-                            onMouseLeave={() => setHoveredSlot(null)}
                             aria-label={isEarlySlot ? `Reservar ${space.name} desde las 08:30` : `Reservar ${space.name} a las ${startH}`}
                             className="absolute inset-x-0 w-full text-left bg-transparent border-0 cursor-pointer hover:bg-blue-50/30 transition-colors z-5 flex items-center justify-center group/cell p-0"
                             title={isEarlySlot ? `Haga clic para reservar en ${space.name} desde las 08:30 (ingreso manual si requiere antes)` : `Haga clic para reservar en ${space.name} a las ${startH}`}

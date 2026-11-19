@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Reservation } from '../types';
+import React, { useMemo, useState } from 'react';
+import { Reservation, SpaceInfo, ActivityTypeItem } from '../types';
 import { SPACES_LIST, ACTIVITY_TYPES } from '../data/spacesData';
+import { getConstituentSpaces } from '../utils/conflictDetector';
 import {
   Users,
   Calendar,
@@ -20,62 +21,130 @@ import {
 
 interface AnalyticsViewProps {
   reservations: Reservation[];
+  spaces?: SpaceInfo[];
+  activityTypes?: ActivityTypeItem[];
 }
 
-export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ reservations }) => {
+export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
+  reservations,
+  spaces = SPACES_LIST,
+  activityTypes
+}) => {
   const [chartMode, setChartMode] = useState<'d3' | 'list'>('d3');
-  const total = reservations.length;
-  const importantes = reservations.filter(r => r.importante === 'Sí').length;
-  const recurrentes = reservations.filter(r => r.actividadRecurrente === 'Sí').length;
-  const totalParticipantes = reservations.reduce((sum, r) => sum + (r.cantidadParticipantes || 0), 0);
 
-  // Group by Space
-  const spaceCounts = SPACES_LIST.map(space => {
-    const count = reservations.filter(r => r.espacio.toUpperCase() === space.name.toUpperCase()).length;
-    const participants = reservations
-      .filter(r => r.espacio.toUpperCase() === space.name.toUpperCase())
-      .reduce((sum, r) => sum + (r.cantidadParticipantes || 0), 0);
-    return {
-      ...space,
-      count,
-      participants,
-      percentage: total > 0 ? ((count / total) * 100).toFixed(1) : '0'
-    };
-  }).sort((a, b) => b.count - a.count);
+  const {
+    total,
+    importantes,
+    recurrentes,
+    totalParticipantes,
+    dateRangeLabel,
+    spaceCounts,
+    activityCounts,
+    topResponsibles
+  } = useMemo(() => {
+    const totalCount = reservations.length;
+    let impCount = 0;
+    let recCount = 0;
+    let totalPart = 0;
+    let minDate = '';
+    let maxDate = '';
 
-  // Group by Activity Type
-  const activityCounts = ACTIVITY_TYPES.map(type => {
-    const count = reservations.filter(r => r.tipoActividad === type).length;
-    return {
-      type,
-      count,
-      percentage: total > 0 ? ((count / total) * 100).toFixed(1) : '0'
-    };
-  }).sort((a, b) => b.count - a.count);
+    const spaceAgg = new Map<string, { count: number; participants: number }>();
+    const activityAgg = new Map<string, number>();
+    const responsibleMap = new Map<string, { count: number; workshops: Set<string> }>();
 
-  // Top Responsibles / Monitores
-  const responsibleMap: Record<string, { count: number; workshops: Set<string> }> = {};
-  reservations.forEach(r => {
-    const name = r.responsable?.trim() || 'No especificado';
-    if (!responsibleMap[name]) {
-      responsibleMap[name] = { count: 0, workshops: new Set() };
+    for (let i = 0; i < reservations.length; i++) {
+      const r = reservations[i];
+      if (r.importante === 'Sí') impCount++;
+      if (r.actividadRecurrente === 'Sí') recCount++;
+      const part = r.cantidadParticipantes || 0;
+      totalPart += part;
+
+      if (r.fecha) {
+        if (!minDate || r.fecha < minDate) minDate = r.fecha;
+        if (!maxDate || r.fecha > maxDate) maxDate = r.fecha;
+      }
+
+      // Count multi-space reservations in each constituent room as well as exact matches
+      const rooms = r.espacio ? getConstituentSpaces(r.espacio) : [];
+      for (const room of rooms) {
+        const key = room.toUpperCase();
+        const prev = spaceAgg.get(key);
+        if (prev) {
+          prev.count += 1;
+          prev.participants += part;
+        } else {
+          spaceAgg.set(key, { count: 1, participants: part });
+        }
+      }
+
+      if (r.tipoActividad) {
+        activityAgg.set(r.tipoActividad, (activityAgg.get(r.tipoActividad) || 0) + 1);
+      }
+
+      const name = r.responsable?.trim() || 'No especificado';
+      let respEntry = responsibleMap.get(name);
+      if (!respEntry) {
+        respEntry = { count: 0, workshops: new Set() };
+        responsibleMap.set(name, respEntry);
+      }
+      respEntry.count += 1;
+      if (r.descripcion) respEntry.workshops.add(r.descripcion);
     }
-    responsibleMap[name].count += 1;
-    if (r.descripcion) responsibleMap[name].workshops.add(r.descripcion);
-  });
 
-  const topResponsibles = Object.entries(responsibleMap)
-    .map(([name, data]) => ({
-      name,
-      count: data.count,
-      workshopsCount: data.workshops.size
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
+    const catalogSpaces = spaces.length > 0 ? spaces : SPACES_LIST;
+    const computedSpaceCounts = catalogSpaces
+      .map(space => {
+        const agg = spaceAgg.get(space.name.toUpperCase());
+        const count = agg?.count || 0;
+        const participants = agg?.participants || 0;
+        return {
+          ...space,
+          count,
+          participants,
+          percentage: totalCount > 0 ? ((count / totalCount) * 100).toFixed(1) : '0'
+        };
+      })
+      .sort((a, b) => b.count - a.count);
+
+    const activityNames = activityTypes && activityTypes.length > 0
+      ? activityTypes.map(item => item.name)
+      : ACTIVITY_TYPES;
+    const computedActivityCounts = activityNames
+      .map(type => {
+        const count = activityAgg.get(type) || 0;
+        return {
+          type,
+          count,
+          percentage: totalCount > 0 ? ((count / totalCount) * 100).toFixed(1) : '0'
+        };
+      })
+      .sort((a, b) => b.count - a.count);
+
+    const computedTopResponsibles = Array.from(responsibleMap.entries())
+      .map(([name, data]) => ({
+        name,
+        count: data.count,
+        workshopsCount: data.workshops.size
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    return {
+      total: totalCount,
+      importantes: impCount,
+      recurrentes: recCount,
+      totalParticipantes: totalPart,
+      dateRangeLabel: minDate && maxDate ? `Fechas: ${minDate} a ${maxDate}.` : 'Sin datos cargados.',
+      spaceCounts: computedSpaceCounts,
+      activityCounts: computedActivityCounts,
+      topResponsibles: computedTopResponsibles
+    };
+  }, [reservations, spaces, activityTypes]);
 
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6">
-      <p className="text-sm text-slate-600">Estadísticas del conjunto cargado ({reservations.length} reservas). {reservations.length ? `Fechas: ${reservations.map(r=>r.fecha).sort()[0]} a ${reservations.map(r=>r.fecha).sort().at(-1)}.` : 'Sin datos cargados.'} El historial que aún no se ha consultado no está incluido.</p>
+      <p className="text-sm text-slate-600">Estadísticas del conjunto cargado ({reservations.length} reservas). {dateRangeLabel} El historial que aún no se ha consultado no está incluido.</p>
       {/* Key Metric Highlights */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center space-x-3.5">

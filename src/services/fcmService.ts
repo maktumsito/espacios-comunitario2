@@ -1,10 +1,4 @@
-import {
-  getMessaging,
-  getToken,
-  onMessage,
-  isSupported,
-  Messaging
-} from 'firebase/messaging';
+import type { Messaging } from 'firebase/messaging';
 import {
   collection,
   doc,
@@ -160,7 +154,8 @@ export async function initializeFCM(
   onForegroundMessage?: (payload: FcmNotificationPayload) => void
 ): Promise<{ success: boolean; token?: string; error?: string }> {
   try {
-    // 1. Check if FCM is supported in this browser environment
+    // 1. Check if FCM is supported in this browser environment (dynamically loaded)
+    const { isSupported, getMessaging, getToken, onMessage } = await import('firebase/messaging');
     const supported = await isSupported();
     if (!supported) {
       console.info('[FCM] Firebase Cloud Messaging is not supported in this browser environment.');
@@ -271,6 +266,7 @@ export async function initializeFCM(
 export async function refreshFcmToken(): Promise<string | null> {
   if (!messagingInstance) return null;
   try {
+    const { getToken } = await import('firebase/messaging');
     const swReg = await registerFcmServiceWorker();
     const newToken = await getToken(messagingInstance, {
       vapidKey: FCM_VAPID_KEY,

@@ -46,6 +46,8 @@ interface NavbarProps {
   onOpenAuditLog?: () => void;
   onOpenChangePassword?: () => void;
   onOpenCommandPalette?: () => void;
+  onPrefetchNewReservation?: () => void;
+  onPrefetchCommandPalette?: () => void;
   unreadNotificationsCount?: number;
   pendingDeletionsCount?: number;
   onOpenPendingDeletions?: () => void;
@@ -80,6 +82,8 @@ const NavbarComponent: React.FC<NavbarProps> = ({
   onOpenAuditLog,
   onOpenChangePassword,
   onOpenCommandPalette,
+  onPrefetchNewReservation,
+  onPrefetchCommandPalette,
   unreadNotificationsCount = 0,
   pendingDeletionsCount = 0,
   onOpenPendingDeletions,
@@ -424,6 +428,8 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                 id="btn-navbar-command-palette"
                 type="button"
                 onClick={onOpenCommandPalette}
+                onMouseEnter={onPrefetchCommandPalette}
+                onFocus={onPrefetchCommandPalette}
                 aria-label="Buscar reservas o ejecutar comandos (Ctrl+K o Cmd+K)"
                 className={`${iconButton} sm:gap-2 sm:px-3`}
               >
@@ -565,6 +571,8 @@ const NavbarComponent: React.FC<NavbarProps> = ({
               id="btn-new-reservation"
               type="button"
               onClick={onNewReservation}
+              onMouseEnter={onPrefetchNewReservation}
+              onFocus={onPrefetchNewReservation}
               className="ml-2 hidden min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800 lg:inline-flex"
             >
               <Plus className="h-4 w-4" />

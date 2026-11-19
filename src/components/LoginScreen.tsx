@@ -6,8 +6,6 @@ import {
   authenticateGoogleSession,
   getLockoutStatus
 } from '../services/authService';
-import { auth } from '../firebase/config';
-import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { useLoginAccounts } from '../hooks/useLoginAccounts';
 import { LoginAccountSelector } from './common/LoginAccountSelector';
 import {
@@ -135,11 +133,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, sessio
     setErrorMessage('');
     setIsLoading(true);
     try {
+      const [{ GoogleAuthProvider, signInWithPopup, signOut }, { getFirebaseAuth }] = await Promise.all([
+        import('firebase/auth'),
+        import('../firebase/config')
+      ]);
+      const firebaseAuth = getFirebaseAuth();
       const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(firebaseAuth, provider);
       const matchedUser = result.user.emailVerified ? selectedAccount : null;
       if (!matchedUser) {
-        await signOut(auth);
+        await signOut(firebaseAuth);
         setErrorMessage('Esta cuenta de Google no tiene acceso asignado. Seleccione su usuario e ingrese su clave.');
         return;
       }

@@ -202,6 +202,8 @@ const CalendarEventTag = memo<CalendarEventTagProps>(({
       data-reservation-id={reservation.id}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
+      onFocus={() => setShowTooltip(true)}
+      onBlur={() => setShowTooltip(false)}
       onContextMenu={() => setShowTooltip(false)}
       aria-label={`Actividad: ${displayTitle} a las ${reservation.horaInicio} en ${formatDisplayTitle(reservation.espacio)}`}
       className={`w-full text-left relative min-h-7 text-xs px-2 py-1 rounded-md truncate font-bold text-white flex items-center gap-1.5 shadow-sm transition-[filter,transform,box-shadow] hover:brightness-105 hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-1 cursor-pointer border border-black/10 ${

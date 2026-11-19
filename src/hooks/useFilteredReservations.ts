@@ -110,11 +110,8 @@ export function useFilteredReservations(reservations: Reservation[], controlled?
   // Dependencias primitivas: escribir no invalida la búsqueda diferida anterior.
   const { espacio, tipoActividad, fechaDesde, fechaHasta, soloRecurrentes, soloImportantes, soloConTopamiento } = filters;
 
-  // Filtered reservations list: apply cheap O(1) structural filters first, then run Fuse.js only on the surviving subset
-  const filteredReservations = useMemo(() => {
-    const rawSearch = deferredSearch ? deferredSearch.trim() : '';
-    const hasSearch = Boolean(rawSearch);
-
+  // 1. Structural filters (stable reference across search keystrokes so Fuse.js cache stays warm on the smaller subset)
+  const structuralCandidates = useMemo(() => {
     const filterEspacio = espacio ? espacio.toUpperCase() : null;
     const filterTipo = tipoActividad || null;
 
@@ -133,29 +130,35 @@ export function useFilteredReservations(reservations: Reservation[], controlled?
       filterTopamiento || filterRecurrentes || filterImportantes || filterDesde || filterHasta || filterEspacio || filterTipo
     );
 
-    const candidates = hasStructuralFilters
-      ? activeReservations.filter((r) => {
-          if (filterTopamiento && !conflictReservationIds.has(r.id)) return false;
-          if (filterRecurrentes && r.actividadRecurrente !== 'Sí') return false;
-          if (filterImportantes && r.importante !== 'Sí') return false;
-          if (filterDesde || filterHasta) {
-            const rFecha = normalizeReservationDate(r.fecha);
-            if (filterDesde && rFecha < filterDesde) return false;
-            if (filterHasta && rFecha > filterHasta) return false;
-          }
-          if (filterEspacio && !doSpacesConflict(r.espacio, filterEspacio)) return false;
-          if (filterTipo && r.tipoActividad !== filterTipo) return false;
-          return true;
-        })
-      : activeReservations;
-
-    if (!hasSearch || candidates.length === 0) {
-      return candidates;
+    if (!hasStructuralFilters) {
+      return activeReservations;
     }
 
-    const fuzzyMatchIds = getFuzzyMatchIds(candidates, rawSearch);
-    return candidates.filter((r) => fuzzyMatchIds.has(r.id));
-  }, [activeReservations, espacio, tipoActividad, fechaDesde, fechaHasta, soloRecurrentes, soloImportantes, soloConTopamiento, deferredSearch, conflictReservationIds]);
+    return activeReservations.filter((r) => {
+      if (filterTopamiento && !conflictReservationIds.has(r.id)) return false;
+      if (filterRecurrentes && r.actividadRecurrente !== 'Sí') return false;
+      if (filterImportantes && r.importante !== 'Sí') return false;
+      if (filterDesde || filterHasta) {
+        const rFecha = normalizeReservationDate(r.fecha);
+        if (filterDesde && rFecha < filterDesde) return false;
+        if (filterHasta && rFecha > filterHasta) return false;
+      }
+      if (filterEspacio && !doSpacesConflict(r.espacio, filterEspacio)) return false;
+      if (filterTipo && r.tipoActividad !== filterTipo) return false;
+      return true;
+    });
+  }, [activeReservations, espacio, tipoActividad, fechaDesde, fechaHasta, soloRecurrentes, soloImportantes, soloConTopamiento, conflictReservationIds]);
+
+  // 2. Fuzzy search over the stable structuralCandidates reference
+  const filteredReservations = useMemo(() => {
+    const rawSearch = deferredSearch ? deferredSearch.trim() : '';
+    if (!rawSearch || structuralCandidates.length === 0) {
+      return structuralCandidates;
+    }
+
+    const fuzzyMatchIds = getFuzzyMatchIds(structuralCandidates, rawSearch);
+    return structuralCandidates.filter((r) => fuzzyMatchIds.has(r.id));
+  }, [structuralCandidates, deferredSearch]);
 
   return {
     filters,

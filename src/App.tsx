@@ -25,11 +25,8 @@ import { AgendaToolbar } from './components/AgendaToolbar';
 import { SpaceAvailabilityModal } from './components/SpaceAvailabilityModal';
 import { isAgendaView, getAgendaPeriodCount, getAgendaPeriodLabel } from './utils/agendaPeriod';
 import { FilterBar } from './components/FilterBar';
-import { CalendarView } from './components/CalendarView';
-import { DailyUsageView } from './components/DailyUsageView';
-import { MobileAgendaView } from './components/MobileAgendaView';
 import { getInitialViewMode, isMobileDevice, persistViewPreference } from './utils/deviceUtils';
-import { RevalidationBanner, CalendarSkeleton, TimelineSkeleton } from './components/common/LoadingSkeleton';
+import { RevalidationBanner, CalendarSkeleton, TimelineSkeleton, ModalLoadingFallback } from './components/common/LoadingSkeleton';
 
 // Custom Hooks for Modular Architecture
 import { useReservationsState } from './hooks/useReservationsState';
@@ -42,7 +39,27 @@ import { useAuditLogs } from './hooks/useAuditLogs';
 import { useSpaceBlocks } from './hooks/useSpaceBlocks';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
+// Code-split agenda views so only the active view is downloaded on initial load
+const CalendarView = lazyWithRetry(
+  () => import('./components/CalendarView').then((m) => ({ default: m.CalendarView })),
+  'CalendarView'
+);
+const DailyUsageView = lazyWithRetry(
+  () => import('./components/DailyUsageView').then((m) => ({ default: m.DailyUsageView })),
+  'DailyUsageView'
+);
+const MobileAgendaView = lazyWithRetry(
+  () => import('./components/MobileAgendaView').then((m) => ({ default: m.MobileAgendaView })),
+  'MobileAgendaView'
+);
+
 // Code-split heavy modals to minimize initial bundle size and boost initial paint performance
+const preloadReservationModal = () => {
+  void import('./components/ReservationModal');
+};
+const preloadCommandPalette = () => {
+  void import('./components/GlobalCommandPalette');
+};
 const ReservationModal = lazyWithRetry(
   () => import('./components/ReservationModal').then((m) => ({ default: m.ReservationModal })),
   'ReservationModal'
@@ -94,7 +111,6 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFilteredReservations, INITIAL_FILTERS } from './hooks/useFilteredReservations';
 import { canWriteReservations, getReservationReadScope } from './utils/reservationReadScope';
 import { useReservationCrud } from './hooks/useReservationCrud';
-import { initGmailAuthListener } from './services/gmailDispatchService';
 import {
   checkTodayImportantActivities,
   checkUpcomingReplacementActivities,
@@ -251,7 +267,7 @@ export default function App() {
   const {
     reservations, setReservations, isFirebaseConnected, setIsFirebaseConnected,
     isFirebaseSyncing, setIsFirebaseSyncing, lastSyncTime, setLastSyncTime,
-    isInitialLoading, isHistoricalLoading, syncStatusToast, setSyncStatusToast,
+    isInitialLoading, isHistoricalLoading,
     triggerSyncToast, loadHistoricalMonth,
     isReadScopeReady, readError, retryRead,
   } = useReservationsState({
@@ -717,9 +733,15 @@ export default function App() {
   );
   useEffect(() => {
     if (!gmailUiActive) return;
-    const unsubGmail = initGmailAuthListener();
+    let active = true;
+    let unsubGmail: (() => void) | undefined;
+    void import('./services/gmailDispatchService').then(({ initGmailAuthListener }) => {
+      if (!active) return;
+      unsubGmail = initGmailAuthListener();
+    });
     return () => {
-      unsubGmail();
+      active = false;
+      unsubGmail?.();
     };
   }, [gmailUiActive]);
 
@@ -1058,6 +1080,8 @@ export default function App() {
         }}
         onOpenChangePassword={() => handleOpenChangePassword()}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+        onPrefetchNewReservation={preloadReservationModal}
+        onPrefetchCommandPalette={preloadCommandPalette}
         totalReservas={reservations.length}
         conflictsCount={conflictsCount}
         currentUser={currentUser}
@@ -1326,31 +1350,33 @@ export default function App() {
           isInitialLoading ? (
             <CalendarSkeleton />
           ) : (
-            <CalendarView
-              reservations={filteredReservations}
-              spaces={spaces}
-              selectedDate={selectedDailyDate}
-              spaceBlocks={spaceBlocks}
-              onVisibleMonthChange={setSelectedDailyDate}
-              onSelectedDateChange={setSelectedDailyDate}
-              onLoadHistoricalMonth={reservationReadScope ? undefined : loadHistoricalMonth}
-              isHistoricalLoading={isHistoricalLoading}
-              onNavigateToDay={(day) => {
-                setSelectedDailyDate(day);
-                if (isMobileDevice()) {
-                  setCurrentView('mobile');
-                } else {
-                  setCurrentView('daily');
+            <Suspense fallback={<CalendarSkeleton />}>
+              <CalendarView
+                reservations={filteredReservations}
+                spaces={spaces}
+                selectedDate={selectedDailyDate}
+                spaceBlocks={spaceBlocks}
+                onVisibleMonthChange={setSelectedDailyDate}
+                onSelectedDateChange={setSelectedDailyDate}
+                onLoadHistoricalMonth={reservationReadScope ? undefined : loadHistoricalMonth}
+                isHistoricalLoading={isHistoricalLoading}
+                onNavigateToDay={(day) => {
+                  setSelectedDailyDate(day);
+                  if (isMobileDevice()) {
+                    setCurrentView('mobile');
+                  } else {
+                    setCurrentView('daily');
+                  }
+                }}
+                onSelectReservation={handleCalendarSelectReservation}
+                onEditReservation={
+                  !currentUser || userCanEditReservations(currentUser)
+                    ? (r) => { requireAuth(() => void prepareReservationEditor(r), 'editar esta reserva'); }
+                    : undefined
                 }
-              }}
-              onSelectReservation={handleCalendarSelectReservation}
-              onEditReservation={
-                !currentUser || userCanEditReservations(currentUser)
-                  ? (r) => { requireAuth(() => void prepareReservationEditor(r), 'editar esta reserva'); }
-                  : undefined
-              }
-              onNewReservationForDate={handleCalendarNewReservationForDate}
-            />
+                onNewReservationForDate={handleCalendarNewReservationForDate}
+              />
+            </Suspense>
           )
         )}
 
@@ -1358,7 +1384,8 @@ export default function App() {
           isInitialLoading ? (
             <TimelineSkeleton />
           ) : (
-            <DailyUsageView
+            <Suspense fallback={<TimelineSkeleton />}>
+              <DailyUsageView
               comparisonSpaces={comparisonSpaces}
               onComparisonSpacesChange={setComparisonSpaces}
               reservations={filteredReservations}
@@ -1442,6 +1469,7 @@ export default function App() {
                 handleReorderSpaces(newSpaces);
               }}
             />
+            </Suspense>
           )
         )}
 
@@ -1449,7 +1477,8 @@ export default function App() {
           isInitialLoading ? (
             <TimelineSkeleton />
           ) : (
-            <MobileAgendaView
+            <Suspense fallback={<TimelineSkeleton />}>
+              <MobileAgendaView
               reservations={filteredReservations}
               allReservations={reservations}
               conflictReservationIds={conflictReservationIds}
@@ -1507,6 +1536,7 @@ export default function App() {
                 setCurrentView('daily');
               }}
             />
+            </Suspense>
           )
         )}
 
@@ -1557,7 +1587,7 @@ export default function App() {
 
         {currentView === 'analytics' && (
           <Suspense fallback={<div className="p-12 text-center text-slate-500 font-medium">Cargando módulo de analíticas avanzadas...</div>}>
-            <AnalyticsView reservations={reservations} />
+            <AnalyticsView reservations={reservations} spaces={spaces} activityTypes={activityTypes} />
           </Suspense>
         )}
 
@@ -1827,7 +1857,7 @@ export default function App() {
           }
         />
       )}
-      {pendingSeriesMove && <Suspense fallback={null}>
+      {pendingSeriesMove && <Suspense fallback={<ModalLoadingFallback />}>
         <RecurringMoveScopeModal original={pendingSeriesMove.original} target={pendingSeriesMove.target}
           onCancel={() => { pendingSeriesMove.resolve(false); setPendingSeriesMove(null); }}
           onConfirm={async scope => {
@@ -1836,7 +1866,7 @@ export default function App() {
             return success;
           }} />
       </Suspense>}
-      {replacementReminder && <Suspense fallback={null}>
+      {replacementReminder && <Suspense fallback={<ModalLoadingFallback />}>
         <ReplacementReminderModal key={replacementReminder.id} replacement={replacementReminder}
           original={reservations.find(r => r.id === replacementReminder.reemplazaReservaId)}
           pendingCount={replacementReminderCount}
@@ -1848,7 +1878,7 @@ export default function App() {
           }} />
       </Suspense>}
       {isReservationModalOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <ReservationModal
             replacementSource={replacementSource}
             isOpen={isReservationModalOpen}
@@ -1900,7 +1930,7 @@ export default function App() {
       )}
 
       {isDetailModalOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <ReservationDetailModal
             onReplace={(r) => {
               if (!userCanCreateReservations(currentUser) || !userCanEditReservations(currentUser) || !canReplaceOccurrence(r)) return;
@@ -2001,7 +2031,7 @@ export default function App() {
 
       {/* Modal de Registro Rápido de Asistencia / Check-in */}
       {isCheckInModalOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <QuickCheckInModal
             isOpen={isCheckInModalOpen}
             onClose={() => {
@@ -2126,7 +2156,7 @@ export default function App() {
 
       {/* Global Quick Search & Command Palette (Ctrl+K / Cmd+K / /) */}
       {isCommandPaletteOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <GlobalCommandPalette
             isOpen={isCommandPaletteOpen}
             onClose={() => setIsCommandPaletteOpen(false)}
@@ -2179,45 +2209,6 @@ export default function App() {
             hasActiveFilters={hasActiveFilters}
           />
         </Suspense>
-      )}
-
-      {/* Instant Sync Status Toast */}
-      {syncStatusToast && (
-        <NotificationPortal><div
-          id="sync-status-toast"
-          role="status"
-          aria-live="polite"
-          className={`fixed bottom-5 left-5 z-[70] max-w-md px-4 py-3 rounded-xl shadow-2xl border flex items-start space-x-3 text-xs sm:text-sm font-semibold backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 pointer-events-auto ${
-            syncStatusToast.type === 'success'
-              ? 'bg-slate-900/95 text-emerald-300 border-emerald-500/50 shadow-emerald-950/20'
-              : syncStatusToast.type === 'error'
-              ? 'bg-rose-950/95 text-rose-100 border-rose-600/50 shadow-rose-950/30'
-              : syncStatusToast.type === 'warning'
-              ? 'bg-slate-900/95 text-amber-200 border-amber-500/50 shadow-amber-950/30'
-              : 'bg-slate-900/95 text-sky-200 border-sky-500/50 shadow-slate-950/20'
-          }`}
-        >
-          <span
-            className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${
-              syncStatusToast.type === 'success'
-                ? 'bg-emerald-400 animate-pulse'
-                : syncStatusToast.type === 'error'
-                ? 'bg-rose-400 animate-ping'
-                : syncStatusToast.type === 'warning'
-                ? 'bg-amber-400'
-                : 'bg-sky-400'
-            }`}
-          />
-          <span className="flex-1 whitespace-pre-line leading-relaxed">{syncStatusToast.message}</span>
-          <button
-            type="button"
-            onClick={() => setSyncStatusToast(null)}
-            className="text-slate-400 hover:text-white p-1 ml-1 cursor-pointer"
-            aria-label="Cerrar notificación"
-          >
-            ×
-          </button>
-        </div></NotificationPortal>
       )}
 
       {/* Floating Notification Toast for Automated 15-day Backups */}
