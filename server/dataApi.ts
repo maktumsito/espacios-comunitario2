@@ -332,9 +332,20 @@ export function registerDataApi(
     wrap(async (req, res) => {
       const ref = reference(db, req.body, (req as any).user);
       const snapshot = await ref.get();
-      res
-        .set("Cache-Control", "no-store")
-        .json({ success: true, docs: records(snapshot, req.body.path) });
+      const content = Buffer.from(
+        JSON.stringify({ success: true, docs: records(snapshot, req.body.path) }),
+      );
+      res.set({
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json",
+      });
+      if (
+        content.length > 2048 &&
+        req.get("accept-encoding")?.includes("gzip")
+      ) {
+        res.set("Content-Encoding", "gzip");
+        res.end(gzipSync(content));
+      } else res.end(content);
     }),
   );
   const readView = async (body: any, user: any) => {

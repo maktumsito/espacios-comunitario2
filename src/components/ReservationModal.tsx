@@ -264,7 +264,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     }
   }, [isOpen, editingReservation, isDuplicating]);
 
-  // Memoized directory of past responsables and contact details for instant auto-complete and auto-fill
+  // Memoized directory of past responsables and contact details (deferred until Step 3 or full-form mode)
+  const needsResponsablesIndex = !isWizardMode || wizardStep === 3;
   const knownResponsablesMap = useMemo(() => {
     const map = new Map<string, {
       responsable: string;
@@ -273,6 +274,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       emailContacto?: string;
       domicilio?: string;
     }>();
+    if (!needsResponsablesIndex) return map;
 
     (allReservations || []).forEach((r) => {
       const name = (r.responsable || '').trim();
@@ -296,7 +298,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     });
 
     return map;
-  }, [allReservations]);
+  }, [allReservations, needsResponsablesIndex]);
 
   const uniqueResponsablesList = useMemo(() => {
     return Array.from(knownResponsablesMap.values()).sort((a, b) => a.responsable.localeCompare(b.responsable));

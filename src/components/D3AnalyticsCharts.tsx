@@ -1,6 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
+function useContainerWidth(ref: React.RefObject<HTMLDivElement | null>, fallbackWidth: number): number {
+  const [width, setWidth] = useState<number>(fallbackWidth);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const initial = el.clientWidth;
+    if (initial > 0) setWidth(initial);
+    if (typeof ResizeObserver === 'undefined') return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const observer = new ResizeObserver((entries) => {
+      const next = Math.round(entries[0]?.contentRect?.width || 0);
+      if (next <= 0) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        setWidth((prev) => (prev === next ? prev : next));
+      }, 150);
+    });
+    observer.observe(el);
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [ref]);
+  return width;
+}
+
 interface SpaceData {
   id: string;
   name: string;
@@ -22,6 +48,7 @@ interface D3SpaceBarChartProps {
 
 export const D3SpaceBarChart: React.FC<D3SpaceBarChartProps> = ({ data }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const measuredWidth = useContainerWidth(containerRef, 450);
   const [tooltip, setTooltip] = useState<{
     visible: boolean;
     x: number;
@@ -35,7 +62,7 @@ export const D3SpaceBarChart: React.FC<D3SpaceBarChartProps> = ({ data }) => {
     if (!containerRef.current || !data || data.length === 0) return;
 
     const container = containerRef.current;
-    const width = container.clientWidth || 450;
+    const width = container.clientWidth || measuredWidth || 450;
     const height = Math.max(260, data.length * 36 + 40);
     const margin = { top: 15, right: 50, bottom: 25, left: 110 };
     const innerWidth = width - margin.left - margin.right;
@@ -166,11 +193,11 @@ export const D3SpaceBarChart: React.FC<D3SpaceBarChartProps> = ({ data }) => {
       .attr('class', 'text-[11px] font-mono fill-slate-500');
 
     g.select('.domain').attr('stroke', '#e2e8f0');
-  }, [data]);
+  }, [data, measuredWidth]);
 
   return (
     <div className="relative w-full overflow-hidden">
-      <div ref={containerRef} className="w-full" />
+      <div ref={containerRef} className="w-full min-h-[260px]" />
       {tooltip && tooltip.visible && (
         <div
           className="absolute z-20 pointer-events-none bg-slate-900/95 text-white text-xs rounded-lg py-1.5 px-2.5 shadow-xl border border-slate-700/80 -translate-x-1/2 -translate-y-full backdrop-blur-xs transition-transform duration-75"
@@ -192,6 +219,7 @@ interface D3ActivityDonutChartProps {
 
 export const D3ActivityDonutChart: React.FC<D3ActivityDonutChartProps> = ({ data }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const measuredWidth = useContainerWidth(containerRef, 340);
   const [activeItem, setActiveItem] = useState<ActivityData | null>(null);
 
   const total = data.reduce((acc, curr) => acc + curr.count, 0);
@@ -200,7 +228,7 @@ export const D3ActivityDonutChart: React.FC<D3ActivityDonutChartProps> = ({ data
     if (!containerRef.current || !data || data.length === 0) return;
 
     const container = containerRef.current;
-    const width = container.clientWidth || 340;
+    const width = container.clientWidth || measuredWidth || 340;
     const height = 260;
     const radius = Math.min(width, height) / 2 - 15;
     const innerRadius = radius * 0.58;
@@ -280,11 +308,11 @@ export const D3ActivityDonutChart: React.FC<D3ActivityDonutChartProps> = ({ data
           .attr('opacity', 0.95);
         setActiveItem(null);
       });
-  }, [data]);
+  }, [data, measuredWidth]);
 
   return (
     <div className="relative w-full flex flex-col items-center justify-center">
-      <div ref={containerRef} className="w-full flex justify-center" />
+      <div ref={containerRef} className="w-full min-h-[260px] flex justify-center" />
       {/* Center text in donut */}
       <div className="absolute top-[130px] -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none text-center">
         <span className="text-2xl font-black text-slate-900 leading-none">
@@ -324,6 +352,7 @@ interface D3HourlyOccupancyChartProps {
 
 export const D3HourlyOccupancyChart: React.FC<D3HourlyOccupancyChartProps> = ({ reservations }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const measuredWidth = useContainerWidth(containerRef, 500);
 
   // Generate hourly occupancy between 08:00 and 22:00
   const hours = Array.from({ length: 15 }, (_, i) => i + 8); // 8 to 22
@@ -350,7 +379,7 @@ export const D3HourlyOccupancyChart: React.FC<D3HourlyOccupancyChartProps> = ({ 
     if (!containerRef.current || hourlyData.length === 0) return;
 
     const container = containerRef.current;
-    const width = container.clientWidth || 500;
+    const width = container.clientWidth || measuredWidth || 500;
     const height = 180;
     const margin = { top: 20, right: 25, bottom: 30, left: 35 };
     const innerWidth = width - margin.left - margin.right;
@@ -477,11 +506,11 @@ export const D3HourlyOccupancyChart: React.FC<D3HourlyOccupancyChartProps> = ({ 
       .attr('class', 'text-[10px] font-mono fill-slate-500');
 
     g.selectAll('.domain').attr('stroke', '#e2e8f0');
-  }, [reservations]);
+  }, [reservations, measuredWidth]);
 
   return (
     <div className="w-full">
-      <div ref={containerRef} className="w-full" />
+      <div ref={containerRef} className="w-full min-h-[180px]" />
     </div>
   );
 };

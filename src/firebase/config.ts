@@ -62,5 +62,4 @@ export function getFirebaseAuth(): Auth {
   }
   return authInstance;
 }
-export const auth = getFirebaseAuth();
 

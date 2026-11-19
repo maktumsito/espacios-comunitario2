@@ -95,11 +95,11 @@ body {
 }
 
 /* Base minimum text readability guard: elevate tiny microcopy to legible threshold */
-.text-\[8px\], .text-\[9px\] {
+.text-\[8px\], .text-\[9px\], .text-\[9\.5px\] {
   font-size: 0.6875rem !important; /* ~11px */
   line-height: 1rem !important;
 }
-.text-\[10px\] {
+.text-\[10px\], .text-\[10\.5px\] {
   font-size: 0.75rem !important; /* 12px */
   line-height: 1rem !important;
 }

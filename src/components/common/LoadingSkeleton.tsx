@@ -48,6 +48,21 @@ export const TimelineSkeleton: React.FC = () => {
   );
 };
 
+export const ModalLoadingFallback: React.FC<{ label?: string }> = ({ label = 'Cargando ventana...' }) => {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-[1px] p-4 animate-fadeIn"
+    >
+      <div className="bg-white border border-slate-200 rounded-2xl px-6 py-4 shadow-xl flex items-center gap-3 text-sm font-semibold text-slate-700">
+        <span className="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin shrink-0" />
+        <span>{label}</span>
+      </div>
+    </div>
+  );
+};
+
 export const RevalidationBanner: React.FC<{ isRevalidating: boolean }> = ({ isRevalidating }) => {
   if (!isRevalidating) return null;
 

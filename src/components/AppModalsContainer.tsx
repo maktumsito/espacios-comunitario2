@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { Reservation, SpaceInfo, SpaceRating, ViewMode, ActivityTypeItem, LoanType, SpaceBlock, EquipmentItem } from '../types';
 import { AuthUser, isCoordinatorOrAdmin } from '../services/authService';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
+import { ModalLoadingFallback } from './common/LoadingSkeleton';
 
 // Lazy-loaded auxiliary modals
 const SpaceRatingModal = lazyWithRetry(
@@ -212,7 +213,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
     <>
       {/* Modal de Calificación de Espacios */}
       {isRatingModalOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <SpaceRatingModal
             isOpen={isRatingModalOpen}
             reservation={ratingTargetReservation}
@@ -226,7 +227,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
 
       {/* Modal de Confirmación de Eliminación */}
       {isDeleteModalOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <DeleteConfirmationModal
             isOpen={isDeleteModalOpen}
             reservation={deleteTargetReservation}
@@ -244,7 +245,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
 
       {/* Modal de Solicitudes de Eliminación en Espera */}
       {isPendingDeletionsModalOpen && isCoordinatorOrAdmin(currentUser) && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <PendingDeletionsModal
             isOpen={isPendingDeletionsModalOpen && isCoordinatorOrAdmin(currentUser)}
             onClose={onClosePendingDeletionsModal}
@@ -258,7 +259,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
 
       {/* Modal de Importar / Exportar / Respaldo */}
       {isImportExportModalOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <ImportExportModal
             isOpen={isImportExportModalOpen}
             spaces={spaces}
@@ -278,7 +279,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
 
       {/* Registro de Auditoría & Control de Restauración */}
       {isAuditLogOpen && isCoordinatorOrAdmin(currentUser) && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <AuditLogModal
             isOpen={isAuditLogOpen && isCoordinatorOrAdmin(currentUser)}
             onClose={onCloseAuditLog}
@@ -292,7 +293,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
 
       {/* Reporte de Conflictos / Topamientos */}
       {conflictReportData.isOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <ConflictReportModal
             isOpen={conflictReportData.isOpen}
             onClose={onCloseConflictReport}
@@ -304,7 +305,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
 
       {/* Modal de Impresión / PDF */}
       {isGlobalPrintModalOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <PrintScheduleModal
             isOpen={isGlobalPrintModalOpen}
             onClose={onClosePrintModal}
@@ -317,7 +318,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
 
       {/* Centro de Notificaciones */}
       {isNotificationCenterOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <NotificationCenterModal
             isOpen={isNotificationCenterOpen}
             onClose={onCloseNotificationCenter}
@@ -329,7 +330,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
 
       {/* Modal de Contraseña / Desbloqueo de Edición */}
       {isPasswordPromptOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <PasswordPromptModal
             isOpen={isPasswordPromptOpen}
             onClose={onClosePasswordPrompt}
@@ -341,7 +342,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
 
       {/* Modal de Cambio de Contraseña */}
       {isChangePasswordOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <ChangePasswordModal
             isOpen={isChangePasswordOpen}
             onClose={onCloseChangePassword}
@@ -354,7 +355,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
 
       {/* Modal de Despacho de Correo Gmail */}
       {isGmailDispatchModalOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ModalLoadingFallback />}>
           <GmailDispatchModal
             isOpen={isGmailDispatchModalOpen}
             onClose={onCloseGmailDispatch}

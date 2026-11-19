@@ -2,7 +2,7 @@
 import { useReservationVisuals } from '../contexts/ReservationVisualsContext';
 import { filterEnabledSpaceReservations, getEnabledSpaces } from '../utils/spaceAvailability';
 import { VirtualCardGrid } from './common/VirtualCardGrid';
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
 import { Reservation, SpaceInfo, SpaceBlock, SpaceRating } from '../types';
 import {
   AuthUser,
@@ -99,6 +99,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
     if (selectedSpaceFilter !== 'ALL' && !spaces.some(space => space.name === selectedSpaceFilter || space.id === selectedSpaceFilter)) setSelectedSpaceFilter('ALL');
   }, [spaces, selectedSpaceFilter]);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState<boolean>(false);
   const [onlyImportant, setOnlyImportant] = useState<boolean>(false);
   const [onlyConflicts, setOnlyConflicts] = useState<boolean>(false);
@@ -219,7 +220,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
 
   // Filtered reservations based on user controls
   const filteredDayReservations = useMemo(() => {
-    const rawSearch = searchQuery.trim();
+    const rawSearch = deferredSearchQuery.trim();
     const fuzzyIds = rawSearch ? getFuzzyMatchIds(dayReservations, rawSearch) : null;
 
     return dayReservations.filter((r) => {
@@ -246,7 +247,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
 
       return true;
     });
-  }, [dayReservations, selectedSpaceFilter, onlyImportant, onlyConflicts, conflictReservationIds, searchQuery]);
+  }, [dayReservations, selectedSpaceFilter, onlyImportant, onlyConflicts, conflictReservationIds, deferredSearchQuery]);
 
   // Navigation handlers
   const handlePrevDay = () => {
@@ -784,7 +785,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="Buscar actividades en este día"
               placeholder="Buscar en este día"
-              className="w-full min-h-[44px] pl-9 pr-8 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 font-medium"
+              className="w-full min-h-[44px] pl-9 pr-8 py-2 text-base sm:text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 font-medium"
             />
             {searchQuery && (
               <button

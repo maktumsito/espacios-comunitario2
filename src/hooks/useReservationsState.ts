@@ -54,20 +54,18 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
     return !cached || cached.length === 0;
   });
 
-  // Instant Feedback Toast for Fluid Operations
-  const [syncStatusToast, setSyncStatusToast] = useState<{
+  // Unified feedback via Sonner (avoids duplicate banner & root App re-renders)
+  const syncStatusToast: {
     message: string;
     type: 'success' | 'info' | 'error' | 'warning';
-  } | null>(null);
+  } | null = null;
+  const setSyncStatusToast = useCallback<
+    React.Dispatch<React.SetStateAction<{ message: string; type: 'success' | 'info' | 'error' | 'warning' } | null>>
+  >(() => {}, []);
 
   const triggerSyncToast = useCallback(
     (message: string, type: 'success' | 'info' | 'error' | 'warning' = 'success') => {
-      // Trigger sonner modern toast
       triggerSonnerToast(message, type);
-      setSyncStatusToast({ message, type });
-      setTimeout(() => {
-        setSyncStatusToast((prev) => (prev?.message === message ? null : prev));
-      }, 4500);
     },
     []
   );
