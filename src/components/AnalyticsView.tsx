@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Reservation, SpaceInfo, ActivityTypeItem } from '../types';
 import { SPACES_LIST, ACTIVITY_TYPES } from '../data/spacesData';
-import { getConstituentSpaces } from '../utils/conflictDetector';
+import { normalizeSpace } from '../utils/conflictDetector';
 import {
   Users,
   Calendar,
@@ -49,6 +49,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     let minDate = '';
     let maxDate = '';
 
+    const catalogSpaces = spaces.length > 0 ? spaces : SPACES_LIST;
+    const exactRooms = new Map(catalogSpaces.map(space => [space.name.trim().toUpperCase(), space.id]));
+    const normalizedRooms = new Map<string, string | null>();
+    for (const space of catalogSpaces) {
+      const key = normalizeSpace(space.name);
+      normalizedRooms.set(key, normalizedRooms.has(key) ? null : space.id);
+    }
     const spaceAgg = new Map<string, { count: number; participants: number }>();
     const activityAgg = new Map<string, number>();
     const responsibleMap = new Map<string, { count: number; workshops: Set<string> }>();
@@ -66,9 +73,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       }
 
       // Count multi-space reservations in each constituent room as well as exact matches
-      const rooms = r.espacio ? getConstituentSpaces(r.espacio) : [];
+      const rooms = (r.espacio || '').split(/[+/]/);
+      const countedRooms = new Set<string>();
       for (const room of rooms) {
-        const key = room.toUpperCase();
+        const key = exactRooms.get(room.trim().toUpperCase()) ?? normalizedRooms.get(normalizeSpace(room));
+        if (!key || countedRooms.has(key)) continue;
+        countedRooms.add(key);
         const prev = spaceAgg.get(key);
         if (prev) {
           prev.count += 1;
@@ -92,10 +102,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       if (r.descripcion) respEntry.workshops.add(r.descripcion);
     }
 
-    const catalogSpaces = spaces.length > 0 ? spaces : SPACES_LIST;
     const computedSpaceCounts = catalogSpaces
       .map(space => {
-        const agg = spaceAgg.get(space.name.toUpperCase());
+        const agg = spaceAgg.get(space.id);
         const count = agg?.count || 0;
         const participants = agg?.participants || 0;
         return {

@@ -12,6 +12,16 @@ import {
   finishScheduledBackup,
 } from "../src/services/backupScheduleCoordinator";
 
+function sendDataContent(req: Request, res: Response, content: Buffer) {
+  res.vary('Accept-Encoding');
+  const encoding = content.length <= 2048 && req.acceptsEncodings('identity')
+    ? 'identity'
+    : req.acceptsEncodings('gzip', 'identity');
+  if (!encoding) return res.status(406).end();
+  if (encoding === 'gzip') return res.set('Content-Encoding', 'gzip').end(gzipSync(content));
+  return res.end(content);
+}
+
 export class ApiFailure extends Error {
   constructor(
     public status: number,
@@ -339,13 +349,7 @@ export function registerDataApi(
         "Cache-Control": "no-store",
         "Content-Type": "application/json",
       });
-      if (
-        content.length > 2048 &&
-        req.get("accept-encoding")?.includes("gzip")
-      ) {
-        res.set("Content-Encoding", "gzip");
-        res.end(gzipSync(content));
-      } else res.end(content);
+      sendDataContent(req, res, content);
     }),
   );
   const readView = async (body: any, user: any) => {
@@ -419,13 +423,7 @@ export function registerDataApi(
         "Cache-Control": "no-store",
         "Content-Type": "application/x-ndjson",
       });
-      if (
-        content.length > 2048 &&
-        req.get("accept-encoding")?.includes("gzip")
-      ) {
-        res.set("Content-Encoding", "gzip");
-        res.end(gzipSync(content));
-      } else res.end(content);
+      sendDataContent(req, res, content);
     }),
   );
   app.post('/api/data/listen-batch', sessions.requireAuth, wrap(async (req, res) => {
@@ -442,10 +440,7 @@ export function registerDataApi(
     }));
     const content = Buffer.from(JSON.stringify({ success: true, results }));
     res.set({ 'Cache-Control': 'no-store', 'Content-Type': 'application/json' });
-    if (content.length > 2048 && req.get('accept-encoding')?.includes('gzip')) {
-      res.set('Content-Encoding', 'gzip');
-      res.end(gzipSync(content));
-    } else res.end(content);
+    sendDataContent(req, res, content);
   }));
   app.post(
     "/api/data/write",

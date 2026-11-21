@@ -121,6 +121,7 @@ interface ReservationStep1DateTimeProps {
   generatedDates: readonly string[] | string[];
 }
 
+/** @deprecated El formulario actual utiliza ReservationStep2DateTime. */
 export const ReservationStep1DateTime: React.FC<ReservationStep1DateTimeProps> = React.memo(({
   isWizardMode,
   wizardStep,

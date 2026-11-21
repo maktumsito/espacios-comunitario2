@@ -1,6 +1,7 @@
 import { build as buildFrontend } from 'vite';
 import { build as buildServer } from 'esbuild';
-import { writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { gzipSync } from 'node:zlib';
 import { createBuildInfo } from './build-info.mjs';
 
 const info = createBuildInfo();
@@ -9,6 +10,12 @@ await buildFrontend({ define, plugins: [{
   name: 'app-build-info',
   transformIndexHtml: () => [{ tag: 'meta', attrs: { name: 'app-source-hash', content: info.sourceHash }, injectTo: 'head' }],
 }] });
+for (const name of await readdir('dist/assets')) {
+  if (!/\.(js|css)$/.test(name)) continue;
+  const filename = 'dist/assets/' + name;
+  const contents = await readFile(filename);
+  if (contents.length > 2048) await writeFile(filename + '.gz', gzipSync(contents));
+}
 await buildServer({ entryPoints: ['server.ts'], bundle: true, platform: 'node', format: 'cjs',
   packages: 'external', sourcemap: true, outfile: 'dist/server.cjs',
   define: { ...define, 'import.meta.env': '{}' } });

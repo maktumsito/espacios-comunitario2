@@ -56,10 +56,10 @@ const MobileAgendaView = lazyWithRetry(
 
 // Code-split heavy modals to minimize initial bundle size and boost initial paint performance
 const preloadReservationModal = () => {
-  void import('./components/ReservationModal');
+  void import('./components/ReservationModal').catch(() => {});
 };
 const preloadCommandPalette = () => {
-  void import('./components/GlobalCommandPalette');
+  void import('./components/GlobalCommandPalette').catch(() => {});
 };
 const ReservationModal = lazyWithRetry(
   () => import('./components/ReservationModal').then((m) => ({ default: m.ReservationModal })),
@@ -570,21 +570,22 @@ export default function App() {
     };
   }, [currentUser]);
 
-  // Preload heavy modals on idle to ensure instantaneous 0ms interaction response
+  const sessionUser = currentUser?.username;
   useEffect(() => {
+    if (!sessionUser) return;
     const preload = () => {
-      import('./components/ReservationModal');
-      import('./components/ReservationDetailModal');
-      import('./components/GlobalCommandPalette');
+      // Opening a dialog uses lazyWithRetry if this optional download fails.
+      preloadReservationModal();
+      preloadCommandPalette();
+      void import('./components/ReservationDetailModal').catch(() => {});
     };
-    if (typeof window !== 'undefined') {
-      if ('requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(preload, { timeout: 3000 });
-      } else {
-        setTimeout(preload, 2000);
-      }
+    if (typeof window.requestIdleCallback === 'function') {
+      const task = window.requestIdleCallback(preload, { timeout: 3000 });
+      return () => window.cancelIdleCallback(task);
     }
-  }, []);
+    const timer = setTimeout(preload, 2000);
+    return () => clearTimeout(timer);
+  }, [sessionUser]);
 
   useEffect(() => {
     let isMounted = true;
