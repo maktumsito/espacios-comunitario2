@@ -406,24 +406,8 @@ export function computeCommitmentPoint2Details(
     espacioStr = (reservation.espacio || 'SALA 3').trim().toUpperCase();
   }
 
-  // 4. MODALIDAD / TIPO
-  let modalidadStr = '';
-  const tipoPrestamoRaw = (reservation.tipoPrestamo || '').trim().toUpperCase();
-  const periodicidad = isMultiSlot && !isSameDay ? 'REGULAR / PERIÓDICA' : 'PUNTUAL';
-  if (tipoPrestamoRaw) {
-    if (
-      tipoPrestamoRaw.includes('PUNTUAL') ||
-      tipoPrestamoRaw.includes('REGULAR') ||
-      tipoPrestamoRaw.includes('PERIÓDICA') ||
-      tipoPrestamoRaw.includes('PERIODICA')
-    ) {
-      modalidadStr = tipoPrestamoRaw;
-    } else {
-      modalidadStr = `${tipoPrestamoRaw} (${periodicidad})`;
-    }
-  } else {
-    modalidadStr = periodicidad;
-  }
+  // 4. TIPO DE ACTIVIDAD
+  const modalidadStr = String(reservation.tipoActividad ?? '').trim().toUpperCase();
 
   // 5. AFORO ESTIMADO
   let aforoStr = '';
@@ -605,7 +589,7 @@ export async function generateCommitmentLetterPdfDoc(
       ],
       [
         { content: `Espacio Asignado: ${esp || '__________________________________________'}` },
-        { content: `Modalidad / Tipo: ${modalidadStr || '______________________'}` }
+        { content: `Tipo de actividad: ${modalidadStr || '______________________'}` }
       ],
       [
         { content: `Aforo Estimado: ${aforoStr || '__________________________________________'}` },

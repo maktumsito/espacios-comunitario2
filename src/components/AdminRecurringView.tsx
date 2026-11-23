@@ -88,6 +88,7 @@ interface AdminRecurringViewProps {
     updateWholeSeries?: boolean
   ) => Promise<boolean>;
   onDeleteReservation?: (id: string, seriesId?: string) => Promise<void>;
+  onRequestDelete?: (reservation: Reservation) => void;
   onEditReservation?: (reservation: Reservation) => void;
 }
 
@@ -99,6 +100,7 @@ interface RecurringSeriesCardProps {
   onOpenModify: (series: RecurringSeriesGroup) => void;
   onEditReservation?: (reservation: Reservation) => void;
   onDeleteReservation?: (id: string, seriesId?: string) => Promise<void>;
+  onRequestDelete?: (reservation: Reservation) => void;
 }
 
 const RecurringSeriesCard = React.memo<RecurringSeriesCardProps>(({
@@ -108,7 +110,8 @@ const RecurringSeriesCard = React.memo<RecurringSeriesCardProps>(({
   onToggleExpand,
   onOpenModify,
   onEditReservation,
-  onDeleteReservation
+  onDeleteReservation,
+  onRequestDelete
 }) => {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Formatted days string
@@ -209,9 +212,9 @@ const RecurringSeriesCard = React.memo<RecurringSeriesCardProps>(({
           {onDeleteReservation && series.reservations[0] && (
             <button
               type="button"
-              onClick={() => setConfirmDelete(true)}
+              onClick={() => onRequestDelete ? onRequestDelete(series.reservations[0]) : setConfirmDelete(true)}
               className="min-h-[40px] p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-200 transition cursor-pointer"
-              title="Eliminar todas las sesiones de la serie"
+              title={onRequestDelete ? "Elegir reservas de la serie para eliminar" : "Eliminar todas las sesiones de la serie"}
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -289,6 +292,7 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
   activityTypes,
   onSaveReservation,
   onDeleteReservation,
+  onRequestDelete,
   onEditReservation
 }) => {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -860,6 +864,7 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
                 onOpenModify={handleOpenModify}
                 onEditReservation={onEditReservation}
                 onDeleteReservation={onDeleteReservation}
+                onRequestDelete={onRequestDelete}
               />
             ))}
           </div>

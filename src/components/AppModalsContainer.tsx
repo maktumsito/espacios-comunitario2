@@ -1,3 +1,4 @@
+import type { ScopedDeleteProps } from './RecurringDeleteScopeModal';
 import React, { Suspense } from 'react';
 import { Reservation, SpaceInfo, SpaceRating, ViewMode, ActivityTypeItem, LoanType, SpaceBlock, EquipmentItem } from '../types';
 import { AuthUser, isCoordinatorOrAdmin } from '../services/authService';
@@ -72,6 +73,7 @@ export interface AppModalsContainerProps {
   onCloseDeleteModal: () => void;
   onConfirmDeleteSingle: (id: string) => void;
   onConfirmDeleteSeries: (seriesId: string) => void;
+  onConfirmDeleteScope?: ScopedDeleteProps['onConfirm'];
   onClearParticipants?: (reservation: Reservation) => void;
   onSubmitDeleteRequest?: (
     reservation: Reservation,
@@ -160,6 +162,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
   onCloseDeleteModal,
   onConfirmDeleteSingle,
   onConfirmDeleteSeries,
+  onConfirmDeleteScope,
   onClearParticipants,
   onSubmitDeleteRequest,
   onAuthorizeDelete,
@@ -234,6 +237,7 @@ export const AppModalsContainer: React.FC<AppModalsContainerProps> = ({
             onClose={onCloseDeleteModal}
             onConfirmDeleteSingle={onConfirmDeleteSingle}
             onConfirmDeleteSeries={onConfirmDeleteSeries}
+            onConfirmDeleteScope={onConfirmDeleteScope}
             onClearParticipants={onClearParticipants}
             currentUser={currentUser}
             onSubmitDeleteRequest={onSubmitDeleteRequest}

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-const sdk = vi.hoisted(() => ({ next: undefined as any, stop: vi.fn(), hydrate: vi.fn() }));
+const sdk = vi.hoisted(() => ({ next: undefined as any, stop: vi.fn(), hydrate: vi.fn(), read: vi.fn() }));
 vi.mock('../../firebase/sharedSnapshot', () => ({
   sharedOnSnapshot: (_query: unknown, next: any) => { sdk.next = next; return sdk.stop; },
 }));
@@ -18,6 +18,7 @@ vi.mock('../reservationWriter', async importOriginal => ({
 }));
 vi.mock('firebase/firestore', async importOriginal => ({
   ...await importOriginal<typeof import('firebase/firestore')>(),
+  getDocs: sdk.read,
   collection: (_db: unknown, path: string) => ({ path }),
   query: (ref: unknown) => ref,
 }));
@@ -106,4 +107,14 @@ it.each(['active', 'date range'])('keeps the original slot available after a con
   sdk.next(snapshot([]));
   expect(onData.mock.calls.at(-1)?.[0]).toEqual([]);
   stop();
+});
+
+it('reads canonical and legacy series IDs, deduplicates and includes the starting day', async () => {
+  const first = { ...row('first', '2026-09-01'), serieRecurrente: 'series' };
+  const anchor = { ...row('anchor', '2026-10-06'), serieRecurrente: 'series' };
+  const last = { ...row('last', '2026-12-01'), recurrenteId: 'series' };
+  sdk.read.mockResolvedValueOnce(snapshot([first, anchor])).mockResolvedValueOnce(snapshot([anchor, last]));
+  const results = await service.queryReservationsBySeries('series', '2026-10-06');
+  expect(sdk.read).toHaveBeenCalledTimes(2);
+  expect(results.map(r => r.id)).toEqual(['anchor', 'last']);
 });

@@ -215,7 +215,7 @@ Domicilio / Dirección: ${dom || '__________________________________________'} |
 
 2. DETALLES DEL ESPACIO Y HORARIO AUTORIZADO
 Fecha y Día: ${fechaDiaStr || '__________________________________________'} | Horario Autorizado: ${horarioStr || '______________________'}
-Espacio Asignado: ${esp || '__________________________________________'} | Modalidad / Tipo: ${modalidadStr || '______________________'}
+Espacio Asignado: ${esp || '__________________________________________'} | Tipo de actividad: ${modalidadStr || '______________________'}
 Aforo Estimado: ${aforoStr || '__________________________________________'} | Propósito / Evento: ${propositoStr || '______________________'}
 
 3. MARCO LEGAL, COMPROMISOS DE COMPORTAMIENTO Y CONDICIONES DE USO
@@ -479,12 +479,12 @@ RUT: ${rutStr || '____________________________________'}
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700">Modalidad / Tipo:</label>
+                  <label className="font-semibold text-slate-700">Tipo de actividad:</label>
                   <input
                     type="text"
-                    placeholder="Puntual / Regular"
-                    value={localData.tipoPrestamo}
-                    onChange={(e) => setLocalData({ ...localData, tipoPrestamo: e.target.value })}
+                    placeholder="Tipo de actividad de la reserva"
+                    value={localData.tipoActividad}
+                    onChange={(e) => setLocalData({ ...localData, tipoActividad: e.target.value })}
                     className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900"
                   />
                 </div>
@@ -637,7 +637,7 @@ RUT: ${rutStr || '____________________________________'}
                     <span className="font-bold text-slate-900">{point2Details.espacioStr || '__________________________________________'}</span>
                   </div>
                   <div className="px-3 py-1">
-                    <span className="font-semibold text-slate-900">Modalidad / Tipo:</span>{' '}
+                    <span className="font-semibold text-slate-900">Tipo de actividad:</span>{' '}
                     <span>{point2Details.modalidadStr || '______________________'}</span>
                   </div>
                 </div>

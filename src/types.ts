@@ -141,6 +141,8 @@ export interface BatchUpdateInfo {
   expectedVersions?: Record<string,number>;
 }
 
+export type DeleteScope = 'single' | 'future' | 'series';
+
 export interface DeletionRequest {
   solicitadoPor: string;
   solicitadoPorNombre?: string;
@@ -148,6 +150,9 @@ export interface DeletionRequest {
   fechaSolicitud: string;
   motivo?: string;
   esSerie?: boolean;
+  alcance?: DeleteScope;
+  fechaDesde?: string;
+  seleccion?: { id: string; version: number }[];
   serieId?: string;
 }
 

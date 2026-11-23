@@ -786,6 +786,7 @@ export default function App() {
     handleDeleteDay,
     handleConfirmDeleteSingle,
     handleConfirmDeleteSeries,
+    handleConfirmDeleteScope,
     handleRequestDelete,
     handleSubmitDeleteRequest,
     handleAuthorizeDelete,
@@ -1694,6 +1695,7 @@ export default function App() {
                 }, 'guardar actividad recurrente');
                 return success;
               }}
+              onRequestDelete={handleRequestDelete}
               onDeleteReservation={async (id, seriesId) => {
                 await requireAuth(async () => {
                   await handleDelete(id, !!seriesId, seriesId);
@@ -2072,6 +2074,7 @@ export default function App() {
         }}
         onConfirmDeleteSingle={handleConfirmDeleteSingle}
         onConfirmDeleteSeries={handleConfirmDeleteSeries}
+        onConfirmDeleteScope={handleConfirmDeleteScope}
         onClearParticipants={handleClearParticipants}
         onSubmitDeleteRequest={handleSubmitDeleteRequest}
         onAuthorizeDelete={handleAuthorizeDelete}
