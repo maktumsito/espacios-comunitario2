@@ -53,6 +53,7 @@ export const CommitmentLetterCard: React.FC<CommitmentLetterCardProps> = ({
   const handleDownloadOfficialPdf = async () => {
     if (isDownloading) return;
     try {
+      setUploadError(null);
       setIsDownloading(true);
       await downloadCommitmentLetterPdf(reservation, {
         allReservations,
@@ -370,7 +371,7 @@ export const CommitmentLetterCard: React.FC<CommitmentLetterCardProps> = ({
 
           {/* Upload error message */}
           {uploadError && (
-            <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center space-x-1.5">
+            <div role="alert" className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center space-x-1.5">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
               <span>{uploadError}</span>
             </div>

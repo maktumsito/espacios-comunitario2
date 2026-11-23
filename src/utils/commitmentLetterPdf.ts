@@ -115,7 +115,7 @@ export function extractScheduleSlots(
 
   // 2. Sibling lookup for single-day multi-space reservations in allReservations
   if (options?.allReservations && options.allReservations.length > 0 && reservation.fecha) {
-    const respLower = (reservation.responsable || '').trim().toLowerCase();
+    const respLower = String(reservation.responsable ?? '').trim().toLowerCase();
     const isMultiSpaceCandidate =
       reservation.tipoRecurrencia === 'doble_espacio' ||
       reservation.totalEnSerie === 2 ||
@@ -488,11 +488,11 @@ export async function generateCommitmentLetterPdfDoc(
   const point2 = computeCommitmentPoint2Details(reservation, rangeInfo);
 
   // Format data from reservation to complete the template blanks
-  const resp = (reservation.responsable || '').trim().toUpperCase();
-  const rutStr = (reservation.rut || '').trim().toUpperCase();
-  const tel = (reservation.telefonoContacto || '').trim().toUpperCase();
-  const emailStr = (reservation.emailContacto || '').trim().toUpperCase();
-  const dom = (reservation.domicilio || '').trim().toUpperCase();
+  const resp = String(reservation.responsable ?? '').trim().toUpperCase();
+  const rutStr = String(reservation.rut ?? '').trim().toUpperCase();
+  const tel = String(reservation.telefonoContacto ?? '').trim().toUpperCase();
+  const emailStr = String(reservation.emailContacto ?? '').trim().toUpperCase();
+  const dom = String(reservation.domicilio ?? '').trim().toUpperCase();
   const tipoAct = (reservation.tipoActividad || 'PRÉSTAMO DE ESPACIO').trim().toUpperCase();
 
   const fechaDiaStr = point2.fechaDiaStr;
@@ -860,7 +860,7 @@ export async function downloadCommitmentLetterPdf(
       .replace(/[\/\\]/g, '_')
       .replace(/\s+/g, '_');
     const filename = `Carta_Compromiso_${spaceLabel}_${reservation.fecha || 'Fecha'}.pdf`;
-    doc.save(filename);
+    await doc.save(filename, { returnPromise: true });
   } catch (err) {
     console.error('Error generating and downloading Commitment Letter PDF:', err);
     throw err;

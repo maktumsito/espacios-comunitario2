@@ -1,3 +1,4 @@
+import { loadPdfLibraries } from '../utils/loadPdfLibraries';
 import { CalendarDateInput } from './common/CalendarDateInput';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useRef, useMemo } from 'react';
@@ -47,6 +48,12 @@ export const CommitmentLetterModal: React.FC<CommitmentLetterModalProps> = ({
   allReservations = [],
   seriesScheduleItems
 }) => {
+  React.useEffect(() => {
+    if (isOpen) void loadPdfLibraries().catch(() => {
+      // The download action reports the error and allows a retry.
+    });
+  }, [isOpen]);
+
   const printContentRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -55,11 +62,11 @@ export const CommitmentLetterModal: React.FC<CommitmentLetterModalProps> = ({
 
   // Local editable fields including municipal completion antecedents
   const [localData, setLocalData] = useState({
-    responsable: (reservationData.responsable || '').toUpperCase(),
-    rut: (reservationData.rut || '').toUpperCase(),
-    telefonoContacto: (reservationData.telefonoContacto || '').toUpperCase(),
-    emailContacto: (reservationData.emailContacto || '').toUpperCase(),
-    domicilio: (reservationData.domicilio || '').toUpperCase(),
+    responsable: String(reservationData.responsable ?? '').toUpperCase(),
+    rut: String(reservationData.rut ?? '').toUpperCase(),
+    telefonoContacto: String(reservationData.telefonoContacto ?? '').toUpperCase(),
+    emailContacto: String(reservationData.emailContacto ?? '').toUpperCase(),
+    domicilio: String(reservationData.domicilio ?? '').toUpperCase(),
     espacio: (reservationData.espacio || 'SALA 3').toUpperCase(),
     fecha: reservationData.fecha || format(new Date(), 'yyyy-MM-dd'),
     horaInicio: reservationData.horaInicio || '14:00',
@@ -101,11 +108,11 @@ export const CommitmentLetterModal: React.FC<CommitmentLetterModalProps> = ({
       const initialEspacio = (derivedRange.uniqueSpacesText || reservationData.espacio || 'SALA 3').toUpperCase();
 
       setLocalData({
-        responsable: (reservationData.responsable || '').toUpperCase(),
-        rut: (reservationData.rut || '').toUpperCase(),
-        telefonoContacto: (reservationData.telefonoContacto || '').toUpperCase(),
-        emailContacto: (reservationData.emailContacto || '').toUpperCase(),
-        domicilio: (reservationData.domicilio || '').toUpperCase(),
+        responsable: String(reservationData.responsable ?? '').toUpperCase(),
+        rut: String(reservationData.rut ?? '').toUpperCase(),
+        telefonoContacto: String(reservationData.telefonoContacto ?? '').toUpperCase(),
+        emailContacto: String(reservationData.emailContacto ?? '').toUpperCase(),
+        domicilio: String(reservationData.domicilio ?? '').toUpperCase(),
         espacio: initialEspacio,
         fecha: reservationData.fecha || format(new Date(), 'yyyy-MM-dd'),
         horaInicio: reservationData.horaInicio || '14:00',
@@ -340,6 +347,7 @@ RUT: ${rutStr || '____________________________________'}
             </button>
 
             <button
+              type="button"
               onClick={handleDownloadPdf}
               disabled={isGeneratingPdf}
               className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-bold transition flex items-center space-x-1.5 shadow-xs cursor-pointer"
