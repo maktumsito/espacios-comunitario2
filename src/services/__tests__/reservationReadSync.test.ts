@@ -30,15 +30,17 @@ function snapshot(rows: any[], fromCache = false) {
   const docs = rows.map(r => ({ id: r.id, data: () => r }));
   return { docs, empty: docs.length === 0, metadata: { fromCache, hasPendingWrites: false }, forEach: (fn: any) => docs.forEach(fn) };
 }
-beforeEach(() => {
+let service: typeof import('../reservationService');
+
+beforeEach(async () => {
   vi.resetModules(); vi.clearAllMocks(); localStorage.clear();
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-06T12:00:00Z'));
   sdk.hydrate.mockResolvedValue([]);
+  service = await import('../reservationService');
 });
 afterEach(() => vi.useRealTimers());
 
 it('preserves local data for cache events, then removes remote deletions while retaining history', async () => {
-  const service = await import('../reservationService');
   service.setLocalCache([row('historical', '2025-11-03'), row('active', '2026-10-05')]);
   const stop = service.subscribeToReservations(vi.fn(), vi.fn());
   sdk.next(snapshot([], true));
@@ -51,7 +53,6 @@ it('preserves local data for cache events, then removes remote deletions while r
 it('keeps a confirmed empty cache empty and prevents delayed IndexedDB hydration from resurrecting data', async () => {
   let resolve!: (rows: any[]) => void;
   sdk.hydrate.mockReturnValue(new Promise<any[]>(done => { resolve = done; }));
-  const service = await import('../reservationService');
   service.setLocalCache([]);
   const onData = vi.fn();
   const stop = service.subscribeToReservations(onData, vi.fn());
@@ -64,7 +65,6 @@ it('keeps a confirmed empty cache empty and prevents delayed IndexedDB hydration
 });
 
 it('reconciles additions, edits and removals inside a live date range while preserving other cached months', async () => {
-  const service = await import('../reservationService');
   service.setLocalCache([row('old', '2026-10-05'), row('future', '2027-01-04')]);
   const onData = vi.fn();
   const stop = service.subscribeToReservationsByDateRange('2026-10-01', '2026-10-31', onData, vi.fn());
@@ -81,7 +81,6 @@ it('reconciles additions, edits and removals inside a live date range while pres
 });
 
 it.each(['active', 'date range'])('keeps the original slot available after a confirmed move and a late %s snapshot', async scope => {
-  const service = await import('../reservationService');
   const { checkSingleConflict } = await import('../../utils/conflictDetector');
   const original = { ...row('moved', '2026-10-07'), version: 1, createdAt: '2026-10-06T09:00:00Z' };
   const moved = { ...original, espacio: 'SALA 2', version: 2 };

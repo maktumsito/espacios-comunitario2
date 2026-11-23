@@ -447,6 +447,12 @@ export default function App() {
     backupId?: string;
   } | null>(null);
 
+  useEffect(() => {
+    if (!backupToast || isReservationModalOpen) return;
+    const timer = window.setTimeout(() => setBackupToast(null), 9000);
+    return () => window.clearTimeout(timer);
+  }, [backupToast, isReservationModalOpen]);
+
   const reservationsRef = useRef(reservations);
   reservationsRef.current = reservations;
   const currentViewRef = useRef(currentView);
@@ -604,13 +610,6 @@ export default function App() {
             message: `Se ha generado automáticamente la copia de seguridad de la base de datos (ciclo de 15 días: ${check.backup.totalReservas} reservas respaldadas en Firebase).`,
             backupId: check.backup.id
           });
-
-          // Auto-hide toast after 9 seconds
-          setTimeout(() => {
-            if (isMounted) {
-              setBackupToast(null);
-            }
-          }, 9000);
         }
       } catch (err) {
         console.warn('[Copia Automática 15 Días] Error durante la verificación periódica:', err);
@@ -2214,7 +2213,7 @@ export default function App() {
       )}
 
       {/* Floating Notification Toast for Automated 15-day Backups */}
-      {backupToast && backupToast.show && (
+      {backupToast?.show && !isReservationModalOpen && (
         <NotificationPortal><div
           id="auto-backup-toast"
           className="fixed bottom-5 right-5 z-50 max-w-md bg-slate-900 text-white rounded-2xl p-4 shadow-2xl border border-emerald-500/40 flex items-start space-x-3 animate-in fade-in slide-in-from-bottom-5"
@@ -2236,6 +2235,7 @@ export default function App() {
             )}
           </div>
           <button
+            aria-label="Cerrar aviso de copia de seguridad"
             onClick={() => setBackupToast(null)}
             className="text-slate-400 hover:text-white p-1 rounded-lg transition cursor-pointer"
           >
