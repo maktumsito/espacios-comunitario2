@@ -121,7 +121,7 @@ export function buildVacateSpacesPlan(
     : allCompatibleCatalogSpaces;
 
   const activeDayRows = snapshot.reservations
-    .filter(r => r.fecha === snapshot.fecha && isReservationActiveForAvailability(r, new Set()) && !r.reemplazadaPorReservaId)
+    .filter(r => r.fecha === snapshot.fecha && isReservationActiveForAvailability(r, new Set()))
     .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio) || a.espacio.localeCompare(b.espacio));
 
   const overlapsWindow = (r: Reservation) => {

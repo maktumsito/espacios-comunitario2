@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'rea
 import { Reservation, ViewMode, FilterState, SpaceRating } from './types';
 import {
   saveReservation,
+  saveReservationsBatch,
   purgeExpiredScheduleSlots,
   getLocalCache,
   compareReservationsByDate
@@ -13,7 +14,8 @@ import { fetchReservationById } from './services/reservationService';
 import { queryReservationsBySeries } from './services/reservationService';
 import { getChileLocalDateString, parseDateToNoon } from './utils/dateUtils';
 import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from './utils/spaceAvailability';
-import { canReplaceOccurrence } from './utils/reservationReplacement';
+import { checkSingleConflict } from './utils/conflictDetector';
+import { canReplaceOccurrence, setReplacementActive } from './utils/reservationReplacement';
 import { useReplacementReminders } from './hooks/useReplacementReminders';
 import { getDueReplacementReminders } from './utils/replacementReminders';
 import { isRecurringSeriesReservation } from './utils/recurringEdits';
@@ -1933,6 +1935,38 @@ export default function App() {
       {isDetailModalOpen && (
         <Suspense fallback={<ModalLoadingFallback />}>
           <ReservationDetailModal
+            onSetReplacementActive={async (selected, active) => {
+              if (!userCanEditReservations(currentUser)) return;
+              const linkedId = selected.reemplazaReservaId || selected.reemplazadaPorReservaId;
+              if (!linkedId) return;
+              const ids = [selected.id, linkedId];
+              const updatePair = (rows: (Reservation | null)[]) => {
+                const byId = new Map(rows.filter((r): r is Reservation => !!r).map(r => [r.id, r]));
+                setReservations(prev => [...prev.filter(r => !ids.includes(r.id)), ...byId.values()].sort(compareReservationsByDate));
+                setSelectedReservation(prev => prev && ids.includes(prev.id) ? byId.get(prev.id) || null : prev);
+              };
+              try {
+                const related = reservations.find(r => r.id === linkedId) || await fetchReservationById(linkedId);
+                const pair = setReplacementActive(selected, related, active);
+                const target = active ? pair[1] : pair[0];
+                if (checkSingleConflict(target, reservations, ids).length) {
+                  throw new Error(`Horario ocupado en ${target.espacio}, ${target.fecha}, de ${target.horaInicio} a ${target.horaFin}.`);
+                }
+                const result = await saveReservationsBatch(pair, {
+                  intent: 'update', requireAtomic: true,
+                  expectedVersions: Object.fromEntries(pair.map(r => [r.id, r.version ?? 0])),
+                });
+                updatePair(result.reservations);
+                triggerSyncToast(active ? 'Reemplazo reactivado.' : 'Reserva original reactivada.', 'success');
+              } catch (error) {
+                triggerSyncToast(error instanceof Error ? error.message : 'No se pudo cambiar el reemplazo.', 'error');
+                try {
+                  updatePair(await Promise.all(ids.map(fetchReservationById)));
+                } catch {
+                  // A failed refresh must preserve the last known agenda.
+                }
+              }
+            }}
             onReplace={(r) => {
               if (!userCanCreateReservations(currentUser) || !userCanEditReservations(currentUser) || !canReplaceOccurrence(r)) return;
               setReplacementSource(r);

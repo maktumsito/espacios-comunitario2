@@ -42,9 +42,10 @@ import {
 import { ConfirmationModal } from './common/ConfirmationModal';
 import { BaseModal } from './common/BaseModal';
 import { canReplaceOccurrence } from '../utils/reservationReplacement';
-import { checkSingleConflict } from '../utils/conflictDetector';
+
 
 interface ReservationDetailModalProps {
+  onSetReplacementActive?: (selected: Reservation, active: boolean) => Promise<void>;
   onReplace?: (reservation: Reservation) => void;
   onViewRelated?: (id: string) => void | Promise<void>;
   reservation: Reservation | null;
@@ -67,6 +68,7 @@ interface ReservationDetailModalProps {
 }
 
 export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
+  onSetReplacementActive,
   onReplace,
   onViewRelated,
   reservation,
@@ -88,6 +90,9 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   onRejectDeleteRequest
 }) => {
   const [showCommitmentLetter, setShowCommitmentLetter] = React.useState(false);
+
+  const [savingReplacement, setSavingReplacement] = React.useState(false);
+  const savingReplacementRef = React.useRef(false);
 
   // Accessible non-blocking confirmation dialog state (D4)
   const [confirmModal, setConfirmModal] = React.useState<{
@@ -130,8 +135,22 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   const canModify = userCanEditReservations(currentUser);
   const canDelete = userCanDeleteReservations(currentUser);
   const canCreate = userCanCreateReservations(currentUser);
-  const reactivationBlocked = Boolean(reservation.reemplazadaPorReservaId &&
-    checkSingleConflict({ ...reservation, estado: 'activa' }, allReservations, [reservation.id]).length);
+  const linkedId = reservation.reemplazaReservaId || reservation.reemplazadaPorReservaId;
+  const related = linkedId ? allReservations.find(r => r.id === linkedId) : undefined;
+  const replacement = reservation.reemplazaReservaId ? reservation : related;
+  const replacementActive = replacement ? replacement.estado !== 'cancelada' : reservation.estado === 'cancelada';
+  const original = reservation.reemplazaReservaId ? related : reservation;
+  const toggleReplacement = async () => {
+    if (!onSetReplacementActive || savingReplacementRef.current) return;
+    savingReplacementRef.current = true;
+    setSavingReplacement(true);
+    try {
+      await onSetReplacementActive(reservation, !replacementActive);
+    } finally {
+      savingReplacementRef.current = false;
+      setSavingReplacement(false);
+    }
+  };
 
   const spaceColor = getSpaceColor(reservation.espacio);
   const isWeekendRes = isWeekend(reservation.fecha);
@@ -151,7 +170,6 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
 
   const handleToggleCancel = () => {
     if (!reservation) return;
-    if (reservation.estado === 'cancelada' && reactivationBlocked) return;
     const isCurrentlyCancelled = reservation.estado === 'cancelada';
     if (isCurrentlyCancelled) {
       openConfirm({
@@ -223,7 +241,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                 )}
                 {reservation.estado === 'cancelada' && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
-                    {reservation.reemplazadaPorReservaId ? 'Suspendida por reemplazo' : '🚫 Cancelada'}
+                    {reservation.reemplazadaPorReservaId && replacementActive ? 'Suspendida por reemplazo' : '🚫 Cancelada'}
                   </span>
                 )}
               </div>
@@ -232,11 +250,10 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               </h3>
               {(reservation.reemplazaReservaId || reservation.reemplazadaPorReservaId) && (
                 <div className="mt-2 text-xs text-indigo-800 space-y-1">
-                  <p>{reservation.reemplazaReservaId ? 'Actividad excepcional: reemplaza una sesión recurrente.' : 'Esta sesión fue suspendida por una actividad excepcional.'}</p>
+                  <p>{replacementActive ? 'Reemplazo activo para esta fecha.' : original?.estado === 'cancelada' ? 'La reserva original y el reemplazo están cancelados.' : original ? 'La reserva original está activa para esta fecha.' : 'Reemplazo desactivado para esta fecha.'}</p>
                   <p>Motivo: {reservation.motivoReemplazo}</p>
                   {(() => {
-                    const relatedId = reservation.reemplazaReservaId || reservation.reemplazadaPorReservaId;
-                    const relatedRes = relatedId ? allReservations.find(r => r.id === relatedId) : undefined;
+                    const relatedRes = related;
                     if (!relatedRes) return null;
                     const isReplacement = Boolean(reservation.reemplazaReservaId);
                     const replacementRecord = isReplacement ? reservation : relatedRes;
@@ -250,7 +267,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                     return (
                       <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] text-indigo-900">
                         <span>
-                          <strong>{isReplacement ? 'Cede el espacio:' : 'Reemplazada por:'}</strong>{' '}
+                          <strong>{isReplacement ? 'Reserva original:' : 'Reemplazo:'}</strong>{' '}
                           {formatDisplayTitle(relatedRes.descripcion || relatedRes.tipoActividad)} ({formatDisplayTitle(relatedRes.responsable)})
                         </span>
                         {otherWaHref && (
@@ -897,18 +914,23 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
 
             {canModify ? (
               <>
-                {onUpdateReservation && (
+                {linkedId && onSetReplacementActive && (
+                  <button type="button" onClick={toggleReplacement} disabled={savingReplacement}
+                    className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800 disabled:opacity-50">
+                    {savingReplacement ? 'Guardando…' : replacementActive ? 'Desactivar reemplazo' : 'Reactivar reemplazo'}
+                  </button>
+                )}
+                {!linkedId && onUpdateReservation && (
                   <button
                     id="btn-detail-toggle-cancel"
                     type="button"
                     onClick={handleToggleCancel}
-                    disabled={reservation.estado === 'cancelada' && reactivationBlocked}
                     className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer border ${
                       reservation.estado === 'cancelada'
                         ? 'text-emerald-800 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border-emerald-300'
                         : 'text-amber-800 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border-amber-300'
                     }`}
-                    title={reactivationBlocked ? 'No se puede reactivar mientras el horario siga ocupado.' : reservation.estado === 'cancelada' ? 'Reactivar reserva en la agenda' : 'Marcar como cancelada y liberar el horario'}
+                    title={reservation.estado === 'cancelada' ? 'Reactivar reserva en la agenda' : 'Marcar como cancelada y liberar el horario'}
                   >
                     <Ban className="w-3.5 h-3.5" />
                     <span>{reservation.estado === 'cancelada' ? 'Reactivar' : 'Cancelar Reserva'}</span>

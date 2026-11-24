@@ -967,7 +967,7 @@ export async function resumeReservationOperation(id: string): Promise<WriteResul
   if (!operation) throw new Error('La operación ya fue completada o no está disponible.');
   const user = getStoredAuthUser();
   if (operation.auditRestore && !isCoordinatorOrAdmin(user)) throw new Error('Solo Administradores o Coordinadores pueden reanudar una restauración.');
-  if (operation.reservations.some(r => r.reemplazaReservaId) && (!userCanCreateReservations(user) || !userCanEditReservations(user))) throw new Error('No tienes permisos para reanudar un reemplazo.');
+  if (operation.intent !== 'update' && operation.reservations.some(r => r.reemplazaReservaId) && (!userCanCreateReservations(user) || !userCanEditReservations(user))) throw new Error('No tienes permisos para reanudar un reemplazo.');
   if (!user || (operation.actor && operation.actor !== user.username) || operation.reservations.some(r=>operation.intent === 'update' || r.version ? !userCanEditReservations(user) : !userCanCreateReservations(user)) || (operation.deletedIds.length && !userCanDeleteReservations(user))) throw new Error('No tienes permisos para reanudar esta operación.');
   if (operation.reservations.every(r => operation.confirmedIds.includes(r.id)) && operation.deletedIds.every(id => operation.confirmedIds.includes(id))) {
     await updateOperationJournal(operation, true);

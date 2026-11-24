@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Reservation } from '../../types';
-import { buildReplacementBatch } from '../../utils/reservationReplacement';
+import { getDueReplacementReminders } from '../../utils/replacementReminders';
+import { buildReplacementBatch, setReplacementActive } from '../../utils/reservationReplacement';
 import { isChileanHoliday } from '../../utils/holidayUtils';
 
 const memory = vi.hoisted(() => ({ rows: new Map<string, any>(), fail: false, loseAck: false, beforeCommit: undefined as (() => void) | undefined, commits: 0, writes: [] as string[], reads: [] as string[] }));
@@ -260,6 +261,40 @@ describe('availability write quota', () => {
   });
 });
 describe('single occurrence replacement transaction', () => {
+  it('switches the saved pair atomically, checks each schedule and rejects stale requests', async () => {
+    const otherDay = { ...original, id: 'next', fecha: '2026-10-13' };
+    seed(otherDay);
+    const rows = buildReplacementBatch(original, { ...original, horaInicio: '12:00', horaFin: '13:00' },
+      'replacement', 'Motivo', 5).updatedReservations;
+    const save = (pair: Reservation[]) => writeReservations({} as any, pair, clean, {
+      requireAtomic: true, intent: 'update', expectedVersions: Object.fromEntries(pair.map(r => [r.id, r.version!])),
+    });
+    const read = (id: string): Reservation => memory.rows.get(`reservas/${id}`);
+    await writeReservations({} as any, rows, clean);
+    const from = read(original.id), to = read('replacement');
+    const disabled = setReplacementActive(to, from, false);
+    const blocker = { ...original, id: 'blocker' };
+    seed(blocker);
+    await expect(save(disabled)).rejects.toThrow(/conflicto/i);
+    expect([read(original.id), read(to.id)]).toEqual([from, to]);
+    await writeReservations({} as any, [{ ...blocker, estado: 'cancelada' }], clean);
+    await save(disabled);
+    expect(getDueReplacementReminders([read(original.id), read(to.id)], original.fecha)).toEqual([]);
+    await expect(save(disabled)).rejects.toThrow(/otro usuario|versión/i);
+    const enabled = setReplacementActive(read(original.id), read(to.id), true);
+    const secondBlocker = { ...blocker, id: 'second', horaInicio: to.horaInicio, horaFin: to.horaFin };
+    seed(secondBlocker);
+    await expect(save(enabled)).rejects.toThrow(/conflicto/i);
+    expect(read(original.id).estado).toBe('activa');
+    expect(read(to.id).estado).toBe('cancelada');
+    await writeReservations({} as any, [{ ...secondBlocker, estado: 'cancelada' }], clean);
+    await save(enabled);
+    expect(read(to.id)).toMatchObject({ estado: 'activa', horaInicio: '12:00', motivoReemplazo: 'Motivo', diasAvisoReemplazo: 5 });
+    expect(read(original.id)).toMatchObject({ estado: 'cancelada', horaInicio: '10:00', reemplazadaPorReservaId: to.id });
+    expect(getDueReplacementReminders([read(original.id), read(to.id)], original.fecha)).toEqual([read(to.id)]);
+    expect(read('next')).toEqual(otherDay);
+    expect(() => setReplacementActive(read(to.id), null, false)).toThrow(/verificar/);
+  });
   it('clears a stale zero-confirmation retry after a definitive version rejection', async () => {
     const rows = [{ ...original, descripcion: 'Cambio pendiente' }];
     memory.fail = true;

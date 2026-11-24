@@ -66,6 +66,26 @@ export function buildReplacementBatch(
   };
 }
 
+export function setReplacementActive(selected: Reservation, related: Reservation | null, active: boolean): Reservation[] {
+  const original = selected.reemplazaReservaId ? related : selected;
+  const replacement = selected.reemplazaReservaId ? selected : related;
+  if (!original || !replacement || original.id === replacement.id ||
+      original.reemplazadaPorReservaId !== replacement.id || replacement.reemplazaReservaId !== original.id ||
+      !isValidReplacementSlot(original, replacement)) {
+    throw new Error('No se pudo verificar la reserva original y su reemplazo.');
+  }
+  for (const row of [original, replacement]) {
+    if ((row.estado && !['activa', 'cancelada'].includes(row.estado)) ||
+        !isReservationActiveForAvailability({ ...row, estado: 'activa' })) {
+      throw new Error('Una de las reservas ya no está disponible.');
+    }
+  }
+  return [
+    { ...original, estado: active ? 'cancelada' : 'activa' },
+    { ...replacement, estado: active ? 'activa' : 'cancelada' },
+  ];
+}
+
 /** Series regeneration must preserve the exception, even if its replacement was cancelled. */
 export function preserveReplacementExceptions(incoming: Reservation[], history: Reservation[]): Reservation[] {
   const exceptions = history.filter(r => r.reemplazadaPorReservaId);

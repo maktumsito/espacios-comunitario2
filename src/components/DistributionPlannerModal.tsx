@@ -33,7 +33,7 @@ export function DistributionPlannerModal({ user, onClose, onCommitted }: { user:
   const [incomingParticipants, setIncomingParticipants] = useState(15);
 
   const activeDayReservations = planner.snapshot?.reservations
-    .filter(row => row.fecha === planner.fecha && isReservationActiveForAvailability(row, new Set()) && !row.reemplazadaPorReservaId)
+    .filter(row => row.fecha === planner.fecha && isReservationActiveForAvailability(row, new Set()))
     .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio) || a.espacio.localeCompare(b.espacio)) || [];
   const existing = activeDayReservations.filter(row => !planner.requests.some(request => request.source?.id === row.id));
   const canAddMore = planner.requests.length < MAX_DISTRIBUTION_ACTIVITIES;

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, type Dispatch, type SetStateAction } from 'react';
 import { Reservation, SpaceRating } from '../types';
 import { AuthUser } from '../services/authService';
 import { DetectedConflictDetail } from '../utils/conflictDetector';
@@ -32,7 +32,7 @@ export interface UseReservationModalsReturn {
 
   // Selected entities and targets
   selectedReservation: Reservation | null;
-  setSelectedReservation: (res: Reservation | null) => void;
+  setSelectedReservation: Dispatch<SetStateAction<Reservation | null>>;
   editingReservation: Reservation | null;
   setEditingReservation: (res: Reservation | null) => void;
   isDuplicating: boolean;

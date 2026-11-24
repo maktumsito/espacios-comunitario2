@@ -87,12 +87,31 @@ it('only exposes replacement for an active recurring session with both permissio
   rerender(<ReservationDetailModal {...p} reservation={{ ...source, estado: 'cancelada' }} />);
   expect(screen.queryByText('Reemplazar solo este día')).toBeNull();
 });
-it('shows the suspension reason, opens its replacement and disables reactivation while occupied', () => {
+it('switches a linked pair from either detail and ignores repeated clicks while saving', async () => {
   const related = vi.fn();
+  let finish!: () => void;
+  const toggle = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
   const original = { ...source, estado: 'cancelada', reemplazadaPorReservaId: 'new', motivoReemplazo: 'Motivo' };
-  const replacement = { ...source, id: 'new', serieRecurrente: undefined, actividadRecurrente: 'No', reemplazaReservaId: source.id };
-  render(<ReservationDetailModal isOpen reservation={original} onClose={vi.fn()} onEdit={vi.fn()} onUpdateReservation={vi.fn()} onViewRelated={related} currentUser={user} allReservations={[original, replacement]} />);
+  const replacement = { ...source, id: 'new', estado: 'activa', reemplazaReservaId: source.id };
+  const props = { isOpen: true, onClose: vi.fn(), onEdit: vi.fn(), onUpdateReservation: vi.fn(),
+    onSetReplacementActive: toggle, onViewRelated: related, currentUser: user, allReservations: [original, replacement] };
+  const { rerender } = render(<ReservationDetailModal {...props} reservation={original} />);
   expect(screen.getByText('Suspendida por reemplazo')).toBeTruthy();
-  expect((screen.getByText('Reactivar').closest('button') as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(screen.getByText('Ver reemplazo')); expect(related).toHaveBeenCalledWith('new');
+  fireEvent.click(screen.getByText('Ver reemplazo'));
+  expect(related).toHaveBeenCalledWith('new');
+  const button = screen.getByRole('button', { name: 'Desactivar reemplazo' });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  expect(toggle).toHaveBeenCalledTimes(1);
+  expect(toggle).toHaveBeenCalledWith(original, false);
+  finish();
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  const disabled = { ...replacement, estado: 'cancelada' };
+  rerender(<ReservationDetailModal {...props} allReservations={[{ ...original, estado: 'activa' }, disabled]} reservation={disabled} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Reactivar reemplazo' }));
+  expect(toggle).toHaveBeenLastCalledWith(disabled, true);
+  finish();
+  await waitFor(() => expect(screen.queryByText('Guardando…')).toBeNull());
+  rerender(<ReservationDetailModal {...props} currentUser={null} reservation={disabled} />);
+  expect(screen.queryByRole('button', { name: 'Reactivar reemplazo' })).toBeNull();
 });
