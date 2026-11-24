@@ -165,3 +165,19 @@ describe('Commitment Letter - Second Space Integration', () => {
     expect(pdfOutput).toContain('%PDF-');
   });
 });
+
+describe('Commitment letter activity type', () => {
+  it.each(['CUMPLEAÑOS', 'PRÉSTAMO', 'TALLER MUNICIPAL'])(
+    'uses %s even when a previous loan type is present',
+    tipoActividad => {
+      const reservation = {
+        fecha: '2026-11-23',
+        tipoActividad,
+        tipoPrestamo: 'TALLER FORMATIVO CCD',
+        espacio: 'SALA 2'
+      };
+      const range = computeCommitmentDateRangeAndDays(extractScheduleSlots(reservation), reservation);
+      expect(computeCommitmentPoint2Details(reservation, range).modalidadStr).toBe(tipoActividad);
+    }
+  );
+});

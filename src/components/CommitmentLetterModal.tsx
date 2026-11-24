@@ -1,3 +1,4 @@
+import { loadPdfLibraries } from '../utils/loadPdfLibraries';
 import { CalendarDateInput } from './common/CalendarDateInput';
 import { ModalOverlay } from './common/ModalOverlay';
 import React, { useState, useRef, useMemo } from 'react';
@@ -47,6 +48,12 @@ export const CommitmentLetterModal: React.FC<CommitmentLetterModalProps> = ({
   allReservations = [],
   seriesScheduleItems
 }) => {
+  React.useEffect(() => {
+    if (isOpen) void loadPdfLibraries().catch(() => {
+      // The download action reports the error and allows a retry.
+    });
+  }, [isOpen]);
+
   const printContentRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -55,11 +62,11 @@ export const CommitmentLetterModal: React.FC<CommitmentLetterModalProps> = ({
 
   // Local editable fields including municipal completion antecedents
   const [localData, setLocalData] = useState({
-    responsable: (reservationData.responsable || '').toUpperCase(),
-    rut: (reservationData.rut || '').toUpperCase(),
-    telefonoContacto: (reservationData.telefonoContacto || '').toUpperCase(),
-    emailContacto: (reservationData.emailContacto || '').toUpperCase(),
-    domicilio: (reservationData.domicilio || '').toUpperCase(),
+    responsable: String(reservationData.responsable ?? '').toUpperCase(),
+    rut: String(reservationData.rut ?? '').toUpperCase(),
+    telefonoContacto: String(reservationData.telefonoContacto ?? '').toUpperCase(),
+    emailContacto: String(reservationData.emailContacto ?? '').toUpperCase(),
+    domicilio: String(reservationData.domicilio ?? '').toUpperCase(),
     espacio: (reservationData.espacio || 'SALA 3').toUpperCase(),
     fecha: reservationData.fecha || format(new Date(), 'yyyy-MM-dd'),
     horaInicio: reservationData.horaInicio || '14:00',
@@ -101,11 +108,11 @@ export const CommitmentLetterModal: React.FC<CommitmentLetterModalProps> = ({
       const initialEspacio = (derivedRange.uniqueSpacesText || reservationData.espacio || 'SALA 3').toUpperCase();
 
       setLocalData({
-        responsable: (reservationData.responsable || '').toUpperCase(),
-        rut: (reservationData.rut || '').toUpperCase(),
-        telefonoContacto: (reservationData.telefonoContacto || '').toUpperCase(),
-        emailContacto: (reservationData.emailContacto || '').toUpperCase(),
-        domicilio: (reservationData.domicilio || '').toUpperCase(),
+        responsable: String(reservationData.responsable ?? '').toUpperCase(),
+        rut: String(reservationData.rut ?? '').toUpperCase(),
+        telefonoContacto: String(reservationData.telefonoContacto ?? '').toUpperCase(),
+        emailContacto: String(reservationData.emailContacto ?? '').toUpperCase(),
+        domicilio: String(reservationData.domicilio ?? '').toUpperCase(),
         espacio: initialEspacio,
         fecha: reservationData.fecha || format(new Date(), 'yyyy-MM-dd'),
         horaInicio: reservationData.horaInicio || '14:00',
@@ -208,7 +215,7 @@ Domicilio / Dirección: ${dom || '__________________________________________'} |
 
 2. DETALLES DEL ESPACIO Y HORARIO AUTORIZADO
 Fecha y Día: ${fechaDiaStr || '__________________________________________'} | Horario Autorizado: ${horarioStr || '______________________'}
-Espacio Asignado: ${esp || '__________________________________________'} | Modalidad / Tipo: ${modalidadStr || '______________________'}
+Espacio Asignado: ${esp || '__________________________________________'} | Tipo de actividad: ${modalidadStr || '______________________'}
 Aforo Estimado: ${aforoStr || '__________________________________________'} | Propósito / Evento: ${propositoStr || '______________________'}
 
 3. MARCO LEGAL, COMPROMISOS DE COMPORTAMIENTO Y CONDICIONES DE USO
@@ -340,6 +347,7 @@ RUT: ${rutStr || '____________________________________'}
             </button>
 
             <button
+              type="button"
               onClick={handleDownloadPdf}
               disabled={isGeneratingPdf}
               className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-bold transition flex items-center space-x-1.5 shadow-xs cursor-pointer"
@@ -471,12 +479,12 @@ RUT: ${rutStr || '____________________________________'}
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700">Modalidad / Tipo:</label>
+                  <label className="font-semibold text-slate-700">Tipo de actividad:</label>
                   <input
                     type="text"
-                    placeholder="Puntual / Regular"
-                    value={localData.tipoPrestamo}
-                    onChange={(e) => setLocalData({ ...localData, tipoPrestamo: e.target.value })}
+                    placeholder="Tipo de actividad de la reserva"
+                    value={localData.tipoActividad}
+                    onChange={(e) => setLocalData({ ...localData, tipoActividad: e.target.value })}
                     className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900"
                   />
                 </div>
@@ -629,7 +637,7 @@ RUT: ${rutStr || '____________________________________'}
                     <span className="font-bold text-slate-900">{point2Details.espacioStr || '__________________________________________'}</span>
                   </div>
                   <div className="px-3 py-1">
-                    <span className="font-semibold text-slate-900">Modalidad / Tipo:</span>{' '}
+                    <span className="font-semibold text-slate-900">Tipo de actividad:</span>{' '}
                     <span>{point2Details.modalidadStr || '______________________'}</span>
                   </div>
                 </div>

@@ -1,3 +1,5 @@
+import { selectReservationsToDelete } from '../utils/reservationDeletion';
+import type { DeleteScope } from '../types';
 import { useCallback, useRef } from 'react';
 import { addWeeks, format, parseISO } from 'date-fns';
 import { Reservation, BatchUpdateInfo, isSingleDayMultiSpaceReservation, SpaceBlock } from '../types';
@@ -87,12 +89,15 @@ export interface UseReservationCrudReturn {
   handleDeleteDay: (fecha: string, selection: readonly Reservation[]) => Promise<void>;
   handleConfirmDeleteSingle: (id: string) => Promise<void>;
   handleConfirmDeleteSeries: (seriesId: string) => Promise<void>;
+  handleConfirmDeleteScope: (reservation: Reservation, scope: DeleteScope, selection: Reservation[], motivo?: string) => Promise<void>;
   handleRequestDelete: (reserva: Reservation) => void;
   handleSubmitDeleteRequest: (
     reservation: Reservation,
     motivo?: string,
     isSeries?: boolean,
-    seriesId?: string
+    seriesId?: string,
+    scope?: DeleteScope,
+    reviewedSelection?: Reservation[]
   ) => Promise<void>;
   handleAuthorizeDelete: (reservation: Reservation) => Promise<void>;
   handleRejectDeleteRequest: (reservation: Reservation) => Promise<void>;
@@ -177,7 +182,7 @@ export function useReservationCrud({
     }
 
     const selected=selection||reservations.map(r=>selectedReservation?.id===r.id?selectedReservation:r);
-    const mergedPool = [...new Map([...getLocalCache(), ...selected].map(r => [r.id, r])).values()];
+    const mergedPool = selection || [...new Map([...getLocalCache(), ...selected].map(r => [r.id, r])).values()];
     const targets = isSeries && seriesId
       ? mergedPool.filter(r=>r.serieRecurrente===seriesId || r.recurrenteId===seriesId)
       : mergedPool.filter(r=>r.id===id);
@@ -255,7 +260,9 @@ export function useReservationCrud({
     reservation: Reservation,
     motivo?: string,
     isSeries?: boolean,
-    seriesId?: string
+    seriesId?: string,
+    scope?: DeleteScope,
+    reviewedSelection?: Reservation[]
   ) => {
     try {
       const solicitudInfo = {
@@ -264,15 +271,31 @@ export function useReservationCrud({
         solicitadoPorRol: currentUser?.role || 'Personal',
         fechaSolicitud: new Date().toISOString(),
         motivo: motivo?.trim() || undefined,
-        esSerie: Boolean(isSeries)
+        esSerie: Boolean(isSeries),
+        ...(scope ? {
+          alcance: scope,
+          ...(scope === 'future' ? { fechaDesde: reservation.fecha } : {}),
+          ...(seriesId ? { serieId: seriesId } : {}),
+          seleccion: (reviewedSelection || [reservation]).map(row => ({ id: row.id, version: (row.version || 0) + (row.id === reservation.id ? 1 : 0) }))
+        } : {})
       };
 
+      if (scope) {
+        const result = await saveReservation({ ...reservation, solicitudEliminacion: solicitudInfo });
+        applyConfirmed(result);
+        void safeAudit({ action: 'REQUEST_DELETE', description: `Solicitud ${scope}: ${reviewedSelection?.length || 1} reservas`,
+          reservaId: reservation.id, user: currentUser, previousState: reservation, newState: result.reservations, newStateIsConfirmed: true });
+        triggerSyncToast('Solicitud de eliminación enviada para autorización.', 'info');
+        return;
+      }
+
       if (isSeries && seriesId) {
-        const remoteSeries = (await queryReservationsBySeries(seriesId).catch(() => [])) || [];
+        const remoteSeries = await queryReservationsBySeries(seriesId);
         const toUpdate = [...new Map([...getLocalCache(), ...reservations, ...remoteSeries].map(r => [r.id, r])).values()].filter(
           (r) => (r.serieRecurrente === seriesId || r.recurrenteId === seriesId) && r.estado !== 'eliminada'
         );
-        const updatedList = toUpdate.map((r) => ({
+        const requestedRows = reviewedSelection || toUpdate;
+        const updatedList = requestedRows.map((r) => ({
           ...r,
           solicitudEliminacion: solicitudInfo
         }));
@@ -326,8 +349,54 @@ export function useReservationCrud({
     } catch (err) {
       console.error('Error submitting delete request:', err);
       triggerSyncToast('Ocurrió un error al enviar la solicitud de eliminación.', 'error');
+      throw err;
     }
   }, [currentUser, reservations, setReservations, triggerSyncToast]);
+
+  const scopedDeleteInFlight = useRef(false);
+  const handleConfirmDeleteScope = useCallback(async (
+    reservation: Reservation, scope: DeleteScope, selection: Reservation[], motivo?: string
+  ) => {
+    if (scopedDeleteInFlight.current) throw new Error('La eliminación ya está en curso.');
+    if (!selection.length || new Set(selection.map(row => row.id)).size !== selection.length ||
+        selectReservationsToDelete(reservation, scope, selection).length !== selection.length) {
+      throw new Error('Actualiza la selección antes de confirmar.');
+    }
+    scopedDeleteInFlight.current = true;
+    try {
+      const seriesId = reservation.serieRecurrente || reservation.recurrenteId;
+      const current = await queryReservationsBySeries(seriesId || '');
+      const currentById = new Map(current.map(row => [row.id, row]));
+      if (selection.some(row => !currentById.has(row.id) || (currentById.get(row.id)!.version || 0) !== (row.version || 0))) {
+        throw new Error('Las reservas cambiaron. Pulsa Actualizar y revisa la selección.');
+      }
+      if (!userCanDeleteReservations(currentUser)) {
+        await handleSubmitDeleteRequest(reservation, motivo, scope !== 'single', seriesId, scope, selection);
+        return;
+      }
+      const applyDeletion = (result: Awaited<ReturnType<typeof commitReservationChanges>>) => applyConfirmed(result);
+      try {
+        applyDeletion(await commitReservationChanges([], {
+          deletedIds: selection.map(row => row.id),
+          expectedVersions: Object.fromEntries(selection.map(row => [row.id, row.version || 0])),
+          onProgress: applyDeletion
+        }));
+      } catch (err) {
+        if (err instanceof ReservationWriteError) applyDeletion(err.result);
+        throw err;
+      }
+      if (selectedReservation && selection.some(row => row.id === selectedReservation.id)) {
+        setIsDetailModalOpen(false);
+        setSelectedReservation(null);
+      }
+      triggerSyncToast(`Eliminadas ${selection.length} reservas.`, 'success');
+      void safeAudit({ action: scope === 'single' ? 'DELETE' : 'DELETE_SERIES',
+        description: `Eliminación ${scope} desde ${reservation.fecha}: ${selection.length} reservas`,
+        reservaId: seriesId || reservation.id, user: currentUser, previousState: selection });
+    } finally {
+      scopedDeleteInFlight.current = false;
+    }
+  }, [currentUser, handleSubmitDeleteRequest, selectedReservation, setIsDetailModalOpen, setSelectedReservation, triggerSyncToast]);
 
   const handleAuthorizeDelete = useCallback(async (reservation: Reservation) => {
     if (!userCanDeleteReservations(currentUser)) {
@@ -335,8 +404,40 @@ export function useReservationCrud({
       return;
     }
 
+    const request = reservation.solicitudEliminacion;
+    if (request?.alcance && request.seleccion) {
+      const seriesId = request.serieId || reservation.serieRecurrente || reservation.recurrenteId;
+      const current = await queryReservationsBySeries(seriesId || '');
+      const reviewed = request.seleccion;
+      const reviewedById = new Map(reviewed.map(item => [item.id, item.version]));
+      const targets = current.filter(row => reviewedById.has(row.id));
+      if (!reviewed.length || targets.length !== reviewed.length ||
+          targets.some(row => reviewedById.get(row.id) !== (row.version || 0)) ||
+          current.find(row => row.id === reservation.id)?.solicitudEliminacion?.fechaSolicitud !== request.fechaSolicitud) {
+        throw new Error('Las reservas de la solicitud cambiaron. Rechaza la solicitud y revisa una nueva selección.');
+      }
+      try {
+        applyConfirmed(await commitReservationChanges([], {
+          deletedIds: targets.map(row => row.id),
+          expectedVersions: Object.fromEntries(reviewed.map(item => [item.id, item.version])),
+          onProgress: applyConfirmed
+        }));
+      } catch (err) {
+        if (err instanceof ReservationWriteError) applyConfirmed(err.result);
+        throw err;
+      }
+      void safeAudit({ action: 'AUTHORIZE_DELETE', description: `Autorizada eliminación ${request.alcance}: ${targets.length} reservas`,
+        reservaId: reservation.id, user: currentUser, previousState: targets });
+      if (selectedReservation && targets.some(row => row.id === selectedReservation.id)) {
+        setIsDetailModalOpen(false);
+        setSelectedReservation(null);
+      }
+      triggerSyncToast(`Eliminadas ${targets.length} reservas autorizadas.`, 'success');
+      return;
+    }
+
     try {
-      const isSeries = reservation.solicitudEliminacion?.esSerie;
+      const isSeries = !reservation.solicitudEliminacion?.alcance && reservation.solicitudEliminacion?.esSerie;
       const seriesId = reservation.recurrenteId || reservation.serieRecurrente;
 
       if (isSeries && seriesId) {
@@ -399,7 +500,7 @@ export function useReservationCrud({
     }
 
     try {
-      const isSeries = reservation.solicitudEliminacion?.esSerie;
+      const isSeries = !reservation.solicitudEliminacion?.alcance && reservation.solicitudEliminacion?.esSerie;
       const seriesId = reservation.recurrenteId || reservation.serieRecurrente;
 
       if (isSeries && seriesId) {
@@ -1497,6 +1598,7 @@ export function useReservationCrud({
     handleDeleteDay,
     handleConfirmDeleteSingle,
     handleConfirmDeleteSeries,
+    handleConfirmDeleteScope,
     handleRequestDelete,
     handleSubmitDeleteRequest,
     handleAuthorizeDelete,

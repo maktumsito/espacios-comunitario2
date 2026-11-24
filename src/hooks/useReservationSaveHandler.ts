@@ -1077,9 +1077,23 @@ export function useReservationSaveHandler({
             allReservations,
             seriesScheduleItems: effectiveSeriesSlotsForLetter
           });
+          toast.info('Carta preparada. Si el archivo no aparece, pulsa Descargar carta.', {
+            duration: 15000,
+            action: {
+              label: 'Descargar carta',
+              onClick: () => {
+                void downloadCommitmentLetterPdf(letterReserva, {
+                  allReservations,
+                  seriesScheduleItems: effectiveSeriesSlotsForLetter
+                }).catch(() => toast.error('No se pudo descargar la carta. Reintenta desde el detalle de la reserva.'));
+              }
+            }
+          });
         } catch (err) {
           console.error('Error al descargar automáticamente la carta de compromiso:', err);
-          toast.warning('Reserva confirmada. No se pudo generar la carta; puedes descargarla desde la reserva.');
+          toast.warning('Reserva confirmada. Puedes reintentar la descarga desde el detalle de la reserva.', {
+            duration: 12000
+          });
         }
       })();
     }

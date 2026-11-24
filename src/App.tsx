@@ -58,10 +58,10 @@ const MobileAgendaView = lazyWithRetry(
 
 // Code-split heavy modals to minimize initial bundle size and boost initial paint performance
 const preloadReservationModal = () => {
-  void import('./components/ReservationModal');
+  void import('./components/ReservationModal').catch(() => {});
 };
 const preloadCommandPalette = () => {
-  void import('./components/GlobalCommandPalette');
+  void import('./components/GlobalCommandPalette').catch(() => {});
 };
 const ReservationModal = lazyWithRetry(
   () => import('./components/ReservationModal').then((m) => ({ default: m.ReservationModal })),
@@ -449,6 +449,12 @@ export default function App() {
     backupId?: string;
   } | null>(null);
 
+  useEffect(() => {
+    if (!backupToast || isReservationModalOpen) return;
+    const timer = window.setTimeout(() => setBackupToast(null), 9000);
+    return () => window.clearTimeout(timer);
+  }, [backupToast, isReservationModalOpen]);
+
   const reservationsRef = useRef(reservations);
   reservationsRef.current = reservations;
   const currentViewRef = useRef(currentView);
@@ -572,21 +578,22 @@ export default function App() {
     };
   }, [currentUser]);
 
-  // Preload heavy modals on idle to ensure instantaneous 0ms interaction response
+  const sessionUser = currentUser?.username;
   useEffect(() => {
+    if (!sessionUser) return;
     const preload = () => {
-      import('./components/ReservationModal');
-      import('./components/ReservationDetailModal');
-      import('./components/GlobalCommandPalette');
+      // Opening a dialog uses lazyWithRetry if this optional download fails.
+      preloadReservationModal();
+      preloadCommandPalette();
+      void import('./components/ReservationDetailModal').catch(() => {});
     };
-    if (typeof window !== 'undefined') {
-      if ('requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(preload, { timeout: 3000 });
-      } else {
-        setTimeout(preload, 2000);
-      }
+    if (typeof window.requestIdleCallback === 'function') {
+      const task = window.requestIdleCallback(preload, { timeout: 3000 });
+      return () => window.cancelIdleCallback(task);
     }
-  }, []);
+    const timer = setTimeout(preload, 2000);
+    return () => clearTimeout(timer);
+  }, [sessionUser]);
 
   useEffect(() => {
     let isMounted = true;
@@ -605,13 +612,6 @@ export default function App() {
             message: `Se ha generado automáticamente la copia de seguridad de la base de datos (ciclo de 15 días: ${check.backup.totalReservas} reservas respaldadas en Firebase).`,
             backupId: check.backup.id
           });
-
-          // Auto-hide toast after 9 seconds
-          setTimeout(() => {
-            if (isMounted) {
-              setBackupToast(null);
-            }
-          }, 9000);
         }
       } catch (err) {
         console.warn('[Copia Automática 15 Días] Error durante la verificación periódica:', err);
@@ -788,6 +788,7 @@ export default function App() {
     handleDeleteDay,
     handleConfirmDeleteSingle,
     handleConfirmDeleteSeries,
+    handleConfirmDeleteScope,
     handleRequestDelete,
     handleSubmitDeleteRequest,
     handleAuthorizeDelete,
@@ -1696,6 +1697,7 @@ export default function App() {
                 }, 'guardar actividad recurrente');
                 return success;
               }}
+              onRequestDelete={handleRequestDelete}
               onDeleteReservation={async (id, seriesId) => {
                 await requireAuth(async () => {
                   await handleDelete(id, !!seriesId, seriesId);
@@ -2106,6 +2108,7 @@ export default function App() {
         }}
         onConfirmDeleteSingle={handleConfirmDeleteSingle}
         onConfirmDeleteSeries={handleConfirmDeleteSeries}
+        onConfirmDeleteScope={handleConfirmDeleteScope}
         onClearParticipants={handleClearParticipants}
         onSubmitDeleteRequest={handleSubmitDeleteRequest}
         onAuthorizeDelete={handleAuthorizeDelete}
@@ -2247,7 +2250,7 @@ export default function App() {
       )}
 
       {/* Floating Notification Toast for Automated 15-day Backups */}
-      {backupToast && backupToast.show && (
+      {backupToast?.show && !isReservationModalOpen && (
         <NotificationPortal><div
           id="auto-backup-toast"
           className="fixed bottom-5 right-5 z-50 max-w-md bg-slate-900 text-white rounded-2xl p-4 shadow-2xl border border-emerald-500/40 flex items-start space-x-3 animate-in fade-in slide-in-from-bottom-5"
@@ -2269,6 +2272,7 @@ export default function App() {
             )}
           </div>
           <button
+            aria-label="Cerrar aviso de copia de seguridad"
             onClick={() => setBackupToast(null)}
             className="text-slate-400 hover:text-white p-1 rounded-lg transition cursor-pointer"
           >

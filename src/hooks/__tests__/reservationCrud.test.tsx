@@ -359,3 +359,69 @@ it('prunes unchanged occurrences in a batch update and skips conflict errors on 
     expect.objectContaining({ expectedVersions: { s1: 2, s2: 3 }, requireAtomic: true, intent: 'update' })
   );
 });
+
+it('deletes only the reviewed future occurrences even when more rows are returned', async () => {
+  const anchor = { ...row, serieRecurrente: 'scoped', version: 2 };
+  const past = { ...anchor, id: 'past', fecha: '2026-09-01' };
+  const later = { ...anchor, id: 'later', fecha: '2026-12-01' };
+  const added = { ...later, id: 'added' };
+  const p = props(); p.reservations = [past, anchor, later, added];
+  mocks.series.mockResolvedValue([past, anchor, later, added]);
+  mocks.save.mockResolvedValue({ reservations: [], deletedIds: [anchor.id, later.id], confirmedIds: [], pendingIds: [] });
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => result.current.handleConfirmDeleteScope(anchor, 'future', [anchor, later]));
+  expect(mocks.save).toHaveBeenCalledWith([], expect.objectContaining({
+    deletedIds: [anchor.id, later.id], expectedVersions: { form: 2, later: 2 }
+  }));
+});
+it('rejects a changed reviewed version before deleting', async () => {
+  const anchor = { ...row, serieRecurrente: 'scoped', version: 2 };
+  mocks.series.mockResolvedValue([{ ...anchor, version: 3 }]);
+  const { result } = renderHook(() => useReservationCrud(props()));
+  await act(async () => expect(result.current.handleConfirmDeleteScope(anchor, 'single', [anchor])).rejects.toThrow('cambiaron'));
+  expect(mocks.save).not.toHaveBeenCalled();
+});
+it('requests and authorizes the same future selection, excluding later additions', async () => {
+  const anchor = { ...row, serieRecurrente: 'scoped', version: 2 };
+  const later = { ...anchor, id: 'later', fecha: '2026-12-01' };
+  const p = props(); p.currentUser = { ...p.currentUser!, role: 'Personal', canDeleteReservations: false };
+  mocks.series.mockResolvedValue([anchor, later]);
+  mocks.save.mockImplementation(async (value: Reservation) => ({ reservations: [{ ...value, version: 3 }], deletedIds: [], confirmedIds: [value.id], pendingIds: [] }));
+  const requester = renderHook(() => useReservationCrud(p));
+  await act(async () => requester.result.current.handleConfirmDeleteScope(anchor, 'future', [anchor, later], 'Prueba'));
+  const saved = mocks.save.mock.calls[0][0] as Reservation;
+  expect(saved.solicitudEliminacion).toMatchObject({ alcance: 'future', fechaDesde: anchor.fecha,
+    seleccion: [{ id: anchor.id, version: 3 }, { id: later.id, version: 2 }] });
+  const requested = { ...saved, version: 3 };
+  mocks.series.mockResolvedValue([requested, later, { ...later, id: 'added' }]);
+  mocks.save.mockClear();
+  mocks.save.mockResolvedValue({ reservations: [], deletedIds: [anchor.id, later.id], confirmedIds: [], pendingIds: [] });
+  const authorizer = renderHook(() => useReservationCrud(props()));
+  await act(async () => authorizer.result.current.handleAuthorizeDelete(requested));
+  expect(mocks.save).toHaveBeenCalledWith([], expect.objectContaining({
+    deletedIds: [anchor.id, later.id], expectedVersions: { form: 3, later: 2 }
+  }));
+});
+
+it('refuses approval after a selected session has changed', async () => {
+  const requested = { ...row, serieRecurrente: 'scoped', version: 3, solicitudEliminacion: {
+    solicitadoPor: 'personal', fechaSolicitud: '2026-10-06T15:00:00Z', alcance: 'future' as const,
+    fechaDesde: row.fecha, serieId: 'scoped', seleccion: [{ id: row.id, version: 3 }, { id: 'later', version: 2 }]
+  } };
+  mocks.series.mockResolvedValue([requested, { ...row, id: 'later', serieRecurrente: 'scoped', version: 3 }]);
+  const { result } = renderHook(() => useReservationCrud(props()));
+  await act(async () => expect(result.current.handleAuthorizeDelete(requested)).rejects.toThrow('cambiaron'));
+  expect(mocks.save).not.toHaveBeenCalled();
+});
+it('rejects a scoped request by clearing only its owning reservation', async () => {
+  const requested = { ...row, serieRecurrente: 'scoped', version: 3, solicitudEliminacion: {
+    solicitadoPor: 'personal', fechaSolicitud: '2026-10-06T15:00:00Z', alcance: 'future' as const,
+    esSerie: true, seleccion: [{ id: row.id, version: 3 }, { id: 'later', version: 2 }]
+  } };
+  const p = props(); p.reservations = [requested, { ...row, id: 'later', serieRecurrente: 'scoped' }];
+  mocks.save.mockResolvedValue({ reservations: [{ ...row, version: 4 }], deletedIds: [], confirmedIds: [row.id], pendingIds: [] });
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => result.current.handleRejectDeleteRequest(requested));
+  expect(mocks.series).not.toHaveBeenCalled();
+  expect(mocks.save.mock.calls[0][0]).not.toHaveProperty('solicitudEliminacion');
+});

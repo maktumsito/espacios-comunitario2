@@ -25,7 +25,9 @@ export interface UseReservationsStateReturn {
   setLastSyncTime: React.Dispatch<React.SetStateAction<number | null>>;
   isInitialLoading: boolean;
   isHistoricalLoading: boolean;
+  /** @deprecated Los avisos se presentan con triggerSyncToast. */
   syncStatusToast: { message: string; type: 'success' | 'info' | 'error' | 'warning' } | null;
+  /** @deprecated Conservado para consumidores anteriores. Usar triggerSyncToast. */
   setSyncStatusToast: React.Dispatch<React.SetStateAction<{ message: string; type: 'success' | 'info' | 'error' | 'warning' } | null>>;
   triggerSyncToast: (message: string, type?: 'success' | 'info' | 'error' | 'warning') => void;
   loadHistoricalMonth: (year: number, month: number) => Promise<Reservation[]>;

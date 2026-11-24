@@ -1,3 +1,4 @@
+import { registerPublicFiles } from './server/publicFiles';
 import { registerBackupApi } from './server/backupApi';
 import { registerBackupMaintenanceApi } from './server/backupMaintenanceApi';
 import { APP_BUILD_INFO } from './src/buildInfo';
@@ -1082,15 +1083,7 @@ async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production' || isCompiledBundle || hasBuiltDist;
 
   if (isProduction) {
-    app.use(express.static(distPath, {
-      maxAge: '1y',
-      immutable: true,
-      setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.html') || filePath.endsWith('manifest.json') || filePath.endsWith('build-info.json') || filePath.endsWith('sw.js')) {
-          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        }
-      }
-    }));
+    registerPublicFiles(app, distPath);
     app.get('*', (req, res) => {
       const indexPath = path.join(distPath, 'index.html');
       if (fs.existsSync(indexPath)) {

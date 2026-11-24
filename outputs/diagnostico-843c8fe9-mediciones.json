@@ -1,0 +1,3110 @@
+{
+  "revision": "843c8fe9d9f6e7d64bfbcbd1deeb52011be29d15",
+  "anterior": "18221cf3",
+  "navegador": "Edge 157.0.4341.60",
+  "acceso": [
+    {
+      "w": 1366,
+      "i": 0,
+      "cache": "cold",
+      "cls": 0.007514750783403365,
+      "long": [
+        173
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "usable": 541.6999999997206,
+      "lcp": 840,
+      "lang": "es-CL",
+      "width": 1366,
+      "ttfb": 30.5,
+      "load": 371.10000000009313,
+      "size": 2438251,
+      "requests": 24,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          432062,
+          94.10000000009313
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          536,
+          51.8000000002794
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          223498,
+          92
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          152940,
+          84.20000000018626
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          349656,
+          102.79999999981374
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          424686,
+          111.6999999997206
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          33133,
+          119.3000000002794
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          118838,
+          128.79999999981374
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          34072,
+          128
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          54938,
+          131.60000000009313
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          157285,
+          96.20000000018626
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          35108,
+          131.89999999990687
+        ],
+        [
+          "/api/auth/users",
+          440,
+          29.800000000279397
+        ],
+        [
+          "/icon-192.png",
+          1720,
+          15.099999999627471
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          104936,
+          18.5
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          76192,
+          37.299999999813735
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          1287,
+          20.800000000279397
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          164779,
+          34.799999999813735
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          13411,
+          30.199999999720603
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          537,
+          32.700000000186265
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          28430,
+          52.8000000002794
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          8122,
+          50.200000000186265
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          18959,
+          52.6999999997206
+        ]
+      ],
+      "click": 19,
+      "focus": "login-password"
+    },
+    {
+      "w": 1366,
+      "i": 0,
+      "cache": "warm",
+      "cls": 0.007514750783403365,
+      "long": [
+        83
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 176,
+      "usable": 194.89999999990687,
+      "lang": "es-CL",
+      "width": 1366,
+      "ttfb": 4,
+      "load": 117.79999999981374,
+      "size": 3126,
+      "requests": 2,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          0,
+          0
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          0,
+          0
+        ],
+        [
+          "/api/auth/users",
+          440,
+          14
+        ],
+        [
+          "/icon-192.png",
+          0,
+          1.6000000000931323
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          0,
+          0
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          0,
+          0
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          0,
+          0
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          0,
+          0
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          0,
+          0
+        ]
+      ],
+      "click": 18,
+      "focus": "login-password"
+    },
+    {
+      "w": 1366,
+      "i": 1,
+      "cache": "cold",
+      "cls": 0.007514750783403365,
+      "long": [
+        137
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "usable": 375.10000000009313,
+      "lcp": 368,
+      "lang": "es-CL",
+      "width": 1366,
+      "ttfb": 7.800000000279397,
+      "load": 248.10000000009313,
+      "size": 2438251,
+      "requests": 24,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          432062,
+          23.899999999906868
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          536,
+          26.899999999906868
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          223498,
+          28.299999999813735
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          152940,
+          26.800000000279397
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          349656,
+          49.1999999997206
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          424686,
+          50.299999999813735
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          33133,
+          41.3000000002794
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          118838,
+          43.799999999813735
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          34072,
+          49.10000000009313
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          54938,
+          49.5
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          35108,
+          56.200000000186265
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          157285,
+          67.5
+        ],
+        [
+          "/api/auth/users",
+          440,
+          12.700000000186265
+        ],
+        [
+          "/icon-192.png",
+          1720,
+          5.600000000093132
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          104936,
+          9.799999999813735
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          76192,
+          13
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          1287,
+          12
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          164779,
+          14.700000000186265
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          13411,
+          14.100000000093132
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          537,
+          15.300000000279397
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          28430,
+          23.399999999906868
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          8122,
+          22.90000000037253
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          18959,
+          20.699999999720603
+        ]
+      ],
+      "click": 20.800000000279397,
+      "focus": "login-password"
+    },
+    {
+      "w": 1366,
+      "i": 1,
+      "cache": "warm",
+      "cls": 0.007514750783403365,
+      "long": [
+        72
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "usable": 172.10000000009313,
+      "lcp": 160,
+      "lang": "es-CL",
+      "width": 1366,
+      "ttfb": 5.5,
+      "load": 105.5,
+      "size": 3126,
+      "requests": 2,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          0,
+          0
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          0,
+          0
+        ],
+        [
+          "/api/auth/users",
+          440,
+          14.399999999906868
+        ],
+        [
+          "/icon-192.png",
+          0,
+          1
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          0,
+          0
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          0,
+          0
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          0,
+          0
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          0,
+          0
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          0,
+          0
+        ]
+      ],
+      "click": 20.5,
+      "focus": "login-password"
+    },
+    {
+      "w": 1366,
+      "i": 2,
+      "cache": "cold",
+      "cls": 0.007514750783403365,
+      "long": [
+        117
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "usable": 361.10000000009313,
+      "lcp": 360,
+      "lang": "es-CL",
+      "width": 1366,
+      "ttfb": 9.100000000093132,
+      "load": 226.60000000009313,
+      "size": 2438251,
+      "requests": 24,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          432062,
+          22.09999999962747
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          536,
+          25.600000000093132
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          223498,
+          29.800000000279397
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          152940,
+          28.800000000279397
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          349656,
+          44.5
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          424686,
+          47.10000000009313
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          33133,
+          37.5
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          34072,
+          46.5
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          118838,
+          45.8000000002794
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          54938,
+          47.8000000002794
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          35108,
+          56.60000000009313
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          157285,
+          56.1999999997206
+        ],
+        [
+          "/api/auth/users",
+          440,
+          14.600000000093132
+        ],
+        [
+          "/icon-192.png",
+          1720,
+          5.100000000093132
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          104936,
+          8.899999999906868
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          76192,
+          9
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          1287,
+          10.200000000186265
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          164779,
+          10.299999999813735
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          13411,
+          11.600000000093132
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          537,
+          11
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          28430,
+          19.700000000186265
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          8122,
+          19.09999999962747
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          18959,
+          19.300000000279397
+        ]
+      ],
+      "click": 19,
+      "focus": "login-password"
+    },
+    {
+      "w": 1366,
+      "i": 2,
+      "cache": "warm",
+      "cls": 0.007514750783403365,
+      "long": [
+        77
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 156,
+      "usable": 182.5,
+      "lang": "es-CL",
+      "width": 1366,
+      "ttfb": 4.199999999720603,
+      "load": 112,
+      "size": 3126,
+      "requests": 2,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          0,
+          0
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          0,
+          0
+        ],
+        [
+          "/api/auth/users",
+          440,
+          18.399999999906868
+        ],
+        [
+          "/icon-192.png",
+          0,
+          1.3999999999068677
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          0,
+          0
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          0,
+          0
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          0,
+          0
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          0,
+          0
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          0,
+          0
+        ]
+      ],
+      "click": 23.600000000093132,
+      "focus": "login-password"
+    },
+    {
+      "w": 1366,
+      "i": 3,
+      "cache": "cold",
+      "cls": 0.007514750783403365,
+      "long": [
+        148
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "usable": 411.70000000018626,
+      "lcp": 408,
+      "lang": "es-CL",
+      "width": 1366,
+      "ttfb": 6.800000000279397,
+      "load": 259.8000000002794,
+      "size": 2438251,
+      "requests": 24,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          432062,
+          21
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          536,
+          23.5
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          223498,
+          25.699999999720603
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          152940,
+          24.40000000037253
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          349656,
+          43.89999999990687
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          33133,
+          37.700000000186265
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          424686,
+          44.89999999990687
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          118838,
+          40
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          34072,
+          44.200000000186265
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          35108,
+          55.89999999990687
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          54938,
+          44.60000000009313
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          157285,
+          61.89999999990687
+        ],
+        [
+          "/api/auth/users",
+          440,
+          14.300000000279397
+        ],
+        [
+          "/icon-192.png",
+          1720,
+          5.699999999720603
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          104936,
+          8.300000000279397
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          76192,
+          16.299999999813735
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          1287,
+          21.100000000093132
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          164779,
+          29.199999999720603
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          13411,
+          33.3000000002794
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          537,
+          32.60000000009313
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          28430,
+          34.5
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          8122,
+          34.5
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          18959,
+          34.60000000009313
+        ]
+      ],
+      "click": 17.700000000186265,
+      "focus": "login-password"
+    },
+    {
+      "w": 1366,
+      "i": 3,
+      "cache": "warm",
+      "cls": 0.007514750783403365,
+      "long": [
+        75
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 172,
+      "usable": 205.29999999981374,
+      "lang": "es-CL",
+      "width": 1366,
+      "ttfb": 7.7999999998137355,
+      "load": 113.79999999981374,
+      "size": 3126,
+      "requests": 2,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          0,
+          0
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          0,
+          0
+        ],
+        [
+          "/api/auth/users",
+          440,
+          22.5
+        ],
+        [
+          "/icon-192.png",
+          0,
+          2
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          0,
+          0
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          0,
+          0
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          0,
+          0
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          0,
+          0
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          0,
+          0
+        ]
+      ],
+      "click": 21.799999999813735,
+      "focus": "login-password"
+    },
+    {
+      "w": 1366,
+      "i": 4,
+      "cache": "cold",
+      "cls": 0.007514750783403365,
+      "long": [
+        141
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "usable": 372.10000000009313,
+      "lcp": 376,
+      "lang": "es-CL",
+      "width": 1366,
+      "ttfb": 4.800000000279397,
+      "load": 242.8000000002794,
+      "size": 2438251,
+      "requests": 24,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          432062,
+          20.200000000186265
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          536,
+          21
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          152940,
+          22.399999999906868
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          223498,
+          23.299999999813735
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          349656,
+          39.1999999997206
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          33133,
+          36.200000000186265
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          424686,
+          41.5
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          118838,
+          38.10000000009313
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          34072,
+          40.90000000037253
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          54938,
+          41.5
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          157285,
+          56.89999999990687
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          35108,
+          53.5
+        ],
+        [
+          "/api/auth/users",
+          440,
+          9.599999999627471
+        ],
+        [
+          "/icon-192.png",
+          1720,
+          3.5
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          104936,
+          8
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          76192,
+          13.599999999627471
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          1287,
+          12.200000000186265
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          164779,
+          29.5
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          13411,
+          27.199999999720603
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          537,
+          32.3000000002794
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          28430,
+          32.39999999990687
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          8122,
+          34.60000000009313
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          18959,
+          37.8000000002794
+        ]
+      ],
+      "click": 21,
+      "focus": "login-password"
+    },
+    {
+      "w": 1366,
+      "i": 4,
+      "cache": "warm",
+      "cls": 0.007514750783403365,
+      "long": [
+        60
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 132,
+      "usable": 163.60000000009313,
+      "lang": "es-CL",
+      "width": 1366,
+      "ttfb": 7.399999999906868,
+      "load": 89.1999999997206,
+      "size": 3126,
+      "requests": 2,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          0,
+          0
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          0,
+          0
+        ],
+        [
+          "/api/auth/users",
+          440,
+          17.100000000093132
+        ],
+        [
+          "/icon-192.png",
+          0,
+          1.2000000001862645
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          0,
+          0
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          0,
+          0
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          0,
+          0
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          0,
+          0
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          0,
+          0
+        ]
+      ],
+      "click": 23.299999999813735,
+      "focus": "login-password"
+    },
+    {
+      "w": 390,
+      "i": 0,
+      "cache": "cold",
+      "cls": 0.028214213517216594,
+      "long": [
+        848,
+        332,
+        53
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 1832,
+      "usable": 2141,
+      "lang": "es-CL",
+      "width": 390,
+      "ttfb": 5.900000000372529,
+      "load": 1093,
+      "size": 2438251,
+      "requests": 24,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          432062,
+          25.700000000186265
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          536,
+          22.300000000279397
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          223498,
+          21.299999999813735
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          152940,
+          19.199999999720603
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          349656,
+          33.39999999990687
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          424686,
+          33.39999999990687
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          33133,
+          24.59999999962747
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          118838,
+          25.200000000186265
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          34072,
+          34.299999999813735
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          54938,
+          37.40000000037253
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          35108,
+          40.5
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          157285,
+          44.200000000186265
+        ],
+        [
+          "/api/auth/users",
+          440,
+          14.399999999906868
+        ],
+        [
+          "/icon-192.png",
+          1720,
+          4.399999999906868
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          104936,
+          5.399999999906868
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          76192,
+          6
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          1287,
+          4.800000000279397
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          164779,
+          5.699999999720603
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          13411,
+          5.5
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          537,
+          6.7000000001862645
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          28430,
+          4.2000000001862645
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          8122,
+          4.7999999998137355
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          18959,
+          4.899999999906868
+        ]
+      ],
+      "click": 121.5,
+      "focus": "login-password"
+    },
+    {
+      "w": 390,
+      "i": 0,
+      "cache": "warm",
+      "cls": 0.028214213517216594,
+      "long": [
+        561,
+        170,
+        53
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 1076,
+      "usable": 1336.7999999998137,
+      "lang": "es-CL",
+      "width": 390,
+      "ttfb": 5.100000000093132,
+      "load": 747.8999999999069,
+      "size": 3126,
+      "requests": 2,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          0,
+          0
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          0,
+          0
+        ],
+        [
+          "/api/auth/users",
+          440,
+          27.299999999813735
+        ],
+        [
+          "/icon-192.png",
+          0,
+          2.5
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          0,
+          0
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          0,
+          0
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          0,
+          0
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          0,
+          0
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          0,
+          0
+        ]
+      ],
+      "click": 66.89999999990687,
+      "focus": "login-password"
+    },
+    {
+      "w": 390,
+      "i": 1,
+      "cache": "cold",
+      "cls": 0.028214213517216594,
+      "long": [
+        50,
+        1124,
+        298,
+        54,
+        54
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 2200,
+      "usable": 2649.2000000001863,
+      "lang": "es-CL",
+      "width": 390,
+      "ttfb": 6.800000000279397,
+      "load": 1420.2000000001863,
+      "size": 2438251,
+      "requests": 24,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          432062,
+          28.90000000037253
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          536,
+          26.200000000186265
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          223498,
+          21.800000000279397
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          152940,
+          20.399999999906868
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          349656,
+          31.299999999813735
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          424686,
+          34.89999999990687
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          33133,
+          30.399999999906868
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          118838,
+          24.200000000186265
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          34072,
+          20.5
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          54938,
+          20.700000000186265
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          35108,
+          29.699999999720603
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          157285,
+          31.800000000279397
+        ],
+        [
+          "/api/auth/users",
+          440,
+          15.100000000093132
+        ],
+        [
+          "/icon-192.png",
+          1720,
+          5
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          104936,
+          7.5
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          76192,
+          5.899999999906868
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          1287,
+          5.5
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          164779,
+          15.399999999906868
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          13411,
+          14.5
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          537,
+          11.899999999906868
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          28430,
+          13.199999999720603
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          8122,
+          13.100000000093132
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          18959,
+          26.600000000093132
+        ]
+      ],
+      "click": 80.1999999997206,
+      "focus": "login-password"
+    },
+    {
+      "w": 390,
+      "i": 1,
+      "cache": "warm",
+      "cls": 0.028214213517216594,
+      "long": [
+        479,
+        149,
+        51
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 908,
+      "usable": 1119.6000000000931,
+      "lang": "es-CL",
+      "width": 390,
+      "ttfb": 5,
+      "load": 633.1000000000931,
+      "size": 3126,
+      "requests": 2,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          0,
+          0
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          0,
+          0
+        ],
+        [
+          "/api/auth/users",
+          440,
+          16.299999999813735
+        ],
+        [
+          "/icon-192.png",
+          0,
+          0.8999999999068677
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          0,
+          0
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          0,
+          0
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          0,
+          0
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          0,
+          0
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          0,
+          0
+        ]
+      ],
+      "click": 53.5,
+      "focus": "login-password"
+    },
+    {
+      "w": 390,
+      "i": 2,
+      "cache": "cold",
+      "cls": 0.028214213517216594,
+      "long": [
+        783,
+        334,
+        56
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 1828,
+      "usable": 2128.7000000001863,
+      "lang": "es-CL",
+      "width": 390,
+      "ttfb": 5.600000000093132,
+      "load": 1021.1000000000931,
+      "size": 2438251,
+      "requests": 24,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          432062,
+          21.899999999906868
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          536,
+          31
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          223498,
+          30.200000000186265
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          152940,
+          17.899999999906868
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          349656,
+          41.700000000186265
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          424686,
+          33.10000000009313
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          33133,
+          28.09999999962747
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          118838,
+          32.39999999990687
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          34072,
+          29.5
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          54938,
+          31.199999999720603
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          35108,
+          35.39999999990687
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          157285,
+          45.5
+        ],
+        [
+          "/api/auth/users",
+          440,
+          10.200000000186265
+        ],
+        [
+          "/icon-192.png",
+          1720,
+          3.6000000000931323
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          104936,
+          19.399999999906868
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          76192,
+          15.899999999906868
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          1287,
+          13
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          164779,
+          15
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          13411,
+          21.600000000093132
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          537,
+          21.200000000186265
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          28430,
+          21
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          8122,
+          20.699999999720603
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          18959,
+          21.200000000186265
+        ]
+      ],
+      "click": 74.60000000009313,
+      "focus": "login-password"
+    },
+    {
+      "w": 390,
+      "i": 2,
+      "cache": "warm",
+      "cls": 0.028214213517216594,
+      "long": [
+        457,
+        170,
+        56
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 940,
+      "usable": 1215.3000000002794,
+      "lang": "es-CL",
+      "width": 390,
+      "ttfb": 5.2000000001862645,
+      "load": 656,
+      "size": 3126,
+      "requests": 2,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          0,
+          0
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          0,
+          0
+        ],
+        [
+          "/api/auth/users",
+          440,
+          15
+        ],
+        [
+          "/icon-192.png",
+          0,
+          2.2999999998137355
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          0,
+          0
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          0,
+          0
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          0,
+          0
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          0,
+          0
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          0,
+          0
+        ]
+      ],
+      "click": 61.3000000002794,
+      "focus": "login-password"
+    },
+    {
+      "w": 390,
+      "i": 3,
+      "cache": "cold",
+      "cls": 0.028214213517216594,
+      "long": [
+        856,
+        301
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 1872,
+      "usable": 2179.5999999996275,
+      "lang": "es-CL",
+      "width": 390,
+      "ttfb": 4.2999999998137355,
+      "load": 1113.5999999996275,
+      "size": 2438251,
+      "requests": 24,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          432062,
+          18.399999999906868
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          536,
+          17.600000000093132
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          223498,
+          18.800000000279397
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          152940,
+          16.700000000186265
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          349656,
+          23.899999999906868
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          424686,
+          27.700000000186265
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          33133,
+          21.800000000279397
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          118838,
+          21.300000000279397
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          34072,
+          20.40000000037253
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          54938,
+          33.60000000009313
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          35108,
+          31.700000000186265
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          157285,
+          41.5
+        ],
+        [
+          "/api/auth/users",
+          440,
+          14.800000000279397
+        ],
+        [
+          "/icon-192.png",
+          1720,
+          4.699999999720603
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          104936,
+          4.899999999906868
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          76192,
+          6.100000000093132
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          1287,
+          4
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          164779,
+          5.199999999720603
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          13411,
+          4.2999999998137355
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          537,
+          5.100000000093132
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          28430,
+          5.7999999998137355
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          8122,
+          5.2999999998137355
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          18959,
+          6.399999999906868
+        ]
+      ],
+      "click": 76.70000000018626,
+      "focus": "login-password"
+    },
+    {
+      "w": 390,
+      "i": 3,
+      "cache": "warm",
+      "cls": 0.028214213517216594,
+      "long": [
+        399,
+        182,
+        56
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 868,
+      "usable": 1092.8000000002794,
+      "lang": "es-CL",
+      "width": 390,
+      "ttfb": 5.100000000093132,
+      "load": 554.3000000002794,
+      "size": 3126,
+      "requests": 2,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          0,
+          0
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          0,
+          0
+        ],
+        [
+          "/api/auth/users",
+          440,
+          21.5
+        ],
+        [
+          "/icon-192.png",
+          0,
+          1.8999999999068677
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          0,
+          0
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          0,
+          0
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          0,
+          0
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          0,
+          0
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          0,
+          0
+        ]
+      ],
+      "click": 52.10000000009313,
+      "focus": "login-password"
+    },
+    {
+      "w": 390,
+      "i": 4,
+      "cache": "cold",
+      "cls": 0.028214213517216594,
+      "long": [
+        53,
+        894,
+        293
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 1864,
+      "usable": 2161.3000000002794,
+      "lang": "es-CL",
+      "width": 390,
+      "ttfb": 7.7000000001862645,
+      "load": 1194.2000000001863,
+      "size": 2438251,
+      "requests": 24,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          432062,
+          18.5
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          536,
+          18.40000000037253
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          223498,
+          19
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          152940,
+          16.600000000093132
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          349656,
+          25.100000000093132
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          424686,
+          31.899999999906868
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          33133,
+          22.899999999906868
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          118838,
+          23.5
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          34072,
+          21.300000000279397
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          54938,
+          29.700000000186265
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          35108,
+          31.600000000093132
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          157285,
+          29.5
+        ],
+        [
+          "/api/auth/users",
+          440,
+          7.400000000372529
+        ],
+        [
+          "/icon-192.png",
+          1720,
+          3.099999999627471
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          104936,
+          4.100000000093132
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          76192,
+          4.7999999998137355
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          1287,
+          4.899999999906868
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          164779,
+          7.199999999720603
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          13411,
+          4.899999999906868
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          537,
+          4.399999999906868
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          28430,
+          4
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          8122,
+          4.7999999998137355
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          18959,
+          5.7000000001862645
+        ]
+      ],
+      "click": 109.89999999990687,
+      "focus": "login-password"
+    },
+    {
+      "w": 390,
+      "i": 4,
+      "cache": "warm",
+      "cls": 0.028214213517216594,
+      "long": [
+        397,
+        178
+      ],
+      "shifts": [
+        [
+          "DIV"
+        ]
+      ],
+      "lcp": 836,
+      "usable": 1045.4000000003725,
+      "lang": "es-CL",
+      "width": 390,
+      "ttfb": 6.900000000372529,
+      "load": 548.1000000000931,
+      "size": 3126,
+      "requests": 2,
+      "entries": [
+        [
+          "/assets/index-nYKRMzgV.js",
+          0,
+          0
+        ],
+        [
+          "/assets/_commonjsHelpers-Cpj98o6Y.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-react-DOaCd3Lh.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-CeJqhzJm.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-core-ijxJopa0.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-firebase-firestore-DXLbmey4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-FdTHunhz.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-helpers-UKpMBkEk.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-date-fns-C0BZtl7T.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-lucide-C2yXXum9.js",
+          0,
+          0
+        ],
+        [
+          "/assets/vendor-feedback-DM6juuWq.js",
+          0,
+          0
+        ],
+        [
+          "/assets/index-BNYqEidD.css",
+          0,
+          0
+        ],
+        [
+          "/api/auth/users",
+          440,
+          20.399999999906868
+        ],
+        [
+          "/icon-192.png",
+          0,
+          1.3999999999068677
+        ],
+        [
+          "/assets/chunk-reservation-modal-CU08dm_7.js",
+          0,
+          0
+        ],
+        [
+          "/assets/RoomSetupPreview-B57UGcSC.js",
+          0,
+          0
+        ],
+        [
+          "/assets/loadPdfLibraries-DKvOSWnf.js",
+          0,
+          0
+        ],
+        [
+          "/assets/useReservationSaveHandler-BlTFL1t4.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ConflictRecommendationPanel-p8VkYcAM.js",
+          0,
+          0
+        ],
+        [
+          "/assets/reservationCakes-BOPzpE2R.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-detail-modal-MI00Kwu3.js",
+          0,
+          0
+        ],
+        [
+          "/assets/ReplacementReminderModal-DoCC8fRu.js",
+          0,
+          0
+        ],
+        [
+          "/assets/chunk-command-palette-DSjpsfUD.js",
+          0,
+          0
+        ]
+      ],
+      "click": 49.89999999990687,
+      "focus": "login-password"
+    }
+  ],
+  "controlMovil": {
+    "muestras": [
+      {
+        "k": 0,
+        "i": 0,
+        "ready": 2202.9000000003725,
+        "lcp": 2028
+      },
+      {
+        "k": 1,
+        "i": 0,
+        "ready": 1600,
+        "lcp": 1364
+      },
+      {
+        "k": 1,
+        "i": 1,
+        "ready": 1571.7000000001863,
+        "lcp": 1340
+      },
+      {
+        "k": 0,
+        "i": 1,
+        "ready": 1743.8999999999069,
+        "lcp": 1504
+      },
+      {
+        "k": 0,
+        "i": 2,
+        "ready": 1719.2000000001863,
+        "lcp": 1500
+      },
+      {
+        "k": 1,
+        "i": 2,
+        "ready": 1532.7999999998137,
+        "lcp": 1340
+      },
+      {
+        "k": 1,
+        "i": 3,
+        "ready": 1539.0999999996275,
+        "lcp": 1276
+      },
+      {
+        "k": 0,
+        "i": 3,
+        "ready": 1726.9000000003725,
+        "lcp": 1492
+      },
+      {
+        "k": 0,
+        "i": 4,
+        "ready": 1829.2000000001863,
+        "lcp": 1576
+      },
+      {
+        "k": 1,
+        "i": 4,
+        "ready": 1512.3000000002794,
+        "lcp": 1308
+      }
+    ],
+    "versiones": [
+      "18221cf3",
+      "843c8fe9"
+    ]
+  },
+  "componentes": {
+    "scope": "Real components, synthetic data, no backend; all external requests blocked",
+    "checks": [
+      {
+        "width": 320,
+        "mode": "grid",
+        "passed": true,
+        "total": 2100,
+        "mounted": 5,
+        "keyboard": "Tab 30, Shift+Tab 1"
+      },
+      {
+        "width": 320,
+        "mode": "filter",
+        "passed": true,
+        "total": 2100,
+        "matches": 1050,
+        "reset": 2100
+      },
+      {
+        "width": 320,
+        "mode": "daily",
+        "passed": true,
+        "configuredColor": "rgb(18, 52, 86)",
+        "dimensions": {
+          "viewport": 320,
+          "body": 320
+        }
+      },
+      {
+        "width": 320,
+        "mode": "mobile",
+        "passed": true,
+        "configuredColor": "rgb(18, 52, 86)",
+        "dimensions": {
+          "viewport": 320,
+          "body": 320
+        }
+      },
+      {
+        "width": 390,
+        "mode": "grid",
+        "passed": true,
+        "total": 2100,
+        "mounted": 5,
+        "keyboard": "Tab 30, Shift+Tab 1"
+      },
+      {
+        "width": 390,
+        "mode": "filter",
+        "passed": true,
+        "total": 2100,
+        "matches": 1050,
+        "reset": 2100
+      },
+      {
+        "width": 390,
+        "mode": "daily",
+        "passed": true,
+        "configuredColor": "rgb(18, 52, 86)",
+        "dimensions": {
+          "viewport": 390,
+          "body": 390
+        }
+      },
+      {
+        "width": 390,
+        "mode": "mobile",
+        "passed": true,
+        "configuredColor": "rgb(18, 52, 86)",
+        "dimensions": {
+          "viewport": 390,
+          "body": 390
+        }
+      },
+      {
+        "width": 1366,
+        "mode": "grid",
+        "passed": true,
+        "total": 2100,
+        "mounted": 20,
+        "keyboard": "Tab 30, Shift+Tab 1"
+      },
+      {
+        "width": 1366,
+        "mode": "filter",
+        "passed": true,
+        "total": 2100,
+        "matches": 1050,
+        "reset": 2100
+      },
+      {
+        "width": 1366,
+        "mode": "daily",
+        "passed": true,
+        "configuredColor": "rgb(18, 52, 86)",
+        "dimensions": {
+          "viewport": 1366,
+          "body": 1366
+        }
+      },
+      {
+        "width": 1366,
+        "mode": "mobile",
+        "passed": true,
+        "configuredColor": "rgb(18, 52, 86)",
+        "dimensions": {
+          "viewport": 1366,
+          "body": 1366
+        }
+      }
+    ],
+    "errors": []
+  },
+  "analiticas": [
+    "SALÓN NORTE SALÓN NORTE",
+    "0 reservas (0.0%) · 0 personas",
+    "SALA 2 SALA 2",
+    "1 reservas (50.0%) · 4 personas",
+    "SALA 3 SALA 3",
+    "1 reservas (50.0%) · 4 personas"
+  ],
+  "estadosModal": [
+    "estado de carga visible",
+    "formulario visible 0"
+  ],
+  "codificacion": [
+    "identity identity 200 155776 506 ddddea3867f094d1",
+    "gzip gzip 200 7531 506 ddddea3867f094d1",
+    "gzip;q=0, identity;q=1 gzip 200 7531 506 ddddea3867f094d1"
+  ],
+  "httpMs": {
+    "editar": [
+      82,
+      74,
+      71,
+      82,
+      80
+    ],
+    "crear": [
+      139,
+      86,
+      121,
+      96,
+      117
+    ],
+    "cancelar": [
+      90,
+      71,
+      95,
+      69,
+      76
+    ],
+    "listar": [
+      195,
+      84,
+      86,
+      90,
+      73
+    ]
+  },
+  "aperturaMs": [
+    195.7,
+    113.6,
+    68.4,
+    65.3,
+    64.1
+  ],
+  "filtroMs": [
+    259,
+    191,
+    224,
+    201,
+    220
+  ],
+  "memoriaKiB": [
+    8787,
+    11445,
+    11646
+  ],
+  "nodos": [
+    1494,
+    1494,
+    1494
+  ],
+  "CRUD": {
+    "escrituras": 3,
+    "registrosFinales": 1,
+    "estado": "cancelada",
+    "version": 3
+  },
+  "pruebas": {
+    "integracion": 64,
+    "unitarias": 929
+  }
+}

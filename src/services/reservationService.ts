@@ -121,7 +121,7 @@ export function calculateReservationsHash(reservations: readonly Reservation[]):
       : '';
 
     const delReqStr = r.solicitudEliminacion
-      ? `${r.solicitudEliminacion.solicitadoPor || ''}:${r.solicitudEliminacion.fechaSolicitud || ''}:${r.solicitudEliminacion.motivo || ''}:${r.solicitudEliminacion.esSerie ? '1' : '0'}`
+      ? `${r.solicitudEliminacion.solicitadoPor || ''}:${r.solicitudEliminacion.fechaSolicitud || ''}:${r.solicitudEliminacion.motivo || ''}:${r.solicitudEliminacion.esSerie ? '1' : '0'}:${JSON.stringify(r.solicitudEliminacion.seleccion || [])}:${r.solicitudEliminacion.alcance || ''}:${r.solicitudEliminacion.fechaDesde || ''}`
       : '';
     const letterStr = r.cartaCompromisoAdjunta
       ? `${r.cartaCompromisoAdjunta.name || ''}:${r.cartaCompromisoAdjunta.uploadedAt || ''}`
@@ -1144,14 +1144,20 @@ export async function queryReservationsBySeries(
   if (!seriesId) return [];
   const db = getDb();
   const reservasCol = collection(db, COLLECTION_NAME);
-  const snapshot = await getDocs(query(reservasCol, where('serieRecurrente', '==', seriesId)));
+  const snapshots = await Promise.all([
+    getDocs(query(reservasCol, where('serieRecurrente', '==', seriesId))),
+    getDocs(query(reservasCol, where('recurrenteId', '==', seriesId)))
+  ]);
   const results: Reservation[] = [];
-  snapshot.forEach((docSnap) => {
+  const seen = new Set<string>();
+  snapshots.forEach(snapshot => snapshot.forEach(docSnap => {
+    if (seen.has(docSnap.id)) return;
+    seen.add(docSnap.id);
     const normalized = normalizeReservationFromFirestore(docSnap.id, docSnap.data());
     if (!fromDate || normalized.fecha >= fromDate) {
       results.push(normalized);
     }
-  });
+  }));
   return results.sort(compareReservationsByDate);
 }
 

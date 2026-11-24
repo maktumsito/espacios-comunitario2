@@ -1,3 +1,4 @@
+import { RecurringDeleteScopeModal, type ScopedDeleteProps } from './RecurringDeleteScopeModal';
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useState, useEffect } from 'react';
 import { Reservation, isSingleDayMultiSpaceReservation } from '../types';
@@ -22,6 +23,7 @@ interface DeleteConfirmationModalProps {
   onClose: () => void;
   onConfirmDeleteSingle: (id: string) => void;
   onConfirmDeleteSeries: (seriesId: string) => void;
+  onConfirmDeleteScope?: ScopedDeleteProps['onConfirm'];
   onClearParticipants?: (reservation: Reservation) => void;
   currentUser?: AuthUser | null;
   onSubmitDeleteRequest?: (
@@ -30,8 +32,8 @@ interface DeleteConfirmationModalProps {
     isSeries?: boolean,
     seriesId?: string
   ) => void;
-  onAuthorizeDelete?: (reservation: Reservation) => void;
-  onRejectDeleteRequest?: (reservation: Reservation) => void;
+  onAuthorizeDelete?: (reservation: Reservation) => void | Promise<void>;
+  onRejectDeleteRequest?: (reservation: Reservation) => void | Promise<void>;
 }
 
 export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
@@ -40,16 +42,30 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
   onClose,
   onConfirmDeleteSingle,
   onConfirmDeleteSeries,
+  onConfirmDeleteScope,
   currentUser,
   onSubmitDeleteRequest,
   onAuthorizeDelete,
   onRejectDeleteRequest
 }) => {
+  const [actionError, setActionError] = useState('');
+  const [actionBusy, setActionBusy] = useState(false);
+  const actionInFlight = React.useRef(false);
+  const runPendingAction = async (action: () => void | Promise<void>) => {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setActionBusy(true);
+    setActionError('');
+    try { await action(); onClose(); }
+    catch (err) { setActionError(err instanceof Error ? err.message : 'No se pudo completar la operación.'); }
+    finally { actionInFlight.current = false; setActionBusy(false); }
+  };
   const [motivo, setMotivo] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setMotivo('');
+      setActionError('');
     }
   }, [isOpen, reservation]);
 
@@ -63,13 +79,18 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
     !isMultiSpace &&
     (reservation.actividadRecurrente === 'Sí' ||
       Boolean(reservation.recurrenteId || reservation.serieRecurrente));
-  const hasMultipleSlots = isMultiSpace || isRecurring;
+  const hasMultipleSlots = isMultiSpace || (isRecurring && Boolean(reservation.serieRecurrente || reservation.recurrenteId));
 
   const seriesId = reservation.recurrenteId || reservation.serieRecurrente || reservation.id;
   const spaceInfo = SPACES_LIST.find(
     (s) => s.name.toUpperCase() === reservation.espacio.toUpperCase()
   );
   const spaceColor = spaceInfo ? spaceInfo.color : '#64748b';
+
+  if (isRecurring && (reservation.serieRecurrente || reservation.recurrenteId) && !hasPendingRequest && onConfirmDeleteScope) {
+    return <RecurringDeleteScopeModal key={reservation.id} reservation={reservation} onClose={() => { if (!actionInFlight.current) onClose(); }}
+      canDelete={canDirectlyDelete} onConfirm={onConfirmDeleteScope} />;
+  }
 
   // Handle Non-Admin Submission
   const handleSendRequest = (isSeries: boolean) => {
@@ -113,7 +134,7 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
   return (
     <BaseModal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={() => { if (!actionInFlight.current) onClose(); }}
       title={modalTitle}
       subtitle={modalSubtitle}
       icon={modalIcon}
@@ -274,6 +295,13 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
           <div className="space-y-3">
             {hasPendingRequest ? (
               <div className="space-y-3">
+                {reservation.solicitudEliminacion?.alcance && <p className="text-sm font-semibold">
+                  {reservation.solicitudEliminacion.alcance === 'future' ? `Desde el ${formatDateDDMMYYYY(reservation.solicitudEliminacion.fechaDesde || reservation.fecha)} en adelante` :
+                    reservation.solicitudEliminacion.alcance === 'series' ? 'Toda la serie' : 'Solo esta reserva'}
+                  {' · '}{reservation.solicitudEliminacion.seleccion?.length || 1} reservas
+                </p>}
+                {actionError && <p role="alert" className="text-rose-700">{actionError}</p>}
+                {actionBusy && <p role="status">Procesando…</p>}
                 <p className="text-xs text-slate-700 font-medium leading-relaxed">
                   ¿Deseas autorizar la solicitud y eliminar permanentemente esta reserva, o rechazar la solicitud para mantenerla activa?
                 </p>
@@ -281,10 +309,10 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   <button
                     type="button"
+                    disabled={actionBusy}
                     onClick={() => {
                       if (onRejectDeleteRequest) {
-                        onRejectDeleteRequest(reservation);
-                        onClose();
+                        void runPendingAction(() => onRejectDeleteRequest(reservation));
                       }
                     }}
                     className="p-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
@@ -295,10 +323,10 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
 
                   <button
                     type="button"
+                    disabled={actionBusy}
                     onClick={() => {
                       if (onAuthorizeDelete) {
-                        onAuthorizeDelete(reservation);
-                        onClose();
+                        void runPendingAction(() => onAuthorizeDelete(reservation));
                       } else {
                         onConfirmDeleteSingle(reservation.id);
                         onClose();

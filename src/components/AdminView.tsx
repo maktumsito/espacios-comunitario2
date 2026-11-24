@@ -121,6 +121,7 @@ interface AdminViewProps {
     updateWholeSeries?: boolean
   ) => Promise<boolean>;
   onDeleteReservation?: (id: string, seriesId?: string) => Promise<void>;
+  onRequestDelete?: (reservation: Reservation) => void;
   onEditReservation?: (reservation: Reservation) => void | Promise<void>;
 }
 
@@ -249,6 +250,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onOpenGmailDispatch,
   onSaveReservation,
   onDeleteReservation,
+  onRequestDelete,
   onEditReservation
 }) => {
   const adminSavingRef = useRef(false);
@@ -2153,6 +2155,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             activityTypes={activityTypes}
             onSaveReservation={onSaveReservation}
             onDeleteReservation={onDeleteReservation}
+            onRequestDelete={onRequestDelete}
             onEditReservation={onEditReservation}
           />
         </Suspense>

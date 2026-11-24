@@ -20,9 +20,9 @@ interface PendingDeletionsModalProps {
   isOpen: boolean;
   onClose: () => void;
   pendingReservations: Reservation[];
-  onAuthorizeDelete: (reservation: Reservation) => void;
-  onRejectDeleteRequest: (reservation: Reservation) => void;
-  onSelectReservation: (reservation: Reservation) => void;
+  onAuthorizeDelete: (reservation: Reservation) => void | Promise<void>;
+  onRejectDeleteRequest: (reservation: Reservation) => void | Promise<void>;
+  onSelectReservation: (reservation: Reservation) => void | Promise<void>;
 }
 
 export const PendingDeletionsModal: React.FC<PendingDeletionsModalProps> = ({
@@ -39,7 +39,7 @@ export const PendingDeletionsModal: React.FC<PendingDeletionsModalProps> = ({
     message: string;
     variant: 'danger' | 'warning';
     confirmLabel: string;
-    onConfirm: () => void;
+    onConfirm: () => void | Promise<void>;
   }>({
     isOpen: false,
     title: '',
@@ -131,7 +131,8 @@ export const PendingDeletionsModal: React.FC<PendingDeletionsModalProps> = ({
                         </span>
                         {req?.esSerie && (
                           <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                            Serie Recurrente
+                            {req.alcance === 'future' ? `Desde ${req.fechaDesde} en adelante` : 'Serie Recurrente'}
+                            {req.seleccion && ` · ${req.seleccion.length} reservas`}
                           </span>
                         )}
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
@@ -208,8 +209,8 @@ export const PendingDeletionsModal: React.FC<PendingDeletionsModalProps> = ({
                           message: `La reserva "${res.tipoActividad}" permanecerá activa en el calendario comunitario y se descartará la solicitud de baja.`,
                           variant: 'warning',
                           confirmLabel: 'Rechazar Solicitud',
-                          onConfirm: () => {
-                            onRejectDeleteRequest(res);
+                          onConfirm: async () => {
+                            await onRejectDeleteRequest(res);
                             setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
                           }
                         });
@@ -226,11 +227,13 @@ export const PendingDeletionsModal: React.FC<PendingDeletionsModalProps> = ({
                         setConfirmDialog({
                           isOpen: true,
                           title: '¿Autorizar y Eliminar definitivamente?',
-                          message: `Esta acción autorizará la solicitud y eliminará definitivamente la reserva "${res.tipoActividad}" agendada en ${res.espacio}.`,
+                          message: req?.alcance
+                            ? `Se eliminarán ${req.seleccion?.length || 1} reservas. ${req.alcance === 'future' ? 'Desde el ' + formatDateDDMMYYYY(req.fechaDesde || res.fecha) + ' en adelante' : req.alcance === 'series' ? 'Toda la serie' : 'Solo esta reserva'}.`
+                            : `Esta acción autorizará la solicitud y eliminará definitivamente la reserva "${res.tipoActividad}" agendada en ${res.espacio}.`,
                           variant: 'danger',
                           confirmLabel: 'Autorizar y Eliminar',
-                          onConfirm: () => {
-                            onAuthorizeDelete(res);
+                          onConfirm: async () => {
+                            await onAuthorizeDelete(res);
                             setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
                           }
                         });

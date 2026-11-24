@@ -147,6 +147,21 @@ describe.skipIf(!enabled)(
       post('/api/reservations/commit', { reservations, options: { operationId, ...options } });
     const cakeStock = () => post('/api/reservations/cake-stock', {});
 
+    it('respects gzip preferences and preserves the reservation list', async () => {
+      await db.doc('reservas/encoding').set({ ...row('encoding'), descripcion: 'a'.repeat(3000) });
+      const read = (encoding: string) => fetch(base + '/api/data/read', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + editor, 'Content-Type': 'application/json', 'Accept-Encoding': encoding },
+        body: JSON.stringify({ path: 'reservas', kind: 'query' }),
+      });
+      const compressed = await read('gzip');
+      const plain = await read('gzip;q=0, identity;q=1');
+      expect(compressed.headers.get('content-encoding')).toBe('gzip');
+      expect(plain.headers.get('content-encoding')).toBeNull();
+      expect(await plain.json()).toEqual(await compressed.json());
+      expect((await read('identity;q=0, gzip;q=0')).status).toBe(406);
+    });
+
     it('stores physical stock by location and protects entered quantities', async () => {
       expect(await post('/api/inventario/lugares', {}, reader)).toMatchObject({ status: 403 });
       expect(await post('/api/inventario/lugares', {})).toMatchObject({ locations: [] });
