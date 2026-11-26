@@ -22,7 +22,7 @@ import {
 import { Reservation, SpaceInfo, SpaceBlock, UpdateScope } from '../types';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { timeStringToMinutes } from '../utils/validationUtils';
-import { timeToMinutes, formatMinutesToTime } from '../utils/conflictDetector';
+import { timeToMinutes, formatMinutesToTime, checkSingleConflict } from '../utils/conflictDetector';
 import { SpaceAvailabilityTimeline } from './SpaceAvailabilityTimeline';
 import { RecurrenceScheduleSection, type CustomScheduleSlot } from './RecurrenceScheduleSection';
 import { ReservationConflictBanner } from './ReservationConflictBanner';
@@ -396,6 +396,23 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
                 : 'border-slate-200 focus:ring-blue-500'
             }`}
           />
+          <div className="flex flex-wrap items-center gap-1 pt-0.5">
+            <span className="text-[10px] text-slate-500 mr-0.5">Duración rápida:</span>
+            {([60, 90, 120, 180] as const).map((mins) => (
+              <button
+                key={mins}
+                type="button"
+                onClick={() => {
+                  const sMin = timeToMinutes(formData.horaInicio || '08:30');
+                  const nextEnd = formatMinutesToTime(Math.min(23 * 60 + 45, sMin + mins));
+                  setFormData((prev) => ({ ...prev, horaFin: nextEnd }));
+                }}
+                className="rounded-md border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition cursor-pointer"
+              >
+                +{mins === 90 ? '1.5h' : `${mins / 60}h`}
+              </button>
+            ))}
+          </div>
         </div>
 
         {!timeValidation.isValid && (
@@ -406,6 +423,65 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
           >
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>⚠️ {timeValidation.error || 'La hora de término debe ser posterior a la de inicio.'}</span>
+          </div>
+        )}
+
+        {/* QUICK VISUAL ROOM AVAILABILITY STRIP FOR CHOSEN DATE & TIME */}
+        {formData.fecha && formData.horaInicio && formData.horaFin && timeValidation.isValid && availableSpaces.length > 1 && (
+          <div className="sm:col-span-4 rounded-xl border border-slate-200 bg-white p-3 space-y-2 shadow-2xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Estado de salas para {formatDateDDMMYYYY(formData.fecha)} ({formData.horaInicio}–{formData.horaFin})</span>
+              </span>
+              <span className="text-[11px] text-slate-500">Clic en una sala verde para elegirla</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {availableSpaces.map((sp) => {
+                const isSelected = (formData.espacio || availableSpaces[0]?.name) === sp.name;
+                const roomConflicts = checkSingleConflict(
+                  {
+                    fecha: formData.fecha!,
+                    horaInicio: formData.horaInicio!,
+                    horaFin: formData.horaFin!,
+                    espacio: sp.name,
+                    terminaDiaSiguiente: Boolean(formData.terminaDiaSiguiente),
+                  },
+                  allReservations,
+                  editingReservation?.id
+                );
+                const isFree = roomConflicts.length === 0;
+                return (
+                  <button
+                    key={sp.id}
+                    type="button"
+                    onClick={() => {
+                      setFormData((prev) => ({ ...prev, espacio: sp.name }));
+                      if (!isEditingSingleOccurrence) {
+                        if (useCustomSchedulesPerDate) Object.keys(dateSchedules).forEach((date) => handleUpdateDateSchedule(date, 'espacio', sp.name));
+                        if (useCustomSchedulesPerDay) Object.keys(daySchedules).forEach((day) => handleUpdateDaySchedule(Number(day), 'espacio', sp.name));
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                      isSelected
+                        ? 'border-blue-600 bg-blue-600 text-white shadow-xs'
+                        : isFree
+                        ? 'border-emerald-200 bg-emerald-50/70 text-emerald-900 hover:bg-emerald-100'
+                        : 'border-rose-200 bg-rose-50/60 text-rose-800 opacity-75 hover:opacity-100'
+                    }`}
+                    title={`${sp.name}${sp.capacity ? ` (Cap. ${sp.capacity})` : ''} · ${isFree ? 'Disponible en este horario' : `Ocupado (${roomConflicts.length} tope)`}`}
+                  >
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${isSelected ? 'bg-white' : isFree ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                    <span>{formatDisplayTitle(sp.name)}</span>
+                    {sp.capacity && (
+                      <span className={`text-[10px] font-mono ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
+                        ({sp.capacity})
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 

@@ -273,6 +273,31 @@ export const SpaceAvailabilityTimeline: React.FC<SpaceAvailabilityTimelineProps>
           {/* Base Available Background */}
           <div className="absolute inset-0 bg-emerald-100/60" />
 
+          {/* Interactive Clickable Free Segments inside the Timeline Track */}
+          {onSelectTimeRange && freeSlots.map((slot, idx) => {
+            const style = getIntervalStyle(slot.startMin, slot.endMin);
+            const hours = Math.floor(slot.durationMin / 60);
+            const mins = slot.durationMin % 60;
+            const durLabel = hours > 0 ? (mins > 0 ? `${hours}h ${mins}m` : `${hours}h`) : `${mins}m`;
+            return (
+              <button
+                key={`free-track-${idx}`}
+                type="button"
+                style={style}
+                onClick={() => onSelectTimeRange(slot.horaInicio, slot.horaFin)}
+                title={`Tramo libre: ${slot.horaInicio} a ${slot.horaFin} (${durLabel}) · Clic para usar este horario`}
+                aria-label={`Usar tramo libre de ${slot.horaInicio} a ${slot.horaFin}`}
+                className="absolute top-0 bottom-0 bg-emerald-100/70 hover:bg-emerald-200/90 text-emerald-900 flex items-center justify-center overflow-hidden px-1 transition cursor-pointer border-r border-emerald-300/60 z-[5]"
+              >
+                {slot.durationMin >= 90 && (
+                  <span className="text-[10px] font-bold font-mono truncate select-none">
+                    {durLabel}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+
           {/* Occupied Segments (Red/Rose for reservations, Amber/Striped for maintenance) */}
           {dayReservations.map((occ) => {
             const style = getIntervalStyle(occ.startMin, occ.endMin);
@@ -340,18 +365,24 @@ export const SpaceAvailabilityTimeline: React.FC<SpaceAvailabilityTimelineProps>
               <Sparkles className="w-3 h-3 text-amber-500" />
               <span>Bloques sugeridos:</span>
             </span>
-            {freeSlots.slice(0, 3).map((slot, i) => (
+            {freeSlots.slice(0, 4).map((slot, i) => {
+              const hours = Math.floor(slot.durationMin / 60);
+              const mins = slot.durationMin % 60;
+              const durLabel = hours > 0 ? (mins > 0 ? `${hours}h ${mins}m` : `${hours}h`) : `${mins}m`;
+              return (
               <button
                 key={i}
                 type="button"
                 id={`btn-timeline-slot-${i}`}
                 onClick={() => onSelectTimeRange(slot.horaInicio, slot.horaFin)}
                 className="px-2 py-1 bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 rounded-lg text-[11px] font-mono font-semibold transition shadow-2xs flex items-center space-x-1 cursor-pointer"
-                title={`Seleccionar ${slot.horaInicio} a ${slot.horaFin} (${slot.durationMin} min disponibles)`}
+                title={`Seleccionar ${slot.horaInicio} a ${slot.horaFin} (${durLabel} disponibles)`}
               >
                 <span>{slot.horaInicio} - {slot.horaFin}</span>
+                <span className="font-sans text-[10px] text-emerald-700 font-bold">· {durLabel}</span>
               </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

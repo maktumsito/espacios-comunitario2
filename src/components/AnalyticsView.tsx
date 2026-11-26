@@ -9,7 +9,6 @@ import {
   Award,
   BarChart,
   PieChart,
-  Flame,
   Activity,
   Sparkles
 } from 'lucide-react';
@@ -167,18 +166,20 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <Calendar className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-black text-slate-900">{total}</div>
+            <div className="text-2xl font-black text-slate-900 tabular-nums">{total}</div>
             <div className="text-xs text-slate-500 font-medium">Reservas cargadas</div>
           </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center space-x-3.5">
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl border border-amber-100">
-            <Flame className="w-6 h-6" />
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
+            <Sparkles className="w-6 h-6" />
           </div>
-          <div>
-            <div className="text-2xl font-black text-amber-600">{importantes}</div>
-            <div className="text-xs text-slate-500 font-medium">Actividades Importantes</div>
+          <div className="min-w-0">
+            <div className="text-sm sm:text-base font-black text-emerald-700 truncate">
+              {spaceCounts.length > 0 ? spaceCounts[spaceCounts.length - 1].name : '—'}
+            </div>
+            <div className="text-xs text-slate-500 font-medium">Mayor holgura disponible</div>
           </div>
         </div>
 
@@ -187,7 +188,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-black text-sky-600">{totalParticipantes.toLocaleString()}</div>
+            <div className="text-2xl font-black text-sky-600 tabular-nums">{totalParticipantes.toLocaleString()}</div>
             <div className="text-xs text-slate-500 font-medium">Asistencia Estimada</div>
           </div>
         </div>
@@ -197,8 +198,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <Layers className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-black text-indigo-600">{recurrentes}</div>
-            <div className="text-xs text-slate-500 font-medium">Series Recurrentes</div>
+            <div className="text-2xl font-black text-indigo-600 tabular-nums">{recurrentes}</div>
+            <div className="text-xs text-slate-500 font-medium">Series Recurrentes ({importantes} imp.)</div>
           </div>
         </div>
       </div>

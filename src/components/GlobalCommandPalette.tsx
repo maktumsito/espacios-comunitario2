@@ -52,6 +52,7 @@ interface GlobalCommandPaletteProps {
   onSelectReservation: (reservation: Reservation) => void;
   onNavigateToView: (view: ViewMode) => void;
   onNewReservation: () => void;
+  onOpenAvailability?: () => void;
   onOpenPrintModal?: () => void;
   onOpenGmailDispatch?: () => void;
   onOpenAuditLog?: () => void;
@@ -81,6 +82,7 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
   onSelectReservation,
   onNavigateToView,
   onNewReservation,
+  onOpenAvailability,
   onOpenPrintModal,
   onOpenGmailDispatch,
   onOpenAuditLog,
@@ -258,6 +260,22 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
         }
       }
     ];
+
+    if (onOpenAvailability) {
+      systemActions.splice(1, 0, {
+        id: 'action-open-availability',
+        type: 'action',
+        title: 'Buscar Espacios y Horarios Libres',
+        subtitle: 'Consultar huecos disponibles por día, duración, franja y capacidad',
+        badge: 'Disponible',
+        badgeColor: 'emerald',
+        icon: <Clock className="w-4 h-4 text-emerald-600" />,
+        onSelect: () => {
+          onClose();
+          onOpenAvailability();
+        }
+      });
+    }
 
     if (onNavigateToDate) {
       systemActions.splice(1, 0, {

@@ -3,7 +3,7 @@ import { VirtualCardGrid } from './common/VirtualCardGrid';
 import React, { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
 import { Reservation, SpaceInfo, isSingleDayMultiSpaceReservation, SpaceBlock } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
-import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from '../utils/spaceAvailability';
+import { computeRoomDayFreeSlots, filterEnabledSpaceReservations, formatDurationCompact, getEnabledSpaces, hasEnabledSpace } from '../utils/spaceAvailability';
 import { getChileanHolidayInfo, ChileanHoliday } from '../utils/holidayUtils';
 import { useReservationDateIndex } from '../utils/reservationIndex';
 import { getActiveWindowStartDate } from '../services/reservationService';
@@ -268,6 +268,7 @@ interface CalendarDayCellProps {
   dateStr: string;
   dayReservations: Reservation[];
   dayBlocks?: SpaceBlock[];
+  totalEnabledSpaces: number;
   isSelected: boolean;
   isCurrentMonth: boolean;
   isDayToday: boolean;
@@ -286,6 +287,7 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
   dateStr,
   dayReservations,
   dayBlocks = [],
+  totalEnabledSpaces,
   isSelected,
   isCurrentMonth,
   isDayToday,
@@ -411,6 +413,31 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
           </div>
         )}
       </div>
+
+      {/* Subtle daily availability / load indicator bar */}
+      {isCurrentMonth && !holidayInfo && totalEnabledSpaces > 0 && (() => {
+        const occupiedRatio = Math.min(1, dayReservations.length / Math.max(1, totalEnabledSpaces * 1.5));
+        const freePct = Math.max(8, Math.round((1 - occupiedRatio) * 100));
+        const barColor =
+          occupiedRatio < 0.35 ? 'bg-emerald-400' : occupiedRatio < 0.7 ? 'bg-blue-400' : 'bg-amber-400';
+        return (
+          <div
+            className="mt-1.5 h-1 w-full rounded-full bg-slate-100 overflow-hidden"
+            title={
+              dayReservations.length === 0
+                ? 'Alta disponibilidad: todas las salas libres'
+                : occupiedRatio < 0.35
+                ? 'Alta disponibilidad de salas'
+                : occupiedRatio < 0.7
+                ? 'Ocupación moderada'
+                : 'Alta demanda en esta fecha'
+            }
+            aria-hidden="true"
+          >
+            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${freePct}%` }} />
+          </div>
+        );
+      })()}
     </div>
   );
 });
@@ -535,11 +562,12 @@ interface SelectedDayAgendaProps {
   selectedDay: Date;
   selectedDayStr: string;
   selectedDayReservations: Reservation[];
+  freeSpacesSummary: { space: SpaceInfo; freeMinutes: number; firstSlot?: { startTime: string; endTime: string } }[];
   holidayInfo: ChileanHoliday | null;
   getSpaceColor: (spaceName: string) => string;
   onSelectReservation: (reserva: Reservation) => void;
   onEditReservation?: (reserva: Reservation) => void;
-  onNewReservationForDate: (dateStr: string) => void;
+  onNewReservationForDate: (dateStr: string, spaceName?: string, startTime?: string, endTime?: string) => void;
   onNavigateToDay?: (day: Date) => void;
 }
 
@@ -550,6 +578,7 @@ const SelectedDayAgenda = memo<SelectedDayAgendaProps>(({
   selectedDay,
   selectedDayStr,
   selectedDayReservations,
+  freeSpacesSummary,
   holidayInfo,
   getSpaceColor,
   onSelectReservation,
@@ -628,6 +657,43 @@ const SelectedDayAgenda = memo<SelectedDayAgendaProps>(({
         </div>
       </div>
 
+      {/* Free spaces strip for selected day */}
+      {!holidayInfo && freeSpacesSummary.length > 0 && (
+        <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-2.5 space-y-1.5">
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+              <span>{freeSpacesSummary.length} {freeSpacesSummary.length === 1 ? 'sala disponible' : 'salas con disponibilidad'}</span>
+            </span>
+            <span className="text-[11px] text-emerald-700 font-medium">Clic para reservar</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {freeSpacesSummary.slice(0, 6).map(({ space, freeMinutes, firstSlot }) => (
+              <button
+                key={space.id}
+                type="button"
+                onClick={() => onNewReservationForDate(selectedDayStr, space.name, firstSlot?.startTime, firstSlot?.endTime)}
+                className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-900 hover:bg-emerald-100 transition cursor-pointer shadow-2xs"
+                title={`Reservar ${space.name} (${formatDurationCompact(freeMinutes)} libres${firstSlot ? `, desde ${firstSlot.startTime}` : ''})`}
+              >
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: space.color }} />
+                <span className="truncate max-w-[115px]">{formatDisplayTitle(space.name)}</span>
+                <span className="text-emerald-700 font-mono text-[10px]">{formatDurationCompact(freeMinutes)}</span>
+              </button>
+            ))}
+            {freeSpacesSummary.length > 6 && onNavigateToDay && (
+              <button
+                type="button"
+                onClick={handleOpenDailyUsage}
+                className="inline-flex items-center rounded-lg bg-emerald-100/80 px-2 py-1 text-[11px] font-bold text-emerald-900 hover:bg-emerald-200 transition cursor-pointer"
+              >
+                +{freeSpacesSummary.length - 6} más
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {isExpanded && (
         selectedDayReservations.length === 0 ? (
           <div className="py-4 text-center text-slate-500 space-y-1.5">
@@ -690,7 +756,7 @@ interface CalendarViewProps {
   onNavigateToDay?: (day: Date) => void;
   onSelectReservation: (reserva: Reservation) => void;
   onEditReservation?: (reserva: Reservation) => void;
-  onNewReservationForDate: (dateStr: string) => void;
+  onNewReservationForDate: (dateStr: string, spaceName?: string, startTime?: string, endTime?: string) => void;
   onLoadHistoricalMonth?: (year: number, month: number) => Promise<any>;
   onVisibleMonthChange?: (date: Date) => void;
   onSelectedDateChange?: (date: Date) => void;
@@ -800,6 +866,20 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
     return getChileanHolidayInfo(selectedDayStr);
   }, [selectedDayStr]);
 
+  const selectedDayFreeSpaces = useMemo(() => {
+    return spaces
+      .map(space => {
+        const summary = computeRoomDayFreeSlots(space.name, selectedDayStr, selectedDayReservations, spaceBlocks, { minSlotMinutes: 30 });
+        return {
+          space,
+          freeMinutes: summary.freeMinutes,
+          firstSlot: summary.slots[0] ? { startTime: summary.slots[0].startTime, endTime: summary.slots[0].endTime } : undefined,
+        };
+      })
+      .filter(item => item.freeMinutes >= 30)
+      .sort((a, b) => b.freeMinutes - a.freeMinutes);
+  }, [spaces, selectedDayStr, selectedDayReservations, spaceBlocks]);
+
   // Stable navigation callbacks
   const handlePrevMonth = useCallback(() => {
     const next = subMonths(currentDate, 1);
@@ -858,6 +938,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
               dateStr={dayData.dateStr}
               dayReservations={dayData.dayReservations}
               dayBlocks={dayData.dayBlocks}
+              totalEnabledSpaces={spaces.length}
               isSelected={dayData.isSelected}
               isCurrentMonth={dayData.isCurrentMonth}
               isDayToday={dayData.isDayToday}
@@ -877,6 +958,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
         selectedDay={selectedDay}
         selectedDayStr={selectedDayStr}
         selectedDayReservations={selectedDayReservations}
+        freeSpacesSummary={selectedDayFreeSpaces}
         holidayInfo={selectedDayHolidayInfo}
         getSpaceColor={getSpaceColor}
         onSelectReservation={onSelectReservation}

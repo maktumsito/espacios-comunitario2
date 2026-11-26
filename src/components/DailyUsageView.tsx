@@ -9,7 +9,14 @@ import { getDragTiming, getTimelineDropSlot } from '../utils/timelineDrag';
 import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } from 'react';
 import { Reservation, SpaceInfo, FilterState, SpaceBlock } from '../types';
 import { SPACES_LIST, normalizeSpaceName } from '../data/spacesData';
-import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from '../utils/spaceAvailability';
+import {
+  computeRoomDayFreeSlots,
+  filterEnabledSpaceReservations,
+  formatDurationCompact,
+  getEnabledSpaces,
+  getRoomLiveStatus,
+  hasEnabledSpace,
+} from '../utils/spaceAvailability';
 import { timeToMinutes, getConflictReservationIds, doSpacesConflict, getConstituentSpaces, normalizeSpace, isReservationActiveForAvailability, getTimeIntervalsForReservation, findMaintenanceBlockConflicts } from '../utils/conflictDetector';
 import { getChileanHolidayInfo } from '../utils/holidayUtils';
 import {
@@ -32,9 +39,13 @@ import {
   ChevronLeft,
   ChevronRight,
   User,
+  Users,
   Clock,
   Phone,
-  MapPin
+  MapPin,
+  Sparkles,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import {
   format,
@@ -281,6 +292,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
   // Vista compacta de fábrica (optimizada para máxima visibilidad horizontal y vertical)
   const [isCompact, setIsCompact] = useState(false);
+  const [showFreeGaps, setShowFreeGaps] = useState(true);
+  const [quickAvailabilityFilter, setQuickAvailabilityFilter] = useState<'all' | 'free_now' | 'gap_2h'>('all');
   const [localComparisonSpaces, setLocalComparisonSpaces] = useState<string[] | null>(null);
   const selectedComparisonSpaces = comparisonSpaces === undefined ? localComparisonSpaces : comparisonSpaces;
   const changeComparisonSpaces = (names: string[] | null) => {
@@ -477,6 +490,20 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     return list;
   }, [localSpaces, spaceCatalog, dayReservations]);
 
+  const sourceForAvailability = allReservations ?? reservations;
+  const roomAvailabilityMap = useMemo(() => {
+    const map = new Map<string, {
+      summary: ReturnType<typeof computeRoomDayFreeSlots>;
+      live: ReturnType<typeof getRoomLiveStatus>;
+    }>();
+    availableScheduleSpaces.forEach(space => {
+      const summary = computeRoomDayFreeSlots(space.name, dateStr, sourceForAvailability, spaceBlocks, { minSlotMinutes: 30 });
+      const live = getRoomLiveStatus(space.name, dateStr, currentTimeMinutes, sourceForAvailability, spaceBlocks);
+      map.set(space.id, { summary, live });
+    });
+    return map;
+  }, [availableScheduleSpaces, dateStr, sourceForAvailability, spaceBlocks, currentTimeMinutes]);
+
   const activeSpaces = useMemo(() => {
     let list = availableScheduleSpaces;
     if (globalFilters?.espacio?.trim()) {
@@ -486,8 +513,19 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     if (selectedComparisonSpaces !== null) {
       list = list.filter(space => selectedComparisonSpaces.includes(space.name));
     }
+    if (quickAvailabilityFilter === 'free_now') {
+      list = list.filter(space => {
+        const info = roomAvailabilityMap.get(space.id);
+        return isToday ? info?.live.status === 'free' : (info?.summary.slots.length ?? 0) > 0;
+      });
+    } else if (quickAvailabilityFilter === 'gap_2h') {
+      list = list.filter(space => {
+        const info = roomAvailabilityMap.get(space.id);
+        return info?.summary.slots.some(slot => slot.durationMinutes >= 120) ?? false;
+      });
+    }
     return list;
-  }, [availableScheduleSpaces, globalFilters?.espacio, selectedComparisonSpaces]);
+  }, [availableScheduleSpaces, globalFilters?.espacio, selectedComparisonSpaces, quickAvailabilityFilter, roomAvailabilityMap, isToday]);
 
 
   // Conflict IDs for the day (utilizes precomputed global Set when provided for O(1) lookups)
@@ -1124,27 +1162,96 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
         </div>
       </div>
 
-      <section aria-label="Comparar espacios" className="agenda-controls flex flex-wrap items-start gap-2 rounded-lg border border-slate-200 bg-white px-2 py-0.5">
-        <details className="min-w-0 flex-1">
-          <summary className="min-h-11 sm:min-h-8 cursor-pointer py-2 sm:py-1.5 text-xs font-semibold text-slate-700">Espacios a comparar: <span className="font-mono tabular-nums">{activeSpaces.length} de {availableScheduleSpaces.length}</span></summary>
-          <div className="mt-2 space-y-3 border-t border-slate-100 pt-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => changeComparisonSpaces(null)} className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm text-blue-700">Todos</button>
-              <button type="button" onClick={() => changeComparisonSpaces([])} className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm text-slate-600">Limpiar selección</button>
-              <label className="flex flex-wrap items-center gap-2 text-sm text-slate-600">Seleccionar grupo
-                <select aria-label="Seleccionar grupo de espacios" value="" onChange={event => { if (event.target.value) changeComparisonSpaces(availableScheduleSpaces.filter(space => space.category === event.target.value).map(space => space.name)); }} className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">Elegir categoría</option>{[...new Set(availableScheduleSpaces.map(space => space.category))].map(category => <option key={category} value={category}>{category}</option>)}</select>
-              </label>
+      <section aria-label="Comparar espacios" className="agenda-controls flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            aria-pressed={showFreeGaps}
+            onClick={() => setShowFreeGaps(value => !value)}
+            className={`inline-flex min-h-9 sm:min-h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition ${
+              showFreeGaps
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+            title="Resaltar bloques libres exactos entre actividades para reservar con 1 clic"
+          >
+            {showFreeGaps ? <Eye className="h-3.5 w-3.5 text-emerald-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
+            <span>Huecos libres</span>
+          </button>
+
+          <div className="h-4 w-px bg-slate-200 hidden sm:block" aria-hidden="true" />
+
+          <button
+            type="button"
+            aria-pressed={quickAvailabilityFilter === 'all' && selectedComparisonSpaces === null}
+            onClick={() => {
+              setQuickAvailabilityFilter('all');
+              changeComparisonSpaces(null);
+            }}
+            className={`min-h-9 sm:min-h-7 rounded-lg border px-2.5 text-xs font-semibold transition ${
+              quickAvailabilityFilter === 'all' && selectedComparisonSpaces === null
+                ? 'border-slate-800 bg-slate-800 text-white'
+                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            Todas ({availableScheduleSpaces.length})
+          </button>
+
+          <button
+            type="button"
+            aria-pressed={quickAvailabilityFilter === 'free_now'}
+            onClick={() => setQuickAvailabilityFilter(prev => prev === 'free_now' ? 'all' : 'free_now')}
+            className={`inline-flex min-h-9 sm:min-h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${
+              quickAvailabilityFilter === 'free_now'
+                ? 'border-emerald-500 bg-emerald-600 text-white'
+                : 'border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100'
+            }`}
+          >
+            <span className={`h-2 w-2 rounded-full ${quickAvailabilityFilter === 'free_now' ? 'bg-white' : 'bg-emerald-500'}`} />
+            <span>{isToday ? 'Libres ahora' : 'Con espacio libre'}</span>
+          </button>
+
+          <button
+            type="button"
+            aria-pressed={quickAvailabilityFilter === 'gap_2h'}
+            onClick={() => setQuickAvailabilityFilter(prev => prev === 'gap_2h' ? 'all' : 'gap_2h')}
+            className={`inline-flex min-h-9 sm:min-h-7 items-center gap-1 rounded-lg border px-2.5 text-xs font-semibold transition ${
+              quickAvailabilityFilter === 'gap_2h'
+                ? 'border-blue-600 bg-blue-600 text-white'
+                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <Sparkles className="h-3 w-3" />
+            <span>Hueco ≥ 2h</span>
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 ml-auto">
+          <details className="min-w-0 relative">
+            <summary className="min-h-9 sm:min-h-7 cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 list-none">
+              Espacios a comparar: <span className="font-mono tabular-nums font-bold">{activeSpaces.length} de {availableScheduleSpaces.length}</span>
+            </summary>
+            <div className="mt-2 space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-lg sm:absolute sm:right-0 sm:z-40 sm:w-[460px]">
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => { setQuickAvailabilityFilter('all'); changeComparisonSpaces(null); }} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50">Todos</button>
+                <button type="button" onClick={() => changeComparisonSpaces([])} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50">Limpiar selección</button>
+                <label className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">Grupo
+                  <select aria-label="Seleccionar grupo de espacios" value="" onChange={event => { if (event.target.value) changeComparisonSpaces(availableScheduleSpaces.filter(space => space.category === event.target.value).map(space => space.name)); }} className="min-h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs"><option value="">Elegir categoría</option>{[...new Set(availableScheduleSpaces.map(space => space.category))].map(category => <option key={category} value={category}>{category}</option>)}</select>
+                </label>
+              </div>
+              <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 max-h-60 overflow-y-auto">{availableScheduleSpaces.map(space => <label key={space.id} className="flex min-h-9 items-center gap-2 rounded-lg px-2 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer">
+                <input type="checkbox" checked={selectedComparisonSpaces === null || selectedComparisonSpaces.includes(space.name)} onChange={event => {
+                  const selected = selectedComparisonSpaces ?? availableScheduleSpaces.map(item => item.name);
+                  changeComparisonSpaces(event.target.checked ? [...selected, space.name] : selected.filter(name => name !== space.name));
+                }} className="h-4 w-4" />
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: space.color }} />
+                <span className="truncate">{formatDisplayTitle(space.name)}</span>
+              </label>)}</div>
+              <p className="text-xs text-slate-500">La selección cambia las columnas visibles. Se siguen aplicando los filtros de la agenda.</p>
             </div>
-            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-4">{availableScheduleSpaces.map(space => <label key={space.id} className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-slate-700 hover:bg-slate-50">
-              <input type="checkbox" checked={selectedComparisonSpaces === null || selectedComparisonSpaces.includes(space.name)} onChange={event => {
-                const selected = selectedComparisonSpaces ?? availableScheduleSpaces.map(item => item.name);
-                changeComparisonSpaces(event.target.checked ? [...selected, space.name] : selected.filter(name => name !== space.name));
-              }} className="h-4 w-4" />{formatDisplayTitle(space.name)}
-            </label>)}</div>
-            <p className="text-sm text-slate-500">La selección cambia las columnas visibles. Se siguen aplicando los filtros de la agenda.</p>
-          </div>
-        </details>
-        <button type="button" aria-pressed={isCompact} onClick={() => setIsCompact(value => !value)} className="min-h-11 sm:min-h-8 rounded-md border border-slate-200 px-2 text-xs text-slate-700">{isCompact ? 'Ampliar columnas' : 'Compactar columnas'}</button>
+          </details>
+          <button type="button" aria-pressed={isCompact} onClick={() => setIsCompact(value => !value)} className="min-h-9 sm:min-h-7 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">{isCompact ? 'Ampliar columnas' : 'Compactar columnas'}</button>
+        </div>
       </section>
       {activeSpaces.length === 0 && <p role="status" className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">No hay espacios visibles. Selecciona al menos uno o revisa el filtro de espacio de la agenda.</p>}
 
@@ -1373,14 +1480,62 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                         allowSpaceReorder && <span className="w-4 shrink-0" />
                       )}
 
-                      {/* Título de espacio completo - Adaptado con salto de línea natural y sin truncar */}
-                      <div className="flex items-center justify-center space-x-1 min-w-0 flex-1 px-1">
-                        {allowSpaceReorder && (
-                          <GripVertical className="w-3.5 h-3.5 text-slate-400 group-hover/header:text-blue-600 transition shrink-0 cursor-grab active:cursor-grabbing" />
-                        )}
-                        <span className="font-extrabold text-[10.5px] sm:text-[11px] uppercase tracking-tight text-slate-800 leading-tight text-center break-words select-none hyphens-auto">
-                          {space.name}
-                        </span>
+                      {/* Título de espacio completo - Con color, aforo y estado de disponibilidad */}
+                      <div className="flex flex-col items-center justify-center min-w-0 flex-1 px-1 gap-0.5">
+                        <div className="flex items-center justify-center gap-1 min-w-0 max-w-full">
+                          {allowSpaceReorder && (
+                            <GripVertical className="w-3.5 h-3.5 text-slate-400 group-hover/header:text-blue-600 transition shrink-0 cursor-grab active:cursor-grabbing" />
+                          )}
+                          <span
+                            className="h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: space.color || '#64748b' }}
+                            aria-hidden="true"
+                          />
+                          <span className="font-extrabold text-[10.5px] sm:text-[11px] uppercase tracking-tight text-slate-800 leading-tight text-center break-words select-none hyphens-auto">
+                            {space.name}
+                          </span>
+                        </div>
+                        {(() => {
+                          const avail = roomAvailabilityMap.get(space.id);
+                          const freeMin = avail?.summary.freeMinutes ?? 0;
+                          const freePct = avail ? Math.max(0, 100 - avail.summary.occupancyPct) : 100;
+                          const liveStatus = avail?.live.status;
+                          return (
+                            <div className="flex flex-col items-center w-full gap-0.5 mt-0.5">
+                              <div className="flex items-center justify-center gap-1 flex-wrap text-[10px] leading-none">
+                                {space.capacity && (
+                                  <span className="inline-flex items-center gap-0.5 text-slate-500 font-medium" title={`Capacidad: ${space.capacity} personas`}>
+                                    <Users className="h-2.5 w-2.5" aria-hidden="true" />
+                                    <span className="tabular-nums">{space.capacity}</span>
+                                  </span>
+                                )}
+                                {isToday && liveStatus === 'free' ? (
+                                  <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 font-bold text-emerald-800" title={avail?.live.label}>
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                                    <span>Libre</span>
+                                  </span>
+                                ) : isToday && liveStatus === 'maintenance' ? (
+                                  <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 font-bold text-amber-800" title={avail?.live.label}>
+                                    Mant.
+                                  </span>
+                                ) : (
+                                  <span
+                                    className={`font-semibold tabular-nums ${freeMin > 0 ? 'text-emerald-700' : 'text-rose-600'}`}
+                                    title={freeMin > 0 ? `${formatDurationCompact(freeMin)} disponibles en horario regular` : 'Sin tramos libres hoy'}
+                                  >
+                                    {freeMin > 0 ? `${formatDurationCompact(freeMin)} libre` : 'Lleno'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="h-1 w-full max-w-[84px] rounded-full bg-slate-200 overflow-hidden" aria-hidden="true">
+                                <div
+                                  className={`h-full rounded-full transition-all ${freePct >= 50 ? 'bg-emerald-500' : freePct > 15 ? 'bg-amber-400' : 'bg-rose-400'}`}
+                                  style={{ width: `${freePct}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Botón mover a la derecha */}
@@ -1542,6 +1697,42 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                         );
                       })}
 
+
+                      {/* INTERACTIVE FREE-SPACE GAPS OVERLAY (Exact free intervals >= 30m) */}
+                      {showFreeGaps && !hasActiveGlobalFilters && (roomAvailabilityMap.get(space.id)?.summary.slots || []).map((gap) => {
+                        const clampStart = Math.max(gap.startMin, START_MINUTES);
+                        const clampEnd = Math.min(gap.endMin, START_MINUTES + TOTAL_MINUTES);
+                        if (clampEnd - clampStart < 30) return null;
+                        const topPx = ((clampStart - START_MINUTES) / 60) * HOUR_HEIGHT + 2;
+                        const heightPx = Math.max(24, ((clampEnd - clampStart) / 60) * HOUR_HEIGHT - 4);
+                        const isTallGap = heightPx >= 52;
+                        return (
+                          <button
+                            key={`free-${space.id}-${gap.startMin}`}
+                            type="button"
+                            data-calendar-date={dateStr}
+                            data-calendar-space={space.name}
+                            data-calendar-start={gap.startTime}
+                            data-calendar-end={gap.endTime}
+                            onClick={() => onNewReservationWithSlot(space.name, dateStr, gap.startTime, gap.endTime)}
+                            style={{ top: `${topPx}px`, height: `${heightPx}px` }}
+                            aria-label={`Tramo libre en ${space.name} de ${gap.startTime} a ${gap.endTime} (${formatDurationCompact(gap.durationMinutes)})`}
+                            title={`Espacio libre: ${gap.startTime} – ${gap.endTime} (${formatDurationCompact(gap.durationMinutes)})\nClic para reservar este tramo en ${space.name}`}
+                            className={`free-slot-block absolute left-[3px] right-[3px] rounded-md px-1.5 py-1 flex flex-col items-center justify-center text-center overflow-hidden z-[6] cursor-pointer group/gap ${
+                              draggedReservation ? 'pointer-events-none opacity-40' : ''
+                            }`}
+                          >
+                            <span className="text-[10px] font-bold font-mono tabular-nums leading-tight truncate max-w-full">
+                              {gap.startTime}–{gap.endTime}
+                            </span>
+                            {isTallGap && (
+                              <span className="text-[10px] font-semibold text-emerald-700/90 leading-tight truncate max-w-full mt-0.5">
+                                Libre · {formatDurationCompact(gap.durationMinutes)}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
 
                       {/* ACTIVE MAINTENANCE / SPACE BLOCKS OVERLAY */}
                       {spaceBlocks

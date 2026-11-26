@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from './common/PaginationControls';
 import { Reservation, SpaceBlock } from '../types';
-import { detectAllConflicts, detectReservationsBlockedByMaintenance } from '../utils/conflictDetector';
+import { detectAllConflicts, detectReservationsBlockedByMaintenance, timeToMinutes } from '../utils/conflictDetector';
 import { getSpaceColor } from '../data/spacesData';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { DuplicateReview } from './maintenance/DuplicateReview';
@@ -198,6 +198,33 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                     <span>Solapamiento: {conflict.solapamiento}</span>
                   </div>
                 </div>
+
+                {/* Mini visual overlap timeline (08:00 - 22:00) */}
+                {(() => {
+                  const DAY_S = 8 * 60;
+                  const DAY_E = 22 * 60;
+                  const SPAN = DAY_E - DAY_S;
+                  const bar = (start: string, end: string) => {
+                    const s = Math.max(DAY_S, Math.min(DAY_E, timeToMinutes(start)));
+                    const e = Math.max(s + 15, Math.min(DAY_E, timeToMinutes(end)));
+                    return { left: `${((s - DAY_S) / SPAN) * 100}%`, width: `${((e - s) / SPAN) * 100}%` };
+                  };
+                  return (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+                        <span>08:00</span>
+                        <span className="font-sans font-semibold text-slate-600">Cruce horario en {formatDisplayTitle(conflict.espacio)}</span>
+                        <span>22:00</span>
+                      </div>
+                      <div className="relative h-2 rounded-full bg-emerald-100 overflow-hidden">
+                        <div style={bar(conflict.reservaA.horaInicio, conflict.reservaA.horaFin)} className="absolute inset-y-0 rounded-full bg-blue-500/85" />
+                      </div>
+                      <div className="relative h-2 rounded-full bg-emerald-100 overflow-hidden">
+                        <div style={bar(conflict.reservaB.horaInicio, conflict.reservaB.horaFin)} className="absolute inset-y-0 rounded-full bg-rose-500/85" />
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* The 2 Conflicting Reservations side-by-side */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -369,8 +369,8 @@ const NavbarComponent: React.FC<NavbarProps> = ({
         </div>
       </aside>
 
-      <header className="no-print sticky top-0 z-40 border-b border-slate-200 bg-white text-slate-900">
-        <div className="mx-auto flex h-16 w-full max-w-[1680px] items-center justify-between gap-2 px-3 sm:px-6">
+      <header className="no-print sticky top-0 z-40 border-b border-slate-200/90 bg-white/95 backdrop-blur-md text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="mx-auto flex h-15 w-full max-w-[1680px] items-center justify-between gap-2 px-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-2">
             {onToggleSidebar && (
               <button
@@ -618,23 +618,33 @@ const NavbarComponent: React.FC<NavbarProps> = ({
 
       <nav
         aria-label="Navegación móvil"
-        className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-slate-200 bg-white px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden"
+        className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 gap-1 border-t border-slate-200 bg-white/95 backdrop-blur-md px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(15,23,42,0.06)] lg:hidden"
       >
         <button
           id="nav-mobile-tab-mobile"
           type="button"
           onClick={() => onViewChange(lastAgenda.current)}
           aria-current={isAgenda ? "page" : undefined}
-          className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-xs font-semibold ${isAgenda ? "bg-blue-50 text-blue-800" : "text-slate-600"}`}
+          className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold transition-colors ${isAgenda ? "bg-blue-50 text-blue-800" : "text-slate-600"}`}
         >
           <Calendar className="h-5 w-5" />
           Agenda
         </button>
         <button
+          id="nav-mobile-bottom-spaces"
+          type="button"
+          onClick={() => onViewChange("spaces")}
+          aria-current={currentView === "spaces" ? "page" : undefined}
+          className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold transition-colors ${currentView === "spaces" ? "bg-emerald-50 text-emerald-800" : "text-slate-600"}`}
+        >
+          <Building2 className="h-5 w-5" />
+          Espacios
+        </button>
+        <button
           id="btn-mobile-new-reservation"
           type="button"
           onClick={onNewReservation}
-          className="mx-2 flex min-h-12 items-center justify-center gap-1.5 rounded-xl bg-blue-700 text-sm font-semibold text-white"
+          className="flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-blue-700 text-[11px] font-bold text-white shadow-xs active:scale-[0.98] transition"
         >
           <Plus className="h-5 w-5" />
           Reservar
@@ -644,7 +654,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
           type="button"
           onClick={() => setIsMobileDrawerOpen(true)}
           aria-haspopup="dialog"
-          className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-xs font-semibold text-slate-600"
+          className="flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold text-slate-600"
         >
           <MoreHorizontal className="h-5 w-5" />
           Más

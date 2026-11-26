@@ -1,6 +1,15 @@
 import { expect, it } from 'vitest';
 import type { Reservation, SpaceBlock, SpaceInfo } from '../../types';
-import { filterEnabledSpaceReservations, getDailySpaceAvailability, getEnabledSpaces, hasEnabledSpace, mergeSpaceOrder } from '../spaceAvailability';
+import {
+  computeRoomDayFreeSlots,
+  filterEnabledSpaceReservations,
+  formatDurationCompact,
+  getDailySpaceAvailability,
+  getEnabledSpaces,
+  getRoomLiveStatus,
+  hasEnabledSpace,
+  mergeSpaceOrder,
+} from '../spaceAvailability';
 const room = (name: string, activo?: boolean): SpaceInfo => ({ id: name, name, activo, description: '', category: 'General', iconName: 'Layers', color: '#0284c7' });
 it('treats legacy spaces as active and keeps explicit inactive entries out of choices', () => {
   const catalog = [room('SALA 2'), room('SALA 3', false), room('SALA 4', true)];
@@ -58,4 +67,45 @@ it('does not offer regular booking slots on a holiday', () => {
   const space = room('SALA 2');
   expect(getDailySpaceAvailability({ fecha: '2026-12-25', spaces: [space], reservations: [], blocks: [] }))
     .toEqual([{ space, slots: [] }]);
+});
+
+it('computes detailed room free gaps, occupancy percentage, and live status', () => {
+  const fecha = '2026-11-10';
+  const reservations: Reservation[] = [
+    {
+      id: 'r1', fecha, espacio: 'SALA 2', horaInicio: '10:00', horaFin: '12:00',
+      responsable: 'Ana', tipoActividad: 'TALLER CCD', descripcion: 'Yoga', actividadRecurrente: 'No',
+    },
+  ];
+  const blocks: SpaceBlock[] = [
+    {
+      id: 'b1', espacio: 'SALA 2', fechaInicio: fecha, fechaFin: fecha,
+      horaInicio: '15:00', horaFin: '16:30', activo: true, todoElDia: false,
+      motivo: 'Mantención', descripcion: 'Revisión', createdAt: '',
+    },
+  ];
+
+  const summary = computeRoomDayFreeSlots('SALA 2', fecha, reservations, blocks);
+  expect(summary.slots.map(s => `${s.startTime}-${s.endTime}`)).toEqual([
+    '08:30-10:00',
+    '12:00-15:00',
+    '16:30-22:00',
+  ]);
+  expect(summary.occupiedMinutes).toBe(210);
+  expect(summary.freeMinutes).toBe(600);
+  expect(formatDurationCompact(90)).toBe('1h 30m');
+  expect(formatDurationCompact(45)).toBe('45m');
+
+  expect(getRoomLiveStatus('SALA 2', fecha, 9 * 60, reservations, blocks)).toMatchObject({
+    status: 'free',
+    untilTime: '10:00',
+  });
+  expect(getRoomLiveStatus('SALA 2', fecha, 10 * 60 + 30, reservations, blocks)).toMatchObject({
+    status: 'occupied',
+    untilTime: '12:00',
+  });
+  expect(getRoomLiveStatus('SALA 2', fecha, 15 * 60 + 15, reservations, blocks)).toMatchObject({
+    status: 'maintenance',
+    untilTime: '16:30',
+  });
 });

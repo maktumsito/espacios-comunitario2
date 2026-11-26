@@ -13,7 +13,7 @@ import {
 import { fetchReservationById } from './services/reservationService';
 import { queryReservationsBySeries } from './services/reservationService';
 import { getChileLocalDateString, parseDateToNoon } from './utils/dateUtils';
-import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from './utils/spaceAvailability';
+import { computeRoomDayFreeSlots, filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from './utils/spaceAvailability';
 import { checkSingleConflict } from './utils/conflictDetector';
 import { canReplaceOccurrence, setReplacementActive } from './utils/reservationReplacement';
 import { useReplacementReminders } from './hooks/useReplacementReminders';
@@ -422,6 +422,30 @@ export default function App() {
     all: getAgendaPeriodCount(isAgendaView(currentView) ? allAgendaReservations : reservations, currentView, selectedDailyDate),
   }), [filteredReservations, reservations, agendaReservations, allAgendaReservations, currentView, selectedDailyDate]);
   const visiblePeriodLabel = getAgendaPeriodLabel(currentView, selectedDailyDate);
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (filters.search?.trim()) count++;
+    if (filters.espacio) count++;
+    if (filters.tipoActividad) count++;
+    if (filters.fechaDesde) count++;
+    if (filters.fechaHasta) count++;
+    if (filters.soloRecurrentes) count++;
+    if (filters.soloImportantes) count++;
+    if (filters.soloConTopamiento) count++;
+    return count;
+  }, [filters]);
+
+  const dailyAvailabilityHint = useMemo(() => {
+    if (!isAgendaView(currentView) || enabledSpaces.length === 0) return undefined;
+    const dateStr = format(selectedDailyDate || new Date(), 'yyyy-MM-dd');
+    let roomsWithFreeSlots = 0;
+    for (const sp of enabledSpaces) {
+      const summary = computeRoomDayFreeSlots(sp.name, dateStr, reservations, spaceBlocks, { minSlotMinutes: 30 });
+      if (summary.slots.length > 0) roomsWithFreeSlots++;
+    }
+    return `${roomsWithFreeSlots}/${enabledSpaces.length} salas con tramos libres`;
+  }, [currentView, enabledSpaces, selectedDailyDate, reservations, spaceBlocks]);
 
   useKeyboardShortcuts({
     enabled: Boolean(currentUser),
@@ -957,7 +981,7 @@ export default function App() {
   };
   useEffect(()=>{if(!isReservationModalOpen)editorLoadRequest.current++;},[isReservationModalOpen]);
 
-  const handleCalendarNewReservationForDate = useCallback((dateStr: string) => {
+  const handleCalendarNewReservationForDate = useCallback((dateStr: string, spaceName?: string, startTime?: string, endTime?: string) => {
     requireAuth(() => {
       if (!userCanCreateReservations(currentUser)) {
         triggerSyncToast('Permiso denegado: No tienes autorización para registrar nuevas reservas (gestión controlada por Cristian Shute).', 'error');
@@ -966,9 +990,13 @@ export default function App() {
       setEditingReservation(null);
       setIsDuplicating(false);
       setPrefillDate(dateStr);
-      setPrefillSpace(enabledSpaces.some(space => space.name === filters.espacio) ? filters.espacio : enabledSpaces[0]?.name || '');
-      setPrefillStartTime('08:30');
-      setPrefillEndTime('09:30');
+      setPrefillSpace(
+        spaceName && enabledSpaces.some(space => space.name === spaceName)
+          ? spaceName
+          : (enabledSpaces.some(space => space.name === filters.espacio) ? filters.espacio : enabledSpaces[0]?.name || '')
+      );
+      setPrefillStartTime(startTime || '08:30');
+      setPrefillEndTime(endTime || '09:30');
       setIsReservationModalOpen(true);
     }, 'crear una reserva en esta fecha');
   }, [filters.espacio, enabledSpaces, currentUser]);
@@ -1145,7 +1173,9 @@ export default function App() {
           view={currentView}
           onViewChange={view => { persistViewPreference(view); setCurrentView(view); }}
           summary={`${visiblePeriodCounts.filtered} ${visiblePeriodCounts.filtered === 1 ? 'reserva' : 'reservas'} en ${visiblePeriodLabel}`}
+          availabilityHint={dailyAvailabilityHint}
           filtersOpen={isFilterBarOpen} hasActiveFilters={hasActiveFilters}
+          activeFiltersCount={activeFiltersCount}
           onToggleFilters={() => setIsFilterBarOpen(open => !open)}
           onOpenAvailability={() => setIsSpaceAvailabilityOpen(true)}
           onPrevPeriod={() => setSelectedDailyDate(d => currentView === 'calendar' ? subMonths(d, 1) : subDays(d, 1))}
@@ -1517,7 +1547,7 @@ export default function App() {
               onRequestDelete={(r) => {
                 requireAuth(() => handleRequestDelete(r), 'eliminar esta reserva');
               }}
-              onNewReservationForDate={(dateStr, space) => {
+              onNewReservationForDate={(dateStr, space, startTime, endTime) => {
                 requireAuth(() => {
                   if (!userCanCreateReservations(currentUser)) {
                     triggerSyncToast('Permiso denegado: No tienes autorización para registrar nuevas reservas (gestión controlada por Cristian Shute).', 'error');
@@ -1527,8 +1557,8 @@ export default function App() {
                   setIsDuplicating(false);
                   if (space) setPrefillSpace(space);
                   setPrefillDate(dateStr);
-                  setPrefillStartTime('08:30');
-                  setPrefillEndTime('09:30');
+                  setPrefillStartTime(startTime || '08:30');
+                  setPrefillEndTime(endTime || '09:30');
                   setIsReservationModalOpen(true);
                 }, 'crear una reserva en esta fecha');
               }}
@@ -1570,6 +1600,7 @@ export default function App() {
               }}
               reservations={reservations}
               spaces={spaces}
+              spaceBlocks={spaceBlocks}
               onSelectSpace={(spaceName) => {
                 setFilters({ ...filters, espacio: spaceName });
                 if (isMobileDevice()) {
@@ -1578,7 +1609,7 @@ export default function App() {
                   setCurrentView('daily');
                 }
               }}
-              onNewReservationForSpace={(spaceName) => {
+              onNewReservationForSpace={(spaceName, dateStr, startTime, endTime) => {
                 requireAuth(() => {
                   if (!userCanCreateReservations(currentUser)) {
                     triggerSyncToast('Permiso denegado: No tienes autorización para registrar nuevas reservas (gestión controlada por Cristian Shute).', 'error');
@@ -1587,9 +1618,9 @@ export default function App() {
                   setEditingReservation(null);
                   setIsDuplicating(false);
                   setPrefillSpace(spaceName);
-                  setPrefillDate(format(new Date(), 'yyyy-MM-dd'));
-                  setPrefillStartTime('10:00');
-                  setPrefillEndTime('11:00');
+                  setPrefillDate(dateStr || format(new Date(), 'yyyy-MM-dd'));
+                  setPrefillStartTime(startTime || '10:00');
+                  setPrefillEndTime(endTime || '11:00');
                   setIsReservationModalOpen(true);
                 }, 'crear una reserva en este espacio');
               }}
@@ -2253,6 +2284,7 @@ export default function App() {
             }}
             onNavigateToView={(view) => setCurrentView(view)}
             onNewReservation={() => openCreateModal({ date: format(selectedDailyDate || new Date(), 'yyyy-MM-dd') })}
+            onOpenAvailability={() => setIsSpaceAvailabilityOpen(true)}
             onOpenPrintModal={() => setIsGlobalPrintModalOpen(true)}
             onOpenGmailDispatch={() => openGmailDispatchModal()}
             onOpenAuditLog={() => {

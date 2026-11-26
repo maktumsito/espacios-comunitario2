@@ -42,6 +42,18 @@
   --color-accent-emerald: #059669;
   --color-accent-rose: #DC2626;
 
+  /* Free-Space & Occupancy Semantic Tokens */
+  --avail-free-bg: #ECFDF5;
+  --avail-free-bg-hover: #D1FAE5;
+  --avail-free-border: #6EE7B7;
+  --avail-free-text: #065F46;
+  --avail-busy-bg: #FFF1F2;
+  --avail-busy-border: #FECDD3;
+  --avail-busy-text: #9F1239;
+  --avail-maint-bg: #FFFBEB;
+  --avail-maint-border: #FDE68A;
+  --avail-maint-text: #92400E;
+
   --shadow-soft-card: 0 4px 14px 0 rgba(20, 30, 50, 0.04), 0 1px 3px 0 rgba(20, 30, 50, 0.02);
   --shadow-soft-elevated: 0 8px 28px -4px rgba(49, 92, 184, 0.08), 0 2px 8px -2px rgba(20, 30, 50, 0.03);
   --shadow-soft-hover: 0 10px 25px -3px rgba(49, 92, 184, 0.12), 0 4px 10px -2px rgba(20, 30, 50, 0.04);
@@ -272,6 +284,45 @@ button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visib
   .timeline-booking .text-sm { font-size: 12px; line-height: 14px; }
 }
 .timeline-booking[data-short="true"] { padding: 2px 4px; }
+
+/* Free-space slot visual affordance in daily timetable */
+.free-slot-block {
+  background-color: rgba(236, 253, 245, 0.62);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(16, 185, 129, 0.04),
+    rgba(16, 185, 129, 0.04) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  border: 1px dashed rgba(16, 185, 129, 0.45);
+  color: var(--avail-free-text);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.free-slot-block:hover,
+.free-slot-block:focus-visible {
+  background-color: rgba(209, 250, 229, 0.92);
+  border-color: #059669;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.14);
+}
+
+/* Segmented control pill container */
+.segmented-pill {
+  background-color: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  border-radius: 0.75rem;
+  padding: 0.25rem;
+}
+
+/* Scrollbar hiding utility for horizontal filter strips */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 @media (pointer: coarse) {
   .agenda-controls :is(button, input:not([type="checkbox"]), select, summary) { min-height: 44px; }
 }
