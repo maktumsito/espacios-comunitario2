@@ -31,6 +31,7 @@ import {
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Reservation, SpaceInfo, ActivityTypeItem } from '../types';
+import { getEnabledSpaces } from '../utils/spaceAvailability';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { detectBatchConflicts } from '../utils/conflictDetector';
 import { usePagination } from '../hooks/usePagination';
@@ -408,8 +409,14 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
   const [modifySuccess, setModifySuccess] = useState<string | null>(null);
 
   // Modal / Form: Nueva Actividad Recurrente
+  const enabledSpaces = useMemo(() => getEnabledSpaces(spaces), [spaces]);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
-  const [newEspacio, setNewEspacio] = useState(spaces[0]?.name || 'GIMNASIO');
+  const [newEspacio, setNewEspacio] = useState(() => enabledSpaces[0]?.name || spaces[0]?.name || 'GIMNASIO');
+  useEffect(() => {
+    if (enabledSpaces.length > 0 && !enabledSpaces.some((s) => s.name === newEspacio)) {
+      setNewEspacio(enabledSpaces[0].name);
+    }
+  }, [enabledSpaces, newEspacio]);
   const [newTipoActividad, setNewTipoActividad] = useState(activityTypes[0]?.name || 'TALLER CCD');
   const [newResponsable, setNewResponsable] = useState('');
   const [newTelefono, setNewTelefono] = useState('');
@@ -820,7 +827,7 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
               <option value="ALL">Todos los espacios</option>
               {spaces.map((s) => (
                 <option key={s.id} value={s.name}>
-                  {s.name}
+                  {s.name}{s.activo === false ? ' (Inactivo)' : ''}
                 </option>
               ))}
             </select>
@@ -1119,7 +1126,7 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
                     onChange={(e) => setNewEspacio(e.target.value)}
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
-                    {spaces.map((s) => (
+                    {enabledSpaces.map((s) => (
                       <option key={s.id} value={s.name}>
                         {s.name}
                       </option>

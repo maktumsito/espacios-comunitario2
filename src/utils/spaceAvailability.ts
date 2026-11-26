@@ -6,7 +6,15 @@ import { isChileanHoliday } from './holidayUtils';
 
 /** Old catalog entries remain active until explicitly disabled. */
 export const getEnabledSpaces = (spaces: readonly SpaceInfo[]): SpaceInfo[] => spaces.filter(space => space.activo !== false);
-export const getDisabledSpaceNames = (spaces: readonly SpaceInfo[]): Set<string> => new Set(spaces.filter(space => space.activo === false).map(space => normalizeSpace(space.name)));
+export const getDisabledSpaceNames = (spaces: readonly SpaceInfo[]): Set<string> => {
+  const enabled = new Set(getEnabledSpaces(spaces).map(space => normalizeSpace(space.name)));
+  return new Set(
+    spaces
+      .filter(space => space.activo === false)
+      .map(space => normalizeSpace(space.name))
+      .filter(name => !enabled.has(name))
+  );
+};
 
 export interface FreeSpaceSlot {
   startTime: string;

@@ -16,6 +16,11 @@ it('treats legacy spaces as active and keeps explicit inactive entries out of ch
   expect(getEnabledSpaces(catalog).map(s => s.name)).toEqual(['SALA 2', 'SALA 4']);
   expect(hasEnabledSpace('sala3', catalog)).toBe(false);
 });
+it('keeps an active space enabled even if an inactive alias normalizes to the same name', () => {
+  const catalog = [room('PATIO EXTERIOR', true), room('EXTERIOR', false)];
+  expect(hasEnabledSpace('PATIO EXTERIOR', catalog)).toBe(true);
+  expect(filterEnabledSpaceReservations([{ espacio: 'PATIO EXTERIOR', id: 'keep' }], catalog).map(r => r.id)).toEqual(['keep']);
+});
 it('hides inactive-only bookings while preserving shared bookings and their original data', () => {
   const catalog = [room('SALA 2', false), room('SALA 3')];
   const rows = [{ espacio: 'sala2', id: 'hidden' }, { espacio: 'SALA 2 / SALA 3', id: 'shared' }, { espacio: 'SALA ANTIGUA', id: 'legacy' }];

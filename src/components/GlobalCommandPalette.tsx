@@ -28,6 +28,7 @@ import { es } from 'date-fns/locale';
 import { fuzzySearchReservations, fuzzySearchItems } from '../utils/fuzzySearch';
 import { ConfirmationModal } from './common/ConfirmationModal';
 import { isTopmostDialog } from '../utils/dialogKeyboard';
+import { getEnabledSpaces } from '../utils/spaceAvailability';
 
 interface PaletteCommandItem {
   id: string;
@@ -440,11 +441,12 @@ export const GlobalCommandPalette: React.FC<GlobalCommandPaletteProps> = ({
       }));
     }
 
-    // 4. SPACES SEARCH (up to 4 matches, typo-tolerant)
+    // 4. SPACES SEARCH (up to 4 matches, typo-tolerant; active spaces only)
+    const enabledSpacesList = getEnabledSpaces(spaces);
     const matchedSpaces: PaletteCommandItem[] = (
       normQ
-        ? fuzzySearchItems(spaces as SpaceInfo[], query, ['name', 'description'], 0.45).slice(0, 4)
-        : (spaces as SpaceInfo[]).slice(0, 5)
+        ? fuzzySearchItems(enabledSpacesList, query, ['name', 'description'], 0.45).slice(0, 4)
+        : enabledSpacesList.slice(0, 5)
     ).map((s) => ({
       id: `space-${s.id}`,
       type: 'space',

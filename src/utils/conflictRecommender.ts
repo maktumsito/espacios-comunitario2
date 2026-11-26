@@ -1,5 +1,6 @@
 import { Reservation, SpaceInfo } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
+import { getEnabledSpaces } from './spaceAvailability';
 import {
   timeToMinutes,
   formatMinutesToTime,
@@ -175,7 +176,7 @@ export function findAlternativeFreeSpaces(
   options?: RecommendationOptions,
   excludeSeriesId?: string
 ): ConflictRecommendation[] {
-  const spacesList = options?.customSpacesList || SPACES_LIST;
+  const spacesList = getEnabledSpaces(options?.customSpacesList || SPACES_LIST);
   const normalizedCurrent = normalizeSpace(currentSpace);
   const durationMinutes = endMinutes - startMinutes;
   const formattedStart = formatMinutesToTime(startMinutes);

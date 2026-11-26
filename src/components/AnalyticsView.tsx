@@ -119,6 +119,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           percentage: totalCount > 0 ? ((count / totalCount) * 100).toFixed(1) : '0'
         };
       })
+      .filter(space => space.activo !== false || space.count > 0)
       .sort((a, b) => b.count - a.count);
 
     const activityNames = activityTypes && activityTypes.length > 0
@@ -286,6 +287,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                     <div className="flex items-center space-x-2 font-semibold text-slate-800">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
                       <span>{s.name}</span>
+                      {s.activo === false && (
+                        <span className="rounded-full border border-slate-200 bg-slate-100 px-1.5 py-0.2 text-[10px] font-semibold text-slate-500">
+                          Inactivo
+                        </span>
+                      )}
                     </div>
                     <span className="font-mono text-slate-500">
                       {s.count} reservas ({s.percentage}%) · {s.participants} personas

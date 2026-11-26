@@ -173,7 +173,7 @@ export const MaintenanceDashboardView: React.FC<MaintenanceDashboardViewProps> =
               <option value="all">Todos los espacios</option>
               {spacesList.map((sp) => (
                 <option key={sp.id} value={sp.name}>
-                  {sp.name}
+                  {sp.name}{sp.activo === false ? ' (Inactivo)' : ''}
                 </option>
               ))}
             </select>

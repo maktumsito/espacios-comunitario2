@@ -2,9 +2,10 @@ import { formatDisplayTitle } from '../utils/reservationVisuals';
 import React, { useState, useMemo } from 'react';
 import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from './common/PaginationControls';
-import { Reservation, SpaceBlock } from '../types';
+import { Reservation, SpaceBlock, SpaceInfo } from '../types';
 import { detectAllConflicts, detectReservationsBlockedByMaintenance, timeToMinutes } from '../utils/conflictDetector';
 import { getSpaceColor } from '../data/spacesData';
+import { getEnabledSpaces } from '../utils/spaceAvailability';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { DuplicateReview } from './maintenance/DuplicateReview';
 import {
@@ -24,6 +25,7 @@ import { ConflictRecommendationPanel } from './ConflictRecommendationPanel';
 
 interface ConflictsViewProps {
   reservations: Reservation[];
+  spaces?: SpaceInfo[];
   spaceBlocks?: SpaceBlock[];
   onSelectReservation: (reserva: Reservation) => void;
   onEditReservation: (reserva: Reservation) => void;
@@ -31,11 +33,17 @@ interface ConflictsViewProps {
 
 export const ConflictsView: React.FC<ConflictsViewProps> = ({
   reservations,
+  spaces,
   spaceBlocks,
   onSelectReservation,
   onEditReservation
 }) => {
   const [expandedSuggestions, setExpandedSuggestions] = useState<Record<string, boolean>>({});
+  const enabledSpaces = useMemo(() => (spaces ? getEnabledSpaces(spaces) : undefined), [spaces]);
+  const resolveSpaceColor = (spaceName: string): string => {
+    const match = spaces?.find((s) => s.name.toUpperCase() === spaceName.toUpperCase());
+    return match?.color || getSpaceColor(spaceName);
+  };
   const conflicts = useMemo(()=>detectAllConflicts(reservations),[reservations]);
   const maintenanceCollisions = useMemo(()=>spaceBlocks ? detectReservationsBlockedByMaintenance(reservations, spaceBlocks) : [],[reservations,spaceBlocks]);
 
@@ -163,7 +171,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
         <div className="space-y-4">
           <PaginationControls {...pagination} onPageChange={pagination.setCurrentPage} itemLabel="topamientos" />
           {pagination.paginatedItems.map((conflict, idx) => {
-            const spaceColor = getSpaceColor(conflict.espacio);
+            const spaceColor = resolveSpaceColor(conflict.espacio);
             const isRecA = conflict.reservaA.actividadRecurrente === 'Sí' || Boolean(conflict.reservaA.serieRecurrente || conflict.reservaA.recurrenteId);
             const isRecB = conflict.reservaB.actividadRecurrente === 'Sí' || Boolean(conflict.reservaB.serieRecurrente || conflict.reservaB.recurrenteId);
             const conflictKey = `${conflict.reservaA.id}-${conflict.reservaB.id}-${idx}`;
@@ -356,6 +364,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                           cantidadParticipantes: conflict.reservaB.cantidadParticipantes
                         }}
                         allReservations={reservations}
+                        customSpacesList={enabledSpaces}
                         excludeReservationId={conflict.reservaB.id}
                         onApplyRecommendation={(rec) => {
                           // Opens edit modal with this updated slot

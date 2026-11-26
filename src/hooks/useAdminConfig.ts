@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   SpaceInfo,
   LoanType,
@@ -71,6 +71,8 @@ export function useAdminConfig(
   { equipmentEnabled = true, enabled = true }: { equipmentEnabled?: boolean; enabled?: boolean } = {},
 ): UseAdminConfigReturn {
   const [spaces, setSpaces] = useState<SpaceInfo[]>(() => getStoredSpaces());
+  const spacesRef = useRef<SpaceInfo[]>(spaces);
+  spacesRef.current = spaces;
   const [loanTypes, setLoanTypes] = useState<LoanType[]>(() => getStoredLoanTypes());
   const [activityTypes, setActivityTypes] = useState<ActivityTypeItem[]>(() => getStoredActivityTypes());
   const [equipment, setEquipment] = useState<EquipmentItem[]>(() => getStoredEquipment());
@@ -129,17 +131,20 @@ export function useAdminConfig(
   }, [equipmentEnabled]);
 
   const handleSaveSpace = useCallback(async (space: SpaceInfo) => {
-    const updated = await saveSpaceItem(space);
+    const updated = await saveSpaceItem(space, spacesRef.current);
+    spacesRef.current = updated;
     setSpaces(updated);
   }, []);
 
   const handleDeleteSpace = useCallback(async (id: string) => {
-    const updated = await deleteSpaceItem(id);
+    const updated = await deleteSpaceItem(id, spacesRef.current);
+    spacesRef.current = updated;
     setSpaces(updated);
   }, []);
 
   const handleReorderSpaces = useCallback(async (newSpaces: SpaceInfo[]) => {
-    const updated = await reorderSpaces(newSpaces);
+    const updated = await reorderSpaces(newSpaces, spacesRef.current);
+    spacesRef.current = updated;
     setSpaces(updated);
   }, []);
 

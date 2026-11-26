@@ -43,7 +43,7 @@ export function CalendarDateInput({ value, onValueChange, min, max, className = 
     <span className="relative inline-flex min-w-0">
       <input size={10} {...props} id={id} ref={textRef} type="text" inputMode="numeric" placeholder="DD/MM/AAAA" autoComplete="off"
         value={draft} disabled={disabled} readOnly={readOnly} className={className}
-        style={{ ...props.style, paddingRight: '2.5rem', minWidth: '9rem' }}
+        style={{ paddingRight: '2.5rem', minWidth: '9rem', ...props.style }}
         aria-invalid={!!error || invalid} aria-describedby={[describedBy, (feedback || error) && `${id}-date-feedback`].filter(Boolean).join(' ') || undefined}
         onChange={event => change(event.target.value)}
         onBlur={event => { setError(event.currentTarget.validationMessage); onBlur?.(event); }}

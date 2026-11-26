@@ -37,8 +37,14 @@ export const SpaceBlockModal: React.FC<SpaceBlockModalProps> = ({
   availableSpaces
 }) => {
   const spacesList = useMemo(() => {
-    return availableSpaces && availableSpaces.length > 0 ? availableSpaces : SPACES_LIST;
-  }, [availableSpaces]);
+    const catalog = availableSpaces && availableSpaces.length > 0 ? availableSpaces : SPACES_LIST;
+    const enabled = catalog.filter(space => space.activo !== false);
+    if (editingBlock?.espacio && !enabled.some(space => space.name === editingBlock.espacio)) {
+      const inactiveMatch = catalog.find(space => space.name === editingBlock.espacio);
+      if (inactiveMatch) return [inactiveMatch, ...enabled];
+    }
+    return enabled.length > 0 ? enabled : catalog;
+  }, [availableSpaces, editingBlock?.espacio]);
 
   const [espacio, setEspacio] = useState<string>(
     editingBlock?.espacio || defaultSpace || spacesList[0]?.name || 'AUDITORIO'
@@ -261,7 +267,7 @@ export const SpaceBlockModal: React.FC<SpaceBlockModalProps> = ({
             >
               {spacesList.map((sp: SpaceInfo) => (
                 <option key={sp.id} value={sp.name}>
-                  {sp.name}
+                  {sp.name}{sp.activo === false ? ' (Inactivo)' : ''}
                 </option>
               ))}
             </select>

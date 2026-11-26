@@ -6,6 +6,7 @@ import {
   formatDurationCompact,
   getEnabledSpaces,
   getRoomLiveStatus,
+  hasEnabledSpace,
 } from '../utils/spaceAvailability';
 import { VirtualCardGrid } from './common/VirtualCardGrid';
 import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
@@ -207,9 +208,10 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
   const activeSpaceBlocksToday = useMemo(() => {
     return spaceBlocks.filter((b) => {
       if (!b.activo) return false;
+      if (!hasEnabledSpace(b.espacio, spaceCatalog)) return false;
       return b.fechaInicio <= selectedDayIso && selectedDayIso <= b.fechaFin;
     });
-  }, [spaceBlocks, selectedDayIso]);
+  }, [spaceBlocks, spaceCatalog, selectedDayIso]);
 
   // Available spaces that have reservations today (for quick filter chips, expanding compound spaces)
   const spacesWithBookingsToday = useMemo(() => {

@@ -3,6 +3,7 @@ import type { DistributionProposal, DistributionRequest, DistributionResult, Dis
 import { getChileLocalDateString } from '../utils/dateUtils';
 import { MAX_DISTRIBUTION_ACTIVITIES, analyzeRoomDistribution, buildVacateSpacesPlan, newDistributionRequest, type VacateSpacesOptions } from '../utils/roomDistribution';
 import { commitDistribution, loadDistributionSnapshot, validateDistributionProposals } from '../services/distributionService';
+import { announceDataChange } from '../firebase/gateway';
 import { ReservationWriteError } from '../services/reservationWriter';
 import { isCoordinatorOrAdmin, userCanCreateReservations, userCanEditReservations, type AuthUser } from '../services/authService';
 import { isReservationActiveForAvailability } from '../utils/conflictDetector';
@@ -126,6 +127,9 @@ export function useDistributionPlanner(user: AuthUser, onCommitted: (rows: Reser
       }
       const receipt = await commitDistribution(operation.fecha, operation.proposals, operation.expectedVersions, operation.operationId, operation.activateSpaceIds || []);
       if (receipt.pendingIds.length) throw new Error('La confirmación sigue pendiente. Reintenta sin modificar la propuesta.');
+      if (operation.activateSpaceIds?.length) {
+        announceDataChange({ local: true });
+      }
       setPending(null); setResult(null); setRequests([]);
       setSuccess(`Distribución confirmada: ${receipt.confirmedIds.length} actividades guardadas. Los demás equipos recibirán la actualización.`);
       onCommitted(receipt.reservations);

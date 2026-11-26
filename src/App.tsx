@@ -416,6 +416,26 @@ export default function App() {
     if (filters.espacio && !hasEnabledSpace(filters.espacio, spaces)) setFilters(previous => ({ ...previous, espacio: '' }));
   }, [filters.espacio, spaces, setFilters]);
 
+  const prevEnabledSpaceNamesRef = useRef<Set<string>>(new Set(enabledSpaces.map(space => space.name)));
+  useEffect(() => {
+    const currentNames = enabledSpaces.map(space => space.name);
+    const currentSet = new Set(currentNames);
+    const newlyEnabled = currentNames.filter(name => !prevEnabledSpaceNamesRef.current.has(name));
+    prevEnabledSpaceNamesRef.current = currentSet;
+    setComparisonSpaces(prev => {
+      if (prev === null) return null;
+      const kept = prev.filter(name => currentSet.has(name));
+      const merged = [...new Set([...kept, ...newlyEnabled])];
+      if (merged.length === currentNames.length && currentNames.every(name => merged.includes(name))) {
+        return null;
+      }
+      if (merged.length === prev.length && merged.every((name, idx) => prev[idx] === name)) {
+        return prev;
+      }
+      return merged;
+    });
+  }, [enabledSpaces]);
+
   // Global Keyboard Shortcuts (Ctrl+K, Cmd+K, '/', Alt+N)
   const visiblePeriodCounts = useMemo(() => ({
     filtered: getAgendaPeriodCount(isAgendaView(currentView) ? agendaReservations : filteredReservations, currentView, selectedDailyDate),
@@ -1165,7 +1185,7 @@ export default function App() {
       <main id="main-content" tabIndex={-1} className={`flex-1 min-w-0 w-full mx-auto outline-none ${
         isAgendaView(currentView)
           ? (currentView === 'daily' || currentView === 'timeline'
-            ? 'max-w-none px-2 sm:px-3 py-2'
+            ? 'max-w-none px-1.5 sm:px-2.5 pt-1 pb-1'
             : `${isSidebarHidden ? 'max-w-none' : 'max-w-[1680px]'} px-3 sm:px-6 py-4`)
           : 'max-w-[1680px] px-3 sm:px-4 md:px-6 py-4'
       }`}>
@@ -1178,9 +1198,9 @@ export default function App() {
           activeFiltersCount={activeFiltersCount}
           onToggleFilters={() => setIsFilterBarOpen(open => !open)}
           onOpenAvailability={() => setIsSpaceAvailabilityOpen(true)}
-          onPrevPeriod={() => setSelectedDailyDate(d => currentView === 'calendar' ? subMonths(d, 1) : subDays(d, 1))}
-          onNextPeriod={() => setSelectedDailyDate(d => currentView === 'calendar' ? addMonths(d, 1) : addDays(d, 1))}
-          onGoToday={() => setSelectedDailyDate(new Date())}
+          onPrevPeriod={currentView === 'daily' || currentView === 'timeline' ? undefined : () => setSelectedDailyDate(d => currentView === 'calendar' ? subMonths(d, 1) : subDays(d, 1))}
+          onNextPeriod={currentView === 'daily' || currentView === 'timeline' ? undefined : () => setSelectedDailyDate(d => currentView === 'calendar' ? addMonths(d, 1) : addDays(d, 1))}
+          onGoToday={currentView === 'daily' || currentView === 'timeline' ? undefined : () => setSelectedDailyDate(new Date())}
           onBackToMonth={currentView !== 'calendar' ? () => { persistViewPreference('calendar'); setCurrentView('calendar'); } : undefined}
           upcomingReplacementsCount={dueReplacements.length}
           onOpenUpcomingReplacement={dueReplacements.length > 0 ? () => {
@@ -1654,6 +1674,7 @@ export default function App() {
           <Suspense fallback={<div className="p-12 text-center text-slate-500 font-medium">Analizando topamientos y conflictos...</div>}>
             <ConflictsView
               reservations={reservations}
+              spaces={spaces}
               spaceBlocks={spaceBlocks}
               onSelectReservation={(r) => {
                 setSelectedReservation(r);

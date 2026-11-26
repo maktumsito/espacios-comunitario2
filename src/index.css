@@ -289,8 +289,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visib
 .segmented-pill {
   background-color: #F1F5F9;
   border: 1px solid #E2E8F0;
-  border-radius: 0.75rem;
-  padding: 0.25rem;
+  border-radius: 0.625rem;
+  padding: 0.125rem;
 }
 
 /* Scrollbar hiding utility for horizontal filter strips */

@@ -24,6 +24,7 @@ import {
 import { ConfirmationModal } from './common/ConfirmationModal';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import { defaultNewUserPermissions } from '../utils/userPermissions';
+import { normalizeSpace } from '../utils/conflictDetector';
 
 const MaintenanceDashboardView = lazyWithRetry(
   () => import('./MaintenanceDashboardView').then(m => ({ default: m.MaintenanceDashboardView })),
@@ -273,7 +274,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [spaceSearch, setSpaceSearch] = useState('');
+  const [spaceStatusFilter, setSpaceStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [compactSpaces, setCompactSpaces] = useState(true);
+  const activeSpacesCount = useMemo(() => spaces.filter(space => space.activo !== false).length, [spaces]);
+  const inactiveSpacesCount = spaces.length - activeSpacesCount;
 
   useEffect(() => {
     if (initialTab) {
@@ -590,7 +594,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         return;
       }
       const cleanName = spaceForm.name.trim().toUpperCase();
-      if (spaces.some(space => space.id !== spaceForm.id && space.name.trim().toUpperCase() === cleanName)) {
+      if (spaces.some(space => space.id !== spaceForm.id && normalizeSpace(space.name) === normalizeSpace(cleanName))) {
         setSpaceFormError('Ya existe un espacio con ese nombre. Puedes editarlo o reactivarlo.');
         return;
       }
@@ -1171,7 +1175,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 )}
               </button>
               <span className="text-[11px] font-semibold text-blue-700 bg-white px-2.5 py-1 rounded-lg border border-blue-200">
-                Total: {spaces.length} espacios
+                Total: {spaces.length} · {activeSpacesCount} activos · {inactiveSpacesCount} inactivos
               </span>
             </div>
           </div>
@@ -1183,15 +1187,22 @@ export const AdminView: React.FC<AdminViewProps> = ({
             <label className="w-full text-sm font-medium text-slate-700 sm:max-w-md">Buscar espacio
               <input id="admin-space-search" type="search" value={spaceSearch} onChange={event => setSpaceSearch(event.target.value)} placeholder="Nombre o categoría" className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" />
             </label>
-            <div role="group" aria-label="Presentación de espacios" className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
-              <button type="button" aria-pressed={compactSpaces} onClick={() => setCompactSpaces(true)} className={`min-h-11 rounded-md px-3 text-sm ${compactSpaces ? 'bg-blue-50 font-semibold text-blue-800' : 'text-slate-600'}`}>Lista</button>
-              <button type="button" aria-pressed={!compactSpaces} onClick={() => setCompactSpaces(false)} className={`min-h-11 rounded-md px-3 text-sm ${!compactSpaces ? 'bg-blue-50 font-semibold text-blue-800' : 'text-slate-600'}`}>Tarjetas</button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div role="group" aria-label="Filtrar espacios por estado" className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
+                <button type="button" aria-pressed={spaceStatusFilter === 'all'} onClick={() => setSpaceStatusFilter('all')} className={`min-h-11 rounded-md px-3 text-xs font-semibold ${spaceStatusFilter === 'all' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Todos ({spaces.length})</button>
+                <button type="button" aria-pressed={spaceStatusFilter === 'active'} onClick={() => setSpaceStatusFilter('active')} className={`min-h-11 rounded-md px-3 text-xs font-semibold ${spaceStatusFilter === 'active' ? 'bg-emerald-600 text-white' : 'text-emerald-800 hover:bg-emerald-50'}`}>Activos ({activeSpacesCount})</button>
+                <button type="button" aria-pressed={spaceStatusFilter === 'inactive'} onClick={() => setSpaceStatusFilter('inactive')} className={`min-h-11 rounded-md px-3 text-xs font-semibold ${spaceStatusFilter === 'inactive' ? 'bg-slate-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Inactivos ({inactiveSpacesCount})</button>
+              </div>
+              <div role="group" aria-label="Presentación de espacios" className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
+                <button type="button" aria-pressed={compactSpaces} onClick={() => setCompactSpaces(true)} className={`min-h-11 rounded-md px-3 text-sm ${compactSpaces ? 'bg-blue-50 font-semibold text-blue-800' : 'text-slate-600'}`}>Lista</button>
+                <button type="button" aria-pressed={!compactSpaces} onClick={() => setCompactSpaces(false)} className={`min-h-11 rounded-md px-3 text-sm ${!compactSpaces ? 'bg-blue-50 font-semibold text-blue-800' : 'text-slate-600'}`}>Tarjetas</button>
+              </div>
             </div>
           </div>
-          {!spaces.some(space => `${space.name} ${space.category}`.toLocaleLowerCase('es').includes(spaceSearch.trim().toLocaleLowerCase('es'))) && <p role="status" className="rounded-xl border border-dashed border-slate-300 p-5 text-sm text-slate-600">No hay espacios que coincidan. <button type="button" onClick={() => setSpaceSearch('')} className="min-h-11 font-semibold text-blue-700 underline">Limpiar búsqueda</button></p>}
+          {!spaces.some(space => (spaceStatusFilter === 'all' || (spaceStatusFilter === 'active' ? space.activo !== false : space.activo === false)) && `${space.name} ${space.category}`.toLocaleLowerCase('es').includes(spaceSearch.trim().toLocaleLowerCase('es'))) && <p role="status" className="rounded-xl border border-dashed border-slate-300 p-5 text-sm text-slate-600">No hay espacios que coincidan. <button type="button" onClick={() => { setSpaceSearch(''); setSpaceStatusFilter('all'); }} className="min-h-11 font-semibold text-blue-700 underline">Limpiar búsqueda</button></p>}
           {/* Spaces Grid (Draggable Cards) */}
           <div className={compactSpaces ? "space-y-2" : "grid grid-cols-1 md:grid-cols-2 gap-4"}>
-            {spaces.map((space, index) => ({ space, index })).filter(({ space }) => `${space.name} ${space.category}`.toLocaleLowerCase('es').includes(spaceSearch.trim().toLocaleLowerCase('es'))).map(({ space, index }) => {
+            {spaces.map((space, index) => ({ space, index })).filter(({ space }) => (spaceStatusFilter === 'all' || (spaceStatusFilter === 'active' ? space.activo !== false : space.activo === false)) && `${space.name} ${space.category}`.toLocaleLowerCase('es').includes(spaceSearch.trim().toLocaleLowerCase('es'))).map(({ space, index }) => {
               const isDragged = draggedSpaceIndex === index;
               const isDropTarget = dragOverSpaceIndex === index;
 

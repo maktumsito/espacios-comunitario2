@@ -121,6 +121,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 }) => {
   const spaces = useMemo(() => getEnabledSpaces(spaceCatalog), [spaceCatalog]);
   const reservations = useMemo(() => filterEnabledSpaceReservations(suppliedReservations, spaceCatalog), [suppliedReservations, spaceCatalog]);
+  const enabledSpaceBlocks = useMemo(() => spaceBlocks.filter(block => hasEnabledSpace(block.espacio, spaceCatalog)), [spaceBlocks, spaceCatalog]);
   const { getReservationTypeVisual } = useReservationVisuals();
   // Single controlled source of truth for the active date rendering the agenda.
   // Supports both controlled mode (via propSelectedDate) and uncontrolled mode (via initialDate).
@@ -232,11 +233,12 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     return () => window.removeEventListener('app_spaces_reorder_toggled', handleSync);
   }, []);
 
-  // Local state for spaces columns to allow 0ms instantaneous ("altiro") reordering
-  const [localSpaces, setLocalSpaces] = useState<SpaceInfo[]>(() => spaces);
+  // Optimistic local order only during drag-reorder; always reflects live enabled spaces immediately
+  const [optimisticOrder, setOptimisticOrder] = useState<SpaceInfo[] | null>(null);
+  const localSpaces = optimisticOrder ?? spaces;
 
   useEffect(() => {
-    setLocalSpaces(spaces);
+    setOptimisticOrder(null);
   }, [spaces]);
 
   // Notification feedback banner
@@ -459,13 +461,27 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
   // Normalize, map and assemble spaces preserving user's customized column order (respecting active space filters)
   const availableScheduleSpaces = useMemo(() => {
     const configuredSpaces = localSpaces.filter(space => hasEnabledSpace(space.name, spaceCatalog));
-    // Compound names can also have been saved by a previous column reorder.
-    let list = configuredSpaces.filter((space) => getConstituentSpaces(space.name).length === 1);
+    const singleConfiguredRooms = new Set(
+      configuredSpaces
+        .filter(space => getConstituentSpaces(space.name).length === 1)
+        .map(space => normalizeSpace(space.name))
+    );
+    const defaultRooms = new Set(SPACES_LIST.map(space => normalizeSpace(space.name)));
+    const isSavedCompoundEntry = (space: SpaceInfo) => {
+      const parts = getConstituentSpaces(space.name);
+      return parts.length > 1 && parts.some(part => singleConfiguredRooms.has(part) || defaultRooms.has(part));
+    };
+
+    // Compound names (e.g. "SALA 2 / SALA 3") can have been saved by a previous column reorder,
+    // whereas standalone rooms whose own name happens to include "/" remain intact.
+    let list = configuredSpaces.filter((space) => !isSavedCompoundEntry(space));
     const knownSpaces = new Set(list.map((space) => normalizeSpace(space.name)));
-    const spaceNames = [...configuredSpaces.map((space) => space.name), ...dayReservations.map((r) => r.espacio)];
+    const compoundConfiguredNames = configuredSpaces.filter(isSavedCompoundEntry).map((space) => space.name);
+    const spaceNames = [...compoundConfiguredNames, ...dayReservations.map((r) => r.espacio)];
 
     // Discover individual rooms without creating an extra column for their combination.
     spaceNames.forEach((name) => {
+      if (knownSpaces.has(normalizeSpace(name))) return;
       getConstituentSpaces(name).forEach((room) => {
         if (!hasEnabledSpace(room, spaceCatalog)) return;
         if (knownSpaces.has(room)) return;
@@ -492,12 +508,12 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
       live: ReturnType<typeof getRoomLiveStatus>;
     }>();
     availableScheduleSpaces.forEach(space => {
-      const summary = computeRoomDayFreeSlots(space.name, dateStr, sourceForAvailability, spaceBlocks, { minSlotMinutes: 30 });
-      const live = getRoomLiveStatus(space.name, dateStr, currentTimeMinutes, sourceForAvailability, spaceBlocks);
+      const summary = computeRoomDayFreeSlots(space.name, dateStr, sourceForAvailability, enabledSpaceBlocks, { minSlotMinutes: 30 });
+      const live = getRoomLiveStatus(space.name, dateStr, currentTimeMinutes, sourceForAvailability, enabledSpaceBlocks);
       map.set(space.id, { summary, live });
     });
     return map;
-  }, [availableScheduleSpaces, dateStr, sourceForAvailability, spaceBlocks, currentTimeMinutes]);
+  }, [availableScheduleSpaces, dateStr, sourceForAvailability, enabledSpaceBlocks, currentTimeMinutes]);
 
   const activeSpaces = useMemo(() => {
     let list = availableScheduleSpaces;
@@ -745,7 +761,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     const visibleIds = new Set(activeSpaces.map(space => space.id));
     let nextVisible = 0;
     const fullOrder = availableScheduleSpaces.map(space => visibleIds.has(space.id) ? newSpaces[nextVisible++] : space);
-    setLocalSpaces(fullOrder);
+    setOptimisticOrder(fullOrder);
 
     // 2. Propagate to parent & storage without blocking
     if (onReorderSpaces) {
@@ -948,7 +964,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     <div
       data-calendar-surface="daily"
       data-calendar-date={dateStr}
-      className="w-full min-w-0 space-y-1.5 pb-1 relative"
+      className="w-full min-w-0 space-y-1 pb-0.5 relative"
     >
       {/* Toast Notification Banner */}
       {toastMessage && (
@@ -967,7 +983,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
       {/* Top Banner if there are conflicts on this day */}
       {conflictIdsToday.size > 0 && (
-        <div className="bg-rose-50 border border-rose-200 rounded-2xl px-5 py-2.5 flex items-center justify-between shadow-xs text-xs text-rose-900">
+        <div className="bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-1.5 flex items-center justify-between shadow-xs text-xs text-rose-900">
           <div className="flex items-center space-x-2">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>
@@ -982,9 +998,9 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
       {/* Top Banner if Today is a Chilean Holiday */}
       {getChileanHolidayInfo(dateStr) && (
-        <div className="bg-rose-50/90 border border-rose-200 rounded-2xl px-5 py-3 flex items-center justify-between shadow-xs text-xs text-rose-900">
-          <div className="flex items-center space-x-2.5">
-            <span className="text-xl">🇨🇱</span>
+        <div className="bg-rose-50/90 border border-rose-200 rounded-xl px-3.5 py-1.5 flex items-center justify-between shadow-xs text-xs text-rose-900">
+          <div className="flex items-center space-x-2">
+            <span className="text-base">🇨🇱</span>
             <div>
               <div className="font-extrabold text-rose-950 flex items-center space-x-2">
                 <span>DÍA FERIADO EN CHILE: {getChileanHolidayInfo(dateStr)?.name}</span>
@@ -992,101 +1008,42 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                   {getChileanHolidayInfo(dateStr)?.isIrrenunciable ? 'Feriado Irrenunciable' : 'Feriado Oficial'}
                 </span>
               </div>
-              <p className="text-[11px] text-rose-800 mt-0.5">
+              <p className="text-[11px] text-rose-800">
                 Por normativa, no se programan reservas estándar en días feriados. Cualquier reserva en esta fecha requiere autorización con clave especial CCD.
               </p>
             </div>
           </div>
-          <span className="text-[11px] font-bold text-rose-800 bg-white px-2.5 py-1 rounded-xl border border-rose-200 shadow-2xs">
+          <span className="text-[11px] font-bold text-rose-800 bg-white px-2 py-0.5 rounded-lg border border-rose-200 shadow-2xs shrink-0">
             {dayReservations.length === 0 ? 'Sin reservas (Día Libre)' : `${dayReservations.length} reserva(s) autorizada(s)`}
           </span>
         </div>
       )}
 
-      {/* 1. TOP HEADER TOOLBAR (Sticky / Frozen) */}
-      <div className="agenda-controls relative z-30 bg-white border border-slate-200 rounded-lg px-2 py-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        {/* Left Side: Date pill card with green "HOY" badge */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="flex items-center gap-2 px-2 py-1 min-h-9 sm:min-h-8 bg-slate-50 border border-slate-200 rounded-md">
-            <span className="text-xs font-bold text-slate-800 capitalize">
-              {format(selectedDate, "EEEE, dd-MM-yyyy", { locale: es })}
-            </span>
-            {isToday && (
-              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[#059669] text-white tracking-wider shadow-2xs">
-                HOY
-              </span>
-            )}
-            {getChileanHolidayInfo(dateStr) && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200 flex items-center space-x-1 shadow-2xs">
-                <span>🇨🇱</span>
-                <span>Feriado</span>
-              </span>
-            )}
-          </div>
-
-          {hasActiveGlobalFilters && (
-            <div className="flex items-center space-x-1.5 text-xs text-blue-800 bg-blue-50 px-2 py-0.5 min-h-8 rounded-md border border-blue-200">
-              <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <span>
-                Filtrado ({dayReservations.length}/{allReservationsForToday.length})
-              </span>
-              <button
-                type="button"
-                id="btn-clear-daily-top-filter"
-                aria-label="Limpiar filtro de búsqueda"
-                onClick={handleClearAllFilters}
-                className="hover:text-blue-900 ml-1 p-1 rounded hover:bg-blue-100 cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
-                title="Limpiar filtros"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Right Side: Action and Date Navigation controls */}
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          {/* Navegación cronológica en bloque unificado */}
-          <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-            {/* Anterior */}
+      {/* 1. UNIFIED COMPACT HEADER & COMPARISON TOOLBAR */}
+      <section aria-label="Comparar espacios" className="agenda-controls relative z-30 bg-white border border-slate-200 rounded-xl px-2 py-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 shadow-2xs">
+        {/* Left Cluster: Date Navigator + Availability Quick Filters + Active Filter Pill */}
+        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+          {/* Unified Date Navigator */}
+          <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 gap-0.5">
             <button
               id="btn-schedule-prev"
+              type="button"
               aria-label="Ir al día anterior"
+              title="Día anterior"
               onClick={handlePrevDay}
-              className="px-2 py-1 min-h-11 min-w-9 sm:min-h-7 rounded-md text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition-colors flex items-center justify-center gap-1"
+              className="px-1.5 py-0.5 min-h-7 rounded-md text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition-colors flex items-center justify-center"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Anterior</span>
             </button>
 
-            {/* Hoy */}
-            <button
-              id="btn-schedule-today"
-              aria-label="Ir a la fecha de hoy"
-              onClick={handleToday}
-              className="px-2.5 py-1 min-h-11 min-w-9 sm:min-h-7 rounded-md text-xs font-bold bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 transition-colors flex items-center justify-center"
-            >
-              Hoy
-            </button>
+            <span className="px-1.5 text-xs font-bold text-slate-800 capitalize whitespace-nowrap">
+              {format(selectedDate, "EEEE", { locale: es })}
+            </span>
 
-            {/* Siguiente */}
-            <button
-              id="btn-schedule-next"
-              aria-label="Ir al día siguiente"
-              onClick={handleNextDay}
-              className="px-2 py-1 min-h-11 min-w-9 sm:min-h-7 rounded-md text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition-colors flex items-center justify-center gap-1"
-            >
-              <span className="hidden sm:inline">Siguiente</span>
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          {/* Ir a fecha Picker input pill */}
-          <div className="flex items-center gap-1 px-2 py-0.5 min-h-11 sm:min-h-8 bg-white border border-slate-200 rounded-lg text-xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
-            <span className="text-slate-500 font-semibold whitespace-nowrap text-[11px]">Ir a fecha:</span>
             <CalendarDateInput
               id="input-goto-date"
               aria-label="Seleccionar fecha para ver el horario"
+              title="Ir a fecha"
               min="2020-01-01"
               max="2035-12-31"
               value={dateStr}
@@ -1111,16 +1068,192 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                   }
                 }
               }}
-              className="min-w-0 px-0.5 py-0.5 text-xs text-slate-700 font-mono font-medium focus:outline-none bg-transparent cursor-pointer min-h-9 sm:min-h-7"
+              style={{ minWidth: '7.4rem', width: '7.6rem', paddingRight: '2rem' }}
+              className="min-w-0 px-1.5 py-0.5 text-xs text-slate-800 font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white border border-slate-200/80 rounded-md cursor-pointer min-h-7"
             />
+
+            <button
+              id="btn-schedule-today"
+              type="button"
+              aria-label="Ir a la fecha de hoy"
+              onClick={handleToday}
+              className={`px-2 py-0.5 min-h-7 rounded-md text-xs font-bold transition-colors flex items-center justify-center ${
+                isToday
+                  ? 'bg-[#059669] text-white border border-[#059669] shadow-2xs'
+                  : 'bg-white hover:bg-blue-50 text-blue-700 border border-blue-200'
+              }`}
+            >
+              Hoy
+            </button>
+
+            <button
+              id="btn-schedule-next"
+              type="button"
+              aria-label="Ir al día siguiente"
+              title="Día siguiente"
+              onClick={handleNextDay}
+              className="px-1.5 py-0.5 min-h-7 rounded-md text-xs font-semibold text-slate-700 hover:bg-white hover:text-slate-900 transition-colors flex items-center justify-center"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
           </div>
+
+          {getChileanHolidayInfo(dateStr) && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1">
+              <span>🇨🇱</span>
+              <span>Feriado</span>
+            </span>
+          )}
+
+          <div className="hidden xl:block h-4 w-px bg-slate-200" aria-hidden="true" />
+
+          {/* Quick Availability Filters */}
+          <div className="flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              aria-pressed={quickAvailabilityFilter === 'all' && selectedComparisonSpaces === null}
+              onClick={() => {
+                setQuickAvailabilityFilter('all');
+                changeComparisonSpaces(null);
+              }}
+              className={`min-h-7 rounded-md border px-2 text-xs font-semibold transition ${
+                quickAvailabilityFilter === 'all' && selectedComparisonSpaces === null
+                  ? 'border-slate-800 bg-slate-800 text-white'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              Todas ({availableScheduleSpaces.length})
+            </button>
+
+            <button
+              type="button"
+              aria-pressed={quickAvailabilityFilter === 'free_now'}
+              onClick={() => setQuickAvailabilityFilter(prev => prev === 'free_now' ? 'all' : 'free_now')}
+              className={`inline-flex min-h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-semibold transition ${
+                quickAvailabilityFilter === 'free_now'
+                  ? 'border-emerald-500 bg-emerald-600 text-white'
+                  : 'border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100'
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${quickAvailabilityFilter === 'free_now' ? 'bg-white' : 'bg-emerald-500'}`} />
+              <span>{isToday ? 'Libres ahora' : 'Con espacio libre'}</span>
+            </button>
+
+            <button
+              type="button"
+              aria-pressed={quickAvailabilityFilter === 'gap_2h'}
+              onClick={() => setQuickAvailabilityFilter(prev => prev === 'gap_2h' ? 'all' : 'gap_2h')}
+              className={`inline-flex min-h-7 items-center gap-1 rounded-md border px-2 text-xs font-semibold transition ${
+                quickAvailabilityFilter === 'gap_2h'
+                  ? 'border-blue-600 bg-blue-600 text-white'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Sparkles className="h-3 w-3" />
+              <span>Hueco ≥ 2h</span>
+            </button>
+
+            {activeSpaces.length < availableScheduleSpaces.length && availableScheduleSpaces.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickAvailabilityFilter('all');
+                  changeComparisonSpaces(null);
+                  if (globalFilters?.espacio && onFilterChange) {
+                    onFilterChange({ ...globalFilters, espacio: '' });
+                  }
+                }}
+                className="inline-flex min-h-7 items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 text-xs font-semibold text-blue-800 hover:bg-blue-100 transition"
+                title="Algunos espacios activos están ocultos por un filtro. Haz clic para ver todos."
+              >
+                <span>{activeSpaces.length}/{availableScheduleSpaces.length} visibles · Ver todas</span>
+              </button>
+            )}
+          </div>
+
+          {hasActiveGlobalFilters && (
+            <div className="flex items-center space-x-1 text-xs text-blue-800 bg-blue-50 px-2 py-0.5 min-h-7 rounded-md border border-blue-200">
+              <Filter className="w-3 h-3 text-blue-600 shrink-0" />
+              <span>
+                Filtrado ({dayReservations.length}/{allReservationsForToday.length})
+              </span>
+              <button
+                type="button"
+                id="btn-clear-daily-top-filter"
+                aria-label="Limpiar filtro de búsqueda"
+                onClick={handleClearAllFilters}
+                className="hover:text-blue-900 ml-0.5 p-0.5 rounded hover:bg-blue-100 cursor-pointer flex items-center justify-center"
+                title="Limpiar filtros"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Right Cluster: Important 3-Day Popover + Search + Compare Spaces + Compact + Print */}
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 ml-auto">
+          {upcomingImportant3Days.length > 0 && (
+            <details className="relative">
+              <summary className="inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-900 hover:bg-amber-100 list-none transition-colors">
+                <Star className="h-3 w-3 fill-amber-500 text-amber-700 shrink-0" />
+                <span>Importantes</span>
+                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-200 px-1 text-[10px] font-extrabold text-amber-950">
+                  {upcomingImportant3Days.length}
+                </span>
+              </summary>
+              <div className="mt-1.5 space-y-2 rounded-xl border border-amber-200 bg-white p-3 shadow-lg sm:absolute sm:right-0 sm:z-40 sm:w-80">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-bold text-amber-950">
+                      Actividades Importantes en los Próximos 3 Días
+                    </div>
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      Entre el {format(selectedDate, 'dd-MM-yyyy')} y el {format(addDays(selectedDate, 3), 'dd-MM-yyyy')}.
+                    </p>
+                  </div>
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-1 divide-y divide-amber-100/80">
+                  {upcomingImportant3Days.map((item) => {
+                    const itemTitle = formatDisplayTitle(
+                      (item.descripcion && item.descripcion.trim()) ? item.descripcion.trim() : item.tipoActividad
+                    );
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => onSelectReservation(item)}
+                        className="w-full text-left py-1.5 px-1.5 rounded-lg hover:bg-amber-50/80 transition flex items-start justify-between gap-2"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold text-slate-900 truncate">{itemTitle}</div>
+                          <div className="text-[10px] text-slate-500 truncate">{formatDisplayTitle(item.espacio)}</div>
+                        </div>
+                        <span className="font-mono text-[10px] font-bold text-amber-900 whitespace-nowrap shrink-0">
+                          {item.fecha.slice(5).split('-').reverse().join('/')} {item.horaInicio}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPrintModalOpen(true)}
+                  className="w-full px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-2xs transition flex items-center justify-center space-x-1.5 cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Imprimir Planilla Diaria</span>
+                </button>
+              </div>
+            </details>
+          )}
 
           {/* Quick Filter in Daily Timeline */}
           <div className="relative flex items-center">
             <label htmlFor="input-daily-search" className="sr-only">
               Buscar actividades en este día
             </label>
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               id="input-daily-search"
               type="text"
@@ -1128,14 +1261,14 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
               placeholder="Buscar en este día..."
               value={searchQuery}
               onChange={(e) => handleDailySearchChange(e.target.value)}
-              className="pl-8 pr-7 py-1 min-h-11 sm:min-h-8 text-xs bg-white hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-36 sm:w-40 transition-colors"
+              className="pl-7 pr-6 py-0.5 min-h-7 text-xs bg-white hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-md text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-32 sm:w-36 transition-colors"
             />
             {searchQuery && (
               <button
                 type="button"
                 aria-label="Limpiar búsqueda del día"
                 onClick={handleClearAllFilters}
-                className="absolute right-1.5 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 cursor-pointer min-w-[32px] min-h-[32px] flex items-center justify-center"
+                className="absolute right-1 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 cursor-pointer flex items-center justify-center"
                 title="Borrar búsqueda"
               >
                 <X className="w-3 h-3" />
@@ -1143,73 +1276,11 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
             )}
           </div>
 
-          {/* Imprimir / Exportar PDF */}
-          <button
-            id="btn-print-schedule"
-            aria-label="Imprimir o exportar esta planilla como PDF"
-            onClick={() => setIsPrintModalOpen(true)}
-            className="px-2.5 py-1 min-h-11 sm:min-h-8 rounded-lg text-xs font-semibold bg-[#eff6ff] hover:bg-[#dbeafe] text-[#0369a1] border border-[#bfdbfe] transition-colors flex items-center gap-1.5"
-            title="Imprimir o exportar esta planilla como PDF oficial"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Imprimir/Exportar</span>
-          </button>
-        </div>
-      </div>
-
-      <section aria-label="Comparar espacios" className="agenda-controls flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 shadow-2xs">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            aria-pressed={quickAvailabilityFilter === 'all' && selectedComparisonSpaces === null}
-            onClick={() => {
-              setQuickAvailabilityFilter('all');
-              changeComparisonSpaces(null);
-            }}
-            className={`min-h-9 sm:min-h-7 rounded-lg border px-2.5 text-xs font-semibold transition ${
-              quickAvailabilityFilter === 'all' && selectedComparisonSpaces === null
-                ? 'border-slate-800 bg-slate-800 text-white'
-                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Todas ({availableScheduleSpaces.length})
-          </button>
-
-          <button
-            type="button"
-            aria-pressed={quickAvailabilityFilter === 'free_now'}
-            onClick={() => setQuickAvailabilityFilter(prev => prev === 'free_now' ? 'all' : 'free_now')}
-            className={`inline-flex min-h-9 sm:min-h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${
-              quickAvailabilityFilter === 'free_now'
-                ? 'border-emerald-500 bg-emerald-600 text-white'
-                : 'border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100'
-            }`}
-          >
-            <span className={`h-2 w-2 rounded-full ${quickAvailabilityFilter === 'free_now' ? 'bg-white' : 'bg-emerald-500'}`} />
-            <span>{isToday ? 'Libres ahora' : 'Con espacio libre'}</span>
-          </button>
-
-          <button
-            type="button"
-            aria-pressed={quickAvailabilityFilter === 'gap_2h'}
-            onClick={() => setQuickAvailabilityFilter(prev => prev === 'gap_2h' ? 'all' : 'gap_2h')}
-            className={`inline-flex min-h-9 sm:min-h-7 items-center gap-1 rounded-lg border px-2.5 text-xs font-semibold transition ${
-              quickAvailabilityFilter === 'gap_2h'
-                ? 'border-blue-600 bg-blue-600 text-white'
-                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Sparkles className="h-3 w-3" />
-            <span>Hueco ≥ 2h</span>
-          </button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 ml-auto">
           <details className="min-w-0 relative">
-            <summary className="min-h-9 sm:min-h-7 cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 list-none">
-              Espacios a comparar: <span className="font-mono tabular-nums font-bold">{activeSpaces.length} de {availableScheduleSpaces.length}</span>
+            <summary className="inline-flex min-h-7 items-center gap-1 cursor-pointer rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 list-none">
+              Espacios a comparar: <span className="font-mono tabular-nums font-bold">{activeSpaces.length}/{availableScheduleSpaces.length}</span>
             </summary>
-            <div className="mt-2 space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-lg sm:absolute sm:right-0 sm:z-40 sm:w-[460px]">
+            <div className="mt-1.5 space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-lg sm:absolute sm:right-0 sm:z-40 sm:w-[460px]">
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={() => { setQuickAvailabilityFilter('all'); changeComparisonSpaces(null); }} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50">Todos</button>
                 <button type="button" onClick={() => changeComparisonSpaces([])} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50">Limpiar selección</button>
@@ -1228,7 +1299,30 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
               <p className="text-xs text-slate-500">La selección cambia las columnas visibles. Se siguen aplicando los filtros de la agenda.</p>
             </div>
           </details>
-          <button type="button" aria-pressed={isCompact} onClick={() => setIsCompact(value => !value)} className="min-h-9 sm:min-h-7 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">{isCompact ? 'Ampliar columnas' : 'Compactar columnas'}</button>
+
+          <button
+            type="button"
+            aria-pressed={isCompact}
+            aria-label={isCompact ? 'Ampliar columnas' : 'Compactar columnas'}
+            title={isCompact ? 'Ampliar columnas' : 'Compactar columnas'}
+            onClick={() => setIsCompact(value => !value)}
+            className="min-h-7 rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            {isCompact ? 'Ampliar' : 'Compactar'}
+          </button>
+
+          {/* Imprimir / Exportar PDF */}
+          <button
+            id="btn-print-schedule"
+            type="button"
+            aria-label="Imprimir o exportar esta planilla como PDF"
+            onClick={() => setIsPrintModalOpen(true)}
+            className="px-2 py-0.5 min-h-7 rounded-md text-xs font-semibold bg-[#eff6ff] hover:bg-[#dbeafe] text-[#0369a1] border border-[#bfdbfe] transition-colors flex items-center gap-1"
+            title="Imprimir o exportar esta planilla como PDF oficial"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Imprimir</span>
+          </button>
         </div>
       </section>
       {activeSpaces.length === 0 && <p role="status" className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">No hay espacios visibles. Selecciona al menos uno o revisa el filtro de espacio de la agenda.</p>}
@@ -1237,7 +1331,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
       {hasActiveGlobalFilters && (
         <div
           id="daily-active-filters-banner"
-          className="bg-blue-50 border border-blue-200 rounded-2xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs text-xs text-blue-950"
+          className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs text-xs text-blue-950"
         >
           <div className="flex items-center space-x-2 flex-wrap gap-y-1">
             <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
@@ -1271,7 +1365,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
         allReservationsForToday.length > 0 ? (
           <div
             id="banner-no-matches-filtered"
-            className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-amber-950 animate-fadeIn"
+            className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-amber-950 animate-fadeIn"
           >
             <div className="flex items-center space-x-3 text-left">
               <div className="w-9 h-9 rounded-xl bg-amber-200 text-amber-900 flex items-center justify-center shrink-0">
@@ -1299,7 +1393,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
         ) : (
           <div
             id="banner-no-reservations-today"
-            className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center text-slate-600 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs"
+            className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center text-slate-600 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs"
           >
             <div className="flex items-center space-x-3 text-left">
               <div className="w-9 h-9 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center shrink-0">
@@ -1328,7 +1422,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
       {/* Invalid date feedback alert if triggered */}
       {dateErrorMessage && (
-        <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-900 flex items-center justify-between shadow-xs animate-fadeIn">
+        <div className="px-3 py-1.5 bg-rose-50 border border-rose-300 rounded-lg text-xs text-rose-900 flex items-center justify-between shadow-xs animate-fadeIn">
           <div className="flex items-center space-x-2">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             <span className="font-semibold">{dateErrorMessage}</span>
@@ -1343,37 +1437,6 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
         </div>
       )}
 
-      {/* 1.1 AVISO ACTIVIDADES IMPORTANTES (Desde 3 días antes) */}
-      {upcomingImportant3Days.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center space-x-2.5">
-            <span className="p-1.5 rounded-lg bg-amber-100 text-amber-800 font-bold flex items-center space-x-1">
-              <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-700" />
-            </span>
-            <div>
-              <div className="text-xs font-bold text-amber-950 flex items-center space-x-1.5">
-                <span>Actividades Importantes en los Próximos 3 Días</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-amber-200 text-amber-900 text-[10px] font-extrabold">
-                  {upcomingImportant3Days.length}
-                </span>
-              </div>
-              <p className="text-[11px] text-amber-800">
-                Se detectaron actividades destacadas entre el {format(selectedDate, 'dd-MM-yyyy')} y el{' '}
-                {format(addDays(selectedDate, 3), 'dd-MM-yyyy')}. Puedes revisarlas o imprimirlas en la planilla.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setIsPrintModalOpen(true)}
-            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-2xs transition flex items-center space-x-1.5 cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Imprimir Planilla Diaria</span>
-          </button>
-        </div>
-      )}
-
-
       {/* 2. MAIN HORIZONTAL/VERTICAL DAILY TIMETABLE GRID */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
         <div
@@ -1381,7 +1444,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
           onScroll={() => {
             if (hoveredCardInfo) setHoveredCardInfo(null);
           }}
-          className="overflow-x-auto overflow-y-auto min-h-0 h-[65dvh] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
+          className="overflow-x-auto overflow-y-auto min-h-0 h-[78dvh] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
         >
           <div className="relative" style={{ minWidth: `${gridMinWidth}px` }}>
             {/* STICKY HEADER ROW: "HORA" + All Space Columns */}
@@ -1420,7 +1483,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                         handleHeaderColumnDrop(e, idx);
                       }
                     }}
-                    className={`flex-1 px-1 py-1.5 text-center border-r border-slate-200 transition-colors select-none relative group/header flex flex-col justify-center ${
+                    className={`flex-1 px-1 py-1 text-center border-r border-slate-200 transition-colors select-none relative group/header flex flex-col justify-center ${
                       allowSpaceReorder ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
                     } ${
                       isReservationHeaderTarget
@@ -1634,7 +1697,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
 
                       {/* ACTIVE MAINTENANCE / SPACE BLOCKS OVERLAY */}
-                      {spaceBlocks
+                      {enabledSpaceBlocks
                         .filter((b) => {
                           if (!b.activo) return false;
                           if (dateStr < b.fechaInicio || dateStr > b.fechaFin) return false;
@@ -1974,7 +2037,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
         </div>
 
         {/* Bottom Legend & Quick Summary (Ultra-compact footer) */}
-        <div className="py-1 px-3 bg-[#f8fafc] border-t border-slate-200 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] text-slate-600 leading-tight">
+        <div className="py-0.5 px-2.5 bg-[#f8fafc] border-t border-slate-200 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[10px] text-slate-600 leading-tight">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="font-bold text-slate-700 text-[10px]">Categorías:</span>
             <div className="flex items-center space-x-1">

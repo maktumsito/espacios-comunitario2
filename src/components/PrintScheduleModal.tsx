@@ -5,6 +5,7 @@ import { showPrintBlob } from '../utils/printWindow';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Reservation, SpaceInfo } from '../types';
 import { SPACES_LIST, normalizeSpaceName } from '../data/spacesData';
+import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from '../utils/spaceAvailability';
 import {
   Printer,
   X,
@@ -106,27 +107,24 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
     return `${dateFormatted}, ${timeFormatted}`;
   }, []);
 
-  // Ordered spaces
+  // Ordered spaces (respects space activation; only falls back to defaults if catalog is empty)
+  const enabledSpaces = useMemo(() => getEnabledSpaces(spaces), [spaces]);
   const orderedSpaceNames = useMemo(() => {
-    const configuredNames = spaces.map((s) => s.name.toUpperCase());
-    const combined = [...configuredNames];
-    DEFAULT_ORDERED_SPACES.forEach((s) => {
-      if (!combined.includes(s)) {
-        combined.push(s);
-      }
-    });
-    return combined;
-  }, [spaces]);
+    if (spaces.length > 0) {
+      return enabledSpaces.map((s) => s.name.toUpperCase());
+    }
+    return [...DEFAULT_ORDERED_SPACES];
+  }, [spaces.length, enabledSpaces]);
 
-  // Active reservations on selected date (excludes cancelled / replaced sessions)
+  // Active reservations on selected date (excludes cancelled / replaced / disabled-space-only sessions)
   const dailyReservations = useMemo(() => {
-    return reservations.filter((r) => {
+    return filterEnabledSpaceReservations(reservations, spaces).filter((r) => {
       if (r.fecha !== selectedDateStr) return false;
       if (r.estado === 'cancelada' || r.estado === 'rechazada' || (r as any).eliminada === true) return false;
       if (r.reemplazadaPorReservaId) return false;
       return true;
     });
-  }, [reservations, selectedDateStr]);
+  }, [reservations, spaces, selectedDateStr]);
 
   // Group reservations by space (expanding compound spaces like "SALA 2 / SALA 3")
   const reservationsBySpace = useMemo(() => {
@@ -137,6 +135,7 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
       const parts = (r.espacio || '').split(/[+/]/).map((s) => normalizeSpaceName(s.trim()).toUpperCase()).filter(Boolean);
       const spaceKeys = parts.length > 0 ? [...new Set(parts)] : [normalizeSpaceName(r.espacio).toUpperCase()];
       spaceKeys.forEach((normSpace) => {
+        if (!hasEnabledSpace(normSpace, spaces)) return;
         let matchedKey = orderedSpaceNames.find(
           (s) => s === normSpace || s.replace(/SALA DE /g, 'SALA ') === normSpace
         );
@@ -156,7 +155,7 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
     });
 
     return map;
-  }, [orderedSpaceNames, dailyReservations]);
+  }, [orderedSpaceNames, dailyReservations, spaces]);
 
   // Visible spaces list based on filter
   const visibleSpaces = useMemo(() => {

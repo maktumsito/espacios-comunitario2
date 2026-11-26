@@ -7,6 +7,7 @@ import { format, parseISO, addDays, startOfDay, endOfDay, isWithinInterval } fro
 import { es } from 'date-fns/locale';
 import { Reservation, SpaceInfo } from '../types';
 import { SPACES_LIST, normalizeSpaceName } from '../data/spacesData';
+import { filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from './spaceAvailability';
 import { formatDateDDMMYYYY } from './dateUtils';
 import { getChileanHolidayInfo } from './holidayUtils';
 
@@ -135,8 +136,8 @@ export async function generateDailySchedulePdf(options: DailySchedulePdfOptions)
     targetDate = new Date();
   }
 
-  // Filter reservations for this exact date
-  const filteredDailyReservations = reservations.filter((r) => {
+  // Filter reservations for this exact date (excluding disabled-space-only reservations)
+  const filteredDailyReservations = filterEnabledSpaceReservations(reservations, spaces).filter((r) => {
     if (!r.fecha || !isDispatchableReservation(r)) return false;
     if (r.fecha !== dateStr) return false;
     if (
@@ -152,14 +153,11 @@ export async function generateDailySchedulePdf(options: DailySchedulePdfOptions)
     return true;
   });
 
-  // Calculate ordered space names
-  const configuredNames = spaces.map((s) => s.name.toUpperCase());
-  const orderedSpaceNames = [...configuredNames];
-  DEFAULT_ORDERED_SPACES.forEach((s) => {
-    if (!orderedSpaceNames.includes(s)) {
-      orderedSpaceNames.push(s);
-    }
-  });
+  // Calculate ordered space names (respecting space activation)
+  const enabledSpaces = getEnabledSpaces(spaces);
+  const orderedSpaceNames = spaces.length > 0
+    ? enabledSpaces.map((s) => s.name.toUpperCase())
+    : [...DEFAULT_ORDERED_SPACES];
 
   // Group reservations by space
   const reservationsBySpace = new Map<string, Reservation[]>();
@@ -169,6 +167,7 @@ export async function generateDailySchedulePdf(options: DailySchedulePdfOptions)
     const parts = (r.espacio || '').split(/[+/]/).map((s) => normalizeSpaceName(s.trim()).toUpperCase()).filter(Boolean);
     const spaceKeys = parts.length > 0 ? [...new Set(parts)] : [normalizeSpaceName(r.espacio).toUpperCase()];
     spaceKeys.forEach((normSpace) => {
+      if (!hasEnabledSpace(normSpace, spaces)) return;
       let matchedKey = orderedSpaceNames.find(
         (s) => s === normSpace || s.replace(/SALA DE /g, 'SALA ') === normSpace
       );

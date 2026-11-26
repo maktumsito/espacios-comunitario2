@@ -271,6 +271,11 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
             }}
             className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs font-bold"
           >
+            {formData.espacio && !availableSpaces.some((s) => s.name === formData.espacio) && (
+              <option value={formData.espacio}>
+                {formData.espacio} (Inactivo)
+              </option>
+            )}
             {availableSpaces.map((s) => (
               <option key={s.id} value={s.name}>
                 {s.name}

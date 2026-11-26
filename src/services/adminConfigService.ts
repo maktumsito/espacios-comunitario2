@@ -16,6 +16,7 @@ const ACTIVITIES_STORAGE_KEY = 'espacios_comunitarios_activities_v2';
 const CONFIG_COLLECTION = 'configuracion_sistema';
 
 const isBrowser = typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+let cachedSpaces: SpaceInfo[] | null = null;
 
 export const DEFAULT_LOAN_TYPES: LoanType[] = [
   {
@@ -126,6 +127,7 @@ export function subscribeToAdminConfig(
           const docId = docSnap.id;
           const payload = docSnap.data();
           if (docId === 'espacios' && Array.isArray(payload.data)) {
+            cachedSpaces = payload.data;
             if (isBrowser) localStorage.setItem(SPACES_STORAGE_KEY, JSON.stringify(payload.data));
             onUpdate({ spaces: payload.data });
           } else if (docId === 'tipos_prestamo' && Array.isArray(payload.data)) {
@@ -203,8 +205,8 @@ export function hasActivityTypeMaterialChange(prev: ActivityTypeItem | undefined
   );
 }
 
-export async function saveSpaceItem(space: SpaceInfo ): Promise<SpaceInfo[]> {
-  const current = getStoredSpaces();
+export async function saveSpaceItem(space: SpaceInfo, baseSpaces?: SpaceInfo[]): Promise<SpaceInfo[]> {
+  const current = baseSpaces ?? cachedSpaces ?? getStoredSpaces();
   if (current.some(s => s.id !== space.id && normalizeSpace(s.name) === normalizeSpace(space.name))) throw new Error('Ya existe un espacio con ese nombre. Edítalo o reactívalo desde Administración.');
   const index = current.findIndex(s => s.id === space.id);
   if (index >= 0 && !hasSpaceMaterialChange(current[index], space)) {
@@ -218,6 +220,7 @@ export async function saveSpaceItem(space: SpaceInfo ): Promise<SpaceInfo[]> {
     updated = [...current, { ...space, isCustom: true }];
   }
   await saveConfigDocToFirestore('espacios', updated);
+  cachedSpaces = updated;
   try {
     if (isBrowser) localStorage.setItem(SPACES_STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
@@ -226,11 +229,12 @@ export async function saveSpaceItem(space: SpaceInfo ): Promise<SpaceInfo[]> {
   return updated;
 }
 
-export async function deleteSpaceItem(id: string ): Promise<SpaceInfo[]> {
-  const current = getStoredSpaces();
+export async function deleteSpaceItem(id: string, baseSpaces?: SpaceInfo[]): Promise<SpaceInfo[]> {
+  const current = baseSpaces ?? cachedSpaces ?? getStoredSpaces();
   const updated = current.filter(s => s.id !== id);
   if (updated.length === current.length) return current;
   await saveConfigDocToFirestore('espacios', updated);
+  cachedSpaces = updated;
   try {
     if (isBrowser) localStorage.setItem(SPACES_STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
@@ -239,8 +243,8 @@ export async function deleteSpaceItem(id: string ): Promise<SpaceInfo[]> {
   return updated;
 }
 
-export async function reorderSpaces(newSpaces: SpaceInfo[] ): Promise<SpaceInfo[]> {
-  const current = getStoredSpaces();
+export async function reorderSpaces(newSpaces: SpaceInfo[], baseSpaces?: SpaceInfo[]): Promise<SpaceInfo[]> {
+  const current = baseSpaces ?? cachedSpaces ?? getStoredSpaces();
   const updated = mergeSpaceOrder(current, newSpaces);
   if (
     updated.length === current.length &&
@@ -249,6 +253,7 @@ export async function reorderSpaces(newSpaces: SpaceInfo[] ): Promise<SpaceInfo[
     return current;
   }
   await saveConfigDocToFirestore('espacios', updated);
+  cachedSpaces = updated;
   try {
     if (isBrowser) localStorage.setItem(SPACES_STORAGE_KEY, JSON.stringify(updated));
   } catch (e) {
@@ -371,6 +376,7 @@ export async function resetConfigToDefaults(): Promise<void> {
     batch.set(doc(db, CONFIG_COLLECTION, id), { data, updatedAt: new Date().toISOString() });
   }
   await batch.commit();
+  cachedSpaces = null;
   if (isBrowser) {
     localStorage.removeItem(SPACES_STORAGE_KEY);
     localStorage.removeItem(LOANS_STORAGE_KEY);
