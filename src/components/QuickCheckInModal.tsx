@@ -100,17 +100,12 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({
       };
 
       await onSaveCheckIn(updatedReservation);
-
-      const statusLabels = {
-        Sí: 'Realizada / Asistió',
-        No: 'No asistió (No-show)',
-        Pendiente: 'Pendiente'
-      };
-
-      showToast.success(`Asistencia registrada: ${statusLabels[status]}`);
       onClose();
     } catch (error: any) {
-      showToast.error(error?.message || 'No se pudo guardar el registro de asistencia.');
+      // App.tsx handleSaveCheckIn reports the error toast; avoid duplicate toasts
+      if (!error?.__toastShown) {
+        showToast.error(error?.message || 'No se pudo guardar el registro de asistencia.');
+      }
     } finally {
       setIsSaving(false);
     }

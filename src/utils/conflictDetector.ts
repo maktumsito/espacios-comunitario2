@@ -403,17 +403,21 @@ export function findMaintenanceBlockConflicts(
         // Date range check: slot.date must fall in [fechaInicio, fechaFin]
         if (slot.date < block.fechaInicio || slot.date > block.fechaFin) continue;
 
-        // Space match check
+        // Space match check (strict constituent-space matching — avoids substring collisions like SALA 1 vs SALA 10)
         const blockSpaceNorm = normalizeSpace(block.espacio);
+        const blockConstituents = getConstituentSpaces(block.espacio);
         let spaceMatches = false;
         if (candSpaceNorm === blockSpaceNorm) {
           spaceMatches = true;
+        } else if (candConstituents.some((c) => blockConstituents.includes(c))) {
+          spaceMatches = true;
         } else if (block.bloquearSubEspacios) {
-          if (candConstituents.some((c) => c === blockSpaceNorm || c.includes(blockSpaceNorm) || blockSpaceNorm.includes(c))) {
+          // Match exact prefix boundary (e.g. "MULTICANCHA" blocks "MULTICANCHA NORTE", not "SALA 1" -> "SALA 10")
+          const matchesPrefix = (parent: string, child: string) =>
+            child === parent || child.startsWith(`${parent} `) || child.startsWith(`${parent}/`) || child.startsWith(`${parent}-`);
+          if (candConstituents.some((c) => blockConstituents.some((b) => matchesPrefix(b, c) || matchesPrefix(c, b)))) {
             spaceMatches = true;
           }
-        } else if (candConstituents.includes(blockSpaceNorm)) {
-          spaceMatches = true;
         }
 
         if (!spaceMatches) continue;
@@ -938,6 +942,7 @@ export function detectReservationsBlockedByMaintenance(
   reservations: readonly Reservation[],
   spaceBlocks: readonly SpaceBlock[]
 ): DetectedBlockConflictDetail[] {
-  return findMaintenanceBlockConflicts(reservations, spaceBlocks);
+  const activeReservations = reservations.filter((r) => isReservationActiveForAvailability(r));
+  return findMaintenanceBlockConflicts(activeReservations, spaceBlocks);
 }
 

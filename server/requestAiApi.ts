@@ -61,8 +61,9 @@ export function registerRequestAiApi(app: Express, sessions: AppSessions, option
     try {
       const { text, ...catalogs } = input.data;
       const referenceDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Santiago' }).format(new Date());
+      const model = (process.env.GEMINI_REQUEST_MODEL || 'gemini-2.5-flash-lite').trim();
       const response = await (options.fetch ?? fetch)(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent', {
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
           signal: controller.signal,

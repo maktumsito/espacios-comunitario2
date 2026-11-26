@@ -5,7 +5,8 @@ import { getSessionRemainingMs, getSessionTokenRemainingMs, hasBrowserSessionCha
 
 const RENEW_BEFORE_MS = 5 * 60_000;
 const RETRY_MS = 30_000;
-const activityEvents = ['mousemove', 'pointermove', 'mousedown', 'pointerdown', 'keydown', 'input', 'change', 'touchstart', 'touchmove', 'wheel'] as const;
+const ACTIVITY_THROTTLE_MS = 15_000;
+const activityEvents = ['pointerdown', 'keydown', 'input', 'change', 'touchstart', 'wheel'] as const;
 
 /** Deadlines also need checking when browsers resume suspended background tabs. */
 export function useSessionExpiry(enabled: boolean, onExpire: (reason: 'expired' | 'changed') => void) {
@@ -49,9 +50,13 @@ export function useSessionExpiry(enabled: boolean, onExpire: (reason: 'expired' 
       }
       timer = setTimeout(check, Math.max(1, nextCheck));
     };
+    let lastActivityAt = 0;
     const activity = () => {
       if (expired || disposed) return;
-      recordSessionActivity();
+      const now = Date.now();
+      if (now - lastActivityAt < ACTIVITY_THROTTLE_MS) return;
+      lastActivityAt = now;
+      recordSessionActivity(now);
       check();
     };
     const reject = () => {

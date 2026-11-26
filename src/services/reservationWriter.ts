@@ -315,6 +315,9 @@ export function prepareReservation(r: Reservation): Reservation {
       `La fecha ${normalized.fecha} es feriado y requiere autorización CCD.`,
     );
   }
+  // Never persist plaintext authorization keys into Firestore documents
+  delete normalized.claveAutorizacionFeriado;
+  delete normalized.claveAutorizacion;
   return normalized;
 }
 
@@ -347,12 +350,23 @@ export function planWriteChunks(
   const slotOwner = new Map<string, string>();
   const keysById = new Map<string, Set<string>>();
   for (const id of ids) {
+    const prevRow = previous.get(id);
+    const nextRow = incoming.get(id);
+    const equipKeys = (row?: Reservation) =>
+      row?.fecha && Array.isArray(row.equipamientoSolicitado)
+        ? row.equipamientoSolicitado
+            .filter(item => Number(item.quantity) > 0)
+            .map(item => `equip_${row.fecha}_${item.equipmentId}`)
+        : [];
     const keys = new Set([
-      ...allSlotKeys(previous.get(id), true),
-      ...allSlotKeys(incoming.get(id)),
+      ...allSlotKeys(prevRow, true),
+      ...allSlotKeys(nextRow),
+      ...equipKeys(prevRow),
+      ...equipKeys(nextRow),
     ]);
     keysById.set(id, keys);
     for (const key of keys) {
+      if (key.startsWith('equip_')) continue;
       const owner = slotOwner.get(key);
       if (owner) parent.set(root(id), root(owner));
       else slotOwner.set(key, id);

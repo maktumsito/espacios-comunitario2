@@ -5,13 +5,12 @@
 importScripts('https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/12.18.0/firebase-messaging-compat.js');
 
-// Firebase Configuration
+// Firebase Configuration (aligned with firebase-applet-config.json)
 const firebaseConfig = {
-  projectId: "gen-lang-client-0872256224",
-  appId: "1:429338046424:web:66884a718f85cbd219ccad",
-  apiKey: "AIzaSyDUiIyAjV-mx-G48RB4oPCDkxWiPQjSrPs",
-  authDomain: "gen-lang-client-0872256224.firebaseapp.com",
-  messagingSenderId: "429338046424"
+  projectId: "gen-lang-client-0391852968",
+  appId: "1:265426525461:web:7627f8470fcba26119d74c",
+  authDomain: "gen-lang-client-0391852968.firebaseapp.com",
+  messagingSenderId: "265426525461"
 };
 
 // Initialize Firebase App in Service Worker context
@@ -50,7 +49,7 @@ if (messaging) {
     const notificationOptions = {
       body: notificationBody,
       icon: '/icon-192.png',
-      badge: '/badge-72.png',
+      badge: '/icon-192.png',
       tag: `fcm-${notifType}-${reservationId || Date.now()}`,
       data: {
         url: '/',
@@ -72,52 +71,51 @@ if (messaging) {
   });
 }
 
-// 2. Direct Web Push Event Listener (Fallback / Android Web Push)
-self.addEventListener('push', (event) => {
-  if (!event.data) return;
-
-  try {
-    const rawText = event.data.text();
-    let data;
+// 2. Direct Web Push Fallback (only when Firebase Messaging SDK is unavailable to avoid duplicate notifications)
+if (!messaging) {
+  self.addEventListener('push', (event) => {
+    if (!event.data) return;
     try {
-      data = event.data.json();
-    } catch {
-      data = { body: rawText };
+      const rawText = event.data.text();
+      let data;
+      try {
+        data = event.data.json();
+      } catch {
+        data = { body: rawText };
+      }
+      if (data.notification || data.data) {
+        const notif = data.notification || {};
+        const customData = data.data || {};
+        const title = notif.title || customData.title || '⭐ Notificación de Espacios';
+        const body = notif.body || customData.body || 'Nueva actualización en el sistema.';
+        const type = customData.type || 'important';
+
+        const options = {
+          body: body,
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          tag: `fcm-push-${type}-${customData.reservationId || Date.now()}`,
+          data: {
+            url: '/',
+            view: customData.view || 'calendar',
+            reservationId: customData.reservationId || '',
+            ...customData
+          },
+          vibrate: type === 'conflict' ? [200, 100, 200, 100, 300] : [150, 80, 250],
+          renotify: true,
+          requireInteraction: true,
+          actions: [
+            { action: 'view_app', title: 'Ver en App' }
+          ]
+        };
+
+        event.waitUntil(self.registration.showNotification(title, options));
+      }
+    } catch (err) {
+      console.warn('[firebase-messaging-sw.js] Error handling push event:', err);
     }
-
-    // Check if message was already handled by onBackgroundMessage
-    if (data.notification || data.data) {
-      const notif = data.notification || {};
-      const customData = data.data || {};
-      const title = notif.title || customData.title || '⭐ Notificación de Espacios';
-      const body = notif.body || customData.body || 'Nueva actualización en el sistema.';
-      const type = customData.type || 'important';
-
-      const options = {
-        body: body,
-        icon: '/icon-192.png',
-        badge: '/badge-72.png',
-        tag: `fcm-push-${type}-${customData.reservationId || Date.now()}`,
-        data: {
-          url: '/',
-          view: customData.view || 'calendar',
-          reservationId: customData.reservationId || '',
-          ...customData
-        },
-        vibrate: type === 'conflict' ? [200, 100, 200, 100, 300] : [150, 80, 250],
-        renotify: true,
-        requireInteraction: true,
-        actions: [
-          { action: 'view_app', title: 'Ver en App' }
-        ]
-      };
-
-      event.waitUntil(self.registration.showNotification(title, options));
-    }
-  } catch (err) {
-    console.warn('[firebase-messaging-sw.js] Error handling push event:', err);
-  }
-});
+  });
+}
 
 // 3. Notification Click Handler (Mobile Android tap & Desktop click)
 self.addEventListener('notificationclick', (event) => {

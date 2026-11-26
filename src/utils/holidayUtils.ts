@@ -250,9 +250,11 @@ export function getChileanHolidays(year: number): ChileanHoliday[] {
     description: 'Conmemoración del Combate Naval de Iquique'
   });
 
-  // 5. Día Nacional de los Pueblos Indígenas (21 de Junio - Solsticio de invierno)
+  // 5. Día Nacional de los Pueblos Indígenas (Ley 21.357 - Solsticio de invierno según SHOA en hora oficial de Chile)
+  const solsticeJune20Years = new Set([2024, 2025, 2028, 2029, 2032, 2033, 2036, 2037]);
+  const solsticeDay = solsticeJune20Years.has(year) ? 20 : 21;
   holidays.push({
-    date: formatIsoDate(year, 6, 21),
+    date: formatIsoDate(year, 6, solsticeDay),
     name: 'Día Nacional de los Pueblos Indígenas',
     type: 'civil',
     isIrrenunciable: false,

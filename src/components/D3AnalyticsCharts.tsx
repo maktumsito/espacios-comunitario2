@@ -357,23 +357,27 @@ export const D3HourlyOccupancyChart: React.FC<D3HourlyOccupancyChartProps> = ({ 
   // Generate hourly occupancy between 08:00 and 22:00
   const hours = Array.from({ length: 15 }, (_, i) => i + 8); // 8 to 22
 
-  const hourlyData = hours.map(hour => {
-    const timeNum = hour * 60;
-    const count = reservations.filter(r => {
-      if (!r.horaInicio || !r.horaFin) return false;
-      const [sh, sm] = r.horaInicio.split(':').map(Number);
-      const [eh, em] = r.horaFin.split(':').map(Number);
-      const sMin = (sh || 0) * 60 + (sm || 0);
-      let eMin = (eh || 0) * 60 + (em || 0);
-      if (eMin <= sMin) eMin += 1440;
-      return timeNum >= sMin && timeNum < eMin;
-    }).length;
+  const hourlyData = React.useMemo(() => {
+    const active = reservations.filter((r: any) => r.estado !== 'cancelada' && r.estado !== 'rechazada');
+    return hours.map(hour => {
+      const hourStart = hour * 60;
+      const hourEnd = (hour + 1) * 60;
+      const count = active.filter(r => {
+        if (!r.horaInicio || !r.horaFin) return false;
+        const [sh, sm] = r.horaInicio.split(':').map(Number);
+        const [eh, em] = r.horaFin.split(':').map(Number);
+        const sMin = (sh || 0) * 60 + (sm || 0);
+        let eMin = (eh || 0) * 60 + (em || 0);
+        if (eMin <= sMin) eMin += 1440;
+        return sMin < hourEnd && eMin > hourStart;
+      }).length;
 
-    return {
-      hour: `${hour.toString().padStart(2, '0')}:00`,
-      count
-    };
-  });
+      return {
+        hour: `${hour.toString().padStart(2, '0')}:00`,
+        count
+      };
+    });
+  }, [reservations]);
 
   useEffect(() => {
     if (!containerRef.current || hourlyData.length === 0) return;

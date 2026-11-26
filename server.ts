@@ -1,8 +1,9 @@
 import { registerPublicFiles } from './server/publicFiles';
 import { registerBackupApi } from './server/backupApi';
 import { registerBackupMaintenanceApi } from './server/backupMaintenanceApi';
+import { registerRequestAiApi } from './server/requestAiApi';
 import { APP_BUILD_INFO } from './src/buildInfo';
-import { claimDelivery,startDelivery,finishDelivery } from './server/deliveryLease';
+import { claimDelivery, finishDelivery } from './server/deliveryLease';
 import { registerReservationApi } from './server/reservationApi';
 import { getServerDatabase, serverAuth } from './server/database';
 import { registerDataApi } from './server/dataApi';
@@ -15,7 +16,7 @@ import { SharedServerDocument } from './server/sharedDocument';
 import { GmailConnection } from './server/gmailConnection';
 import { registerScheduledCheck, scheduledRetryGate } from './server/scheduledDispatch';
 import { dispatchCakeNotices } from './server/reservationCakes';
-import { selectDispatchReservations, isDispatchLoan as isLoan, isDispatchableReservation } from './src/utils/activityDispatchSelection';
+import { selectDispatchReservations } from './src/utils/activityDispatchSelection';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -111,7 +112,7 @@ function getSantiagoTime(): {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hourCycle: 'h23',
     weekday: 'short'
   });
   const parts = formatter.formatToParts(now);
@@ -120,7 +121,7 @@ function getSantiagoTime(): {
   const year = getPart('year');
   const month = getPart('month');
   const day = getPart('day');
-  const hour = parseInt(getPart('hour'), 10) || 0;
+  const hour = (parseInt(getPart('hour'), 10) || 0) % 24;
   const minute = parseInt(getPart('minute'), 10) || 0;
 
   const weekdayStr = now.toLocaleDateString('en-US', { timeZone: TIMEZONE, weekday: 'short' });
@@ -160,7 +161,7 @@ export interface EmailSendOptions {
 
 interface EmailSendResult {
   success: boolean;
-  mode: 'smtp' | 'resend' | 'gmail_api' | 'logged' | 'unconfigured';
+  mode: 'smtp' | 'gmail_api' | 'logged' | 'unconfigured';
   messageId?: string;
   timestamp: string;
   error?: string;
@@ -211,34 +212,24 @@ async function sendEmailServer(options: EmailSendOptions): Promise<EmailSendResu
   }
   if (options.gmailOnly) return { success: false, mode: 'unconfigured', safeToRetry: true, timestamp: nowIso };
 
-  // 1. Automatic Gmail SMTP & Custom SMTP config
+  // 1. Automatic Gmail SMTP config
   const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'cristianshute@gmail.com';
   const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASSWORD;
   const isGmail = (process.env.SMTP_HOST === 'smtp.gmail.com') || (!process.env.SMTP_HOST && smtpUser.endsWith('@gmail.com'));
-  const smtpHost = process.env.SMTP_HOST || (isGmail ? 'smtp.gmail.com' : undefined);
-  const smtpPort = parseInt(process.env.SMTP_PORT || (isGmail ? '465' : '587'), 10);
   const smtpFrom = process.env.SMTP_FROM || `Gestión de Espacios Diaguitas <${smtpUser}>`;
 
   if (smtpPass && smtpUser && isGmail) {
     try {
-      // For Gmail, Nodemailer's native 'gmail' service automatically configures SSL/TLS, port 465 and Google mail servers
-      const transporter = isGmail
-        ? nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-              user: smtpUser,
-              pass: smtpPass
-            }
-          })
-        : nodemailer.createTransport({
-            host: smtpHost,
-            port: smtpPort,
-            secure: smtpPort === 465,
-            auth: {
-              user: smtpUser,
-              pass: smtpPass
-            }
-          });
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        connectionTimeout: 15_000,
+        greetingTimeout: 15_000,
+        socketTimeout: 30_000,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        }
+      });
 
       const mailAttachments = attachments.map(att => ({
         filename: att.filename,
@@ -526,9 +517,9 @@ async function executeScheduledDispatchInternal(force = false): Promise<{
 
     const textBody = `Centro Comunitario Diaguitas\nDespacho Oficial de Planillas de Actividades\n\nFechas: ${formattedDatesList}\nTotal actividades: ${totalActivities}\n\nAdjuntos para impresión (${attachments.length}):\n${attachments.map(a => `- ${a.filename}`).join('\n')}\n\nGenerado automáticamente por el Sistema de Gestión.`;
 
-    const delivery=await claimDelivery(getServerDatabase(),santiago.dateStr,Date.now(),true);
-    if(!delivery)return {success:false,skipped:true,message:'El ciclo ya se envió, está en curso o requiere revisión de su resultado. No se repetirá automáticamente.'};
-    await startDelivery(getServerDatabase(),delivery);
+    const deliveryCycle = force ? `manual-${santiago.dateStr}-${Date.now()}` : santiago.dateStr;
+    const delivery = await claimDelivery(getServerDatabase(), deliveryCycle, Date.now(), true);
+    if (!delivery) return { success: false, skipped: true, message: 'El ciclo ya se envió, está en curso o requiere revisión de su resultado. No se repetirá automáticamente.' };
     // 9. Send through the free Gmail transport.
     const result = await sendEmailServer({
       to: recipients,
@@ -539,7 +530,11 @@ async function executeScheduledDispatchInternal(force = false): Promise<{
       attachments
     });
 
-    try{await finishDelivery(getServerDatabase(),delivery,result.success,result.messageId);}catch{console.warn('[Scheduler] Despacho pendiente de reconciliación; no se repetirá automáticamente.');}
+    try {
+      await finishDelivery(getServerDatabase(), delivery, result.success, result.messageId, Boolean(result.safeToRetry));
+    } catch {
+      console.warn('[Scheduler] Despacho pendiente de reconciliación; no se repetirá automáticamente.');
+    }
     if (result.success) {
       // A failed Firestore timestamp write must not resend an already delivered email.
       confirmedDispatchDate = santiago.dateStr;
@@ -623,6 +618,8 @@ export function executeScheduledDispatchServer(force = false) {
 }
 
 let schedulerInterval: NodeJS.Timeout | null = null;
+let cakeDispatchInterval: NodeJS.Timeout | null = null;
+let slotCleanupInterval: NodeJS.Timeout | null = null;
 
 // Automatic backend cleanup of historical concurrency slots older than 30 days
 export const purgeExpiredSlotsServer = guardedSlotCleanup(executeExpiredSlotsCleanup);
@@ -691,21 +688,34 @@ function startBackgroundScheduler() {
       console.warn('[Background Scheduler] Periodic check notice:', err);
     });
   }, 60 * 1000);
+  schedulerInterval.unref();
+
+  // Periodic cake outbox drain every 5 minutes (supports both Gmail OAuth and Gmail SMTP)
+  cakeDispatchInterval = setInterval(() => {
+    dispatchCakeNotices(getServerDatabase(), email => sendEmailServer(email)).catch(err => {
+      console.warn('[Background Scheduler] Cake mail dispatch notice:', err);
+    });
+  }, 5 * 60 * 1000);
+  cakeDispatchInterval.unref();
 
   // Periodic slots cleanup every 24 hours
-  setInterval(() => {
+  slotCleanupInterval = setInterval(() => {
     purgeExpiredSlotsServer(30).catch(err => {
       console.warn('[Background Scheduler] Daily slots cleanup notice:', err);
     });
   }, 24 * 60 * 60 * 1000);
+  slotCleanupInterval.unref();
 }
 
 
 // Start Express Application
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+  app.set('trust proxy', 1);
+  const largeJson = express.json({ limit: '50mb' });
+  app.use(['/api/backups', '/api/data/write', '/api/reservations/commit', '/api/email/send'], largeJson);
+  app.use(express.json({ limit: '2mb' }));
+  app.use(express.urlencoded({ limit: '2mb', extended: true }));
 
   // -------------------------------------------------------------
   // API ROUTES (Mounted FIRST before Vite middleware)
@@ -721,47 +731,11 @@ async function startServer() {
     });
   });
 
-  app.get('/api/email/status',appSessions.requireAuth, async (req, res) => {
-    if (localTestMode) { res.json({active:true,provider:'local_simulated',gmailConnected:false,smtpConfigured:false,resendConfigured:false}); return; }
-    const santiago = getSantiagoTime();
-    const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'cristianshute@gmail.com';
-    const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASSWORD;
-    const hasSmtp = Boolean(smtpPass && smtpUser && (process.env.SMTP_HOST==='smtp.gmail.com'||!process.env.SMTP_HOST&&smtpUser.endsWith('@gmail.com')));
-    const hasResend = false;
-    const gmail = await gmailConnection.status(req).catch(() => ({ connected: false, persistent: false }));
-
-    res.json({
-      active: hasSmtp || hasResend || gmail.connected,
-      provider: gmail.connected ? 'gmail_api' : hasSmtp ? 'smtp_gmail' : hasResend ? 'resend' : 'unconfigured',
-      gmailConnected: gmail.connected,
-      gmailPersistent: gmail.persistent,
-      smtpConfigured: hasSmtp,
-      resendConfigured: hasResend,
-      timezone: TIMEZONE,
-      santiagoTime: `${santiago.dateStr} ${santiago.timeFormatted}`,
-      senderEmail: smtpUser,
-      outboundConfig: {
-        service: 'gmail',
-        host: 'smtp.gmail.com',
-        port: 465,
-        security: 'SSL/TLS',
-        authAccount: smtpUser,
-        fromHeader: `Gestión de Espacios Diaguitas <${smtpUser}>`,
-        hasPasswordConfigured: Boolean(smtpPass)
-      },
-      mondaySchedule: {
-        targetDay: 'Lunes',
-        targetTime: '09:00 AM',
-        destinatarios: ['cristianshute@gmail.com']
-      }
-    });
-  });
-
   // Rate limiting map for email dispatch to prevent open relay abuse
   const emailRateLimit = new Map<string, { count: number; resetAt: number }>();
 
   // Periodically clean up expired rate limit entries to prevent unbounded memory growth
-  setInterval(() => {
+  const rateLimitCleanup = setInterval(() => {
     const now = Date.now();
     for (const [key, entry] of emailRateLimit.entries()) {
       if (entry.resetAt < now) {
@@ -769,6 +743,7 @@ async function startServer() {
       }
     }
   }, 5 * 60 * 1000);
+  rateLimitCleanup.unref();
 
   function checkEmailRateLimit(ipOrUser: string): boolean {
     const now = Date.now();
@@ -790,10 +765,11 @@ async function startServer() {
       .select('username', 'name', 'role', 'initials', 'avatarColor').get();
     return snapshot.docs.map(doc => doc.data() as UserAccount);
   });
-  registerDataApi(app, getServerDatabase(), appSessions);
-  registerReservationApi(app,getServerDatabase(),appSessions);
-  registerBackupApi(app,getServerDatabase(),appSessions);
-  registerBackupMaintenanceApi(app,getServerDatabase(),appSessions, () => purgeExpiredSlotsServer.status());
+  const stopDataApi = registerDataApi(app, getServerDatabase(), appSessions);
+  registerReservationApi(app, getServerDatabase(), appSessions);
+  registerRequestAiApi(app, appSessions);
+  registerBackupApi(app, getServerDatabase(), appSessions);
+  registerBackupMaintenanceApi(app, getServerDatabase(), appSessions, () => purgeExpiredSlotsServer.status());
   const requireAuth = appSessions.requireAuth;
   if (!localTestMode) gmailConnection.register(app, (req, res, next) => {
     void requireAuth(req, res, () => requireReservationWriter(req, res, next));
@@ -849,7 +825,7 @@ async function startServer() {
   registerScheduledCheck(app, () => process.env.EMAIL_SCHEDULER_SECRET, async force => {
     const [scheduled, cakes] = await Promise.allSettled([
       executeScheduledDispatchServer(force),
-      dispatchCakeNotices(getServerDatabase(), email => sendEmailServer({ ...email, gmailOnly: true })),
+      dispatchCakeNotices(getServerDatabase(), email => sendEmailServer(email)),
     ]);
     if (cakes.status === 'rejected' || scheduled.status === 'rejected')
       return { success: false, message: 'No se pudo completar la comprobación del correo programado.' };
@@ -866,77 +842,6 @@ async function startServer() {
         success: false,
         error: err?.message || 'Error al ejecutar despacho programado'
       });
-    }
-  });
-
-  // Preview what the scheduled automated dispatch will send
-  app.get('/api/email/preview-scheduled', requireAuth, async (req, res) => {
-    try {
-      const db = getServerDb();
-      if (!db) return res.status(500).json({ error: 'DB not available' });
-
-      const configSnap = await getDocFromServer(doc(db, 'configuracion_sistema', 'gmail_dispatch_config'));
-      const configRaw = configSnap.exists() ? (configSnap.data() as any) : null;
-      const config = configRaw?.data || configRaw;
-      const schedule = config?.schedule;
-      const santiago = getSantiagoTime();
-
-      const alcance = schedule?.alcanceActividades || 'fin_de_semana';
-      const specificDays = schedule?.diasActividadesEspecificos || [6, 0];
-      let activityDates = calculateActivityDatesForDispatchDate(santiago.dateStr, alcance, specificDays);
-
-      const allReservations = await fetchDispatchReservations(db, activityDates);
-      const filterMode = config?.dispatchFilterMode || 'solo_prestamos';
-      const emailReservations = selectDispatchReservations(allReservations, {
-        dates: activityDates,
-        referenceDate: santiago.dateStr,
-        filterMode,
-        selectedActivityTypes: config?.selectedActivityTypes
-      });
-      activityDates = activityDates.filter(date => emailReservations.some(r => r.fecha === date));
-
-      const dailySummaries = activityDates.map(dateStr => {
-        const count = emailReservations.filter(r => r.fecha === dateStr).length;
-        const totalRaw = allReservations.filter(r => r.fecha === dateStr && isDispatchableReservation(r)).length;
-        const loansCount = allReservations.filter(r => r.fecha === dateStr && isDispatchableReservation(r) && isLoan(r)).length;
-        const filename = getDailySchedulePdfFilename(dateStr);
-        return { dateStr, formattedDate: formatDateDDMMYYYY(dateStr), filename, count, totalRaw, loansCount, filterMode };
-      });
-
-      res.json({
-        santiagoTime: `${santiago.dateStr} ${santiago.timeFormatted}`,
-        schedule,
-        filterMode,
-        recipients: config?.defaultRecipients || ['cristianshute@gmail.com'],
-        activityDates,
-        dailySummaries,
-        totalAttachments: dailySummaries.length
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Error generating preview' });
-    }
-  });
-
-  app.post('/api/email/trigger-monday', requireAuth, async (req, res) => {
-    res.json({ success: false, message: 'El envío automático de correos de fin de semana ha sido cancelado por configuración.' });
-  });
-
-  // -------------------------------------------------------------
-  // CCD HOLIDAY OVERRIDE VALIDATION ENDPOINT
-  // -------------------------------------------------------------
-  app.post('/api/auth/verify-holiday-override', (req, res) => {
-    try {
-      const { key } = req.body || {};
-      if (!key || typeof key !== 'string') {
-        return res.status(400).json({ valid: false, error: 'Clave requerida' });
-      }
-      const normalizedKey = key.trim().toUpperCase();
-      const hash = crypto.createHash('sha256').update(normalizedKey).digest('hex');
-      const EXPECTED_HASH = '66dfd0071d636ea2ae067345ef9f1c816baa45f411800f36a6c29eee4ce7aa8f';
-      const isValid = hash === EXPECTED_HASH;
-      return res.json({ valid: isValid });
-    } catch (e: any) {
-      return res.status(500).json({ valid: false, error: e?.message || 'Error validando clave' });
     }
   });
 
@@ -991,7 +896,9 @@ async function startServer() {
 
       const santiago = getSantiagoTime();
       const eventDate = reservationEndDate(dbReservation);
-      const eventEndTime = String(dbReservation.horaFin || '23:59').trim();
+      const rawEndTime = String(dbReservation.horaFin || '23:59').trim();
+      const [endH = '23', endM = '59'] = rawEndTime.split(':');
+      const eventEndTime = `${endH.padStart(2, '0')}:${endM.padStart(2, '0')}`;
 
       // Comparación estricta de tiempo de finalización contra hora de Santiago (Chile)
       const isFuture = (eventDate > santiago.dateStr) || (eventDate === santiago.dateStr && eventEndTime > santiago.timeFormatted);
@@ -1042,31 +949,6 @@ async function startServer() {
   });
 
   // -------------------------------------------------------------
-  // SERVICE WORKERS EXPLICIT MIME-TYPE ROUTING
-  // -------------------------------------------------------------
-  app.get('/firebase-messaging-sw.js', (req, res) => {
-    const swPath = path.join(process.cwd(), 'public', 'firebase-messaging-sw.js');
-    if (fs.existsSync(swPath)) {
-      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      res.setHeader('Service-Worker-Allowed', '/');
-      res.sendFile(swPath);
-    } else {
-      res.status(404).send('// Service worker not found');
-    }
-  });
-
-  app.get('/sw.js', (req, res) => {
-    const swPath = path.join(process.cwd(), 'public', 'sw.js');
-    if (fs.existsSync(swPath)) {
-      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      res.setHeader('Service-Worker-Allowed', '/');
-      res.sendFile(swPath);
-    } else {
-      res.status(404).send('// Service worker not found');
-    }
-  });
-
-  // -------------------------------------------------------------
   // VITE MIDDLEWARE (Development) or STATIC ASSETS (Production)
   // -------------------------------------------------------------
   const distPath = fs.existsSync(path.join(process.cwd(), 'dist', 'index.html'))
@@ -1077,14 +959,33 @@ async function startServer() {
     ? path.join(__dirname, '..', 'dist')
     : path.join(process.cwd(), 'dist');
 
-  const hasBuiltDist = fs.existsSync(path.join(distPath, 'index.html'));
   const isCompiledBundle = (typeof __filename !== 'undefined' && __filename.includes('server.cjs')) ||
     (typeof __dirname !== 'undefined' && __dirname.includes('dist'));
-  const isProduction = process.env.NODE_ENV === 'production' || isCompiledBundle || hasBuiltDist;
+  const isProduction = process.env.NODE_ENV === 'production' || isCompiledBundle;
+
+  // Service Workers explicit MIME-type + no-cache routing (works in both dist/ and public/)
+  const serveServiceWorker = (filename: string) => (_req: express.Request, res: express.Response) => {
+    const candidates = [path.join(distPath, filename), path.join(process.cwd(), 'public', filename)];
+    const swPath = candidates.find(candidate => fs.existsSync(candidate));
+    if (swPath) {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Service-Worker-Allowed', '/');
+      res.sendFile(swPath);
+    } else {
+      res.status(404).send('// Service worker not found');
+    }
+  };
+  app.get('/firebase-messaging-sw.js', serveServiceWorker('firebase-messaging-sw.js'));
+  app.get('/sw.js', serveServiceWorker('sw.js'));
 
   if (isProduction) {
     registerPublicFiles(app, distPath);
     app.get('*', (req, res) => {
+      if (req.path.startsWith('/api/') || req.path.startsWith('/assets/') || /\.[a-z0-9]{1,8}$/i.test(req.path)) {
+        res.status(404).end();
+        return;
+      }
       const indexPath = path.join(distPath, 'index.html');
       if (fs.existsSync(indexPath)) {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -1111,6 +1012,18 @@ async function startServer() {
     console.log(`[Server] Chile Time: ${getSantiagoTime().dateStr} ${getSantiagoTime().timeFormatted}`);
     startBackgroundScheduler();
   });
+
+  const shutdown = () => {
+    if (schedulerInterval) clearInterval(schedulerInterval);
+    if (cakeDispatchInterval) clearInterval(cakeDispatchInterval);
+    if (slotCleanupInterval) clearInterval(slotCleanupInterval);
+    clearInterval(rateLimitCleanup);
+    stopDataApi?.();
+    dispatchConfiguration?.close();
+    server.close(() => process.exit(0));
+  };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
 
   server.on('error', (err: any) => {
     console.error(`[Server] Listen error on port ${PORT}:`, err);

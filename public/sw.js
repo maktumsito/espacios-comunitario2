@@ -1,10 +1,8 @@
 // Service Worker for Community Spaces & Workshops (PWA + Push Notifications)
 // Handles offline caching, asset fallbacks, background push notifications, and vibration
 
-const CACHE_NAME = 'espacios-comunitarios-sw-v2';
+const CACHE_NAME = 'espacios-comunitarios-sw-v3';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
@@ -39,9 +37,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (!url.protocol.startsWith('http')) return;
 
-  // Bypass API and Firestore network calls
+  // Bypass API, build-info and Firestore network calls
   if (
     url.pathname.startsWith('/api/') ||
+    url.pathname === '/build-info.json' ||
     url.hostname.includes('firestore') ||
     url.hostname.includes('googleapis') ||
     url.hostname.includes('identitytoolkit')
@@ -49,13 +48,41 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Network-First for HTML navigations so deployments never serve stale index.html pointing to removed chunks
+  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request).then((res) => res || caches.match('/') || caches.match('/index.html')))
+    );
+    return;
+  }
+
+  const isValidAssetResponse = (requestUrl, response) => {
+    if (!response || response.status !== 200 || response.type !== 'basic') return false;
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    // Never cache an HTML SPA fallback under a JS/CSS/image asset URL
+    if (/\.(js|mjs|css|png|ico|svg|woff2|json)$/i.test(requestUrl.pathname) && contentType.includes('text/html')) {
+      return false;
+    }
+    return true;
+  };
+
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
         // Stale-while-revalidate for cached static resources
         fetch(event.request)
           .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+            if (isValidAssetResponse(url, networkResponse)) {
               const responseToCache = networkResponse.clone();
               caches.open(CACHE_NAME).then((cache) => {
                 cache.put(event.request, responseToCache);
@@ -66,10 +93,10 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
 
-      // If not in cache, request from network and cache
+      // If not in cache, request from network and cache only valid responses
       return fetch(event.request)
         .then((networkResponse) => {
-          if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+          if (!isValidAssetResponse(url, networkResponse)) {
             return networkResponse;
           }
           const responseToCache = networkResponse.clone();
@@ -78,13 +105,7 @@ self.addEventListener('fetch', (event) => {
           });
           return networkResponse;
         })
-        .catch(() => {
-          // Offline navigation fallback: serve cached index.html
-          if (event.request.mode === 'navigate') {
-            return caches.match('/') || caches.match('/index.html');
-          }
-          return new Response('Offline', { status: 503, statusText: 'Offline' });
-        });
+        .catch(() => new Response('Offline', { status: 503, statusText: 'Offline' }));
     })
   );
 });

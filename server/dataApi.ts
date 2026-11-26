@@ -2,7 +2,8 @@ import type { Express, Request, Response } from "express";
 import type { DocumentSnapshot, Firestore } from "firebase-admin/firestore";
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { gzipSync } from "node:zlib";
+import { promisify } from "node:util";
+import { gzip } from "node:zlib";
 import type { AppSessions } from "./appSession";
 import { hashPassword, publicProfile, verifyPassword } from "./passwords";
 import { defaultNewUserPermissions, isReservationPermissionAdmin, reservationPermission, reservationPermissionKeys, RESERVATION_PERMISSION_ADMIN_USERNAME } from '../src/utils/userPermissions';
@@ -12,13 +13,18 @@ import {
   finishScheduledBackup,
 } from "../src/services/backupScheduleCoordinator";
 
-function sendDataContent(req: Request, res: Response, content: Buffer) {
+const gzipAsync = promisify(gzip);
+
+async function sendDataContent(req: Request, res: Response, content: Buffer, precompressed?: Buffer) {
   res.vary('Accept-Encoding');
   const encoding = content.length <= 2048 && req.acceptsEncodings('identity')
     ? 'identity'
     : req.acceptsEncodings('gzip', 'identity');
   if (!encoding) return res.status(406).end();
-  if (encoding === 'gzip') return res.set('Content-Encoding', 'gzip').end(gzipSync(content));
+  if (encoding === 'gzip') {
+    const body = precompressed ?? await gzipAsync(content);
+    return res.set('Content-Encoding', 'gzip').end(body);
+  }
   return res.end(content);
 }
 
@@ -320,7 +326,6 @@ export function registerDataApi(
   const views = new Map<
     string,
     {
-      snapshot: any;
       docs: any[];
       version: string;
       lastUse: number;
@@ -349,7 +354,7 @@ export function registerDataApi(
         "Cache-Control": "no-store",
         "Content-Type": "application/json",
       });
-      sendDataContent(req, res, content);
+      await sendDataContent(req, res, content);
     }),
   );
   const readView = async (body: any, user: any) => {
@@ -376,7 +381,6 @@ export function registerDataApi(
         const epoch = randomUUID();
         let sequence = 0;
         view = {
-          snapshot: null,
           docs: [],
           version: "",
           lastUse: Date.now(),
@@ -389,7 +393,6 @@ export function registerDataApi(
         const current = view;
         current.stop = ref.onSnapshot(
           (snapshot: any) => {
-            current.snapshot = snapshot;
             current.docs = records(snapshot, body.path);
             current.version = `${epoch}:${++sequence}`;
             ready();
@@ -423,7 +426,7 @@ export function registerDataApi(
         "Cache-Control": "no-store",
         "Content-Type": "application/x-ndjson",
       });
-      sendDataContent(req, res, content);
+      await sendDataContent(req, res, content);
     }),
   );
   app.post('/api/data/listen-batch', sessions.requireAuth, wrap(async (req, res) => {
@@ -440,7 +443,7 @@ export function registerDataApi(
     }));
     const content = Buffer.from(JSON.stringify({ success: true, results }));
     res.set({ 'Cache-Control': 'no-store', 'Content-Type': 'application/json' });
-    sendDataContent(req, res, content);
+    await sendDataContent(req, res, content);
   }));
   app.post(
     "/api/data/write",
@@ -481,7 +484,7 @@ export function registerDataApi(
       }
       const batch = db.batch();
       let batchOps = 0;
-      for (const w of writes) {
+      const validatedWrites = writes.map((w) => {
         const p = validatePath(w.path);
         if (!["set", "update", "delete"].includes(w.type) || p.length % 2 !== 0)
           throw new ApiFailure(400, "Escritura no válida.");
@@ -498,6 +501,33 @@ export function registerDataApi(
             403,
             "Utiliza la operación autorizada específica.",
           );
+        if (p[0] === "calificaciones_espacios") {
+          if (w.type !== "delete") {
+            throw new ApiFailure(
+              403,
+              "Las calificaciones deben registrarse mediante la validación autorizada del servidor.",
+            );
+          }
+          if (!reservationPermission(user, "canDeleteReservations") && !manager(user)) {
+            throw new ApiFailure(403, "No tienes permiso para eliminar calificaciones.");
+          }
+        }
+        return { w, p };
+      });
+      const prefetchPaths = [...new Set(
+        validatedWrites
+          .filter(({ p }) => ["configuracion_sistema", "bloqueos_espacios", "fcm_tokens"].includes(p[0]))
+          .map(({ w }) => w.path as string),
+      )];
+      const prefetchedDocs = new Map<string, any>();
+      if (prefetchPaths.length > 0) {
+        const refs = prefetchPaths.map((path) => db.doc(path));
+        const snaps = typeof db.getAll === "function"
+          ? await db.getAll(...refs)
+          : await Promise.all(refs.map((ref) => ref.get()));
+        prefetchPaths.forEach((path, idx) => prefetchedDocs.set(path, snaps[idx]));
+      }
+      for (const { w, p } of validatedWrites) {
         let existingTokenDoc: any = null;
         if (
           [
@@ -510,13 +540,14 @@ export function registerDataApi(
           if (p[0] === "configuracion_sistema" && !configs.includes(p[1]))
             throw new ApiFailure(403, "Configuración privada.");
           if (p[0] === "configuracion_sistema" || p[0] === "bloqueos_espacios") {
-            existingTokenDoc = await db.doc(w.path).get();
+            existingTokenDoc = prefetchedDocs.get(w.path) ?? null;
           }
         } else if (p[0] === "fcm_tokens") {
-          existingTokenDoc = await db.doc(w.path).get();
-          if (existingTokenDoc.exists && existingTokenDoc.get("owner") !== user.username)
+          existingTokenDoc = prefetchedDocs.get(w.path) ?? null;
+          if (existingTokenDoc?.exists && existingTokenDoc.get("owner") !== user.username)
             requireManager(user);
         } else if (
+          p[0] !== "calificaciones_espacios" &&
           !reservationPermission(user, "canCreateReservations") &&
           !reservationPermission(user, "canEditReservations")
         )

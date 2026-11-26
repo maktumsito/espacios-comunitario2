@@ -100,8 +100,9 @@ export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignme
   const start = Date.parse(`${period.start}T12:00:00Z`);
   const end = Date.parse(`${period.end}T12:00:00Z`);
   const enabledNames = new Set(getEnabledSpaces(spaces).map(space => space.name));
-  const byId = new Map(existing.map(row => [row.id, row]));
-  const existingKeys = new Set(existing.map(sessionKey));
+  const activeExisting = existing.filter(row => row.estado !== 'cancelada' && row.estado !== 'rechazada');
+  const byId = new Map(activeExisting.map(row => [row.id, row]));
+  const existingKeys = new Set(activeExisting.map(sessionKey));
   const result: WorkshopImportPreview = { reservations: [], omittedHolidays: [], duplicates: 0, total: 0 };
   const holidays = new Map<string, { date: string; name: string; sessions: number }>();
   const identities = new Set<string>();
@@ -139,7 +140,7 @@ export async function buildWorkshopImport(rows: readonly WorkshopRow[], assignme
           ...(activityAssignments[row.row] ? { tipoPrestamo: activityAssignments[row.row] } : {}), actividadRecurrente: 'Sí',
           tipoRecurrencia: 'semanal', serieRecurrente: seriesId, recurrenteId: seriesId,
           fechaInicioRecurrencia: period.start, fechaFinRecurrencia: period.end,
-          diasSemana: [...new Set(schedules.map(slot => Object.keys(weekdays).find(key => weekdays[key] === slot.day)!.toLowerCase()))].join(','),
+          diasSemana: [...new Set(schedules.map(slot => ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][slot.day]))].join(','),
           estado: 'activa', realizada: 'No' });
       }
     }

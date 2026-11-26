@@ -118,30 +118,36 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
     return combined;
   }, [spaces]);
 
-  // Active reservations on selected date
+  // Active reservations on selected date (excludes cancelled / replaced sessions)
   const dailyReservations = useMemo(() => {
     return reservations.filter((r) => {
-      return r.fecha === selectedDateStr;
+      if (r.fecha !== selectedDateStr) return false;
+      if (r.estado === 'cancelada' || r.estado === 'rechazada' || (r as any).eliminada === true) return false;
+      if (r.reemplazadaPorReservaId) return false;
+      return true;
     });
   }, [reservations, selectedDateStr]);
 
-  // Group reservations by space
+  // Group reservations by space (expanding compound spaces like "SALA 2 / SALA 3")
   const reservationsBySpace = useMemo(() => {
     const map = new Map<string, Reservation[]>();
     orderedSpaceNames.forEach((name) => map.set(name, []));
 
     dailyReservations.forEach((r) => {
-      const normSpace = normalizeSpaceName(r.espacio).toUpperCase();
-      let matchedKey = orderedSpaceNames.find(
-        (s) => s === normSpace || s.replace(/SALA DE /g, 'SALA ') === normSpace
-      );
-      if (!matchedKey) {
-        matchedKey = normSpace;
-      }
-      if (!map.has(matchedKey)) {
-        map.set(matchedKey, []);
-      }
-      map.get(matchedKey)!.push(r);
+      const parts = (r.espacio || '').split(/[+/]/).map((s) => normalizeSpaceName(s.trim()).toUpperCase()).filter(Boolean);
+      const spaceKeys = parts.length > 0 ? [...new Set(parts)] : [normalizeSpaceName(r.espacio).toUpperCase()];
+      spaceKeys.forEach((normSpace) => {
+        let matchedKey = orderedSpaceNames.find(
+          (s) => s === normSpace || s.replace(/SALA DE /g, 'SALA ') === normSpace
+        );
+        if (!matchedKey) {
+          matchedKey = normSpace;
+        }
+        if (!map.has(matchedKey)) {
+          map.set(matchedKey, []);
+        }
+        map.get(matchedKey)!.push(r);
+      });
     });
 
     // Sort reservations inside each space by start time
@@ -187,6 +193,7 @@ export const PrintScheduleModal: React.FC<PrintScheduleModalProps> = ({
       return reservations
         .filter((r) => {
           if (r.importante !== 'Sí') return false;
+          if (r.estado === 'cancelada' || r.estado === 'rechazada' || (r as any).eliminada === true || r.reemplazadaPorReservaId) return false;
           if (!r.fecha) return false;
           const rDate = parseISO(r.fecha);
           if (isNaN(rDate.getTime())) return false;

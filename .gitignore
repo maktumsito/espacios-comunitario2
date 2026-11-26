@@ -1,8 +1,12 @@
 node_modules/
 build/
 dist/
+dist-server/
 coverage/
 work/
+output/
+outputs/
+.letter-qa-*
 .firebase/
 .DS_Store
 *.log

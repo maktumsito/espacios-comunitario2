@@ -249,20 +249,22 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     return [...new Set(selectedSpecificDates)].filter(date => !exceptions.has(date) && date >= cutoff &&
       (!context || isDuplicating || updateScope === 'single' || isDateInSeriesScope(date, context)));
   }, [selectedSpecificDates, allReservations, editingReservation, isDuplicating, updateScope, editToday, rangeStartDate, rangeEndDate, selectedOccurrenceIds]);
-  const [isWizardMode, setIsWizardMode] = useState<boolean>(!editingReservation || isDuplicating);
+  const hasPrefilledSlot = Boolean(!editingReservation && !isDuplicating && initialSpace && initialStartTime);
+  const [isWizardMode, setIsWizardMode] = useState<boolean>(!editingReservation && !hasPrefilledSlot || isDuplicating);
   const [isEditingLoading, setIsEditingLoading] = useState<boolean>(false);
   const initializedFormKey = useRef<string | null>(null);
   const [initializationRevision, setInitializationRevision] = useState(0);
   const [initialFormBaseline, setInitialFormBaseline] = useState<{form: Partial<Reservation>; schedule: string; history: Reservation[]} | null>(null);
 
 
-  // Sync wizard step on open
+  // Sync wizard step on open (use 1-screen Quick Mode when opening from a preselected free time slot)
   useEffect(() => {
     if (isOpen) {
       setWizardStep(1);
-      setIsWizardMode(!editingReservation || isDuplicating);
+      const quickFromSlot = Boolean(!editingReservation && !isDuplicating && initialSpace && initialStartTime);
+      setIsWizardMode((!editingReservation && !quickFromSlot) || isDuplicating);
     }
-  }, [isOpen, editingReservation, isDuplicating]);
+  }, [isOpen, editingReservation, isDuplicating, initialSpace, initialStartTime]);
 
   // Memoized directory of past responsables and contact details (deferred until Step 3 or full-form mode)
   const needsResponsablesIndex = !isWizardMode || wizardStep === 3;

@@ -202,12 +202,15 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
     });
   }, [spaceBlocks, selectedDayIso]);
 
-  // Available spaces that have reservations today (for quick filter chips)
+  // Available spaces that have reservations today (for quick filter chips, expanding compound spaces)
   const spacesWithBookingsToday = useMemo(() => {
     const counts = new Map<string, number>();
     dayReservations.forEach((r) => {
-      const canon = normalizeSpaceName(r.espacio);
-      counts.set(canon, (counts.get(canon) || 0) + 1);
+      const parts = (r.espacio || '').split(/[+/]/).map((s) => normalizeSpaceName(s.trim())).filter(Boolean);
+      const uniqueParts = new Set(parts.length > 0 ? parts : [normalizeSpaceName(r.espacio)]);
+      uniqueParts.forEach((canon) => {
+        counts.set(canon, (counts.get(canon) || 0) + 1);
+      });
     });
     return counts;
   }, [dayReservations]);
@@ -224,10 +227,13 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
     const fuzzyIds = rawSearch ? getFuzzyMatchIds(dayReservations, rawSearch) : null;
 
     return dayReservations.filter((r) => {
-      // Space filter
+      // Space filter (matches compound spaces like "SALA 2 / SALA 3")
       if (selectedSpaceFilter !== 'ALL') {
-        const canon = normalizeSpaceName(r.espacio);
-        if (canon !== selectedSpaceFilter) return false;
+        const parts = (r.espacio || '').split(/[+/]/).map((s) => normalizeSpaceName(s.trim())).filter(Boolean);
+        const matches = parts.length > 0
+          ? parts.includes(selectedSpaceFilter)
+          : normalizeSpaceName(r.espacio) === selectedSpaceFilter;
+        if (!matches) return false;
       }
 
       // Important filter
@@ -286,8 +292,8 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
     });
   };
 
-  // Helper for current live status
-  const getLiveStatus = (horaInicio: string, horaFin: string) => {
+  // Helper for current live status (handles overnight events crossing midnight)
+  const getLiveStatus = (horaInicio: string, horaFin: string, terminaDiaSiguiente?: boolean) => {
     const isToday = selectedDayIso === formatDateYYYYMMDD(new Date());
     if (!isToday) return null;
 
@@ -298,7 +304,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
     const [eh, em] = horaFin.split(':').map(Number);
     const startMin = sh * 60 + sm;
     let endMin = eh * 60 + em;
-    if (endMin === 0 && startMin > 0) endMin = 1440;
+    if (terminaDiaSiguiente || (endMin <= startMin && startMin > 0)) endMin += 1440;
 
     if (currentMin >= startMin && currentMin < endMin) {
       return { status: 'live', label: 'En curso ahora' };
@@ -316,7 +322,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
             const spaceInfo = spaceMap.get(normalizeSpaceName(res.espacio));
             const spaceColor = spaceInfo?.color || '#2563eb';
             const isConflict = conflictReservationIds?.has(res.id);
-            const liveState = getLiveStatus(res.horaInicio, res.horaFin);
+            const liveState = getLiveStatus(res.horaInicio, res.horaFin, res.terminaDiaSiguiente);
             const isExpanded = expandedCards.has(res.id);
             const existingRating = ratingByReservationId.get(res.id);
             const isRealizada = res.realizada === 'Sí';
@@ -598,10 +604,10 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            if (canDelete && onDeleteReservation) {
-                              onDeleteReservation(res.id, res.actividadRecurrente === 'Sí', res.recurrenteId);
-                            } else if (onRequestDelete) {
+                            if (onRequestDelete) {
                               onRequestDelete(res);
+                            } else if (canDelete && onDeleteReservation) {
+                              onDeleteReservation(res.id, Boolean(res.actividadRecurrente === 'Sí' || res.serieRecurrente || res.recurrenteId), res.recurrenteId || res.serieRecurrente);
                             }
                           }}
                           aria-label={canDelete ? "Eliminar reserva" : "Solicitar eliminación de reserva"}

@@ -36,6 +36,7 @@ import { detectBatchConflicts } from '../utils/conflictDetector';
 import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from './common/PaginationControls';
 import { ConfirmationModal } from './common/ConfirmationModal';
+import { IndependentReservationGrouping } from './IndependentReservationGrouping';
 
 const WEEKDAYS = [
   { dayNum: 1, key: 'lunes', short: 'Lun', full: 'Lunes' },
@@ -791,6 +792,9 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
           <p className="text-[11px] text-slate-500 mt-1">Sesiones vinculadas a series</p>
         </div>
       </div>
+
+      {/* Herramienta de agrupación de reservas individuales repetidas en series recurrentes */}
+      <IndependentReservationGrouping />
 
       {/* Filter and Search Bar */}
       <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">

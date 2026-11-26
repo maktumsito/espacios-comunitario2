@@ -59,11 +59,21 @@ export async function finishDelivery(
   claim: { owner: string; cycle: string },
   sent: boolean,
   messageId?: string,
+  safeToRetry = false,
 ) {
   const ref = db.doc(`_email_dispatches/${claim.cycle}`);
   await db.runTransaction(async (tx) => {
     const old = (await tx.get(ref)).data();
     if (old?.owner !== claim.owner) return;
+    if (!sent && safeToRetry) {
+      tx.update(ref, {
+        status: "released",
+        expiresAt: 0,
+        messageId: null,
+        updatedAt: new Date().toISOString(),
+      });
+      return;
+    }
     tx.update(ref, {
       status: sent ? "sent" : "needs_reconciliation",
       messageId: messageId || null,

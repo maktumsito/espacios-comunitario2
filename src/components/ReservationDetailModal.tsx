@@ -24,10 +24,22 @@ import {
   XCircle,
   Check,
   Ban,
-  CheckCircle2
+  CheckCircle2,
+  CalendarPlus,
+  Download,
+  Share2,
+  GitMerge
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { CommitmentLetterModal } from './CommitmentLetterModal';
+import { MergeReservationsModal } from './MergeReservationsModal';
+import {
+  buildGoogleCalendarUrl,
+  buildReservationReceiptText,
+  buildWhatsAppReceiptUrl,
+  downloadReservationIcs
+} from '../utils/reservationReceipt';
+import { showToast } from '../services/toastNotificationService';
 import { getPhoneContactActions } from '../utils/phoneUtils';
 import { buildReplacementWhatsAppHref } from './ReplacementReminderModal';
 import { CommitmentLetterCard } from './CommitmentLetterCard';
@@ -81,7 +93,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   onToggleRealizada,
   onOpenCheckIn,
   onUpdateReservation,
-  onMergeReservations: _onMergeReservations,
+  onMergeReservations,
   existingRating,
   onOpenRatingModal,
   allReservations = [],
@@ -90,6 +102,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   onRejectDeleteRequest
 }) => {
   const [showCommitmentLetter, setShowCommitmentLetter] = React.useState(false);
+  const [showMergeModal, setShowMergeModal] = React.useState(false);
 
   const [savingReplacement, setSavingReplacement] = React.useState(false);
   const savingReplacementRef = React.useRef(false);
@@ -512,7 +525,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                 <Users className="w-3 h-3 text-blue-600" />
                 <span>Participantes & Asistencia</span>
               </span>
-              {onOpenCheckIn && (
+              {canModify && onOpenCheckIn && (
                 <button
                   type="button"
                   id="btn-detail-quick-checkin-link"
@@ -532,7 +545,9 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               <span className="text-[11px] text-slate-500 font-medium">Estado:</span>
               <button
                 type="button"
+                disabled={!canModify}
                 onClick={() => {
+                  if (!canModify) return;
                   if (onOpenCheckIn) {
                     onClose();
                     onOpenCheckIn(reservation);
@@ -857,6 +872,66 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               </span>
             )}
 
+            {/* Comprobante al Vecino / Profesor y Calendario (.ics / Google Calendar / WhatsApp) */}
+            <button
+              id="btn-detail-download-ics"
+              type="button"
+              onClick={() => {
+                downloadReservationIcs(reservation);
+                showToast.success('Invitación de calendario (.ics) descargada.');
+              }}
+              className="flex items-center space-x-1.5 text-xs text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200 font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer"
+              title="Descargar archivo .ics compatible con Google Calendar, Outlook y Apple Calendar"
+            >
+              <Download className="w-3.5 h-3.5 text-sky-600" />
+              <span>Calendario .ics</span>
+            </button>
+
+            <a
+              id="btn-detail-google-calendar"
+              href={buildGoogleCalendarUrl(reservation)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-1.5 text-xs text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer"
+              title="Abrir evento prellenado en Google Calendar"
+            >
+              <CalendarPlus className="w-3.5 h-3.5 text-blue-600" />
+              <span>Google Calendar</span>
+            </a>
+
+            <button
+              id="btn-detail-copy-receipt"
+              type="button"
+              onClick={() => {
+                const text = buildReservationReceiptText(reservation);
+                if (navigator.clipboard?.writeText) {
+                  navigator.clipboard.writeText(text)
+                    .then(() => showToast.success('Comprobante copiado para enviar por WhatsApp o correo.'))
+                    .catch(() => window.open(buildWhatsAppReceiptUrl(reservation), '_blank', 'noopener,noreferrer'));
+                } else {
+                  window.open(buildWhatsAppReceiptUrl(reservation), '_blank', 'noopener,noreferrer');
+                }
+              }}
+              className="flex items-center space-x-1.5 text-xs text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer"
+              title="Copiar comprobante de reserva listo para WhatsApp o correo"
+            >
+              <Share2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Comprobante</span>
+            </button>
+
+            {canModify && onMergeReservations && (
+              <button
+                id="btn-detail-merge-duplicates"
+                type="button"
+                onClick={() => setShowMergeModal(true)}
+                className="flex items-center space-x-1.5 text-xs text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200 font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer"
+                title="Fusionar reservas duplicadas o contiguas en este registro"
+              >
+                <GitMerge className="w-3.5 h-3.5 text-violet-600" />
+                <span>Fusionar</span>
+              </button>
+            )}
+
             {(isCommitmentLetterEligible(reservation.tipoActividad, reservation.tipoPrestamo) || reservation.requiereCartaCompromiso || reservation.cartaCompromisoAdjunta) && (
               <button
                 id="btn-detail-carta-compromiso"
@@ -985,6 +1060,29 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
           onClose={() => setShowCommitmentLetter(false)}
           reservationData={reservation}
           allReservations={allReservations}
+          onUpdateReservationData={
+            canModify && onUpdateReservation
+              ? (updatedPartial) => onUpdateReservation({ ...reservation, ...updatedPartial })
+              : undefined
+          }
+        />
+      )}
+
+      {/* Merge Duplicate Reservations Modal */}
+      {showMergeModal && onMergeReservations && (
+        <MergeReservationsModal
+          isOpen={showMergeModal}
+          onClose={() => setShowMergeModal(false)}
+          targetReservation={reservation}
+          allReservations={allReservations}
+          onConfirmMerge={async (targetId, sourceIds) => {
+            const ok = await onMergeReservations(targetId, sourceIds);
+            if (ok !== false) {
+              setShowMergeModal(false);
+              onClose();
+            }
+            return ok;
+          }}
         />
       )}
 

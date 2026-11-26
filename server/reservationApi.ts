@@ -53,11 +53,22 @@ export async function readAudit(
   if (entry.operationParts) {
     const before: Reservation[] = [],
       after: Reservation[] = [];
-    for (const key of entry.operationParts) {
+    const allPartIds: string[] = [];
+    const partGroups = entry.operationParts.map((key: any) => {
+      const keys: string[] = key.keys || [key];
+      allPartIds.push(...keys);
+      return keys;
+    });
+    const partRefs = allPartIds.map((partId) => db.doc(`audit_logs/${id}/partes/${partId}`));
+    const partSnaps = partRefs.length
+      ? (typeof db.getAll === "function" ? await db.getAll(...partRefs) : await Promise.all(partRefs.map((ref) => ref.get())))
+      : [];
+    const snapById = new Map(allPartIds.map((partId, idx) => [partId, partSnaps[idx]]));
+    for (const keys of partGroups) {
       let payload = "";
-      for (const partId of key.keys || [key]) {
-        const part = await db.doc(`audit_logs/${id}/partes/${partId}`).get();
-        if (!part.exists || typeof part.get("payload") !== "string")
+      for (const partId of keys) {
+        const part = snapById.get(partId);
+        if (!part?.exists || typeof part.get("payload") !== "string")
           throw new ApiFailure(
             409,
             "El respaldo de auditoría está incompleto.",
@@ -71,10 +82,14 @@ export async function readAudit(
     entry.previousState = before;
     entry.newState = after;
   } else if (entry.snapshotParts) {
+    const partRefs = Array.from({ length: entry.snapshotParts }, (_, i) => db.doc(`audit_logs/${id}/partes/${i}`));
+    const partSnaps = partRefs.length
+      ? (typeof db.getAll === "function" ? await db.getAll(...partRefs) : await Promise.all(partRefs.map((ref) => ref.get())))
+      : [];
     let serialized = "";
     for (let i = 0; i < entry.snapshotParts; i++) {
-      const part = await db.doc(`audit_logs/${id}/partes/${i}`).get();
-      if (!part.exists || part.get("index") !== i)
+      const part = partSnaps[i];
+      if (!part?.exists || part.get("index") !== i)
         throw new ApiFailure(409, "El respaldo está incompleto.");
       serialized += part.get("payload");
     }
@@ -566,14 +581,23 @@ export function registerReservationApi(
             return;
           }
           const current = new Map<string, Reservation>();
-          for (const id of new Set(
-            [
-              ...auditStateRows(entry.previousState),
-              ...auditStateRows(entry.newState),
-            ].map((r) => r.id),
-          )) {
-            const s = await db.doc(`reservas/${id}`).get();
-            if (s.exists) current.set(id, { ...s.data(), id } as Reservation);
+          const uniqueIds = [
+            ...new Set(
+              [
+                ...auditStateRows(entry.previousState),
+                ...auditStateRows(entry.newState),
+              ].map((r) => r.id),
+            ),
+          ];
+          if (uniqueIds.length > 0) {
+            const refs = uniqueIds.map((id) => db.doc(`reservas/${id}`));
+            const snaps = typeof db.getAll === "function"
+              ? await db.getAll(...refs)
+              : await Promise.all(refs.map((ref) => ref.get()));
+            uniqueIds.forEach((id, idx) => {
+              const s = snaps[idx];
+              if (s?.exists) current.set(id, { ...s.data(), id } as Reservation);
+            });
           }
           const plan = buildAuditRestorePlan(entry, current),
             timestamp = new Date().toISOString();

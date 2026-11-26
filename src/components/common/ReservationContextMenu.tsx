@@ -398,18 +398,19 @@ export const ReservationContextMenu: React.FC<ReservationContextMenuProps> = ({
               role="menuitem"
               onClick={() =>
                 runAction(() => {
+                  if (onRequestDelete) {
+                    onRequestDelete(reservation);
+                    return;
+                  }
                   const isSeries = Boolean(
                     reservation.actividadRecurrente === 'Sí' ||
                     reservation.recurrenteId ||
                     reservation.serieRecurrente
                   );
                   if (isSeries && canDelete) {
-                    // Open detail or delete modal for series options
                     onDelete?.(reservation.id, true, reservation.recurrenteId || reservation.serieRecurrente);
                   } else if (canDelete && onDelete) {
                     onDelete(reservation.id, false);
-                  } else if (onRequestDelete) {
-                    onRequestDelete(reservation);
                   }
                 })
               }

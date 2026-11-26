@@ -30,6 +30,7 @@ import {
   Search,
   X,
   Trash2,
+  Sparkles,
 } from "lucide-react";
 
 interface NavbarProps {
@@ -38,6 +39,7 @@ interface NavbarProps {
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
   onNewReservation: () => void;
+  onOpenQuickRequest?: () => void;
   onOpenImportExport: () => void;
   onOpenPrintModal?: () => void;
   onOpenGmailDispatch?: () => void;
@@ -74,6 +76,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
   currentView,
   onViewChange,
   onNewReservation,
+  onOpenQuickRequest,
   onOpenImportExport,
   onOpenPrintModal,
   onOpenGmailDispatch,
@@ -263,6 +266,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
     );
   const tools = () => (
     <>
+      {toolButton("Crear desde texto / IA", onOpenQuickRequest, Sparkles, "navbar-btn-quick-request")}
       {toolButton("Imprimir agenda diaria", onOpenPrintModal, Printer)}
       {/* El padre solo proporciona esta acción cuando el usuario puede eliminar. */}
       {toolButton("Eliminar reservas de un día", onDeleteDay, Trash2)}
@@ -423,6 +427,36 @@ const NavbarComponent: React.FC<NavbarProps> = ({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            {onOpenQuickRequest && (
+              <button
+                id="btn-navbar-quick-request"
+                type="button"
+                onClick={onOpenQuickRequest}
+                aria-label="Crear reserva rápida pegando texto o correo con IA"
+                title="Pegar solicitud de WhatsApp/correo (IA)"
+                className={`${iconButton} sm:gap-1.5 sm:px-2.5 text-indigo-700 hover:bg-indigo-50`}
+              >
+                <Sparkles className="h-4.5 w-4.5" />
+                <span className="hidden text-xs font-semibold xl:inline">Texto / IA</span>
+              </button>
+            )}
+            {onOpenNotificationCenter && (
+              <button
+                id="btn-navbar-notifications"
+                type="button"
+                onClick={onOpenNotificationCenter}
+                aria-label={unreadNotificationsCount > 0 ? `Notificaciones (${unreadNotificationsCount} sin leer)` : "Centro de notificaciones"}
+                title="Centro de notificaciones"
+                className={`${iconButton} relative`}
+              >
+                <Bell className="h-5 w-5" />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">
+                    {unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount}
+                  </span>
+                )}
+              </button>
+            )}
             {onOpenCommandPalette && (
               <button
                 id="btn-navbar-command-palette"

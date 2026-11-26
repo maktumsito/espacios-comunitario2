@@ -135,18 +135,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, sessio
     try {
       const [{ GoogleAuthProvider, signInWithPopup, signOut }, { getFirebaseAuth }] = await Promise.all([
         import('firebase/auth'),
-        import('../firebase/config')
+        import('../firebase/authClient')
       ]);
       const firebaseAuth = getFirebaseAuth();
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(firebaseAuth, provider);
       const matchedUser = result.user.emailVerified ? selectedAccount : null;
       if (!matchedUser) {
-        await signOut(firebaseAuth);
+        await signOut(firebaseAuth).catch(() => {});
         setErrorMessage('Esta cuenta de Google no tiene acceso asignado. Seleccione su usuario e ingrese su clave.');
         return;
       }
-      onLoginSuccess(await authenticateGoogleSession(matchedUser.username, await result.user.getIdToken()));
+      try {
+        onLoginSuccess(await authenticateGoogleSession(matchedUser.username, await result.user.getIdToken()));
+      } catch (sessionErr) {
+        await signOut(firebaseAuth).catch(() => {});
+        throw sessionErr;
+      }
     } catch (err: any) {
       console.warn('Google sign-in status:', err?.message || err);
       setErrorMessage('No se completó el inicio con Google. Seleccione su usuario e ingrese su clave asignada.');
@@ -224,7 +230,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, sessio
               </label>
 
               <div className="relative rounded-xl shadow-xs">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500" aria-hidden="true">
                   <KeyRound className="w-4.5 h-4.5" />
                 </div>
                 <input
@@ -251,10 +257,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, sessio
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-600 hover:text-slate-800 transition cursor-pointer"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  aria-pressed={showPassword}
+                  className="absolute inset-y-0 right-0 px-3 min-w-[44px] flex items-center justify-center text-slate-600 hover:text-slate-900 transition cursor-pointer"
                   title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
                 </button>
               </div>
               <p className="text-[11px] text-slate-500 flex items-center gap-1 pt-1">

@@ -63,7 +63,13 @@ export const SpaceAvailabilityTimeline: React.FC<SpaceAvailabilityTimelineProps>
       .filter((r) => {
         if (excludeReservationId && r.id === excludeReservationId) return false;
         if (r.fecha !== date) return false;
-        if (normalizeSpaceName(r.espacio) !== targetNorm) return false;
+        if (r.estado === 'cancelada' || r.estado === 'rechazada' || (r as any).eliminada === true) return false;
+        const rParts = (r.espacio || '').split(/[+/]/).map((s) => normalizeSpaceName(s.trim())).filter(Boolean);
+        const tParts = (space || '').split(/[+/]/).map((s) => normalizeSpaceName(s.trim())).filter(Boolean);
+        const overlapsSpace = rParts.length > 0 && tParts.length > 0
+          ? rParts.some((rp) => tParts.includes(rp))
+          : normalizeSpaceName(r.espacio) === targetNorm;
+        if (!overlapsSpace) return false;
         return true;
       })
       .map((r) => ({

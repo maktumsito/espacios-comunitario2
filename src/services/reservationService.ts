@@ -435,9 +435,9 @@ export function isReservationExplicitlyDeleted(
   const set = deletedSet || getDeletedIds();
   if (r.id && set.has(r.id)) return true;
   if ((r as any).eliminada === true) return true;
+  if (r.solicitudEliminacion?.aprobada === true) return true;
   const rawStatus = String(r.estado || (r as any).status || '').trim().toLowerCase();
   if (['eliminada', 'eliminado', 'deleted'].includes(rawStatus)) return true;
-  if (!isReservationActiveForAvailability(r)) return true;
   return false;
 }
 
@@ -596,7 +596,9 @@ export function isCacheInSyncWithFirestore(): boolean {
 function mergeReservationWindow(incoming: Reservation[], inWindow: (row: Reservation) => boolean) {
   const current = getLocalCache();
   const currentById = new Map(current.map(row => [row.id, row]));
+  const deletedSet = getDeletedIds();
   const incomingIds = new Set<string>();
+  const now = Date.now();
   let hasOlderRows = false;
   const reconciled = incoming.map(row => {
     incomingIds.add(row.id);
@@ -608,7 +610,18 @@ function mergeReservationWindow(incoming: Reservation[], inWindow: (row: Reserva
     hasOlderRows = true;
     return cached;
   });
-  const merged = [...current.filter(row => !inWindow(row) && !incomingIds.has(row.id)), ...reconciled]
+  // Protect freshly confirmed local creations from being temporarily dropped by an in-flight stale poll.
+  const preservedLocal = current.filter(row => {
+    if (incomingIds.has(row.id) || deletedSet.has(row.id)) return false;
+    if (!inWindow(row)) return true;
+    const stamp = Date.parse(row.updatedAt || row.createdAt || '');
+    if (Number.isFinite(stamp) && now - stamp < 15_000) {
+      hasOlderRows = true;
+      return true;
+    }
+    return false;
+  });
+  const merged = [...preservedLocal, ...reconciled]
     .sort(compareReservationsByDate);
   return { merged, hasOlderRows };
 }

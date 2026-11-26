@@ -117,7 +117,15 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
     const handleWriteProgress = (event: Event) => {
       const result = (event as CustomEvent).detail;
       if (!isMounted || !result) return;
-      setReservations(prev=> { const map = new Map(prev.map(r=>[r.id,r])); result.deletedIds.forEach((id: string)=>map.delete(id)); result.reservations.forEach((r: Reservation)=> { map.delete(r.id); if (inRange(r)) map.set(r.id,r); }); return [...map.values()]; });
+      setReservations(prev => {
+        const map = new Map(prev.map(r => [r.id, r]));
+        result.deletedIds.forEach((id: string) => map.delete(id));
+        result.reservations.forEach((r: Reservation) => {
+          map.delete(r.id);
+          if (inRange(r)) map.set(r.id, r);
+        });
+        return [...map.values()].sort(compareReservationsByDate);
+      });
     };
     window.addEventListener('reservation-write-progress', handleWriteProgress);
     window.addEventListener('cache-sync-updated', handleCacheSyncUpdated);

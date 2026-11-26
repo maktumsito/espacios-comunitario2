@@ -14,7 +14,17 @@ interface LoginAccountSelectorProps {
 export function LoginAccountSelector({ users, selectedUsername, onSelect, disabled, loading, error, onRetry }: LoginAccountSelectorProps) {
   return <div className="mb-5">
     <p className="mb-2.5 text-xs font-bold text-slate-700">1. Haz clic en tu usuario</p>
-    {loading ? <p role="status" className="flex min-h-[72px] items-center text-sm text-slate-500">Cargando usuarios...</p> : error ? <div>
+    {loading ? (
+      <div role="status" aria-label="Cargando usuarios" className="grid grid-cols-2 gap-2 sm:grid-cols-3 min-h-[232px]">
+        {Array.from({ length: 6 }).map((_, idx) => (
+          <div key={idx} className="min-h-[72px] p-2.5 rounded-xl border border-slate-200 bg-slate-50 animate-pulse flex flex-col items-center justify-center gap-1.5">
+            <span className="w-7 h-7 rounded-full bg-slate-200" />
+            <span className="h-3 w-16 rounded bg-slate-200" />
+          </div>
+        ))}
+        <span className="sr-only">Cargando usuarios...</span>
+      </div>
+    ) : error ? <div>
       <p role="alert" className="text-sm text-rose-700">{error}</p>
       <button type="button" onClick={onRetry} disabled={disabled} className="min-h-[44px] text-sm font-semibold text-blue-700">Reintentar</button>
     </div> : !users.length ? <div>

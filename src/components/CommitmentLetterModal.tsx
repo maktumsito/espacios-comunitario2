@@ -479,17 +479,6 @@ RUT: ${rutStr || '____________________________________'}
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700">Tipo de actividad:</label>
-                  <input
-                    type="text"
-                    placeholder="Tipo de actividad de la reserva"
-                    value={localData.tipoActividad}
-                    onChange={(e) => setLocalData({ ...localData, tipoActividad: e.target.value })}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900"
-                  />
-                </div>
-
-                <div className="space-y-1">
                   <label className="font-semibold text-slate-700">Aforo Estimado:</label>
                   <input
                     type="number"

@@ -7,9 +7,11 @@ export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
-      },
+      alias: [
+        { find: /^(\.\.?\/)+firebase\/gateway$/, replacement: path.resolve(__dirname, 'src/firebase/gateway.browser.ts') },
+        { find: /^(\.\.?\/)+firebase\/config$/, replacement: path.resolve(__dirname, 'src/firebase/config.browser.ts') },
+        { find: '@', replacement: path.resolve(__dirname, '.') },
+      ],
     },
     build: {
       chunkSizeWarningLimit: 500,

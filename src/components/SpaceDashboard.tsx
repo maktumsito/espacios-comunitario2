@@ -1,7 +1,8 @@
 import { formatDisplayTitle } from '../utils/reservationVisuals';
 import { getEnabledSpaces } from '../utils/spaceAvailability';
-import React from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import type { AuthUser } from '../services/authService';
+import { userCanEditReservations } from '../services/authService';
 import { Reservation, SpaceInfo } from '../types';
 import { SPACES_LIST } from '../data/spacesData';
 import {
@@ -20,10 +21,15 @@ import {
   GraduationCap,
   Library,
   Stethoscope,
-  Sun
+  Sun,
+  SlidersHorizontal
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { isReservationActiveForAvailability } from '../utils/conflictDetector';
+import { doSpacesConflict, isReservationActiveForAvailability } from '../utils/conflictDetector';
+
+const DistributionPlannerModal = lazy(() =>
+  import('./DistributionPlannerModal').then((m) => ({ default: m.DistributionPlannerModal }))
+);
 
 interface SpaceDashboardProps {
   currentUser?: AuthUser | null;
@@ -45,6 +51,8 @@ export const SpaceDashboard: React.FC<SpaceDashboardProps> = ({
   onSelectReservation
 }) => {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const [isPlannerOpen, setIsPlannerOpen] = useState(false);
+  const canPlanDistribution = Boolean(currentUser && onDistributionCommitted && userCanEditReservations(currentUser));
 
   const getIcon = (iconName: string) => {
     switch (iconName) {
@@ -77,13 +85,37 @@ export const SpaceDashboard: React.FC<SpaceDashboardProps> = ({
             Explora las categorías, detalles y el estado de ocupación actual para cada recinto, sala de talleres y multicancha.
           </p>
         </div>
+        {canPlanDistribution && (
+          <button
+            id="btn-open-distribution-planner"
+            type="button"
+            onClick={() => setIsPlannerOpen(true)}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 transition cursor-pointer shrink-0"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            <span>Planificar distribución de salas</span>
+          </button>
+        )}
       </div>
+
+      {isPlannerOpen && currentUser && onDistributionCommitted && (
+        <Suspense fallback={null}>
+          <DistributionPlannerModal
+            user={currentUser}
+            onClose={() => setIsPlannerOpen(false)}
+            onCommitted={(rows) => {
+              onDistributionCommitted(rows);
+              setIsPlannerOpen(false);
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* Grid of Spaces */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {getEnabledSpaces(spaces).map((space) => {
           const spaceReservations = reservations.filter(
-            r => r.espacio.toUpperCase() === space.name.toUpperCase()
+            r => doSpacesConflict(r.espacio, space.name)
           );
 
           const todayEvents = spaceReservations.filter(r => r.fecha === todayStr);

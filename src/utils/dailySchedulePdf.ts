@@ -166,17 +166,20 @@ export async function generateDailySchedulePdf(options: DailySchedulePdfOptions)
   orderedSpaceNames.forEach((name) => reservationsBySpace.set(name, []));
 
   filteredDailyReservations.forEach((r) => {
-    const normSpace = normalizeSpaceName(r.espacio).toUpperCase();
-    let matchedKey = orderedSpaceNames.find(
-      (s) => s === normSpace || s.replace(/SALA DE /g, 'SALA ') === normSpace
-    );
-    if (!matchedKey) {
-      matchedKey = normSpace;
-    }
-    if (!reservationsBySpace.has(matchedKey)) {
-      reservationsBySpace.set(matchedKey, []);
-    }
-    reservationsBySpace.get(matchedKey)!.push(r);
+    const parts = (r.espacio || '').split(/[+/]/).map((s) => normalizeSpaceName(s.trim()).toUpperCase()).filter(Boolean);
+    const spaceKeys = parts.length > 0 ? [...new Set(parts)] : [normalizeSpaceName(r.espacio).toUpperCase()];
+    spaceKeys.forEach((normSpace) => {
+      let matchedKey = orderedSpaceNames.find(
+        (s) => s === normSpace || s.replace(/SALA DE /g, 'SALA ') === normSpace
+      );
+      if (!matchedKey) {
+        matchedKey = normSpace;
+      }
+      if (!reservationsBySpace.has(matchedKey)) {
+        reservationsBySpace.set(matchedKey, []);
+      }
+      reservationsBySpace.get(matchedKey)!.push(r);
+    });
   });
 
   // Sort inside each space by start time
@@ -213,6 +216,7 @@ export async function generateDailySchedulePdf(options: DailySchedulePdfOptions)
       importantUpcomingReservations = reservations
         .filter((r) => {
           if (r.importante !== 'Sí') return false;
+          if (r.estado === 'cancelada' || r.estado === 'rechazada' || (r as any).eliminada === true || r.reemplazadaPorReservaId) return false;
           if (!r.fecha) return false;
           const rDate = parseISO(r.fecha);
           if (isNaN(rDate.getTime())) return false;

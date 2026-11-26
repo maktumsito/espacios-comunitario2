@@ -116,6 +116,8 @@ export class DataViewPoller {
         };
         entry.last = nextMessage;
         entry.query.version = undefined;
+        (entry as any).localWriteStamp = ((entry as any).localWriteStamp || 0) + 1;
+        this.dirty = true;
         for (const listener of entry.listeners) {
           listener.next(nextMessage);
         }
@@ -189,11 +191,13 @@ export class DataViewPoller {
       // Bound each batch while still sharing one verification across up to 50 views.
       for (let index = 0; index < entries.length; index += 50) {
         const chunk = entries.slice(index, index + 50);
+        const stamps = chunk.map(entry => (entry as any).localWriteStamp || 0);
         const response = await this.request(chunk.map(entry => ({ ...entry.query })), controller.signal);
         if (generation !== this.generation || token !== this.token()) return;
         if (!Array.isArray(response.results) || response.results.length !== chunk.length) throw new Error('Respuesta de sincronización incompleta.');
         response.results.forEach((message, i) => {
           const entry = chunk[i];
+          if (((entry as any).localWriteStamp || 0) !== stamps[i]) return;
           if (message.error) {
             entry.blocked = message.status === 401 || message.status === 403;
             entry.retryAt = Date.now() + Math.max(60_000, message.retryAfterMs || 0);

@@ -9,7 +9,23 @@ export function ReservationVisualsProvider({ activityTypes, reservations, childr
   reservations: readonly Reservation[];
   children: React.ReactNode;
 }) {
-  const registry = useMemo(() => createReservationVisualRegistry(activityTypes, reservations), [activityTypes, reservations]);
+  // Stabilize context value: only recompute when the unique set of activity types actually changes
+  const extraTypesKey = useMemo(() => {
+    const seen = new Set<string>();
+    for (let i = 0; i < reservations.length; i++) {
+      const t = reservations[i].tipoActividad?.trim();
+      if (t) seen.add(t);
+    }
+    return [...seen].sort().join('\u0000');
+  }, [reservations]);
+
+  const registry = useMemo(
+    () => createReservationVisualRegistry(
+      activityTypes,
+      extraTypesKey ? extraTypesKey.split('\u0000').map(tipoActividad => ({ tipoActividad } as Reservation)) : []
+    ),
+    [activityTypes, extraTypesKey]
+  );
   return <ReservationVisualsContext.Provider value={registry}>{children}</ReservationVisualsContext.Provider>;
 }
 

@@ -128,22 +128,16 @@ export async function registerFcmServiceWorker(): Promise<ServiceWorkerRegistrat
   }
 
   try {
-    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+    // Keep /sw.js as the single primary Service Worker on scope '/' (it already handles push & offline caching)
+    const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/'
     });
     fcmServiceWorkerReg = registration;
-    console.log('[FCM] Dedicated Firebase Messaging Service Worker registered successfully:', registration.scope);
+    console.log('[FCM] Primary Service Worker registered successfully:', registration.scope);
     return registration;
   } catch (err) {
-    console.warn('[FCM] Fallback to standard SW registration:', err);
-    try {
-      const standardReg = await navigator.serviceWorker.register('/sw.js');
-      fcmServiceWorkerReg = standardReg;
-      return standardReg;
-    } catch (e2) {
-      console.warn('[FCM] Service worker registration not available:', e2);
-      return null;
-    }
+    console.warn('[FCM] Service worker registration not available:', err);
+    return null;
   }
 }
 

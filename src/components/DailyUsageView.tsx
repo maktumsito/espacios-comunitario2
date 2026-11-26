@@ -624,8 +624,15 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
       return;
     }
 
+    // Preserve compound spaces (e.g. "SALA 2 / SALA 3") when dragging vertically inside one of their constituent columns
+    const draggedConstituents = getConstituentSpaces(draggedReservation.espacio);
+    const targetConstituent = normalizeSpace(spaceName);
+    const nextSpace = draggedConstituents.length > 1 && draggedConstituents.includes(targetConstituent)
+      ? draggedReservation.espacio
+      : spaceName;
+
     // Check if dropping on the exact same space and time (no-op)
-    const isSameSpace = normalizeSpaceName(draggedReservation.espacio) === normalizeSpaceName(spaceName);
+    const isSameSpace = normalizeSpaceName(draggedReservation.espacio) === normalizeSpaceName(nextSpace);
     const isSameStart = draggedReservation.horaInicio === target.startTime;
     const isSameEnd = draggedReservation.horaFin === target.endTime;
     if (isSameSpace && isSameStart && isSameEnd) {
@@ -639,7 +646,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     if (target.isBlocked) {
       setToastMessage({
         text: 'Reubicación cancelada: Espacio en mantención',
-        sub: `${spaceName}: ${target.blockReason || 'Bloqueo activo en este horario'}`
+        sub: `${nextSpace}: ${target.blockReason || 'Bloqueo activo en este horario'}`
       });
       setDraggedReservation(null);
       setDragTargetInfo(null);
@@ -649,7 +656,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
     const updatedRes: Reservation = {
       ...draggedReservation,
-      espacio: spaceName,
+      espacio: nextSpace,
       horaInicio: target.startTime,
       horaFin: target.endTime,
       terminaDiaSiguiente: target.overnight

@@ -5,6 +5,8 @@ import { publicProfile,verifyPassword, verifyLegacyPassword } from './passwords'
 import { reservationPermission, reservationPermissionKeys } from '../src/utils/userPermissions';
 
 const SESSION_MS = 60 * 60_000;
+const MAX_SESSION_MS = 7 * 24 * 60 * 60_000;
+const DIRECTORY_CACHE_MS = 15_000;
 
 function accountReadFailure(error: unknown) {
   const code = String((error as any)?.code ?? '').toLowerCase().replace(/_/g, '-');
@@ -40,6 +42,7 @@ export class AppSessions {
   private pendingAccounts = new Map<string, Promise<UserAccount | null>>();
   private accountFailures = new Map<string, { error: unknown; expiresAt: number }>();
   private attempts = new Map<string, { count: number; expiresAt: number }>();
+  private directoryCache: { users: LoginAccount[]; expiresAt: number } | null = null;
 
   constructor(private readAccount: (username: string) => Promise<UserAccount | null>, secret?: string,
     private verifyGoogleToken?: (token: string) => Promise<string | null>,
@@ -95,8 +98,9 @@ export class AppSessions {
     if (!equal(signature, crypto.createHmac('sha256', this.key).update(body).digest('base64url'))) return null;
     try {
       const claims = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-      return typeof claims.u === 'string' && typeof claims.v === 'string' && typeof claims.exp === 'number' && claims.exp > Date.now() &&
-        typeof claims.startedAt === 'number' && claims.startedAt <= Date.now()
+      const now = Date.now();
+      return typeof claims.u === 'string' && typeof claims.v === 'string' && typeof claims.exp === 'number' && claims.exp > now &&
+        typeof claims.startedAt === 'number' && claims.startedAt <= now && (now - claims.startedAt) <= MAX_SESSION_MS
         ? { username: claims.u, startedAt: claims.startedAt, version: claims.v } : null;
     } catch { return null; }
   }
@@ -104,6 +108,7 @@ export class AppSessions {
     const name = username.trim().toLowerCase();
     this.accounts.delete(name);
     this.accountFailures.delete(name);
+    this.directoryCache = null;
   }
   acceptsAccount(token: string, account: UserAccount | null): boolean {
     const claims=this.verify(token.replace(/^Bearer\s+/i,'').trim());
@@ -132,10 +137,15 @@ export class AppSessions {
     if (readLoginAccounts) app.get('/api/auth/users', async (_req, res) => {
       res.set('Cache-Control', 'no-store');
       try {
+        if (this.directoryCache && this.directoryCache.expiresAt > Date.now()) {
+          res.json({ success: true, users: this.directoryCache.users });
+          return;
+        }
         const accounts = await readLoginAccounts();
         const users = accounts.map(({ username, name, role, initials, avatarColor }) =>
           ({ username, name, role, initials, avatarColor }));
         users.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        this.directoryCache = { users, expiresAt: Date.now() + DIRECTORY_CACHE_MS };
         res.json({ success: true, users });
       } catch {
         res.status(503).json({ success: false, error: 'No se pudo cargar la lista de usuarios. Intenta nuevamente.' });
@@ -196,7 +206,10 @@ export class AppSessions {
         this.attempts.delete(key);
         const { passwordHash: _password, ...user } = publicProfile(account);
         res.json({ success: true, user, token: this.issue(user, Date.now(),this.binding(account!)) });
-      } catch { res.status(503).json({ success: false, error: 'No se pudo verificar la cuenta. Intenta nuevamente.' }); }
+      } catch (error) {
+        const failure = accountReadFailure(error);
+        res.set('Retry-After', String(failure.retryAfter)).status(503).json({ success: false, error: failure.message, code: failure.code });
+      }
     });
   }
 }

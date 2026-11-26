@@ -42,7 +42,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     activityCounts,
     topResponsibles
   } = useMemo(() => {
-    const totalCount = reservations.length;
+    const activeReservations = reservations.filter(
+      (r) => r.estado !== 'cancelada' && r.estado !== 'rechazada' && (r as any).eliminada !== true
+    );
+    const totalCount = activeReservations.length;
     let impCount = 0;
     let recCount = 0;
     let totalPart = 0;
@@ -58,10 +61,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     }
     const spaceAgg = new Map<string, { count: number; participants: number }>();
     const activityAgg = new Map<string, number>();
+    const normalizeActivityKey = (val: string) =>
+      val.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
     const responsibleMap = new Map<string, { count: number; workshops: Set<string> }>();
 
-    for (let i = 0; i < reservations.length; i++) {
-      const r = reservations[i];
+    for (let i = 0; i < activeReservations.length; i++) {
+      const r = activeReservations[i];
       if (r.importante === 'Sí') impCount++;
       if (r.actividadRecurrente === 'Sí') recCount++;
       const part = r.cantidadParticipantes || 0;
@@ -89,7 +94,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       }
 
       if (r.tipoActividad) {
-        activityAgg.set(r.tipoActividad, (activityAgg.get(r.tipoActividad) || 0) + 1);
+        const actKey = normalizeActivityKey(r.tipoActividad);
+        activityAgg.set(actKey, (activityAgg.get(actKey) || 0) + 1);
       }
 
       const name = r.responsable?.trim() || 'No especificado';
@@ -121,7 +127,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       : ACTIVITY_TYPES;
     const computedActivityCounts = activityNames
       .map(type => {
-        const count = activityAgg.get(type) || 0;
+        const count = activityAgg.get(normalizeActivityKey(type)) || 0;
         return {
           type,
           count,

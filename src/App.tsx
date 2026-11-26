@@ -87,6 +87,10 @@ const QuickCheckInModal = lazyWithRetry(
   () => import('./components/QuickCheckInModal').then((m) => ({ default: m.QuickCheckInModal })),
   'QuickCheckInModal'
 );
+const QuickRequestCreatorModal = lazyWithRetry(
+  () => import('./components/QuickRequestCreatorModal').then((m) => ({ default: m.QuickRequestCreatorModal })),
+  'QuickRequestCreatorModal'
+);
 
 // Code-split heavy views & modals with resilient lazyWithRetry to reduce initial bundle size and boost reliability
 const SpaceDashboard = lazyWithRetry(
@@ -262,6 +266,7 @@ export default function App() {
 
   const [checkInReservation, setCheckInReservation] = useState<Reservation | null>(null);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+  const [isQuickRequestOpen, setIsQuickRequestOpen] = useState(false);
 
   const reservationReadScope = getReservationReadScope(
     currentUser, currentView, selectedDailyDate, reservationFilters,
@@ -599,7 +604,7 @@ export default function App() {
     let isMounted = true;
 
     const executeScheduledBackupCheck = async () => {
-      if (!canWrite) return;
+      if (!isCoordinatorOrAdmin(currentUser)) return;
       try {
         const currentResList = reservationsRef.current;
         if (!currentResList || currentResList.length === 0) return;
@@ -618,12 +623,8 @@ export default function App() {
       }
     };
 
-    if (canWrite && reservations.length > 0) {
+    if (isCoordinatorOrAdmin(currentUser) && reservations.length > 0) {
       executeScheduledBackupCheck();
-      // Purge expired concurrency schedule_slots (> 30 days old, throttled to run at most once a week)
-      purgeExpiredScheduleSlots(30).catch((purgeErr) => {
-        console.warn('[ScheduleSlotsPurge] Error purgando slots expirados:', purgeErr);
-      });
     }
 
     // Check periodically every 4 hours while the app is active
@@ -660,6 +661,13 @@ export default function App() {
     const handleServiceWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type === 'NAVIGATE_VIEW' && event.data?.view) {
         setCurrentView(event.data.view as ViewMode);
+        if (event.data.reservationId) {
+          const matched = reservationsRef.current.find((r) => r.id === event.data.reservationId);
+          if (matched) {
+            setSelectedReservation(matched);
+            setIsDetailModalOpen(true);
+          }
+        }
       }
     };
 
@@ -886,6 +894,7 @@ export default function App() {
       triggerSyncToast('Asistencia guardada correctamente.', 'success');
     } catch (err: any) {
       triggerSyncToast(err?.message || 'No se pudo guardar la asistencia.', 'error');
+      if (err && typeof err === 'object') err.__toastShown = true;
       throw err;
     }
   }, [selectedReservation, setReservations, setSelectedReservation, triggerSyncToast]);
@@ -1057,6 +1066,9 @@ export default function App() {
             setIsReservationModalOpen(true);
           }, 'crear una nueva reserva');
         }}
+        onOpenQuickRequest={userCanCreateReservations(currentUser) ? () => {
+          requireAuth(() => setIsQuickRequestOpen(true), 'crear una solicitud rápida desde texto');
+        } : undefined}
         onDeleteDay={userCanDeleteReservations(currentUser) ? () => setIsDeleteDayModalOpen(true) : undefined}
         onOpenImportExport={() => {
           requireAuth(() => setIsImportExportModalOpen(true), 'importar o exportar reservas');
@@ -2078,6 +2090,41 @@ export default function App() {
             reservation={checkInReservation}
             currentUser={currentUser}
             onSaveCheckIn={handleSaveCheckIn}
+          />
+        </Suspense>
+      )}
+
+      {/* Modal de Creación Rápida desde Texto / WhatsApp / Correo (IA + Detector Local) */}
+      {isQuickRequestOpen && (
+        <Suspense fallback={<ModalLoadingFallback />}>
+          <QuickRequestCreatorModal
+            isOpen={isQuickRequestOpen}
+            onClose={() => setIsQuickRequestOpen(false)}
+            defaultDate={format(selectedDailyDate || new Date(), 'yyyy-MM-dd')}
+            availableSpaces={enabledSpaces}
+            availableActivityTypes={activityTypes}
+            availableLoanTypes={loanTypes}
+            availableEquipment={equipment}
+            allReservations={reservations}
+            spaceBlocks={spaceBlocks}
+            onCreateDirectly={async (reserva, generateSeries, seriesDates) => {
+              const ok = await handleCreateOrUpdate(reserva, generateSeries, seriesDates);
+              if (ok !== false) setIsQuickRequestOpen(false);
+              return ok;
+            }}
+            onOpenInFullForm={(parsed) => {
+              setIsQuickRequestOpen(false);
+              openCreateModal({
+                date: parsed.fecha || format(selectedDailyDate || new Date(), 'yyyy-MM-dd'),
+                space: parsed.espacio || enabledSpaces[0]?.name,
+                startTime: parsed.horaInicio || '10:00',
+                endTime: parsed.horaFin || '11:00',
+                responsable: parsed.responsable || undefined,
+                rut: parsed.rut || undefined,
+                phone: parsed.telefonoContacto || undefined,
+                email: parsed.emailContacto || undefined,
+              });
+            }}
           />
         </Suspense>
       )}
