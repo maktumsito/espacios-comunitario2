@@ -1480,7 +1480,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                         allowSpaceReorder && <span className="w-4 shrink-0" />
                       )}
 
-                      {/* Título de espacio completo - Con color, aforo y estado de disponibilidad */}
+                      {/* Título de espacio completo - Con color y aforo */}
                       <div className="flex flex-col items-center justify-center min-w-0 flex-1 px-1 gap-0.5">
                         <div className="flex items-center justify-center gap-1 min-w-0 max-w-full">
                           {allowSpaceReorder && (
@@ -1495,47 +1495,12 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                             {space.name}
                           </span>
                         </div>
-                        {(() => {
-                          const avail = roomAvailabilityMap.get(space.id);
-                          const freeMin = avail?.summary.freeMinutes ?? 0;
-                          const freePct = avail ? Math.max(0, 100 - avail.summary.occupancyPct) : 100;
-                          const liveStatus = avail?.live.status;
-                          return (
-                            <div className="flex flex-col items-center w-full gap-0.5 mt-0.5">
-                              <div className="flex items-center justify-center gap-1 flex-wrap text-[10px] leading-none">
-                                {space.capacity && (
-                                  <span className="inline-flex items-center gap-0.5 text-slate-500 font-medium" title={`Capacidad: ${space.capacity} personas`}>
-                                    <Users className="h-2.5 w-2.5" aria-hidden="true" />
-                                    <span className="tabular-nums">{space.capacity}</span>
-                                  </span>
-                                )}
-                                {isToday && liveStatus === 'free' ? (
-                                  <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 font-bold text-emerald-800" title={avail?.live.label}>
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                                    <span>Libre</span>
-                                  </span>
-                                ) : isToday && liveStatus === 'maintenance' ? (
-                                  <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 font-bold text-amber-800" title={avail?.live.label}>
-                                    Mant.
-                                  </span>
-                                ) : (
-                                  <span
-                                    className={`font-semibold tabular-nums ${freeMin > 0 ? 'text-emerald-700' : 'text-rose-600'}`}
-                                    title={freeMin > 0 ? `${formatDurationCompact(freeMin)} disponibles en horario regular` : 'Sin tramos libres hoy'}
-                                  >
-                                    {freeMin > 0 ? `${formatDurationCompact(freeMin)} libre` : 'Lleno'}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="h-1 w-full max-w-[84px] rounded-full bg-slate-200 overflow-hidden" aria-hidden="true">
-                                <div
-                                  className={`h-full rounded-full transition-all ${freePct >= 50 ? 'bg-emerald-500' : freePct > 15 ? 'bg-amber-400' : 'bg-rose-400'}`}
-                                  style={{ width: `${freePct}%` }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })()}
+                        {space.capacity && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] leading-none text-slate-500 font-medium" title={`Capacidad: ${space.capacity} personas`}>
+                            <Users className="h-2.5 w-2.5" aria-hidden="true" />
+                            <span className="tabular-nums">{space.capacity}</span>
+                          </span>
+                        )}
                       </div>
 
                       {/* Botón mover a la derecha */}
