@@ -10,6 +10,7 @@ vi.mock('../../services/reservationService', () => ({
   subscribeToReservations: mock.full, subscribeToReservationsByDateRange: mock.range,
   getLocalCache: () => [], getLastSyncTime: () => null,
   loadHistoricalReservationsMonth: vi.fn(), loadHistoricalReservationsRange: vi.fn(),
+  compareReservationsByDate: (a: Reservation, b: Reservation) => (a.fecha || '').localeCompare(b.fecha || ''),
 }));
 vi.mock('../../services/migrations/cleanMinuteConflictsMigration', () => ({
   hasMinuteConflictMigrationRun: () => false, executeMinuteConflictCleanupMigration: mock.migration,

@@ -6,7 +6,8 @@ import {
   getLocalCache,
   getLastSyncTime,
   loadHistoricalReservationsMonth,
-  loadHistoricalReservationsRange
+  loadHistoricalReservationsRange,
+  compareReservationsByDate
 } from '../services/reservationService';
 import { triggerSonnerToast } from '../services/toastNotificationService';
 import type { ReservationDateRange } from '../utils/reservationReadScope';

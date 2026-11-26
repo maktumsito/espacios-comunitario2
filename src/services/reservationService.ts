@@ -593,6 +593,8 @@ export function isCacheInSyncWithFirestore(): boolean {
 // REAL-TIME FIRESTORE SUBSCRIPTIONS (HASH-GATED SYNC)
 // ============================================================================
 
+const recentlyConfirmedLocalWrites = new Map<string, number>();
+
 function mergeReservationWindow(incoming: Reservation[], inWindow: (row: Reservation) => boolean) {
   const current = getLocalCache();
   const currentById = new Map(current.map(row => [row.id, row]));
@@ -603,9 +605,15 @@ function mergeReservationWindow(incoming: Reservation[], inWindow: (row: Reserva
   const reconciled = incoming.map(row => {
     incomingIds.add(row.id);
     const cached = currentById.get(row.id);
-    if (!cached || (cached.version || 0) <= (row.version || 0)) return row;
+    if (!cached || (cached.version || 0) <= (row.version || 0)) {
+      recentlyConfirmedLocalWrites.delete(row.id);
+      return row;
+    }
     // A recreated reservation can restart its version with a new creation date.
-    if (row.createdAt && cached.createdAt && row.createdAt > cached.createdAt) return row;
+    if (row.createdAt && cached.createdAt && row.createdAt > cached.createdAt) {
+      recentlyConfirmedLocalWrites.delete(row.id);
+      return row;
+    }
     // The live view can lag behind a confirmed write.
     hasOlderRows = true;
     return cached;
@@ -614,10 +622,13 @@ function mergeReservationWindow(incoming: Reservation[], inWindow: (row: Reserva
   const preservedLocal = current.filter(row => {
     if (incomingIds.has(row.id) || deletedSet.has(row.id)) return false;
     if (!inWindow(row)) return true;
-    const stamp = Date.parse(row.updatedAt || row.createdAt || '');
-    if (Number.isFinite(stamp) && now - stamp < 15_000) {
-      hasOlderRows = true;
-      return true;
+    const confirmedAt = recentlyConfirmedLocalWrites.get(row.id);
+    if (confirmedAt !== undefined) {
+      if (now - confirmedAt < 15_000) {
+        hasOlderRows = true;
+        return true;
+      }
+      recentlyConfirmedLocalWrites.delete(row.id);
     }
     return false;
   });
@@ -942,9 +953,16 @@ export async function commitReservationChanges(reservas: readonly Reservation[],
     ...options,
     onProgress: (result) => {
       const map = new Map(getLocalCache().map(r => [r.id, r]));
-      result.deletedIds.forEach(id => map.delete(id));
+      result.deletedIds.forEach(id => {
+        map.delete(id);
+        recentlyConfirmedLocalWrites.delete(id);
+      });
       recordDeletedIds(result.deletedIds);
-      result.reservations.forEach(r => map.set(r.id, r));
+      const confirmedNow = Date.now();
+      result.reservations.forEach(r => {
+        map.set(r.id, r);
+        recentlyConfirmedLocalWrites.set(r.id, confirmedNow);
+      });
       unrecordDeletedIds(result.reservations.map(r => r.id));
       setLocalCache(Array.from(map.values()).sort(compareReservationsByDate));
       setLastSyncTime(Date.now());

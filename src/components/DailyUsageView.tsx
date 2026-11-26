@@ -12,7 +12,6 @@ import { SPACES_LIST, normalizeSpaceName } from '../data/spacesData';
 import {
   computeRoomDayFreeSlots,
   filterEnabledSpaceReservations,
-  formatDurationCompact,
   getEnabledSpaces,
   getRoomLiveStatus,
   hasEnabledSpace,
@@ -39,13 +38,10 @@ import {
   ChevronLeft,
   ChevronRight,
   User,
-  Users,
   Clock,
   Phone,
   MapPin,
-  Sparkles,
-  Eye,
-  EyeOff
+  Sparkles
 } from 'lucide-react';
 import {
   format,
@@ -292,7 +288,6 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
   // Vista compacta de fábrica (optimizada para máxima visibilidad horizontal y vertical)
   const [isCompact, setIsCompact] = useState(false);
-  const [showFreeGaps, setShowFreeGaps] = useState(true);
   const [quickAvailabilityFilter, setQuickAvailabilityFilter] = useState<'all' | 'free_now' | 'gap_2h'>('all');
   const [localComparisonSpaces, setLocalComparisonSpaces] = useState<string[] | null>(null);
   const selectedComparisonSpaces = comparisonSpaces === undefined ? localComparisonSpaces : comparisonSpaces;
@@ -1166,23 +1161,6 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
-            aria-pressed={showFreeGaps}
-            onClick={() => setShowFreeGaps(value => !value)}
-            className={`inline-flex min-h-9 sm:min-h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition ${
-              showFreeGaps
-                ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-            }`}
-            title="Resaltar bloques libres exactos entre actividades para reservar con 1 clic"
-          >
-            {showFreeGaps ? <Eye className="h-3.5 w-3.5 text-emerald-700" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
-            <span>Huecos libres</span>
-          </button>
-
-          <div className="h-4 w-px bg-slate-200 hidden sm:block" aria-hidden="true" />
-
-          <button
-            type="button"
             aria-pressed={quickAvailabilityFilter === 'all' && selectedComparisonSpaces === null}
             onClick={() => {
               setQuickAvailabilityFilter('all');
@@ -1480,27 +1458,19 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                         allowSpaceReorder && <span className="w-4 shrink-0" />
                       )}
 
-                      {/* Título de espacio completo - Con color y aforo */}
-                      <div className="flex flex-col items-center justify-center min-w-0 flex-1 px-1 gap-0.5">
-                        <div className="flex items-center justify-center gap-1 min-w-0 max-w-full">
-                          {allowSpaceReorder && (
-                            <GripVertical className="w-3.5 h-3.5 text-slate-400 group-hover/header:text-blue-600 transition shrink-0 cursor-grab active:cursor-grabbing" />
-                          )}
-                          <span
-                            className="h-2 w-2 rounded-full shrink-0"
-                            style={{ backgroundColor: space.color || '#64748b' }}
-                            aria-hidden="true"
-                          />
-                          <span className="font-extrabold text-[10.5px] sm:text-[11px] uppercase tracking-tight text-slate-800 leading-tight text-center break-words select-none hyphens-auto">
-                            {space.name}
-                          </span>
-                        </div>
-                        {space.capacity && (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] leading-none text-slate-500 font-medium" title={`Capacidad: ${space.capacity} personas`}>
-                            <Users className="h-2.5 w-2.5" aria-hidden="true" />
-                            <span className="tabular-nums">{space.capacity}</span>
-                          </span>
+                      {/* Título de espacio completo - Adaptado con salto de línea natural y sin truncar */}
+                      <div className="flex items-center justify-center gap-1 min-w-0 flex-1 px-1">
+                        {allowSpaceReorder && (
+                          <GripVertical className="w-3.5 h-3.5 text-slate-400 group-hover/header:text-blue-600 transition shrink-0 cursor-grab active:cursor-grabbing" />
                         )}
+                        <span
+                          className="h-2 w-2 rounded-full shrink-0"
+                          style={{ backgroundColor: space.color || '#64748b' }}
+                          aria-hidden="true"
+                        />
+                        <span className="font-extrabold text-[10.5px] sm:text-[11px] uppercase tracking-tight text-slate-800 leading-tight text-center break-words select-none hyphens-auto">
+                          {space.name}
+                        </span>
                       </div>
 
                       {/* Botón mover a la derecha */}
@@ -1662,42 +1632,6 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                         );
                       })}
 
-
-                      {/* INTERACTIVE FREE-SPACE GAPS OVERLAY (Exact free intervals >= 30m) */}
-                      {showFreeGaps && !hasActiveGlobalFilters && (roomAvailabilityMap.get(space.id)?.summary.slots || []).map((gap) => {
-                        const clampStart = Math.max(gap.startMin, START_MINUTES);
-                        const clampEnd = Math.min(gap.endMin, START_MINUTES + TOTAL_MINUTES);
-                        if (clampEnd - clampStart < 30) return null;
-                        const topPx = ((clampStart - START_MINUTES) / 60) * HOUR_HEIGHT + 2;
-                        const heightPx = Math.max(24, ((clampEnd - clampStart) / 60) * HOUR_HEIGHT - 4);
-                        const isTallGap = heightPx >= 52;
-                        return (
-                          <button
-                            key={`free-${space.id}-${gap.startMin}`}
-                            type="button"
-                            data-calendar-date={dateStr}
-                            data-calendar-space={space.name}
-                            data-calendar-start={gap.startTime}
-                            data-calendar-end={gap.endTime}
-                            onClick={() => onNewReservationWithSlot(space.name, dateStr, gap.startTime, gap.endTime)}
-                            style={{ top: `${topPx}px`, height: `${heightPx}px` }}
-                            aria-label={`Tramo libre en ${space.name} de ${gap.startTime} a ${gap.endTime} (${formatDurationCompact(gap.durationMinutes)})`}
-                            title={`Espacio libre: ${gap.startTime} – ${gap.endTime} (${formatDurationCompact(gap.durationMinutes)})\nClic para reservar este tramo en ${space.name}`}
-                            className={`free-slot-block absolute left-[3px] right-[3px] rounded-md px-1.5 py-1 flex flex-col items-center justify-center text-center overflow-hidden z-[6] cursor-pointer group/gap ${
-                              draggedReservation ? 'pointer-events-none opacity-40' : ''
-                            }`}
-                          >
-                            <span className="text-[10px] font-bold font-mono tabular-nums leading-tight truncate max-w-full">
-                              {gap.startTime}–{gap.endTime}
-                            </span>
-                            {isTallGap && (
-                              <span className="text-[10px] font-semibold text-emerald-700/90 leading-tight truncate max-w-full mt-0.5">
-                                Libre · {formatDurationCompact(gap.durationMinutes)}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
 
                       {/* ACTIVE MAINTENANCE / SPACE BLOCKS OVERLAY */}
                       {spaceBlocks

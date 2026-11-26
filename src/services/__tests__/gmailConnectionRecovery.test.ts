@@ -5,6 +5,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 vi.mock('../gmailConnectionClient', () => ({ gmailServerRequest: vi.fn(), waitForGmailPopup: vi.fn() }));
 vi.mock('../../firebase/config', () => ({ getFirebaseAuth: () => ({}), getDb: () => ({}) }));
+vi.mock('../../firebase/authClient', () => ({ getFirebaseAuth: () => ({}) }));
 vi.mock('firebase/auth', () => ({
   onAuthStateChanged: vi.fn(), signOut: vi.fn().mockResolvedValue(undefined),
   signInWithPopup: vi.fn(), GoogleAuthProvider: class {}

@@ -154,6 +154,7 @@ export interface DeletionRequest {
   fechaDesde?: string;
   seleccion?: { id: string; version: number }[];
   serieId?: string;
+  aprobada?: boolean;
 }
 
 /**

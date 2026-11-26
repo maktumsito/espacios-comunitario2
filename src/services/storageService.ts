@@ -111,18 +111,7 @@ export function sanitizeAuditEntriesForLocalStorage(
   }));
 }
 
-export const CLEANABLE_CACHE_KEYS = [
-  'reservas_comunitarias_cache_v6',
-  'reservas_comunitarias_meta_v6',
-  'reservas_date_range_sync_v1',
-  'cc_audit_changelog_v1',
-  'espacios_calificaciones_cache_v1',
-  'ccd_bloqueos_espacios_cache_v1',
-  'espacios_backup_history_v2',
-  'cc_reservas_cache_v1',
-  'reservations_cache',
-  'audit_logs_cache',
-] as const;
+export const CLEANABLE_CACHE_KEYS = ['cc_reservas_cache_v1', 'reservations_cache', 'audit_logs_cache'] as const;
 
 export function getCleanableCacheEntries(): StorageDetail[] {
   return getLocalStorageStats().details.filter(entry => (CLEANABLE_CACHE_KEYS as readonly string[]).includes(entry.key));

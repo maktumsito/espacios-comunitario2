@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { AnalyticsView } from '../AnalyticsView';
 import { SPACES_LIST } from '../../data/spacesData';
@@ -22,8 +22,9 @@ it('attributes shared bookings and distinguishes catalog names that differ only 
   }));
   render(<AnalyticsView reservations={reservations} spaces={spaces} />);
   fireEvent.click(screen.getByRole('button', { name: 'Lista / Barras Simples' }));
+  const listCard = screen.getByRole('heading', { name: 'Uso y Demanda por Espacio' }).closest('.rounded-2xl') as HTMLElement;
   for (const room of names) {
-    const row = screen.getByText(room, { exact: true }).parentElement?.parentElement;
+    const row = within(listCard).getByText(room, { exact: true }).parentElement?.parentElement;
     expect(row?.textContent).toContain(room === 'SALON NORTE' ? '0 reservas (0.0%) · 0 personas' : '1 reservas (50.0%) · 4 personas');
   }
 });

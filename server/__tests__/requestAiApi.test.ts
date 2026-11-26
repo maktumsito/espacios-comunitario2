@@ -50,7 +50,7 @@ it('extracts structured data with Santiago context and redacts identifiers witho
     expect(result.extraction).toEqual(extraction);
     expect(JSON.stringify(result)).not.toContain('test-server-key');
     const [url, config] = gemini.mock.calls[0] as any;
-    expect(url).toContain('gemini-3.5-flash-lite:generateContent');
+    expect(url).toContain('gemini-2.5-flash-lite:generateContent');
     expect(config.headers['x-goog-api-key']).toBe('test-server-key');
     for (const personal of ['María Soto', 'maria@example.com', '12.345.678-5', '912345678']) expect(config.body).not.toContain(personal);
     const prompt = JSON.parse(JSON.parse(config.body).contents[0].parts[0].text);

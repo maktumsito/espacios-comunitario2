@@ -285,27 +285,6 @@ button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visib
 }
 .timeline-booking[data-short="true"] { padding: 2px 4px; }
 
-/* Free-space slot visual affordance in daily timetable */
-.free-slot-block {
-  background-color: rgba(236, 253, 245, 0.62);
-  background-image: repeating-linear-gradient(
-    -45deg,
-    rgba(16, 185, 129, 0.04),
-    rgba(16, 185, 129, 0.04) 6px,
-    transparent 6px,
-    transparent 12px
-  );
-  border: 1px dashed rgba(16, 185, 129, 0.45);
-  color: var(--avail-free-text);
-  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.free-slot-block:hover,
-.free-slot-block:focus-visible {
-  background-color: rgba(209, 250, 229, 0.92);
-  border-color: #059669;
-  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.14);
-}
-
 /* Segmented control pill container */
 .segmented-pill {
   background-color: #F1F5F9;
