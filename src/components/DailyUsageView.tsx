@@ -10,10 +10,8 @@ import React, { useState, useMemo, useEffect, useRef, Suspense, useCallback } fr
 import { Reservation, SpaceInfo, FilterState, SpaceBlock } from '../types';
 import { SPACES_LIST, normalizeSpaceName } from '../data/spacesData';
 import {
-  computeRoomDayFreeSlots,
   filterEnabledSpaceReservations,
   getEnabledSpaces,
-  getRoomLiveStatus,
   hasEnabledSpace,
 } from '../utils/spaceAvailability';
 import { timeToMinutes, getConflictReservationIds, doSpacesConflict, getConstituentSpaces, normalizeSpace, isReservationActiveForAvailability, getTimeIntervalsForReservation, findMaintenanceBlockConflicts } from '../utils/conflictDetector';
@@ -40,8 +38,7 @@ import {
   User,
   Clock,
   Phone,
-  MapPin,
-  Sparkles
+  MapPin
 } from 'lucide-react';
 import {
   format,
@@ -290,7 +287,6 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
   // Vista compacta de fábrica (optimizada para máxima visibilidad horizontal y vertical)
   const [isCompact, setIsCompact] = useState(false);
-  const [quickAvailabilityFilter, setQuickAvailabilityFilter] = useState<'all' | 'free_now' | 'gap_2h'>('all');
   const [localComparisonSpaces, setLocalComparisonSpaces] = useState<string[] | null>(null);
   const selectedComparisonSpaces = comparisonSpaces === undefined ? localComparisonSpaces : comparisonSpaces;
   const changeComparisonSpaces = (names: string[] | null) => {
@@ -501,20 +497,6 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     return list;
   }, [localSpaces, spaceCatalog, dayReservations]);
 
-  const sourceForAvailability = allReservations ?? reservations;
-  const roomAvailabilityMap = useMemo(() => {
-    const map = new Map<string, {
-      summary: ReturnType<typeof computeRoomDayFreeSlots>;
-      live: ReturnType<typeof getRoomLiveStatus>;
-    }>();
-    availableScheduleSpaces.forEach(space => {
-      const summary = computeRoomDayFreeSlots(space.name, dateStr, sourceForAvailability, enabledSpaceBlocks, { minSlotMinutes: 30 });
-      const live = getRoomLiveStatus(space.name, dateStr, currentTimeMinutes, sourceForAvailability, enabledSpaceBlocks);
-      map.set(space.id, { summary, live });
-    });
-    return map;
-  }, [availableScheduleSpaces, dateStr, sourceForAvailability, enabledSpaceBlocks, currentTimeMinutes]);
-
   const activeSpaces = useMemo(() => {
     let list = availableScheduleSpaces;
     if (globalFilters?.espacio?.trim()) {
@@ -524,19 +506,8 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
     if (selectedComparisonSpaces !== null) {
       list = list.filter(space => selectedComparisonSpaces.includes(space.name));
     }
-    if (quickAvailabilityFilter === 'free_now') {
-      list = list.filter(space => {
-        const info = roomAvailabilityMap.get(space.id);
-        return isToday ? info?.live.status === 'free' : (info?.summary.slots.length ?? 0) > 0;
-      });
-    } else if (quickAvailabilityFilter === 'gap_2h') {
-      list = list.filter(space => {
-        const info = roomAvailabilityMap.get(space.id);
-        return info?.summary.slots.some(slot => slot.durationMinutes >= 120) ?? false;
-      });
-    }
     return list;
-  }, [availableScheduleSpaces, globalFilters?.espacio, selectedComparisonSpaces, quickAvailabilityFilter, roomAvailabilityMap, isToday]);
+  }, [availableScheduleSpaces, globalFilters?.espacio, selectedComparisonSpaces]);
 
 
   // Conflict IDs for the day (utilizes precomputed global Set when provided for O(1) lookups)
@@ -1107,17 +1078,16 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
 
           <div className="hidden xl:block h-4 w-px bg-slate-200" aria-hidden="true" />
 
-          {/* Quick Availability Filters */}
+          {/* Quick Space Reset */}
           <div className="flex flex-wrap items-center gap-1">
             <button
               type="button"
-              aria-pressed={quickAvailabilityFilter === 'all' && selectedComparisonSpaces === null}
+              aria-pressed={selectedComparisonSpaces === null}
               onClick={() => {
-                setQuickAvailabilityFilter('all');
                 changeComparisonSpaces(null);
               }}
               className={`min-h-7 rounded-md border px-2 text-xs font-semibold transition ${
-                quickAvailabilityFilter === 'all' && selectedComparisonSpaces === null
+                selectedComparisonSpaces === null
                   ? 'border-slate-800 bg-slate-800 text-white'
                   : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
               }`}
@@ -1125,39 +1095,10 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
               Todas ({availableScheduleSpaces.length})
             </button>
 
-            <button
-              type="button"
-              aria-pressed={quickAvailabilityFilter === 'free_now'}
-              onClick={() => setQuickAvailabilityFilter(prev => prev === 'free_now' ? 'all' : 'free_now')}
-              className={`inline-flex min-h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-semibold transition ${
-                quickAvailabilityFilter === 'free_now'
-                  ? 'border-emerald-500 bg-emerald-600 text-white'
-                  : 'border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100'
-              }`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${quickAvailabilityFilter === 'free_now' ? 'bg-white' : 'bg-emerald-500'}`} />
-              <span>{isToday ? 'Libres ahora' : 'Con espacio libre'}</span>
-            </button>
-
-            <button
-              type="button"
-              aria-pressed={quickAvailabilityFilter === 'gap_2h'}
-              onClick={() => setQuickAvailabilityFilter(prev => prev === 'gap_2h' ? 'all' : 'gap_2h')}
-              className={`inline-flex min-h-7 items-center gap-1 rounded-md border px-2 text-xs font-semibold transition ${
-                quickAvailabilityFilter === 'gap_2h'
-                  ? 'border-blue-600 bg-blue-600 text-white'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <Sparkles className="h-3 w-3" />
-              <span>Hueco ≥ 2h</span>
-            </button>
-
             {activeSpaces.length < availableScheduleSpaces.length && availableScheduleSpaces.length > 0 && (
               <button
                 type="button"
                 onClick={() => {
-                  setQuickAvailabilityFilter('all');
                   changeComparisonSpaces(null);
                   if (globalFilters?.espacio && onFilterChange) {
                     onFilterChange({ ...globalFilters, espacio: '' });
@@ -1282,7 +1223,7 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
             </summary>
             <div className="mt-1.5 space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-lg sm:absolute sm:right-0 sm:z-40 sm:w-[460px]">
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => { setQuickAvailabilityFilter('all'); changeComparisonSpaces(null); }} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50">Todos</button>
+                <button type="button" onClick={() => changeComparisonSpaces(null)} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50">Todos</button>
                 <button type="button" onClick={() => changeComparisonSpaces([])} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50">Limpiar selección</button>
                 <label className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">Grupo
                   <select aria-label="Seleccionar grupo de espacios" value="" onChange={event => { if (event.target.value) changeComparisonSpaces(availableScheduleSpaces.filter(space => space.category === event.target.value).map(space => space.name)); }} className="min-h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs"><option value="">Elegir categoría</option>{[...new Set(availableScheduleSpaces.map(space => space.category))].map(category => <option key={category} value={category}>{category}</option>)}</select>
