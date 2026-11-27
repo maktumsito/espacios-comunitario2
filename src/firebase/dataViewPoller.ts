@@ -20,6 +20,7 @@ interface Entry {
   last?: DataViewMessage;
   retryAt: number;
   blocked: boolean;
+  failed: boolean;
 }
 
 function matchesQueryConstraints(data: Record<string, any> | undefined, id: string, constraints?: unknown[]): boolean {
@@ -130,7 +131,7 @@ export class DataViewPoller {
     let entry = this.entries.get(key);
     const listener = { next, error };
     if (!entry) {
-      entry = { query: { ...query }, listeners: new Set(), retryAt: 0, blocked: false };
+      entry = { query: { ...query }, listeners: new Set(), retryAt: 0, blocked: false, failed: false };
       this.entries.set(key, entry);
       this.dirty = true;
     }
@@ -161,6 +162,7 @@ export class DataViewPoller {
         entry.query.version = undefined;
         entry.last = undefined;
         entry.blocked = false;
+        entry.failed = false;
         entry.retryAt = 0;
       }
     }
@@ -217,13 +219,21 @@ export class DataViewPoller {
           const entry = chunk[i];
           if (((entry as any).localWriteStamp || 0) !== stamps[i]) return;
           if (message.error) {
+            entry.failed = true;
             entry.blocked = message.status === 401 || message.status === 403;
             entry.retryAt = Date.now() + Math.max(60_000, message.retryAfterMs || 0);
             for (const listener of entry.listeners) listener.error(Object.assign(new Error(message.error), message));
             return;
           }
+          const recovered = entry.failed;
+          entry.failed = false;
           entry.query.version = message.version;
-          if (message.unchanged) return;
+          if (message.unchanged) {
+            if (recovered && entry.last) {
+              for (const listener of entry.listeners) listener.next(entry.last);
+            }
+            return;
+          }
           entry.last = message;
           for (const listener of entry.listeners) listener.next(message);
         });
@@ -234,7 +244,10 @@ export class DataViewPoller {
       if (generation !== this.generation || controller.signal.aborted) return;
       const terminal = error.status === 401 || error.status === 403;
       this.retryAt = terminal ? Infinity : Date.now() + Math.max(error.retryAfterMs || 0, Math.min(300_000, 10_000 * 2 ** Math.min(this.failures++, 5)));
-      for (const entry of entries) for (const listener of entry.listeners) listener.error(error);
+      for (const entry of entries) {
+        entry.failed = true;
+        for (const listener of entry.listeners) listener.error(error);
+      }
     } finally {
       if (generation === this.generation) {
         this.controller = undefined;

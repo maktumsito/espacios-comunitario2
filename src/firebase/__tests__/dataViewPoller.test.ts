@@ -144,3 +144,21 @@ it('immediately bypasses backoff cooldown when forceRetry is triggered by the us
   expect(p.next).toHaveBeenCalledTimes(7);
   p.stop();
 });
+
+it('re-emits the last snapshot to clear error state when recovery returns unchanged', async () => {
+  const p = setup();
+  // Initial load succeeds and caches version + docs
+  await vi.advanceTimersByTimeAsync(25);
+  expect(p.next).toHaveBeenCalledTimes(7);
+
+  // Next poll fails transiently
+  p.request.mockRejectedValueOnce(Object.assign(new Error('Error temporal de red'), { status: 503 }));
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(p.error).toHaveBeenCalledTimes(7);
+
+  // Subsequent recovery poll returns unchanged: true for all views
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(p.request).toHaveBeenCalledTimes(3);
+  expect(p.next).toHaveBeenCalledTimes(14);
+  p.stop();
+});
