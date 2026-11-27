@@ -15,6 +15,8 @@ import {
 import { Reservation } from '../types';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { isCommitmentLetterEligible } from '../utils/commitmentLetterPdf';
+import { buildRecurrenceHumanSummary } from '../utils/recurrenceSummary';
+import { formatBirthdayLimitMessage, type DailyBirthdayLimitViolation } from '../utils/birthdayLimit';
 
 export interface ReservationStep5ReviewProps {
   reviewSlots?: ScheduleSlot[];
@@ -28,6 +30,14 @@ export interface ReservationStep5ReviewProps {
   singleSecondStartTime?: string;
   singleSecondEndTime?: string;
   generatedDates: readonly string[] | string[];
+  selectedDays?: number[];
+  recurrenceStartDate?: string;
+  recurrenceEndDate?: string;
+  omittedHolidaysCount?: number;
+  useCustomSchedulesPerDay?: boolean;
+  useCustomSchedulesPerDate?: boolean;
+  birthdayLimitViolations?: DailyBirthdayLimitViolation[];
+  allowBirthdayLimitOverride?: boolean;
   conflicts: Reservation[];
   candidateConflictDates: readonly string[] | string[];
   onGoToStep: (step: 1 | 2 | 3 | 4 | 5) => void;
@@ -46,6 +56,14 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
   singleSecondStartTime,
   singleSecondEndTime,
   generatedDates,
+  selectedDays = [],
+  recurrenceStartDate,
+  recurrenceEndDate,
+  omittedHolidaysCount = 0,
+  useCustomSchedulesPerDay = false,
+  useCustomSchedulesPerDate = false,
+  birthdayLimitViolations = [],
+  allowBirthdayLimitOverride = false,
   conflicts,
   candidateConflictDates,
   onGoToStep,
@@ -61,6 +79,23 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
     : (generatedDates.length || 0));
 
   const hasConflicts = conflicts.length > 0 || candidateConflictDates.length > 0;
+  const humanSummary = buildRecurrenceHumanSummary({
+    bookingMode,
+    espacio: formData.espacio,
+    fecha: formData.fecha,
+    horaInicio: formData.horaInicio,
+    horaFin: formData.horaFin,
+    selectedDays,
+    recurrenceStartDate,
+    recurrenceEndDate,
+    generatedDates,
+    specificDates,
+    reviewSlots,
+    omittedHolidaysCount,
+    useCustomSchedulesPerDay,
+    useCustomSchedulesPerDate,
+    hasMultipleSpaces: enableSingleSecondSpace,
+  });
 
   return (
     <div id="reservation-step-5-container" className="space-y-4">
@@ -68,7 +103,7 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
       <ReservationSectionHeader title="5. Revisar reserva" description="Comprueba los datos. La reserva se guardará cuando confirmes." icon={<CheckCircle2 className="h-4 w-4" />} />
 
       {/* Total Sessions Banner */}
-      <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl flex items-center justify-between">
+      <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl flex items-center justify-between gap-3">
         <div className="flex items-center space-x-2.5">
           <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-black text-sm flex items-center justify-center shrink-0">
             {totalCount}
@@ -77,19 +112,33 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
             <h4 className="text-xs font-bold text-blue-950">
               {totalCount === 1 ? '1 Reserva para Registrar' : `${totalCount} Reservas para Registrar`}
             </h4>
-            <p className="text-[11px] text-blue-700">
-              {bookingMode === 'single'
-                ? `Fecha única: ${formData.fecha ? formatDateDDMMYYYY(formData.fecha) : 'Por definir'}`
-                : bookingMode === 'specific'
-                ? `${specificDates.length} fechas específicas seleccionadas`
-                : 'Serie semanal recurrente según días programados'}
+            <p className="text-[11px] text-blue-800 font-medium">
+              {humanSummary}
             </p>
           </div>
         </div>
-        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-blue-200/80 text-blue-900">
+        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-blue-200/80 text-blue-900 shrink-0">
           {bookingMode === 'single' ? 'Individual' : 'Múltiple'}
         </span>
       </div>
+
+      {birthdayLimitViolations.length > 0 && (
+        <div className={`p-3 rounded-xl border text-xs flex items-start space-x-2 ${
+          allowBirthdayLimitOverride
+            ? 'bg-amber-50 border-amber-300 text-amber-950'
+            : 'bg-rose-50 border-rose-300 text-rose-950'
+        }`}>
+          <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${allowBirthdayLimitOverride ? 'text-amber-600' : 'text-rose-600'}`} />
+          <div className="space-y-0.5">
+            <span className="font-bold">
+              {allowBirthdayLimitOverride
+                ? 'Excepción autorizada: límite diario de cumpleaños'
+                : 'Límite diario de cumpleaños alcanzado:'}
+            </span>
+            <p className="text-[11px]">{formatBirthdayLimitMessage(birthdayLimitViolations)}</p>
+          </div>
+        </div>
+      )}
 
       {/* Conflict Alert if applicable */}
       {hasConflicts && (
@@ -134,6 +183,11 @@ export const ReservationStep5Review: React.FC<ReservationStep5ReviewProps> = Rea
                 </span>
               )}
             </div>
+            {formData.unidadMunicipal && (
+              <div className="text-[11px] text-slate-600">
+                Dirección / departamento: <strong className="text-slate-800">{formData.unidadMunicipal}</strong>
+              </div>
+            )}
           </div>
         </div>
 

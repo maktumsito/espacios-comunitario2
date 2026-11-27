@@ -42,6 +42,7 @@ interface ReservationModalDialogsProps {
   excludeReservationIds: string[];
   excludeSeriesId?: string;
   allowConflictOverride: boolean;
+  canOverrideConflicts?: boolean;
   setFormData: React.Dispatch<React.SetStateAction<Partial<Reservation>>>;
   handleUpdateSecondSpace: (updates: { space?: string; startTime?: string; endTime?: string }) => void;
   setSpecificDates: React.Dispatch<React.SetStateAction<string[]>>;
@@ -83,6 +84,7 @@ export const ReservationModalDialogs: React.FC<ReservationModalDialogsProps> = R
   excludeReservationIds,
   excludeSeriesId,
   allowConflictOverride,
+  canOverrideConflicts = true,
   setFormData,
   handleUpdateSecondSpace,
   setSpecificDates,
@@ -123,6 +125,7 @@ export const ReservationModalDialogs: React.FC<ReservationModalDialogsProps> = R
           excludeReservationIds={excludeReservationIds}
           excludeSeriesId={excludeSeriesId}
           allowConflictOverride={allowConflictOverride}
+          canOverrideConflicts={canOverrideConflicts}
           onUpdateFormData={setFormData}
           onUpdateSecondSpace={handleUpdateSecondSpace}
           onUpdateSpecificDates={setSpecificDates}

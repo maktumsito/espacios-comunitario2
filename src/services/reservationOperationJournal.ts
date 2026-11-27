@@ -14,6 +14,7 @@ export interface PendingOperation {
   deletedIds: string[];
   confirmedIds: string[];
   allowConflictOverride: boolean;
+  allowBirthdayLimitOverride?: boolean;
   intent?: "create" | "update";
   requireAtomic?: boolean;
   distributionDate?: string;

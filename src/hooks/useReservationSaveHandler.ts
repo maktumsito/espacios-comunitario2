@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { normalizeSpaceName } from '../data/spacesData';
 import { isReservationActiveForAvailability, findMaintenanceBlockConflicts, formatBlockConflictMessage, findReservationConflicts } from '../utils/conflictDetector';
+import { findDailyBirthdayLimitViolations, formatBirthdayLimitMessage } from '../utils/birthdayLimit';
 import { getDeletedIds } from '../services/reservationService';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import {
@@ -111,6 +112,8 @@ interface UseReservationSaveHandlerProps {
   excludeSeriesId?: string;
   allowConflictOverride: boolean;
   setAllowConflictOverride: (val: boolean) => void;
+  allowBirthdayLimitOverride?: boolean;
+  isManagerUser?: boolean;
   setShowConflictDialog: (val: boolean) => void;
   generateFullSeries: boolean;
   editingReservation?: Reservation | null;
@@ -128,7 +131,8 @@ interface UseReservationSaveHandlerProps {
     seriesDates?: (string | SeriesItemSlot)[],
     isBatchUpdate?: boolean,
     batchInfo?: BatchUpdateInfo,
-    allowConflictOverride?: boolean
+    allowConflictOverride?: boolean,
+    allowBirthdayLimitOverride?: boolean
   ) => void | boolean | Promise<void | boolean>;
   clearDraft: () => void;
   onClose: () => void;
@@ -194,6 +198,8 @@ export function useReservationSaveHandler({
   excludeSeriesId,
   allowConflictOverride,
   setAllowConflictOverride,
+  allowBirthdayLimitOverride = false,
+  isManagerUser = false,
   setShowConflictDialog,
   generateFullSeries,
   editingReservation,
@@ -220,8 +226,14 @@ export function useReservationSaveHandler({
     setIsSubmitting(true);
     try {
 
-    const abortWithFeedback = (msg: string, type: 'error' | 'warning' = 'error') => {
+    const abortWithFeedback = (msg: string, type: 'error' | 'warning' = 'error', focusElementId?: string) => {
       showFormFeedback(msg, type);
+      if (focusElementId && typeof document !== 'undefined') {
+        const targetEl = document.getElementById(focusElementId);
+        if (targetEl && typeof targetEl.focus === 'function') {
+          targetEl.focus();
+        }
+      }
       isSubmittingRef.current = false;
       setIsSubmitting(false);
     };
@@ -293,12 +305,12 @@ export function useReservationSaveHandler({
     const effectivePatternHolidayAnalysis = isEditingRecurring ? filterOutChileanHolidays(effectiveRawPatternDates) : patternHolidayAnalysis;
 
     if (!effectiveFormData.responsable?.trim()) {
-      abortWithFeedback('Por favor completa el nombre del responsable de la actividad.');
+      abortWithFeedback('Por favor completa el nombre del responsable de la actividad.', 'error', 'input-reserva-responsable');
       return;
     }
 
     if (!effectiveFormData.tipoActividad) {
-      abortWithFeedback('Por favor selecciona el tipo de actividad.');
+      abortWithFeedback('Por favor selecciona el tipo de actividad.', 'error', 'input-reserva-tipo');
       return;
     }
 
@@ -348,17 +360,17 @@ export function useReservationSaveHandler({
     }
 
     if (!rutValidation.isValid) {
-      abortWithFeedback(`⚠️ R.U.T. inválido: ${rutValidation.error}`);
+      abortWithFeedback(`⚠️ R.U.T. inválido: ${rutValidation.error}`, 'error', 'input-reserva-rut');
       return;
     }
 
     if (!emailValidation.isValid) {
-      abortWithFeedback(`⚠️ Correo electrónico inválido: ${emailValidation.error}`);
+      abortWithFeedback(`⚠️ Correo electrónico inválido: ${emailValidation.error}`, 'error', 'input-reserva-email');
       return;
     }
 
     if (!phoneValidation.isValid) {
-      abortWithFeedback(`⚠️ Teléfono de contacto inválido: ${phoneValidation.error}`);
+      abortWithFeedback(`⚠️ Teléfono de contacto inválido: ${phoneValidation.error}`, 'error', 'input-reserva-telefono');
       return;
     }
 
@@ -383,7 +395,7 @@ export function useReservationSaveHandler({
     if (loanScheduleCheck.requiresAuthorization && !metadataOnly) {
       if (!isExtensionAuthorized) {
         abortWithFeedback(
-          '⚠️ Autorización requerida: La actividad opera en horario extendido (antes de las 08:30 hrs o después de las 22:00 hrs). Ingresa la clave oficial "ccd2026" para autorizarla.'
+          '⚠️ Autorización requerida: La actividad opera en horario extendido (antes de las 08:30 hrs o después de las 22:00 hrs). Ingresa la clave de autorización de horario extendido para continuar.'
         );
         return;
       }
@@ -507,6 +519,18 @@ export function useReservationSaveHandler({
     const unchangedScheduleCandidates = validationCandidates.filter(c => !changedScheduleCandidates.includes(c));
     const blocks = findMaintenanceBlockConflicts(changedScheduleCandidates,spaceBlocks);
     if (blocks.length) { abortWithFeedback(formatBlockConflictMessage(blocks[0])); return; }
+
+    if (!(allowBirthdayLimitOverride && isManagerUser)) {
+      const birthdayViolations = findDailyBirthdayLimitViolations(
+        changedScheduleCandidates,
+        allReservations,
+        { excludeReservationIds: isEditingExisting && !isDuplicating ? excludeReservationIds : [] }
+      );
+      if (birthdayViolations.length > 0) {
+        abortWithFeedback(formatBirthdayLimitMessage(birthdayViolations));
+        return;
+      }
+    }
     if (!forceConflictOverride && !allowConflictOverride && changedScheduleCandidates.length > 0 && findReservationConflicts(changedScheduleCandidates,[...allReservations, ...unchangedScheduleCandidates],{
       excludeReservationIds,excludeSeriesId,allowCandidateSelfConflicts:false,
     }).length) { setShowConflictDialog(true); return; }
@@ -728,7 +752,7 @@ export function useReservationSaveHandler({
               updatedReservations: [updatedReserva],
               affectedIds: [updatedReserva.id],
               description: `Modificada reserva individual '${updatedReserva.tipoActividad}' de ${updatedReserva.responsable} (${formatDateDDMMYYYY(updatedReserva.fecha)})`
-            }, forceConflictOverride || allowConflictOverride)
+            }, forceConflictOverride || allowConflictOverride, Boolean(allowBirthdayLimitOverride && isManagerUser))
           );
           if (singleResult === false) {
             return;
@@ -986,7 +1010,7 @@ export function useReservationSaveHandler({
             const existing=cleanAffected.find(old=>old.id===r.id);
             if (existing && initialFormData && !draftMode) {
               const changed=applyChangedSeriesFields(existing,effectiveFormData,initialFormData);
-              for (const field of ['tipoActividad','descripcion','responsable','telefonoContacto','emailContacto','tipoPrestamo','cantidadParticipantes','equipamientoSolicitado','montaje','importante','comentarios','rut','domicilio','requiereCartaCompromiso','cartaCompromisoAdjunta','realizada'] as const) (r as any)[field]=changed[field];
+              for (const field of ['tipoActividad','unidadMunicipal','descripcion','responsable','telefonoContacto','emailContacto','tipoPrestamo','cantidadParticipantes','equipamientoSolicitado','montaje','importante','comentarios','rut','domicilio','requiereCartaCompromiso','cartaCompromisoAdjunta','realizada'] as const) (r as any)[field]=changed[field];
               r.unidadMunicipal = changed.unidadMunicipal;
             }
             if (existing && sameScheduleSlot(existing,r)) {
@@ -1015,7 +1039,7 @@ export function useReservationSaveHandler({
           }
 
           const scopeLabels: Record<UpdateScope, string> = {
-            single: 'Solo esta reserva',
+            single: 'Solo esta fecha',
             future: `Desde ${formatDateDDMMYYYY(editingReservation.fecha)} en adelante (${updatedList.length} reservas)`,
             series: `Toda la serie (${updatedList.length} reservas)`,
             dateRange: `Rango ${formatDateDDMMYYYY(rangeStartDate)} a ${formatDateDDMMYYYY(rangeEndDate)} (${updatedList.length} reservas)`,
@@ -1034,7 +1058,7 @@ export function useReservationSaveHandler({
               description: isConvertingToSeries
                 ? `Convertida reserva individual a serie de ${updatedList.length} sesiones para '${effectiveFormData.tipoActividad || 'Actividad'}' (${effectiveFormData.responsable || 'Responsable'})`
                 : `Actualizadas ${updatedList.length} reservas (${scopeLabels[updateScope] || updateScope}) para '${effectiveFormData.tipoActividad || 'Actividad'}' (${effectiveFormData.responsable || 'Responsable'})`
-            }, forceConflictOverride || allowConflictOverride)
+            }, forceConflictOverride || allowConflictOverride, Boolean(allowBirthdayLimitOverride && isManagerUser))
           );
           if (batchResult === false) {
             return;
@@ -1046,17 +1070,17 @@ export function useReservationSaveHandler({
         finalDates.length >= 1 &&
         (!editingReservation || isDuplicating)
       ) {
-        const seriesResult = await Promise.resolve(onSave(finalReserva, true, finalSeriesPayload, false, undefined, forceConflictOverride || allowConflictOverride));
+        const seriesResult = await Promise.resolve(onSave(finalReserva, true, finalSeriesPayload, false, undefined, forceConflictOverride || allowConflictOverride, Boolean(allowBirthdayLimitOverride && isManagerUser)));
         if (seriesResult === false) {
           return;
         }
       } else if (enableSingleSecondSpace && (!editingReservation || isDuplicating)) {
-        const doubleResult = await Promise.resolve(onSave(finalReserva, true, finalSeriesPayload, false, undefined, forceConflictOverride || allowConflictOverride));
+        const doubleResult = await Promise.resolve(onSave(finalReserva, true, finalSeriesPayload, false, undefined, forceConflictOverride || allowConflictOverride, Boolean(allowBirthdayLimitOverride && isManagerUser)));
         if (doubleResult === false) {
           return;
         }
       } else {
-        const singleResult = await Promise.resolve(onSave(finalReserva, false, undefined, false, undefined, forceConflictOverride || allowConflictOverride));
+        const singleResult = await Promise.resolve(onSave(finalReserva, false, undefined, false, undefined, forceConflictOverride || allowConflictOverride, Boolean(allowBirthdayLimitOverride && isManagerUser)));
         if (singleResult === false) {
           return;
         }

@@ -8,7 +8,7 @@ import { SPACES_LIST, ACTIVITY_TYPES } from '../data/spacesData';
 import { DEFAULT_LOAN_TYPES } from '../services/adminConfigService';
 import { getStoredEquipment } from '../services/equipmentService';
 import { checkSingleConflict, timeToMinutes, formatMinutesToTime, findMaintenanceBlockConflicts, formatBlockConflictMessage } from '../utils/conflictDetector';
-import { AuthUser, userCanEditReservations, userCanDeleteReservations } from '../services/authService';
+import { AuthUser, isCoordinatorOrAdmin, userCanEditReservations, userCanDeleteReservations } from '../services/authService';
 import { verifyHolidayOverrideKey } from '../utils/holidayUtils';
 import { AlertTriangle } from 'lucide-react';
 import { useReservationAutosave, AutosavedReservationDraft } from '../hooks/useReservationAutosave';
@@ -63,7 +63,8 @@ interface ReservationModalProps {
     seriesDates?: (string | SeriesItemSlot)[],
     updateWholeSeries?: boolean,
     batchUpdateInfo?: BatchUpdateInfo,
-    allowConflictOverride?: boolean
+    allowConflictOverride?: boolean,
+    allowBirthdayLimitOverride?: boolean
   ) => void | boolean | Promise<void | boolean>;
   onDelete?: (id: string, isSeries?: boolean, seriesId?: string) => void | Promise<void>;
   onRequestDelete?: (reserva: Reservation) => void;
@@ -216,6 +217,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   );
 
   const [allowConflictOverride, setAllowConflictOverride] = useState(false);
+  const [allowBirthdayLimitOverride, setAllowBirthdayLimitOverride] = useState(false);
+  const isManagerUser = isCoordinatorOrAdmin(currentUser);
   const [showInlineSuggestions, setShowInlineSuggestions] = useState(false);
   const [generateFullSeries, setGenerateFullSeries] = useState(true);
 
@@ -658,7 +661,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
         autorizadoPor: editingReservation.autorizadoPor || '',
         equipamientoSolicitado: clonedEquip
       });
-      // Inicia bloqueado por defecto para requerir validación estricta de clave ccd2026
+      // Inicia bloqueado por defecto para requerir clave de autorización en horario extendido
       setExtendedAuthKey('');
       const isRecurringSeries = !isCopy && !isMultiSpace && Boolean(
         editingReservation.actividadRecurrente === 'Sí' ||
@@ -666,6 +669,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       );
       setGenerateFullSeries(isCopy ? true : isRecurringSeries);
       setAllowConflictOverride(false);
+      setAllowBirthdayLimitOverride(false);
       setUpdateScope(isRecurringSeries && editingReservation.fecha >= getChileLocalDateString() ? 'series' : 'single');
       setRangeStartDate(editingReservation.fecha || format(new Date(), 'yyyy-MM-dd'));
       setRangeEndDate(editingReservation.fecha || format(new Date(), 'yyyy-MM-dd'));
@@ -820,6 +824,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       setSelectedDays([initDayNum]);
       setGenerateFullSeries(true);
       setAllowConflictOverride(false);
+      setAllowBirthdayLimitOverride(false);
       setShowConflictDialog(false);
       setExtendedAuthKey('');
       setHolidayOverrideKey('');
@@ -919,7 +924,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
 
   const handleAddRelativeDays = (daysToAdd: number) => {
     try {
-      const baseStr = specificDates.length > 0 ? specificDates[specificDates.length - 1] : (formData.fecha || '2026-08-27');
+      const baseStr = specificDates.length > 0 ? specificDates[specificDates.length - 1] : (formData.fecha || getChileLocalDateString());
       const nextDate = format(addDays(parseISO(baseStr), daysToAdd), 'yyyy-MM-dd');
       handleAddSpecificDate(nextDate);
       setCurrentCalendarMonth(parseISO(nextDate));
@@ -1027,6 +1032,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     secondSpaceCapacityWarning,
     isFormSubmitDisabled,
     hasStep1Conflict,
+    birthdayLimitViolations,
+    hasBirthdayLimitBlock,
     isStep1ActivityCompleted,
     isStep2DateTimeCompleted,
     isStep3ApplicantCompleted,
@@ -1039,6 +1046,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     preserveExistingSchedule: isEditingRecurring && updateScope !== 'single' && Boolean(initialFormBaseline && initialFormBaseline.schedule === scheduleFingerprint),
     reviewSlots,
     allReservations,
+    allowBirthdayLimitOverride,
+    isManagerUser,
     formData,
     enableSingleSecondSpace,
     singleSecondStartTime,
@@ -1210,6 +1219,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     excludeSeriesId,
     allowConflictOverride,
     setAllowConflictOverride,
+    allowBirthdayLimitOverride,
+    isManagerUser,
     setShowConflictDialog,
     generateFullSeries,
     editingReservation,
@@ -1238,6 +1249,85 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     showFormFeedback
   });
 
+  const focusFirstInvalidFieldForStep = useCallback((step: 1 | 2 | 3) => {
+    if (typeof document === 'undefined') return;
+    const focusFirst = (ids: string[]) => {
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el && typeof el.focus === 'function') {
+          el.focus();
+          return;
+        }
+      }
+    };
+    if (step === 1) {
+      if (!formData.descripcion?.trim() || !descriptionValidation.isValid) {
+        focusFirst(['input-reserva-descripcion']);
+      } else if (!formData.tipoActividad) {
+        focusFirst(['input-reserva-tipo']);
+      }
+      return;
+    }
+    if (step === 2) {
+      if (!formData.espacio) {
+        focusFirst(['input-reserva-espacio']);
+      } else if (bookingMode === 'single' && !formData.fecha) {
+        focusFirst(['input-reserva-fecha']);
+      } else if (!timeValidation.isValid) {
+        focusFirst(['input-reserva-fin', 'input-reserva-inicio']);
+      } else if (loanScheduleCheck.requiresAuthorization && !isExtensionAuthorized) {
+        focusFirst(['input-clave-extension', 'input-reserva-fin']);
+      }
+      return;
+    }
+    if (step === 3) {
+      if (!formData.responsable?.trim()) {
+        focusFirst(['input-reserva-responsable']);
+      } else if (formData.rut && !rutValidation.isValid) {
+        focusFirst(['input-reserva-rut']);
+      } else if (formData.emailContacto && !emailValidation.isValid) {
+        focusFirst(['input-reserva-email']);
+      } else if (formData.telefonoContacto && !phoneValidation.isValid) {
+        focusFirst(['input-reserva-telefono']);
+      }
+    }
+  }, [
+    formData.descripcion,
+    formData.tipoActividad,
+    formData.espacio,
+    formData.fecha,
+    formData.responsable,
+    formData.rut,
+    formData.emailContacto,
+    formData.telefonoContacto,
+    bookingMode,
+    descriptionValidation.isValid,
+    timeValidation.isValid,
+    loanScheduleCheck.requiresAuthorization,
+    isExtensionAuthorized,
+    rutValidation.isValid,
+    emailValidation.isValid,
+    phoneValidation.isValid,
+  ]);
+
+  const validateStep1WithFocus = useCallback((showAlert = true) => {
+    const valid = validateStep1Activity(showAlert);
+    if (!valid && showAlert) focusFirstInvalidFieldForStep(1);
+    return valid;
+  }, [validateStep1Activity, focusFirstInvalidFieldForStep]);
+
+  const validateStep2WithFocus = useCallback((showAlert = true) => {
+    const valid = validateStep2DateTime(showAlert);
+    if (!valid && showAlert) focusFirstInvalidFieldForStep(2);
+    return valid;
+  }, [validateStep2DateTime, focusFirstInvalidFieldForStep]);
+
+  const validateStep3WithFocus = useCallback((showAlert = true) => {
+    const valid = validateStep3Applicant(showAlert);
+    if (!valid && showAlert) focusFirstInvalidFieldForStep(3);
+    return valid;
+  }, [validateStep3Applicant, focusFirstInvalidFieldForStep]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (replacementSource) {
@@ -1254,21 +1344,21 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     }
     if (isWizardMode) {
       if (wizardStep === 1) {
-        if (validateStep1Activity(true)) {
+        if (validateStep1WithFocus(true)) {
           setWizardStep(2);
           scrollToModalTop();
         }
         return;
       }
       if (wizardStep === 2) {
-        if (validateStep2DateTime(true)) {
+        if (validateStep2WithFocus(true)) {
           setWizardStep(3);
           scrollToModalTop();
         }
         return;
       }
       if (wizardStep === 3) {
-        if (validateStep3Applicant(true)) {
+        if (validateStep3WithFocus(true)) {
           setWizardStep(4);
           scrollToModalTop();
         }
@@ -1317,7 +1407,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
           ),
           confirmLabel: 'Eliminar Toda la Serie',
           secondaryAction: {
-            label: 'Solo Esta Fecha',
+            label: 'Solo esta fecha',
             className: 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-semibold',
             onClick: async () => {
               await onDelete(editingReservation.id, false);
@@ -1405,7 +1495,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                 descripcion={formData.descripcion}
                 equipamientoCount={formData.equipamientoSolicitado?.length || 0}
                 onSelectStep={(targetStep) => {
-                  const prerequisites = [validateStep1Activity, validateStep2DateTime, validateStep3Applicant];
+                  const prerequisites = [validateStep1WithFocus, validateStep2WithFocus, validateStep3WithFocus];
                   for (const validate of prerequisites.slice(0, targetStep - 1)) {
                     if (!validate(false)) {
                       validate(true);
@@ -1553,6 +1643,9 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
             mainDuration={mainDuration}
             allowConflictOverride={allowConflictOverride}
             setAllowConflictOverride={setAllowConflictOverride}
+            birthdayLimitViolations={birthdayLimitViolations}
+            allowBirthdayLimitOverride={allowBirthdayLimitOverride}
+            setAllowBirthdayLimitOverride={setAllowBirthdayLimitOverride}
             showInlineSuggestions={showInlineSuggestions}
             setShowInlineSuggestions={setShowInlineSuggestions}
             handleShiftImmediatelyAfter={handleShiftImmediatelyAfter}
@@ -1736,6 +1829,14 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               singleSecondStartTime={singleSecondStartTime}
               singleSecondEndTime={singleSecondEndTime}
               generatedDates={generatedDates}
+              selectedDays={selectedDays}
+              recurrenceStartDate={recurrenceStartDate}
+              recurrenceEndDate={recurrenceEndDate}
+              omittedHolidaysCount={!includeHolidaysInSeries ? (bookingMode === 'pattern' ? patternHolidayAnalysis.omittedHolidays.length : specificHolidayAnalysis.omittedHolidays.length) : 0}
+              useCustomSchedulesPerDay={useCustomSchedulesPerDay}
+              useCustomSchedulesPerDate={useCustomSchedulesPerDate}
+              birthdayLimitViolations={birthdayLimitViolations}
+              allowBirthdayLimitOverride={allowBirthdayLimitOverride}
               conflicts={conflicts}
               candidateConflictDates={candidateConflictDates}
               onGoToStep={(step) => {
@@ -1800,15 +1901,17 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
             setWizardStep={setWizardStep}
             scrollToModalTop={scrollToModalTop}
             onClose={() => { if (!isSubmittingRef.current) onClose(); }}
-            validateStep1={validateStep1Activity}
-            validateStep2={validateStep2DateTime}
-            validateStep3={validateStep3Applicant}
+            validateStep1={validateStep1WithFocus}
+            validateStep2={validateStep2WithFocus}
+            validateStep3={validateStep3WithFocus}
             validateStep4={validateStep4Resources}
             isFormSubmitDisabled={isFormSubmitDisabled || isEditingLoading || (!availableSpaces.length && !isEditingExisting)}
             isEditingExisting={isEditingExisting}
             conflicts={conflicts}
             candidateConflictDates={candidateConflictDates}
             allowConflictOverride={allowConflictOverride}
+            hasBirthdayLimitBlock={hasBirthdayLimitBlock}
+            requiresExtendedAuth={Boolean(loanScheduleCheck.requiresAuthorization && !isExtensionAuthorized)}
             isSubmitting={isSubmitting}
             timeValidation={timeValidation}
             enableSingleSecondSpace={enableSingleSecondSpace}
@@ -1851,6 +1954,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
         excludeReservationIds={excludeReservationIds}
         excludeSeriesId={excludeSeriesId}
         allowConflictOverride={allowConflictOverride}
+        canOverrideConflicts={isManagerUser}
         setFormData={setFormData}
         handleUpdateSecondSpace={handleUpdateSecondSpace}
         setSpecificDates={setSpecificDates}

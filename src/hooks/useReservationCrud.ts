@@ -83,7 +83,8 @@ export interface UseReservationCrudReturn {
     seriesDates?: (string | { fecha: string; horaInicio?: string; horaFin?: string; espacio?: string; terminaDiaSiguiente?: boolean; cantidadTortas?: number })[],
     updateWholeSeries?: boolean,
     batchUpdateInfo?: BatchUpdateInfo,
-    allowConflictOverride?: boolean
+    allowConflictOverride?: boolean,
+    allowBirthdayLimitOverride?: boolean
   ) => Promise<boolean>;
   handleDelete: (id: string, isSeries?: boolean, seriesId?: string, selection?:Reservation[]) => Promise<void>;
   handleDeleteDay: (fecha: string, selection: readonly Reservation[]) => Promise<void>;
@@ -724,7 +725,8 @@ export function useReservationCrud({
     seriesDates?: (string | { fecha: string; horaInicio?: string; horaFin?: string; espacio?: string; terminaDiaSiguiente?: boolean; cantidadTortas?: number })[],
     updateWholeSeries?: boolean,
     batchUpdateInfo?: BatchUpdateInfo,
-    allowConflictOverride?: boolean
+    allowConflictOverride?: boolean,
+    allowBirthdayLimitOverride?: boolean
   ): Promise<boolean> => {
     if (saveInFlight.current) return false;
     saveInFlight.current = true;
@@ -839,7 +841,7 @@ export function useReservationCrud({
         }
 
         const scopeNames: Record<string, string> = {
-          single: 'Solo esta reserva',
+          single: 'Solo esta fecha',
           future: 'Esta y las siguientes',
           series: 'Toda la serie',
           dateRange: 'Rango de fechas',
@@ -852,7 +854,7 @@ export function useReservationCrud({
         const scopedExpectedVersions = batchUpdateInfo.expectedVersions
           ? Object.fromEntries(Object.entries(batchUpdateInfo.expectedVersions).filter(([id]) => relevantVersionIds.has(id)))
           : undefined;
-        const writeOptions = {...(Object.keys(deletionGuards).length?{expectedVersions:{...deletionGuards,...(scopedExpectedVersions||{})}}:{}),deletedIds: batchUpdateInfo.deletedIds,allowConflictOverride,
+        const writeOptions = {...(Object.keys(deletionGuards).length?{expectedVersions:{...deletionGuards,...(scopedExpectedVersions||{})}}:{}),deletedIds: batchUpdateInfo.deletedIds,allowConflictOverride,allowBirthdayLimitOverride,
           ...(recurringEdit ? {requireAtomic:true,...(scopedExpectedVersions?{expectedVersions:{...deletionGuards,...scopedExpectedVersions}}:{}),
             ...(!(batchUpdateInfo.addedIds||[]).length && materialUpdated.every(r=>existingIds.has(r.id)) ? {intent:'update' as const} : {})} : {})};
         const confirmedWrite = await commitReservationChanges(materialUpdated,writeOptions);
@@ -1109,7 +1111,7 @@ export function useReservationCrud({
             return true;
           }
           const relevantSeriesVersionIds = new Set([...materialSeriesList.map(r => r.id), ...idsToDelete, reserva.id]);
-          const confirmedWrite = await commitReservationChanges(materialSeriesList, { deletedIds: idsToDelete, allowConflictOverride,
+          const confirmedWrite = await commitReservationChanges(materialSeriesList, { deletedIds: idsToDelete, allowConflictOverride, allowBirthdayLimitOverride,
             requireAtomic:true,expectedVersions:Object.fromEntries([...seriesMatches, reserva].filter(r => relevantSeriesVersionIds.has(r.id)).map(r=>[r.id,r.version||0])) });
             void safeAudit({
                 action: 'UPDATE',
@@ -1250,7 +1252,7 @@ export function useReservationCrud({
           throw new Error(formatBlockConflictMessage(seriesBlocks[0]));
         }
 
-        const confirmedWrite = await saveReservationsBatch(seriesList, { allowConflictOverride, intent:'create' });
+        const confirmedWrite = await saveReservationsBatch(seriesList, { allowConflictOverride, allowBirthdayLimitOverride, intent:'create' });
             void safeAudit({
               action: 'CREATE',
               description: `Creada serie recurrente de ${seriesList.length} reservas para '${reserva.tipoActividad || 'Actividad'}' (${reserva.espacio})`,
@@ -1357,7 +1359,7 @@ export function useReservationCrud({
           }
         }
 
-        const confirmedWrite = await saveReservation(cleanReserva, { allowConflictOverride, ...(isEditing ? {} : {intent:'create' as const}) });
+        const confirmedWrite = await saveReservation(cleanReserva, { allowConflictOverride, allowBirthdayLimitOverride, ...(isEditing ? {} : {intent:'create' as const}) });
             if (isEditing && existingRes) {
               const diffs = computeReservationDiff(existingRes, cleanReserva);
               void safeAudit({
@@ -1425,6 +1427,11 @@ export function useReservationCrud({
         const confirmed = new Map(getLocalCache().map(r => [r.id,r]));
         const ids = new Set(err.result.confirmedIds);
         setReservations(prev => { const map = new Map(prev.map(r=>[r.id,r])); ids.forEach(id=> { if(confirmed.has(id)) map.set(id,confirmed.get(id)!); else map.delete(id); }); return [...map.values()].sort(compareReservationsByDate); });
+        triggerSyncToast(
+          `Guardado parcial: se confirmaron ${err.result.confirmedIds.length} reserva(s), pero el resto falló (${err?.message || 'Error de conexión'}). Tus datos pendientes siguen en el formulario para reintentar.`,
+          'warning'
+        );
+        return false;
       }
       triggerSyncToast(`Error al guardar: ${err?.message || 'Error de conexión'}. Tus datos se conservaron.`, 'error');
       return false;

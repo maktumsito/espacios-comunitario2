@@ -125,10 +125,15 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
               id="input-reserva-unidad-municipal"
               type="text"
               maxLength={200}
+              placeholder="Ej.: Dirección de Desarrollo Comunitario, Departamento de Deportes"
+              aria-describedby="unidad-municipal-help"
               value={formData.unidadMunicipal || ''}
               onChange={(e) => setFormData((prev) => ({ ...prev, unidadMunicipal: e.target.value }))}
-              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
             />
+            <p id="unidad-municipal-help" className="text-xs text-slate-500">
+              Opcional. Indica la dirección o departamento municipal responsable del taller.
+            </p>
           </div>
         )}
         <p className="flex items-center gap-2 text-sm text-slate-600">
@@ -155,7 +160,7 @@ export const ReservationStep1Activity: React.FC<ReservationStep1ActivityProps> =
         <label className="font-semibold text-slate-700 flex items-center justify-between text-xs">
           <span className="flex items-center space-x-1.5">
             <Star className={`w-3.5 h-3.5 ${formData.importante === 'Sí' ? 'text-amber-500 fill-amber-400' : 'text-slate-400'}`} />
-            <span>Destacar actividad</span>
+            <span>Destacar actividad <span className="font-normal text-slate-500">(opcional)</span></span>
           </span>
           {formData.importante === 'Sí' && (
             <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300 flex items-center space-x-1">

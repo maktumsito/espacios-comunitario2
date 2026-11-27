@@ -1094,10 +1094,10 @@ export default function App() {
             setCurrentView(v);
           }
         }}
-        onNewReservation={() => {
+        onNewReservation={(!currentUser || userCanCreateReservations(currentUser)) ? () => {
           requireAuth(() => {
             if (!userCanCreateReservations(currentUser)) {
-              triggerSyncToast('Permiso denegado: No tienes autorización para registrar nuevas reservas (gestión controlada por Cristian Shute).', 'error');
+              triggerSyncToast('Permiso denegado: No tienes autorización para registrar nuevas reservas.', 'error');
               return;
             }
             setEditingReservation(null);
@@ -1113,7 +1113,7 @@ export default function App() {
             setPrefillEndTime('11:00');
             setIsReservationModalOpen(true);
           }, 'crear una nueva reserva');
-        }}
+        } : undefined}
         onOpenQuickRequest={userCanCreateReservations(currentUser) ? () => {
           requireAuth(() => setIsQuickRequestOpen(true), 'crear una solicitud rápida desde texto');
         } : undefined}
@@ -1441,6 +1441,7 @@ export default function App() {
                     : undefined
                 }
                 onNewReservationForDate={handleCalendarNewReservationForDate}
+                canCreateReservations={!currentUser || userCanCreateReservations(currentUser)}
               />
             </Suspense>
           )

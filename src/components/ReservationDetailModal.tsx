@@ -47,10 +47,12 @@ import { isCommitmentLetterEligible } from '../utils/commitmentLetterPdf';
 import { checkLoanScheduleLimit } from '../utils/validationUtils';
 import {
   AuthUser,
+  isAuxiliar,
   userCanCreateReservations,
-  userCanEditReservations,
-  userCanDeleteReservations
+  userCanDeleteReservations,
+  userCanEditReservations
 } from '../services/authService';
+import { useReservationVisuals } from '../contexts/ReservationVisualsContext';
 import { ConfirmationModal } from './common/ConfirmationModal';
 import { BaseModal } from './common/BaseModal';
 import { canReplaceOccurrence } from '../utils/reservationReplacement';
@@ -101,6 +103,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   onAuthorizeDelete,
   onRejectDeleteRequest
 }) => {
+  const { getReservationTypeVisual } = useReservationVisuals();
   const [showCommitmentLetter, setShowCommitmentLetter] = React.useState(false);
   const [showMergeModal, setShowMergeModal] = React.useState(false);
 
@@ -148,6 +151,8 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   const canModify = userCanEditReservations(currentUser);
   const canDelete = userCanDeleteReservations(currentUser);
   const canCreate = userCanCreateReservations(currentUser);
+  const hideSensitiveContact = isAuxiliar(currentUser);
+  const typeVisual = getReservationTypeVisual(reservation);
   const linkedId = reservation.reemplazaReservaId || reservation.reemplazadaPorReservaId;
   const related = linkedId ? allReservations.find(r => r.id === linkedId) : undefined;
   const replacement = reservation.reemplazaReservaId ? reservation : related;
@@ -184,11 +189,13 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   const handleToggleCancel = () => {
     if (!reservation) return;
     const isCurrentlyCancelled = reservation.estado === 'cancelada';
+    const activityLabel = formatDisplayTitle(reservation.descripcion || reservation.tipoActividad);
+    const scheduleSummary = `${activityLabel} (${formatDisplayTitle(reservation.espacio)}, ${formatDateDDMMYYYY(reservation.fecha)}, ${reservation.horaInicio}–${reservation.horaFin})`;
     if (isCurrentlyCancelled) {
       openConfirm({
         title: '¿Reactivar esta reserva?',
-        message: 'Volverá a ocupar su horario en la agenda comunitaria y estará activa para su uso.',
-        confirmLabel: 'Reactivar Reserva',
+        message: `La actividad ${scheduleSummary} volverá a figurar como confirmada y ocupará su horario en la agenda.`,
+        confirmLabel: 'Reactivar reserva',
         variant: 'primary',
         onConfirm: () => {
           onUpdateReservation?.({
@@ -202,8 +209,8 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
     } else {
       openConfirm({
         title: '¿Cancelar esta reserva?',
-        message: 'Se mantendrá en el registro histórico pero su horario quedará inmediatamente liberado para nuevas reservas.',
-        confirmLabel: 'Confirmar Cancelación',
+        message: `La actividad ${scheduleSummary} se marcará como cancelada en el historial y su horario quedará liberado de inmediato para nuevas reservas.`,
+        confirmLabel: 'Cancelar esta reserva',
         variant: 'warning',
         onConfirm: () => {
           onUpdateReservation?.({
@@ -232,9 +239,21 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                   className="w-3 h-3 rounded-full shadow-xs"
                   style={{ backgroundColor: spaceColor }}
                 />
-                <span className="text-xs font-bold text-slate-500 normal-case tracking-wider">
+                <span className="text-xs font-bold text-slate-600 normal-case tracking-wider">
                   {formatDisplayTitle(reservation.espacio)}
                 </span>
+                <span
+                  className="inline-flex items-center gap-1.5 text-[10.5px] font-bold px-2 py-0.5 rounded-full border text-slate-900"
+                  style={{ backgroundColor: typeVisual.background, borderColor: typeVisual.border }}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: typeVisual.accent }} />
+                  <span>{typeVisual.label}</span>
+                </span>
+                {reservation.estado !== 'cancelada' && (
+                  <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    ✓ Confirmada
+                  </span>
+                )}
                 {reservation.importante === 'Sí' && (
                   <span className="flex items-center space-x-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                     <Flame className="w-3 h-3 text-amber-500" />
@@ -457,6 +476,11 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
             </div>
             <div className="font-bold text-slate-900 font-mono">{reservation.horaInicio} - {reservation.horaFin}</div>
             <div className="text-[10px] text-slate-500 font-medium">{formatDisplayTitle(reservation.tipoActividad)}</div>
+            {reservation.unidadMunicipal && (
+              <div className="text-[10.5px] text-slate-600">
+                Dirección / depto.: <strong className="text-slate-800">{reservation.unidadMunicipal}</strong>
+              </div>
+            )}
             {(reservation.horarioExtendidoAutorizado ||
               checkLoanScheduleLimit(reservation.horaInicio, reservation.horaFin, Boolean(reservation.terminaDiaSiguiente)).isOutsideRegularHours) && (
               <div className="mt-1.5 p-1.5 rounded-lg bg-amber-50 border border-amber-200 text-[10.5px] text-amber-900 space-y-0.5">
@@ -511,11 +535,14 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                 </div>
               );
             })()}
-            {reservation.emailContacto && (
+            {!hideSensitiveContact && reservation.emailContacto && (
               <div className="text-[11px] text-slate-600 truncate">✉️ {reservation.emailContacto}</div>
             )}
-            {reservation.rut && (
+            {!hideSensitiveContact && reservation.rut && (
               <div className="text-[10px] text-slate-500 font-mono">RUT: {reservation.rut}</div>
+            )}
+            {!hideSensitiveContact && reservation.domicilio && (
+              <div className="text-[10px] text-slate-500 truncate">🏠 {reservation.domicilio}</div>
             )}
           </div>
 
@@ -784,95 +811,11 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
           />
         )}
 
-        {/* Footer Actions: Carta, Edit & Delete */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200">
-          <div className="flex items-center space-x-2">
-            {onReplace && canCreate && canModify && canReplaceOccurrence(reservation) && (
-              <button id="btn-detail-replace-occurrence" type="button" onClick={() => onReplace(reservation)}
-                className="px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-bold cursor-pointer">
-                Reemplazar solo este día
-              </button>
-            )}
-            {canDelete ? (
-              <button
-                id="btn-detail-delete"
-                type="button"
-                onClick={() => {
-                  if (onRequestDelete) {
-                    onClose();
-                    onRequestDelete(reservation);
-                    return;
-                  }
-                  if (onDelete) {
-                    if (reservation.actividadRecurrente === 'Sí' && (reservation.recurrenteId || reservation.serieRecurrente)) {
-                      openConfirm({
-                        title: 'Eliminar Reserva Recurrente',
-                        message: (
-                          <div className="space-y-2 text-xs text-slate-600">
-                            <p>Esta reserva pertenece a una serie recurrente periódica.</p>
-                            <p className="font-semibold text-slate-800">
-                              ¿Deseas eliminar únicamente esta sesión individual o la serie recurrente completa?
-                            </p>
-                          </div>
-                        ),
-                        confirmLabel: 'Eliminar Toda la Serie',
-                        cancelLabel: 'Solo Esta Sesión',
-                        variant: 'danger',
-                        onConfirm: async () => {
-                          await onDelete(reservation.id, true, reservation.recurrenteId || reservation.serieRecurrente);
-                          closeConfirm();
-                          onClose();
-                        },
-                        onCancel: async () => {
-                          await onDelete(reservation.id, false);
-                          closeConfirm();
-                          onClose();
-                        }
-                      });
-                      return;
-                    }
-                    openConfirm({
-                      title: '¿Eliminar esta reserva?',
-                      message: `Se eliminará la reserva "${reservation.tipoActividad}" agendada en ${reservation.espacio} el día ${formatDateDDMMYYYY(reservation.fecha)}.`,
-                      confirmLabel: 'Eliminar Reserva',
-                      variant: 'danger',
-                      onConfirm: async () => {
-                        await onDelete(reservation.id, false);
-                        closeConfirm();
-                        onClose();
-                      }
-                    });
-                  }
-                }}
-                className="flex items-center space-x-1.5 text-xs text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer"
-                aria-label="Eliminar esta reserva"
-              >
-                <Trash2 className="w-4 h-4 text-rose-600" />
-                <span>Eliminar</span>
-              </button>
-            ) : !reservation.solicitudEliminacion ? (
-              <button
-                id="btn-detail-request-delete"
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onRequestDelete?.(reservation);
-                }}
-                className="flex items-center space-x-1.5 text-xs text-amber-800 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer"
-                aria-label="Solicitar eliminación de esta reserva"
-                title="Solicitar eliminación (quedará en espera de autorización por un Administrador o Coordinador autorizado)"
-              >
-                <Clock className="w-4 h-4 text-amber-600" />
-                <span>Solicitar Eliminación</span>
-              </button>
-            ) : (
-              <span className="flex items-center space-x-1.5 text-xs text-amber-800 bg-amber-100/80 border border-amber-300 font-bold px-3 py-1.5 rounded-xl">
-                <Clock className="w-3.5 h-3.5 text-amber-700" />
-                <span>En espera de autorización</span>
-              </span>
-            )}
-
-            {/* Comprobante al Vecino / Profesor y Calendario (.ics / Google Calendar / WhatsApp) */}
+        {/* Footer Actions: Grouped by purpose (Gestión, Comprobantes, Cancelación) */}
+        <div className="space-y-3 pt-3 border-t border-slate-200">
+          {/* Group 1: Documentos y compartir */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Documentos y difusión</span>
             <button
               id="btn-detail-download-ics"
               type="button"
@@ -919,19 +862,6 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               <span>Comprobante</span>
             </button>
 
-            {canModify && onMergeReservations && (
-              <button
-                id="btn-detail-merge-duplicates"
-                type="button"
-                onClick={() => setShowMergeModal(true)}
-                className="flex items-center space-x-1.5 text-xs text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200 font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer"
-                title="Fusionar reservas duplicadas o contiguas en este registro"
-              >
-                <GitMerge className="w-3.5 h-3.5 text-violet-600" />
-                <span>Fusionar</span>
-              </button>
-            )}
-
             {(isCommitmentLetterEligible(reservation.tipoActividad, reservation.tipoPrestamo) || reservation.requiereCartaCompromiso || reservation.cartaCompromisoAdjunta) && (
               <button
                 id="btn-detail-carta-compromiso"
@@ -945,110 +875,215 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                 <span>Carta Compromiso</span>
               </button>
             )}
-
-            {canModify && onUpdateReservation && (
-              <button
-                id="btn-detail-toggle-important"
-                type="button"
-                aria-label={reservation.importante === 'Sí' ? 'Desmarcar reserva importante' : 'Marcar reserva como importante'}
-                aria-pressed={reservation.importante === 'Sí'}
-                onClick={() => onUpdateReservation({
-                  ...reservation,
-                  importante: reservation.importante === 'Sí' ? 'No' : 'Sí'
-                })}
-                className={`flex items-center space-x-1.5 text-xs border font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer ${
-                  reservation.importante === 'Sí'
-                    ? 'text-amber-950 bg-amber-100 hover:bg-amber-200 border-amber-300'
-                    : 'text-slate-700 bg-slate-50 hover:bg-amber-50 border-slate-200'
-                }`}
-                title={reservation.importante === 'Sí' ? 'Desmarcar reserva importante' : 'Marcar reserva como importante'}
-              >
-                <Flame className="w-4 h-4 text-amber-600" />
-                <span>{reservation.importante === 'Sí' ? 'Desmarcar Importante' : 'Marcar Importante'}</span>
-              </button>
-            )}
           </div>
 
-          <div className="flex items-center space-x-2">
-            {onDuplicate && canCreate && (
-              <button
-                id="btn-detail-duplicate"
-                type="button"
-                aria-label="Duplicar esta reserva en una nueva fecha u horario"
-                onClick={() => {
-                  onClose();
-                  onDuplicate(reservation);
-                }}
-                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border border-indigo-200 text-xs font-bold shadow-xs transition cursor-pointer"
-                title="Duplicar esta reserva (copia todos los datos a una nueva reserva)"
-              >
-                <Copy className="w-4 h-4 text-indigo-600" />
-                <span>Duplicar</span>
-              </button>
-            )}
-
-            {canModify ? (
-              <>
-                {linkedId && onSetReplacementActive && (
-                  <button type="button" onClick={toggleReplacement} disabled={savingReplacement}
-                    className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800 disabled:opacity-50">
-                    {savingReplacement ? 'Guardando…' : replacementActive ? 'Desactivar reemplazo' : 'Reactivar reemplazo'}
-                  </button>
-                )}
-                {!linkedId && onUpdateReservation && (
-                  <button
-                    id="btn-detail-toggle-cancel"
-                    type="button"
-                    onClick={handleToggleCancel}
-                    className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer border ${
-                      reservation.estado === 'cancelada'
-                        ? 'text-emerald-800 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border-emerald-300'
-                        : 'text-amber-800 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border-amber-300'
-                    }`}
-                    title={reservation.estado === 'cancelada' ? 'Reactivar reserva en la agenda' : 'Marcar como cancelada y liberar el horario'}
-                  >
-                    <Ban className="w-3.5 h-3.5" />
-                    <span>{reservation.estado === 'cancelada' ? 'Reactivar' : 'Cancelar Reserva'}</span>
-                  </button>
-                )}
-                {onOpenCheckIn && (
-                  <button
-                    id="btn-detail-checkin"
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onOpenCheckIn(reservation);
-                    }}
-                    className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold shadow-xs transition cursor-pointer"
-                    title="Registrar asistencia y novedades de la actividad (Check-in rápido)"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Check-in / Asistencia</span>
-                  </button>
-                )}
+          {/* Group 2: Gestión y acciones críticas */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-2">
+              {canDelete ? (
                 <button
-                  id="btn-detail-edit"
+                  id="btn-detail-delete"
                   type="button"
-                  aria-label="Editar datos de esta reserva"
+                  onClick={() => {
+                    if (onRequestDelete) {
+                      onClose();
+                      onRequestDelete(reservation);
+                      return;
+                    }
+                    if (onDelete) {
+                      if (reservation.actividadRecurrente === 'Sí' && (reservation.recurrenteId || reservation.serieRecurrente)) {
+                        openConfirm({
+                          title: 'Eliminar actividad recurrente',
+                          message: (
+                            <div className="space-y-2 text-xs text-slate-600">
+                              <p>Actividad: <strong>{formatDisplayTitle(reservation.descripcion || reservation.tipoActividad)}</strong> ({formatDisplayTitle(reservation.espacio)}, {reservation.horaInicio}–{reservation.horaFin}).</p>
+                              <p className="font-semibold text-slate-800">
+                                ¿Deseas eliminar únicamente la fecha {formatDateDDMMYYYY(reservation.fecha)} o toda la serie?
+                              </p>
+                            </div>
+                          ),
+                          confirmLabel: 'Eliminar toda la serie',
+                          cancelLabel: 'Eliminar solo esta fecha',
+                          variant: 'danger',
+                          onConfirm: async () => {
+                            await onDelete(reservation.id, true, reservation.recurrenteId || reservation.serieRecurrente);
+                            closeConfirm();
+                            onClose();
+                          },
+                          onCancel: async () => {
+                            await onDelete(reservation.id, false);
+                            closeConfirm();
+                            onClose();
+                          }
+                        });
+                        return;
+                      }
+                      openConfirm({
+                        title: '¿Eliminar esta reserva?',
+                        message: `Se eliminará "${formatDisplayTitle(reservation.descripcion || reservation.tipoActividad)}" en ${formatDisplayTitle(reservation.espacio)} el ${formatDateDDMMYYYY(reservation.fecha)} (${reservation.horaInicio}–${reservation.horaFin}).`,
+                        confirmLabel: 'Eliminar reserva',
+                        variant: 'danger',
+                        onConfirm: async () => {
+                          await onDelete(reservation.id, false);
+                          closeConfirm();
+                          onClose();
+                        }
+                      });
+                    }
+                  }}
+                  className="flex items-center space-x-1.5 text-xs text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer"
+                  aria-label="Eliminar esta reserva"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-600" />
+                  <span>Eliminar</span>
+                </button>
+              ) : !reservation.solicitudEliminacion ? (
+                <button
+                  id="btn-detail-request-delete"
+                  type="button"
                   onClick={() => {
                     onClose();
-                    onEdit(reservation);
+                    onRequestDelete?.(reservation);
                   }}
-                  className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                  className="flex items-center space-x-1.5 text-xs text-amber-800 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer"
+                  aria-label="Solicitar eliminación de esta reserva"
+                  title="Solicitar eliminación (quedará en espera de autorización por un Administrador o Coordinador)"
                 >
-                  <Edit2 className="w-4 h-4" />
-                  <span>Editar Reserva</span>
+                  <Clock className="w-4 h-4 text-amber-600" />
+                  <span>Solicitar eliminación</span>
                 </button>
-              </>
-            ) : (
-              <div
-                title="No posees permisos para modificar o cancelar reservas (gestión controlada por Cristian Shute)."
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-medium cursor-not-allowed"
-              >
-                <Lock className="w-3.5 h-3.5 text-slate-400" />
-                <span>Modificación no autorizada</span>
-              </div>
-            )}
+              ) : (
+                <span className="flex items-center space-x-1.5 text-xs text-amber-800 bg-amber-100/80 border border-amber-300 font-bold px-3 py-1.5 rounded-xl">
+                  <Clock className="w-3.5 h-3.5 text-amber-700" />
+                  <span>En espera de autorización</span>
+                </span>
+              )}
+
+              {canModify && !linkedId && onUpdateReservation && (
+                <button
+                  id="btn-detail-toggle-cancel"
+                  type="button"
+                  onClick={handleToggleCancel}
+                  className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer border ${
+                    reservation.estado === 'cancelada'
+                      ? 'text-emerald-800 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border-emerald-300'
+                      : 'text-amber-800 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border-amber-300'
+                  }`}
+                  title={reservation.estado === 'cancelada' ? 'Reactivar reserva en la agenda' : 'Marcar como cancelada y liberar el horario'}
+                >
+                  <Ban className="w-3.5 h-3.5" />
+                  <span>{reservation.estado === 'cancelada' ? 'Reactivar' : 'Cancelar reserva'}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {onReplace && canCreate && canModify && canReplaceOccurrence(reservation) && (
+                <button id="btn-detail-replace-occurrence" type="button" onClick={() => onReplace(reservation)}
+                  className="px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-bold cursor-pointer">
+                  Reemplazar solo este día
+                </button>
+              )}
+
+              {canModify && onMergeReservations && (
+                <button
+                  id="btn-detail-merge-duplicates"
+                  type="button"
+                  onClick={() => setShowMergeModal(true)}
+                  className="flex items-center space-x-1.5 text-xs text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200 font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer"
+                  title="Fusionar reservas duplicadas o contiguas en este registro"
+                >
+                  <GitMerge className="w-3.5 h-3.5 text-violet-600" />
+                  <span>Fusionar</span>
+                </button>
+              )}
+
+              {canModify && onUpdateReservation && (
+                <button
+                  id="btn-detail-toggle-important"
+                  type="button"
+                  aria-label={reservation.importante === 'Sí' ? 'Desmarcar reserva importante' : 'Marcar reserva como importante'}
+                  aria-pressed={reservation.importante === 'Sí'}
+                  onClick={() => onUpdateReservation({
+                    ...reservation,
+                    importante: reservation.importante === 'Sí' ? 'No' : 'Sí'
+                  })}
+                  className={`flex items-center space-x-1.5 text-xs border font-bold px-3 py-2 rounded-xl transition shadow-xs cursor-pointer ${
+                    reservation.importante === 'Sí'
+                      ? 'text-amber-950 bg-amber-100 hover:bg-amber-200 border-amber-300'
+                      : 'text-slate-700 bg-slate-50 hover:bg-amber-50 border-slate-200'
+                  }`}
+                  title={reservation.importante === 'Sí' ? 'Desmarcar reserva importante' : 'Marcar reserva como importante'}
+                >
+                  <Flame className="w-4 h-4 text-amber-600" />
+                  <span>{reservation.importante === 'Sí' ? 'Desmarcar Importante' : 'Marcar Importante'}</span>
+                </button>
+              )}
+
+              {onDuplicate && canCreate && (
+                <button
+                  id="btn-detail-duplicate"
+                  type="button"
+                  aria-label="Duplicar esta reserva en una nueva fecha u horario"
+                  onClick={() => {
+                    onClose();
+                    onDuplicate(reservation);
+                  }}
+                  className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border border-indigo-200 text-xs font-bold shadow-xs transition cursor-pointer"
+                  title="Duplicar esta reserva (copia todos los datos a una nueva reserva)"
+                >
+                  <Copy className="w-4 h-4 text-indigo-600" />
+                  <span>Duplicar</span>
+                </button>
+              )}
+
+              {canModify ? (
+                <>
+                  {linkedId && onSetReplacementActive && (
+                    <button type="button" onClick={toggleReplacement} disabled={savingReplacement}
+                      className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800 disabled:opacity-50">
+                      {savingReplacement ? 'Guardando…' : replacementActive ? 'Desactivar reemplazo' : 'Reactivar reemplazo'}
+                    </button>
+                  )}
+                  {onOpenCheckIn && (
+                    <button
+                      id="btn-detail-checkin"
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenCheckIn(reservation);
+                      }}
+                      className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold shadow-xs transition cursor-pointer"
+                      title="Registrar asistencia y novedades de la actividad (Check-in rápido)"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>Check-in / Asistencia</span>
+                    </button>
+                  )}
+                  <button
+                    id="btn-detail-edit"
+                    type="button"
+                    aria-label="Editar datos de esta reserva"
+                    onClick={() => {
+                      onClose();
+                      onEdit(reservation);
+                    }}
+                    className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    <span>Editar reserva</span>
+                  </button>
+                </>
+              ) : (
+                <div
+                  title="Solicita apoyo a Coordinación o Administración para modificar esta reserva."
+                  className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-medium cursor-not-allowed"
+                >
+                  <Lock className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Solo lectura según tu perfil</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </BaseModal>

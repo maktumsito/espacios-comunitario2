@@ -12,8 +12,10 @@ export function isRecurringSeriesReservation(r: Reservation): boolean {
 }
 
 export function getSeriesEditStartDate(scope: UpdateScope, sourceDate: string, today = getChileLocalDateString()): string {
-  // A single-session correction may target history; bulk edits protect past sessions.
+  // Single-session corrections may target history; 'series' covers all pending dates from today forward;
+  // other bulk edits protect past sessions and start at sourceDate (or today if sourceDate is in the past).
   if (scope === 'single') return sourceDate;
+  if (scope === 'series') return today;
   return sourceDate > today ? sourceDate : today;
 }
 

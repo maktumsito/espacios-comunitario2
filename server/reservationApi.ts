@@ -38,6 +38,11 @@ import { SPACES_LIST } from '../src/data/spacesData';
 import { REGULAR_LOAN_START_MINUTES, REGULAR_LOAN_END_MINUTES } from '../src/utils/validationUtils';
 import { getDisabledSpaceNames } from '../src/utils/spaceAvailability';
 import { getConstituentSpaces } from '../src/utils/conflictDetector';
+import {
+  findDailyBirthdayLimitViolations,
+  formatBirthdayLimitMessage,
+  isBirthdayActivityType,
+} from '../src/utils/birthdayLimit';
 
 const clean = (value: any): any => JSON.parse(JSON.stringify(value));
 const hash = (value: any) =>
@@ -121,7 +126,7 @@ export async function commitTrusted(
   }
   if (!/^[\w-]{1,180}$/.test(operationId))
     throw new ApiFailure(400, "Identificador de operación no válido.");
-  if (options.allowConflictOverride || options.auditRestore)
+  if (options.allowConflictOverride || options.allowBirthdayLimitOverride || options.auditRestore)
     requireManager(actor);
   const auditRef = db.doc(`audit_logs/AUDIT_OP_${operationId}`);
   const fingerprint = hash({
@@ -130,6 +135,7 @@ export async function commitTrusted(
     expectedVersions: options.expectedVersions || {},
     intent: options.intent,
     override: !!options.allowConflictOverride,
+    ...(options.allowBirthdayLimitOverride ? { birthdayOverride: true } : {}),
     restore: options.auditRestore?.logId,
     ...(options.distributionDate ? { distributionDate: options.distributionDate } : {}),
     ...(activationIds.length ? { activateSpaceIds: activationIds } : {}),
@@ -218,11 +224,40 @@ export async function commitTrusted(
               "Tu cuenta no tiene permiso para esta operación.",
             );
         }
-        if (options.allowConflictOverride || options.auditRestore)
+        if (options.allowConflictOverride || options.allowBirthdayLimitOverride || options.auditRestore)
           requireManager(fresh);
         const active = saved.filter((r) =>
           isReservationActiveForAvailability(r, new Set()),
         );
+        const birthdayCandidates = active.filter((r) => {
+          const orig = current.get(r.id);
+          return (
+            isBirthdayActivityType(r.tipoActividad) &&
+            (!orig ||
+              !isReservationActiveForAvailability(orig, new Set()) ||
+              !isBirthdayActivityType(orig.tipoActividad) ||
+              orig.fecha !== r.fecha)
+          );
+        });
+        if (birthdayCandidates.length > 0 && !options.allowBirthdayLimitOverride) {
+          const birthdayDates = [...new Set(birthdayCandidates.map((r) => r.fecha))];
+          const existingBirthdayRows: Reservation[] = [];
+          for (let i = 0; i < birthdayDates.length; i += 30) {
+            const slice = birthdayDates.slice(i, i + 30);
+            const snap = await tx.get(db.collection('reservas').where('fecha', 'in', slice));
+            snap.docs.forEach((docSnap: any) => {
+              existingBirthdayRows.push({ ...docSnap.data(), id: docSnap.id } as Reservation);
+            });
+          }
+          const birthdayViolations = findDailyBirthdayLimitViolations(
+            birthdayCandidates,
+            existingBirthdayRows,
+            { excludeReservationIds: new Set([...chunk, ...deletions]) },
+          );
+          if (birthdayViolations.length > 0) {
+            throw new ApiFailure(409, formatBirthdayLimitMessage(birthdayViolations));
+          }
+        }
         const activeChangedOccupancy = active.filter((r) =>
           hasReservationOccupancyChange(current.get(r.id), r),
         );
@@ -558,6 +593,7 @@ export function registerReservationApi(
           intent: input.intent,
           requireAtomic: !!input.requireAtomic,
           allowConflictOverride: !!input.allowConflictOverride,
+          allowBirthdayLimitOverride: !!input.allowBirthdayLimitOverride,
           distributionDate: input.distributionDate,
           activateSpaceIds: input.activateSpaceIds,
         };

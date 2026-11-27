@@ -20,7 +20,7 @@ import {
 import { normalizeSpaceName } from '../data/spacesData';
 import { formatDateYYYYMMDD, parseDateToNoon } from '../utils/dateUtils';
 import { getFuzzyMatchIds } from '../utils/fuzzySearch';
-import { formatDisplayTitle } from '../utils/reservationVisuals';
+import { formatDisplayTitle, normalizeActivityType } from '../utils/reservationVisuals';
 import { canReplaceOccurrence } from '../utils/reservationReplacement';
 import {
   Calendar as CalendarIcon,
@@ -112,6 +112,20 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState<boolean>(false);
   const [onlyImportant, setOnlyImportant] = useState<boolean>(false);
   const [onlyConflicts, setOnlyConflicts] = useState<boolean>(false);
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('ALL');
+  const hasActiveMobileFilters =
+    selectedSpaceFilter !== 'ALL' ||
+    selectedTypeFilter !== 'ALL' ||
+    onlyImportant ||
+    onlyConflicts ||
+    Boolean(searchQuery.trim());
+  const resetMobileFilters = () => {
+    setSelectedSpaceFilter('ALL');
+    setSelectedTypeFilter('ALL');
+    setOnlyImportant(false);
+    setOnlyConflicts(false);
+    setSearchQuery('');
+  };
   const [mobileTab, setMobileTab] = useState<'bookings' | 'free'>('bookings');
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
@@ -257,6 +271,11 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
         return false;
       }
 
+      // Activity type filter
+      if (selectedTypeFilter !== 'ALL' && normalizeActivityType(r.tipoActividad) !== selectedTypeFilter) {
+        return false;
+      }
+
       // Search query filter (fuzzy search with typo tolerance)
       if (fuzzyIds && !fuzzyIds.has(r.id)) {
         return false;
@@ -264,7 +283,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
 
       return true;
     });
-  }, [dayReservations, selectedSpaceFilter, onlyImportant, onlyConflicts, conflictReservationIds, deferredSearchQuery]);
+  }, [dayReservations, selectedSpaceFilter, selectedTypeFilter, onlyImportant, onlyConflicts, conflictReservationIds, deferredSearchQuery]);
 
   // Navigation handlers
   const handlePrevDay = () => {
@@ -372,8 +391,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                 key={res.id}
                 id={`mobile-reservation-card-${res.id}`}
                 data-reservation-id={res.id}
-                onClick={() => onSelectReservation(res)}
-                className={`relative bg-white rounded-xl border transition-all overflow-hidden cursor-pointer ${
+                className={`relative bg-white rounded-xl border transition-all overflow-hidden ${
                   isConflict
                     ? 'border-rose-300 ring-2 ring-rose-200/60 bg-rose-50/20'
                     : liveState?.status === 'live'
@@ -403,14 +421,20 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                     </div>
 
                     <div className="flex items-center space-x-1.5">
-                      {liveState?.status === 'live' && (
+                      {res.estado === 'cancelada' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
+                          Cancelada
+                        </span>
+                      ) : liveState?.status === 'live' ? (
                         <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                          <span>EN CURSO</span>
+                          <span>En curso</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold">
+                          Confirmada
                         </span>
                       )}
-
-
 
                       {res.importante === 'Sí' && (
                         <span className="p-1 rounded-md bg-amber-100 text-amber-800" title="Actividad Importante">
@@ -420,18 +444,25 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Space & Activity Title */}
+                  {/* Space & Activity Title (semantic button for detail view) */}
                   <div>
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 min-w-0">
-                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: spaceColor }} />
-                        <span className="truncate">{formatDisplayTitle(res.espacio)}</span>
-                      </span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onSelectReservation(res)}
+                      aria-label={`Ver detalles de ${displayTitle} en ${formatDisplayTitle(res.espacio)}`}
+                      className="w-full text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 cursor-pointer group"
+                    >
+                      <div className="flex items-center space-x-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 min-w-0">
+                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: spaceColor }} />
+                          <span className="truncate">{formatDisplayTitle(res.espacio)}</span>
+                        </span>
+                      </div>
 
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug line-clamp-2 break-words" title={formatDisplayTitle(mainTitle)}>
-                      {displayTitle || 'Sin descripción'}
-                    </h4>
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-blue-700 leading-snug line-clamp-2 break-words" title={formatDisplayTitle(mainTitle)}>
+                        {displayTitle || 'Sin descripción'}
+                      </h4>
+                    </button>
                   </div>
 
                   {/* Badges and metadata */}
@@ -880,7 +911,7 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
             onClick={() => setIsFilterPanelOpen((open) => !open)}
             aria-expanded={isFilterPanelOpen}
             className={`min-w-[44px] min-h-[44px] px-3 rounded-xl flex items-center justify-center gap-1.5 border transition cursor-pointer ${
-              isFilterPanelOpen || selectedSpaceFilter !== 'ALL' || onlyImportant || onlyConflicts
+              isFilterPanelOpen || hasActiveMobileFilters
                 ? 'bg-blue-50 text-blue-700 border-blue-200'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'
             }`}
@@ -972,13 +1003,47 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
             );
           })}
           </div>
-          <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1" aria-label="Colores por tipo de reserva">
-            {legend.map((item) => (
-              <span key={item.key} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-1 text-xs font-semibold text-slate-900" style={{ backgroundColor: item.background, borderColor: item.border }}>
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.accent }} />
-                {item.label}
-              </span>
-            ))}
+          <div className="flex flex-wrap items-center gap-1.5 pb-1" role="group" aria-label="Filtrar por tipo de reserva">
+            <button
+              type="button"
+              aria-pressed={selectedTypeFilter === 'ALL'}
+              onClick={() => setSelectedTypeFilter('ALL')}
+              className={`min-h-[36px] px-2.5 py-1 rounded-full border text-xs font-bold transition cursor-pointer ${
+                selectedTypeFilter === 'ALL'
+                  ? 'bg-slate-800 text-white border-slate-800'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              Todos los tipos
+            </button>
+            {legend.map((item) => {
+              const isActive = selectedTypeFilter === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => setSelectedTypeFilter((prev) => (prev === item.key ? 'ALL' : item.key))}
+                  className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 min-h-[36px] text-xs font-semibold text-slate-900 transition cursor-pointer ${
+                    isActive ? 'ring-2 ring-blue-600 shadow-2xs' : 'hover:opacity-90'
+                  }`}
+                  style={{ backgroundColor: item.background, borderColor: item.border }}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.accent }} />
+                  {item.label}
+                </button>
+              );
+            })}
+            {hasActiveMobileFilters && (
+              <button
+                type="button"
+                id="btn-mobile-reset-filters"
+                onClick={resetMobileFilters}
+                className="min-h-[36px] px-2.5 py-1 text-xs font-bold text-blue-700 hover:text-blue-900 underline cursor-pointer"
+              >
+                Restablecer filtros
+              </button>
+            )}
           </div>
         </div>
         )}
@@ -1096,10 +1161,21 @@ const MobileAgendaViewComponent: React.FC<MobileAgendaViewProps> = ({
               No hay actividades programadas
             </h3>
             <p className="text-xs text-slate-500 max-w-xs mx-auto mb-4">
-              {searchQuery || selectedSpaceFilter !== 'ALL' || onlyImportant || onlyConflicts
+              {hasActiveMobileFilters
                 ? 'No se encontraron resultados con los filtros actuales.'
                 : `El día ${selectedDate.getDate()} de ${MONTH_NAMES[selectedDate.getMonth()]} se encuentra totalmente disponible.`}
             </p>
+            {hasActiveMobileFilters && (
+              <div className="mb-3">
+                <button
+                  type="button"
+                  onClick={resetMobileFilters}
+                  className="min-h-[40px] px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-800 text-xs font-bold hover:bg-blue-100 transition cursor-pointer"
+                >
+                  Restablecer filtros
+                </button>
+              </div>
+            )}
             {onNewReservationForDate && canCreate && (
               <button
                 type="button"

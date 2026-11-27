@@ -297,7 +297,7 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
               <div className="space-y-3">
                 {reservation.solicitudEliminacion?.alcance && <p className="text-sm font-semibold">
                   {reservation.solicitudEliminacion.alcance === 'future' ? `Desde el ${formatDateDDMMYYYY(reservation.solicitudEliminacion.fechaDesde || reservation.fecha)} en adelante` :
-                    reservation.solicitudEliminacion.alcance === 'series' ? 'Toda la serie' : 'Solo esta reserva'}
+                    reservation.solicitudEliminacion.alcance === 'series' ? 'Toda la serie' : 'Solo esta fecha'}
                   {' · '}{reservation.solicitudEliminacion.seleccion?.length || 1} reservas
                 </p>}
                 {actionError && <p role="alert" className="text-rose-700">{actionError}</p>}

@@ -11,17 +11,18 @@ const rows = [{ ...row, id: 'past', fecha: '2026-09-01' }, row, { ...row, id: 's
 beforeEach(() => { vi.clearAllMocks(); query.mockResolvedValue(rows); });
 afterEach(cleanup);
 it.each([
-  ['Solo esta reserva', ['anchor']],
-  ['Desde esta fecha en adelante', ['anchor', 'same-day', 'future']],
+  ['Solo esta fecha', ['anchor']],
+  ['Esta fecha y las siguientes', ['anchor', 'same-day', 'future']],
   ['Toda la serie', ['past', 'anchor', 'same-day', 'future']]
 ])('confirms the exact selection for %s', async (label, ids) => {
   const onConfirm = vi.fn().mockResolvedValue(undefined);
   const close = vi.fn();
   render(<RecurringDeleteScopeModal reservation={row} onClose={close} canDelete onConfirm={onConfirm} />);
-  await waitFor(() => expect((screen.getByLabelText('Solo esta reserva') as HTMLInputElement).disabled).toBe(false));
-  expect((screen.getByLabelText('Solo esta reserva') as HTMLInputElement).checked).toBe(true);
-  fireEvent.click(screen.getByLabelText(label));
-  fireEvent.click(screen.getByRole('button', { name: 'Confirmar eliminación' }));
+  await waitFor(() => expect((screen.getByLabelText(/Solo esta fecha/i) as HTMLInputElement).disabled).toBe(false));
+  expect((screen.getByLabelText(/Solo esta fecha/i) as HTMLInputElement).checked).toBe(true);
+  fireEvent.click(screen.getByLabelText(new RegExp(`^${label}`)));
+  const expectedBtn = ids.length === 1 ? 'Eliminar esta fecha' : `Eliminar ${ids.length} reservas`;
+  fireEvent.click(screen.getByRole('button', { name: expectedBtn }));
   await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
   expect(onConfirm.mock.calls[0][2].map((r: Reservation) => r.id)).toEqual(ids);
 });
@@ -30,7 +31,7 @@ it('keeps errors visible, prevents double submission and allows refresh and retr
   const onConfirm = vi.fn().mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; })).mockResolvedValue(undefined);
   const close = vi.fn();
   render(<RecurringDeleteScopeModal reservation={row} onClose={close} canDelete onConfirm={onConfirm} />);
-  const confirm = screen.getByRole('button', { name: 'Confirmar eliminación' });
+  const confirm = screen.getByRole('button', { name: /Eliminar/i });
   await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(confirm);
   fireEvent.click(confirm);
@@ -38,10 +39,10 @@ it('keeps errors visible, prevents double submission and allows refresh and retr
   reject(new Error('Las reservas cambiaron.'));
   await screen.findByRole('alert');
   expect(close).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Actualizar' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Reintentar consulta' }));
   await waitFor(() => expect(query).toHaveBeenCalledTimes(2));
-  await waitFor(() => expect((screen.getByRole('button', { name: 'Confirmar eliminación' }) as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(screen.getByRole('button', { name: 'Confirmar eliminación' }));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Eliminar esta fecha' }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByRole('button', { name: 'Eliminar esta fecha' }));
   await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
 });
 it('cancels without submitting and reports a failed series query', async () => {
@@ -49,7 +50,7 @@ it('cancels without submitting and reports a failed series query', async () => {
   const onConfirm = vi.fn(), close = vi.fn();
   render(<RecurringDeleteScopeModal reservation={row} onClose={close} canDelete={false} onConfirm={onConfirm} />);
   await screen.findByRole('alert');
-  expect((screen.getByRole('button', { name: 'Solicitar eliminación' }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('button', { name: /Solicitar eliminación/i }) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
   expect(close).toHaveBeenCalledTimes(1);
   expect(onConfirm).not.toHaveBeenCalled();

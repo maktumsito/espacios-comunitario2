@@ -17,9 +17,10 @@ import {
   ShieldCheck,
   Repeat,
   Building2,
-  ChevronRight
+  Cake
 } from 'lucide-react';
 import { Reservation, SpaceInfo, SpaceBlock, UpdateScope } from '../types';
+import type { DailyBirthdayLimitViolation } from '../utils/birthdayLimit';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { timeStringToMinutes } from '../utils/validationUtils';
 import { timeToMinutes, formatMinutesToTime, checkSingleConflict } from '../utils/conflictDetector';
@@ -52,13 +53,16 @@ interface ReservationStep2DateTimeProps {
   mainDuration: number;
   allowConflictOverride: boolean;
   setAllowConflictOverride: (allow: boolean) => void;
-  showInlineSuggestions: boolean;
-  setShowInlineSuggestions: (show: boolean) => void;
+  birthdayLimitViolations?: DailyBirthdayLimitViolation[];
+  allowBirthdayLimitOverride?: boolean;
+  setAllowBirthdayLimitOverride?: (allow: boolean) => void;
+  showInlineSuggestions?: boolean;
+  setShowInlineSuggestions?: (show: boolean) => void;
   handleShiftImmediatelyAfter: (newStartTime: string) => void;
   handleApplyRecommendation: (rec: ConflictRecommendation) => void;
   handleFindNextAvailableSlot: () => void;
-  quickFreeSlots: ConflictRecommendation[];
-  quickAltSpaces: ConflictRecommendation[];
+  quickFreeSlots?: ConflictRecommendation[];
+  quickAltSpaces?: ConflictRecommendation[];
   setShowConflictDialog: (show: boolean) => void;
   // Schedule Unlock outside regular hours
   loanScheduleCheck: { requiresAuthorization: boolean; reason?: string };
@@ -150,13 +154,12 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
   mainDuration,
   allowConflictOverride,
   setAllowConflictOverride,
-  showInlineSuggestions,
-  setShowInlineSuggestions,
+  birthdayLimitViolations = [],
+  allowBirthdayLimitOverride = false,
+  setAllowBirthdayLimitOverride,
   handleShiftImmediatelyAfter,
   handleApplyRecommendation,
   handleFindNextAvailableSlot,
-  quickFreeSlots,
-  quickAltSpaces,
   setShowConflictDialog,
   loanScheduleCheck,
   currentUser,
@@ -239,12 +242,58 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
         availableSpaces={availableSpaces}
         editingReservation={editingReservation}
         allowConflictOverride={allowConflictOverride}
+        canOverrideConflicts={isCoordinatorOrAdmin(currentUser)}
         setAllowConflictOverride={setAllowConflictOverride}
         onOpenConflictDialog={() => setShowConflictDialog(true)}
         onShiftImmediatelyAfter={handleShiftImmediatelyAfter}
         onApplyRecommendation={handleApplyRecommendation}
         onFindNextAvailableSlot={handleFindNextAvailableSlot}
       />
+
+      {birthdayLimitViolations.length > 0 && (
+        <div
+          id="birthday-limit-warning-banner"
+          role="status"
+          className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-2.5 shadow-xs"
+        >
+          <div className="flex items-start gap-2.5">
+            <Cake className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" aria-hidden="true" />
+            <div className="space-y-1 flex-1 text-xs">
+              <p className="font-bold text-amber-950">
+                Límite diario de cumpleaños alcanzado (máximo 2 por día en el centro)
+              </p>
+              <ul className="space-y-0.5 text-amber-900">
+                {birthdayLimitViolations.slice(0, 4).map((v) => (
+                  <li key={v.fecha}>
+                    • <strong>{formatDateDDMMYYYY(v.fecha)}</strong>: ya hay {v.existingCount} cumpleaños registrados
+                    {v.existingReservations.length > 0
+                      ? ` (${v.existingReservations.map((r) => formatDisplayTitle(r.espacio)).join(', ')})`
+                      : ''}.
+                  </li>
+                ))}
+                {birthdayLimitViolations.length > 4 && (
+                  <li>• y {birthdayLimitViolations.length - 4} fecha(s) adicional(es).</li>
+                )}
+              </ul>
+              <p className="text-amber-900">
+                Para continuar, elige otra fecha o cambia el tipo de actividad.
+              </p>
+            </div>
+          </div>
+          {isCoordinatorOrAdmin(currentUser) && setAllowBirthdayLimitOverride && (
+            <label className="flex items-center gap-2 pt-2 border-t border-amber-200 text-xs font-semibold text-amber-950 cursor-pointer">
+              <input
+                id="checkbox-override-birthday-limit"
+                type="checkbox"
+                checked={allowBirthdayLimitOverride}
+                onChange={(e) => setAllowBirthdayLimitOverride(e.target.checked)}
+                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+              />
+              <span>Autorizar excepción de límite diario de cumpleaños ({currentUser?.role})</span>
+            </label>
+          )}
+        </div>
+      )}
 
       {/* Row 3: Espacio, Fecha y Horarios */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -490,7 +539,7 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
           </div>
         )}
 
-        {/* VISUAL REAL-TIME AVAILABILITY TIMELINE & SLOT ADVISOR (OPTIMIZATION STEP 3) */}
+        {/* Visual Real-Time Availability Timeline & Slot Advisor */}
         <div className="sm:col-span-4">
           <SpaceAvailabilityTimeline
             space={formData.espacio || availableSpaces[0]?.name || ''}
@@ -510,120 +559,6 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
             }}
           />
         </div>
-
-        {/* INLINE CONFLICT REPORTING & 1-CLICK RECOMMENDATIONS (D9) */}
-        {conflicts.length > 0 && (
-          <div
-            id="inline-conflict-warning"
-            className="sm:col-span-4 p-3.5 rounded-xl bg-rose-50 border-2 border-rose-300 text-rose-950 space-y-3 shadow-xs animate-fadeIn"
-          >
-            <div className="flex items-start space-x-2.5">
-              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-              <div className="space-y-1 flex-1 min-w-0">
-                <div className="flex flex-wrap items-center justify-between gap-1.5">
-                  <p className="font-bold text-rose-950 text-xs sm:text-sm">
-                    ⚠️ Conflicto de horario: {formatDisplayTitle(formData.espacio)} ya está ocupado en este rango
-                  </p>
-                  <span className="text-[11px] font-bold bg-rose-200 text-rose-900 px-2 py-0.5 rounded-md">
-                    {conflicts.length} topamiento(s)
-                  </span>
-                </div>
-                <div className="text-xs text-rose-800 space-y-1">
-                  {conflicts.slice(0, 3).map((c, idx) => (
-                    <div key={idx} className="flex flex-wrap items-center gap-1.5 bg-white/70 p-2 rounded-lg border border-rose-200">
-                      <span className="font-bold text-slate-800">{c.horaInicio} - {c.horaFin}</span>
-                      <span className="text-slate-500">•</span>
-                      <span className="font-medium text-slate-900">{formatDisplayTitle(c.tipoActividad)}</span>
-                      {c.responsable && (
-                        <span className="text-slate-600 text-[11px]">(Resp: {formatDisplayTitle(c.responsable)})</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* 1-Click Inline Quick-Fix Actions */}
-            <div className="pt-2 border-t border-rose-200">
-              {!showInlineSuggestions ? (
-                <button
-                  type="button"
-                  onClick={() => setShowInlineSuggestions(true)}
-                  className="w-full text-left p-2.5 bg-white/95 hover:bg-white border border-rose-200 hover:border-indigo-300 rounded-xl transition flex items-center justify-between shadow-2xs group cursor-pointer"
-                >
-                  <div className="flex items-center space-x-2">
-                    <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-md bg-indigo-600 text-white shadow-2xs">
-                      Aviso
-                    </span>
-                    <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-900 flex items-center space-x-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Recomendaciones para resolver topamiento</span>
-                    </span>
-                  </div>
-                  <span className="text-xs font-bold text-indigo-600 group-hover:text-indigo-800 flex items-center space-x-1">
-                    <span>Hacer clic para ver</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </span>
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Soluciones sugeridas:</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowInlineSuggestions(false)}
-                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 underline cursor-pointer"
-                    >
-                      Ocultar
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {conflicts[0]?.horaFin && (
-                      <button
-                        type="button"
-                        onClick={() => handleShiftImmediatelyAfter(conflicts[0].horaFin)}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow-2xs cursor-pointer"
-                      >
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>Mover después ({conflicts[0].horaFin})</span>
-                      </button>
-                    )}
-                    {quickFreeSlots.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => handleApplyRecommendation(quickFreeSlots[0])}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow-2xs cursor-pointer"
-                      >
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>Hueco libre: {quickFreeSlots[0].horaInicio} - {quickFreeSlots[0].horaFin}</span>
-                      </button>
-                    )}
-                    {quickAltSpaces.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => handleApplyRecommendation(quickAltSpaces[0])}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow-2xs cursor-pointer"
-                      >
-                        <Building2 className="w-3.5 h-3.5" />
-                        <span>Cambiar a {formatDisplayTitle(quickAltSpaces[0].espacio)}</span>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setShowConflictDialog(true)}
-                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1 shadow-2xs cursor-pointer ml-auto"
-                    >
-                      <span>Asistente avanzado de topamientos</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Banner y Control de Desbloqueo de Horario: Aparece AUTOMÁTICAMENTE solo cuando el horario está fuera del horario normal (08:30 a 22:00 hrs) */}
         {loanScheduleCheck.requiresAuthorization && (
@@ -678,59 +613,65 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
             )}
 
             <div className="pt-2 border-t border-amber-200/80 space-y-2.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <label htmlFor="input-clave-extension" className="text-xs font-semibold text-amber-950 flex items-center space-x-1.5">
-                  <KeyRound className="w-3.5 h-3.5 text-amber-700" />
-                  <span>Clave Oficial de Desbloqueo (ccd2026) *:</span>
-                </label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    id="input-clave-extension"
-                    type="password"
-                    placeholder="Ingresa ccd2026"
-                    value={extendedAuthKey}
-                    onChange={(e) => setExtendedAuthKey(e.target.value)}
-                    className={`px-3 py-1.5 text-xs font-mono bg-white border rounded-lg focus:outline-none focus:ring-2 w-36 shadow-2xs ${
-                      isExtensionAuthorized
-                        ? 'border-emerald-500 ring-1 ring-emerald-500 text-emerald-950 font-bold'
-                        : 'border-amber-300 focus:ring-amber-500 text-slate-800'
-                    }`}
-                  />
-                  {isExtensionAuthorized ? (
-                    <span className="text-emerald-800 bg-emerald-100 border border-emerald-300 text-[11px] font-bold px-2 py-1 rounded-md flex items-center space-x-1 shadow-2xs">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Desbloqueado</span>
-                    </span>
-                  ) : (
-                    <span className="text-amber-800 bg-amber-100 border border-amber-300 text-[11px] font-semibold px-2 py-1 rounded-md">
-                      Desbloqueo Requerido
-                    </span>
-                  )}
-                </div>
-              </div>
+              {isCoordinatorOrAdmin(currentUser) ? (
+                <>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label htmlFor="input-clave-extension" className="text-xs font-semibold text-amber-950 flex items-center space-x-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Clave de autorización de horario extendido *:</span>
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        id="input-clave-extension"
+                        type="password"
+                        placeholder="Ingresa clave de autorización"
+                        value={extendedAuthKey}
+                        onChange={(e) => setExtendedAuthKey(e.target.value)}
+                        className={`px-3 py-1.5 text-xs font-mono bg-white border rounded-lg focus:outline-none focus:ring-2 w-44 shadow-2xs ${
+                          isExtensionAuthorized
+                            ? 'border-emerald-500 ring-1 ring-emerald-500 text-emerald-950 font-bold'
+                            : 'border-amber-300 focus:ring-amber-500 text-slate-800'
+                        }`}
+                      />
+                      {isExtensionAuthorized ? (
+                        <span className="text-emerald-800 bg-emerald-100 border border-emerald-300 text-[11px] font-bold px-2 py-1 rounded-md flex items-center space-x-1 shadow-2xs">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Autorizado</span>
+                        </span>
+                      ) : (
+                        <span className="text-amber-800 bg-amber-100 border border-amber-300 text-[11px] font-semibold px-2 py-1 rounded-md">
+                          Autorización requerida
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-              {isExtensionAuthorized ? (
-                <p className="text-[11px] text-emerald-700 font-semibold flex items-center space-x-1 bg-emerald-50/80 p-2 rounded-lg border border-emerald-200">
-                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>
-                    ✓ Horario especial desbloqueado y autorizado para este préstamo por {currentUser?.name || currentUser?.username || 'Coordinador/Admin'}.
-                  </span>
-                </p>
-              ) : (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-amber-100/60 p-2 rounded-lg border border-amber-200">
-                  <p className="text-[11px] text-amber-900">
-                    Ingresa la clave oficial <strong>ccd2026</strong> para desbloquear este horario fuera del rango normal (08:30 a 22:00 hrs).
-                  </p>
-                  {isCoordinatorOrAdmin(currentUser) && (
-                    <button
-                      type="button"
-                      onClick={() => setExtendedAuthKey('ccd2026')}
-                      className="text-[10.5px] text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-300 font-bold px-2.5 py-1 rounded-lg transition shadow-2xs cursor-pointer whitespace-nowrap"
-                    >
-                      ⚡ Desbloquear con {currentUser?.role || 'Admin'}
-                    </button>
+                  {isExtensionAuthorized ? (
+                    <p className="text-[11px] text-emerald-700 font-semibold flex items-center space-x-1 bg-emerald-50/80 p-2 rounded-lg border border-emerald-200">
+                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>
+                        Horario extendido autorizado por {currentUser?.name || currentUser?.username || 'Coordinador/Admin'}.
+                      </span>
+                    </p>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-amber-100/60 p-2 rounded-lg border border-amber-200">
+                      <p className="text-[11px] text-amber-900">
+                        Autoriza este horario fuera de la franja habitual (08:30 a 22:00 hrs) para continuar.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setExtendedAuthKey('ccd2026')}
+                        className="text-[10.5px] text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-300 font-bold px-2.5 py-1 rounded-lg transition shadow-2xs cursor-pointer whitespace-nowrap"
+                      >
+                        Autorizar con perfil {currentUser?.role || 'Admin'}
+                      </button>
+                    </div>
                   )}
-                </div>
+                </>
+              ) : (
+                <p className="text-xs font-medium text-amber-950 bg-amber-100/70 p-2.5 rounded-lg border border-amber-200">
+                  Este horario está fuera de la franja habitual (08:30 a 22:00 hrs). Ajusta las horas dentro de ese rango o solicita a un Administrador o Coordinador que autorice y registre la reserva.
+                </p>
               )}
             </div>
           </div>
@@ -827,14 +768,9 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
 
       {/* Modalidad de Reserva / Repetición */}
       <div className="space-y-1.5">
-        <label htmlFor="input-reserva-recurrente" className="font-semibold text-slate-700 flex items-center justify-between">
-          <span className="flex items-center space-x-1.5">
-            <Repeat className="w-3.5 h-3.5 text-blue-600" />
-            <span>Modalidad de Reserva / Repetición</span>
-          </span>
-          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-            Opción Admin
-          </span>
+        <label htmlFor="input-reserva-recurrente" className="font-semibold text-slate-700 flex items-center space-x-1.5">
+          <Repeat className="w-3.5 h-3.5 text-blue-600" />
+          <span>¿Esta actividad se repite?</span>
         </label>
         <select
           id="input-reserva-recurrente"
@@ -867,13 +803,13 @@ export const ReservationStep2DateTime: React.FC<ReservationStep2DateTimeProps> =
         >
           <option value="single">
             {isEditingSingleOccurrence
-              ? `📅 Modificando SOLO esta fecha (${formatDateDDMMYYYY(editingReservation?.fecha || formData.fecha || '')})`
-              : '📅 Fecha Única (1 sola sesión)'}
+              ? `Modificando solo esta fecha (${formatDateDDMMYYYY(editingReservation?.fecha || formData.fecha || '')})`
+              : 'No, solo esta fecha (1 sesión)'}
           </option>
           {!isEditingSingleOccurrence && (
             <>
-              <option value="specific">🗓️ Fechas Específicas (Libre elección)</option>
-              <option value="pattern">🔄 Repetir semanalmente hasta cierta fecha (Opción Admin)</option>
+              <option value="specific">Sí, elegir fechas puntuales en el calendario</option>
+              <option value="pattern">Sí, repetir todas las semanas hasta una fecha de término</option>
             </>
           )}
         </select>

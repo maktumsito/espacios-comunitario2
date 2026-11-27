@@ -1013,5 +1013,46 @@ describe.skipIf(!enabled)(
           .name,
       ).toBe("Restored space");
     });
+
+    it('enforces max 2 active birthdays per day on commit and restricts overrides to managers', async () => {
+      const date = '2099-11-20';
+      const bday = (id: string, espacio: string) => ({
+        ...row(id, date),
+        espacio,
+        tipoActividad: 'CUMPLEAÑOS',
+        descripcion: `Cumpleaños ${id}`,
+      });
+      await post('/api/reservations/commit', {
+        reservations: [bday('bday-1', 'SALA 1'), bday('bday-2', 'SALA 2')],
+        options: { operationId: 'bday-seed' },
+      });
+
+      const blocked = await post('/api/reservations/commit', {
+        reservations: [bday('bday-3', 'SALA 3')],
+        options: { operationId: 'bday-3-blocked' },
+      });
+      expect(blocked.status).toBe(409);
+      expect(blocked.error).toMatch(/cumpleaños/i);
+      expect((await db.doc('reservas/bday-3').get()).exists).toBe(false);
+
+      await db.doc('usuarios_sistema/editor').update({ role: 'Recepción', isMasterAdmin: false });
+      try {
+        const nonManagerOverride = await post('/api/reservations/commit', {
+          reservations: [bday('bday-3-nonmgr', 'SALA 3')],
+          options: { operationId: 'bday-3-nonmgr', allowBirthdayLimitOverride: true },
+        });
+        expect(nonManagerOverride.status).toBe(403);
+        expect((await db.doc('reservas/bday-3-nonmgr').get()).exists).toBe(false);
+      } finally {
+        await db.doc('usuarios_sistema/editor').update({ role: 'Administrador', isMasterAdmin: true });
+      }
+
+      const managerOverride = await post('/api/reservations/commit', {
+        reservations: [bday('bday-3-mgr', 'SALA 3')],
+        options: { operationId: 'bday-3-mgr', allowBirthdayLimitOverride: true },
+      });
+      expect(managerOverride.error).toBeUndefined();
+      expect((await db.doc('reservas/bday-3-mgr').get()).exists).toBe(true);
+    });
   },
 );

@@ -20,11 +20,18 @@ import {
 import { formatDateDDMMYYYY, WEEKDAYS } from '../utils/dateUtils';
 import { CustomScheduleSlot } from '../types';
 import { sameScheduleSlot, type ScheduleSlot } from '../utils/recurringSchedule';
+import {
+  findDailyBirthdayLimitViolations,
+  formatBirthdayLimitMessage,
+  type DailyBirthdayLimitViolation
+} from '../utils/birthdayLimit';
 
 interface UseReservationModalValidationProps {
   preserveExistingSchedule?: boolean;
   reviewSlots?: ScheduleSlot[];
   allReservations?: Reservation[];
+  allowBirthdayLimitOverride?: boolean;
+  isManagerUser?: boolean;
   formData: Partial<Reservation>;
   enableSingleSecondSpace: boolean;
   singleSecondStartTime: string;
@@ -66,6 +73,8 @@ export function useReservationModalValidation({
   preserveExistingSchedule = false,
   reviewSlots,
   allReservations = [],
+  allowBirthdayLimitOverride = false,
+  isManagerUser = false,
   formData,
   enableSingleSecondSpace,
   singleSecondStartTime,
@@ -266,6 +275,45 @@ export function useReservationModalValidation({
     return { isValid: true, error: undefined };
   }, [preserveExistingSchedule, bookingMode, generateFullSeries, specificDates]);
 
+  const birthdayLimitViolations = useMemo<DailyBirthdayLimitViolation[]>(() => {
+    const candidates: Partial<Reservation>[] =
+      reviewSlots && reviewSlots.length > 0
+        ? reviewSlots.map((slot, idx) => ({
+            ...formData,
+            id: slot.sourceId || `CANDIDATE_SLOT_${idx}_${slot.fecha}`,
+            fecha: slot.fecha,
+            horaInicio: slot.horaInicio,
+            horaFin: slot.horaFin,
+            espacio: slot.espacio,
+            terminaDiaSiguiente: slot.terminaDiaSiguiente,
+            estado: formData.estado || 'activa',
+          }))
+        : formData.fecha
+        ? [
+            {
+              ...formData,
+              id: editingReservation?.id || 'CANDIDATE_SINGLE',
+              estado: formData.estado || 'activa',
+            },
+          ]
+        : [];
+
+    const excludeReservationIds =
+      reviewSlots && reviewSlots.length > 0
+        ? reviewSlots.map((slot) => slot.sourceId).filter((id): id is string => Boolean(id))
+        : editingReservation?.id
+        ? [editingReservation.id]
+        : [];
+
+    return findDailyBirthdayLimitViolations(candidates, allReservations, {
+      excludeReservationIds,
+    });
+  }, [reviewSlots, formData, editingReservation?.id, allReservations]);
+
+  const hasBirthdayLimitBlock = useMemo(() => {
+    return Boolean(birthdayLimitViolations.length > 0 && !(allowBirthdayLimitOverride && isManagerUser));
+  }, [birthdayLimitViolations.length, allowBirthdayLimitOverride, isManagerUser]);
+
   const isFormSubmitDisabled = useMemo(() => {
     if (isSubmitting) return true;
     if (!timeValidation.isValid) return true;
@@ -275,6 +323,7 @@ export function useReservationModalValidation({
     if (!emailValidation.isValid) return true;
     if (!phoneValidation.isValid) return true;
     if (loanScheduleCheck.requiresAuthorization && !isExtensionAuthorized) return true;
+    if (hasBirthdayLimitBlock) return true;
     if (!patternDatesValidation.isValid) return true;
     if (!specificDatesValidation.isValid) return true;
     if (!formData.responsable?.trim()) return true;
@@ -293,6 +342,7 @@ export function useReservationModalValidation({
     phoneValidation.isValid,
     loanScheduleCheck.requiresAuthorization,
     isExtensionAuthorized,
+    hasBirthdayLimitBlock,
     patternDatesValidation.isValid,
     specificDatesValidation.isValid,
     formData.responsable,
@@ -322,6 +372,7 @@ export function useReservationModalValidation({
     if (!timeValidation.isValid) return false;
     if (enableSingleSecondSpace && !singleSecondTimeValidation.isValid) return false;
     if (hasStep1Conflict) return false;
+    if (hasBirthdayLimitBlock) return false;
     if (loanScheduleCheck.requiresAuthorization && !isExtensionAuthorized) return false;
 
     if (!preserveExistingSchedule && bookingMode === 'single') {
@@ -351,6 +402,7 @@ export function useReservationModalValidation({
     enableSingleSecondSpace,
     singleSecondTimeValidation.isValid,
     hasStep1Conflict,
+    hasBirthdayLimitBlock,
     loanScheduleCheck.requiresAuthorization,
     isExtensionAuthorized,
     bookingMode,
@@ -452,7 +504,19 @@ export function useReservationModalValidation({
 
     if (loanScheduleCheck.requiresAuthorization && !isExtensionAuthorized) {
       if (showAlert) {
-        showFormFeedback('⚠️ Autorización requerida: La actividad opera en horario extendido (antes de las 08:30 hrs o después de las 22:00 hrs). Ingresa la clave oficial "ccd2026" para autorizarla.', 'warning');
+        showFormFeedback(
+          isManagerUser
+            ? '⚠️ Autorización requerida: La actividad opera en horario extendido (antes de las 08:30 hrs o después de las 22:00 hrs). Ingresa la clave de autorización para continuar.'
+            : '⚠️ Este horario está fuera de la franja habitual (08:30 a 22:00 hrs). Solicita autorización a un Administrador o Coordinador.',
+          'warning'
+        );
+      }
+      return false;
+    }
+
+    if (hasBirthdayLimitBlock) {
+      if (showAlert) {
+        showFormFeedback(formatBirthdayLimitMessage(birthdayLimitViolations), 'error');
       }
       return false;
     }
@@ -505,6 +569,8 @@ export function useReservationModalValidation({
     specificDatesValidation,
     isFormSubmitDisabled,
     hasStep1Conflict,
+    birthdayLimitViolations,
+    hasBirthdayLimitBlock,
     // 5-step wizard exports
     isStep1ActivityCompleted,
     isStep2DateTimeCompleted,

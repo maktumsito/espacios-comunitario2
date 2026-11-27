@@ -75,7 +75,7 @@ export function useReservationSeriesState({
     if (!editingReservation || isDuplicating || isSingleDayMultiSpaceReservation(editingReservation)) return [];
     const deletedSet = getDeletedIds();
     const isCleanActive = (r: Reservation) =>
-      r.fecha >= getSeriesEditStartDate(updateScope, editingReservation.fecha, today) && !r.reemplazadaPorReservaId &&
+      r.fecha >= getSeriesEditStartDate(updateScope === 'single' ? 'single' : 'series', editingReservation.fecha, today) && !r.reemplazadaPorReservaId &&
       !deletedSet.has(r.id) &&
       r.estado !== 'eliminada' &&
       (r as any).eliminada !== true &&
@@ -132,7 +132,7 @@ export function useReservationSeriesState({
       return safeEditingRes;
     }
     if (updateScope === 'future') {
-      const refDate = editingReservation.fecha;
+      const refDate = editingReservation.fecha > today ? editingReservation.fecha : today;
       const res = seriesReservations.filter((r) => r.fecha >= refDate);
       return res;
     }

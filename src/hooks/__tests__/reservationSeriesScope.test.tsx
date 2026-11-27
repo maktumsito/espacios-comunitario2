@@ -48,3 +48,32 @@ it('limits pattern previews to a date range rather than checking the whole serie
   const {result}=renderHook(()=>useReservationSeriesState({editingReservation:rows[1],allReservations:rows,updateScope:'dateRange',rangeStartDate:'2026-10-07',rangeEndDate:'2026-10-07',selectedOccurrenceIds:new Set(),bookingMode:'pattern',recurrenceStartDate:'2026-10-05',recurrenceEndDate:'2026-10-07',selectedDays:[1,2,3],specificDates:[],formData:rows[1],includeHolidaysInSeries:false,holidayOverrideKey:''}));
   expect(result.current.generatedDates).toEqual(['2026-10-07']);
 });
+
+it('applies series edits to all pending dates from today while future edits start at editingReservation.fecha', () => {
+  const rows: Reservation[] = [
+    { ...base, id: 'p-1', fecha: '2026-10-05' },
+    { ...base, id: 'p-2', fecha: '2026-10-07' },
+    { ...base, id: 'p-3', fecha: '2026-10-14' },
+  ];
+  const { result } = renderHook(
+    ({ updateScope }: { updateScope: 'series' | 'future' }) =>
+      useReservationSeriesState({
+        isOpen: true,
+        isDuplicating: false,
+        editingReservation: rows[2],
+        formData: rows[2],
+        allReservations: rows,
+        updateScope,
+        rangeStartDate: '',
+        rangeEndDate: '',
+        selectedOccurrenceIds: new Set(),
+        bookingMode: 'pattern',
+        rawPatternDates: ['2026-10-05', '2026-10-07', '2026-10-14'],
+        patternValidDates: ['2026-10-05', '2026-10-07', '2026-10-14'],
+      }),
+    { initialProps: { updateScope: 'series' as 'series' | 'future' } }
+  );
+
+  expect(result.current.seriesReservations.map(r => r.id)).toEqual(['p-2', 'p-3']);
+  expect(result.current.affectedReservations.map(r => r.id)).toEqual(['p-2', 'p-3']);
+});

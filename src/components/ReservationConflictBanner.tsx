@@ -20,6 +20,7 @@ interface ReservationConflictBannerProps {
   availableSpaces: SpaceInfo[];
   editingReservation?: Reservation | null;
   allowConflictOverride: boolean;
+  canOverrideConflicts?: boolean;
   setAllowConflictOverride: (allow: boolean) => void;
   onOpenConflictDialog: () => void;
   onShiftImmediatelyAfter: (newStartTime: string) => void;
@@ -36,6 +37,7 @@ export const ReservationConflictBanner: React.FC<ReservationConflictBannerProps>
   availableSpaces,
   editingReservation,
   allowConflictOverride,
+  canOverrideConflicts = true,
   setAllowConflictOverride,
   onOpenConflictDialog,
   onShiftImmediatelyAfter,
@@ -76,8 +78,10 @@ export const ReservationConflictBanner: React.FC<ReservationConflictBannerProps>
           </div>
           <p className="text-xs text-rose-800">
             {candidateConflictDates.length > 1
-              ? `Se detectaron coincidencias de horario en ${candidateConflictDates.length} de las fechas programadas para esta reserva. Puedes aplicar soluciones masivas o individuales.`
-              : `El espacio ${formatDisplayTitle(formData.espacio)} ya está ocupado en la fecha ${formatDateDDMMYYYY(candidateConflictDates[0] || formData.fecha || '')} durante el bloque seleccionado (${formData.horaInicio} - ${formData.horaFin}).`}
+              ? `Se detectaron conflictos de horario en ${candidateConflictDates.length} fechas. Revisa las fechas afectadas para ajustar el horario, cambiar de espacio o quitar los días ocupados.`
+              : conflicts[0]
+              ? `La ${formatDisplayTitle(formData.espacio)} está ocupada de ${conflicts[0].horaInicio} a ${conflicts[0].horaFin} el ${formatDateDDMMYYYY(candidateConflictDates[0] || formData.fecha || '')}. Cambia el horario o selecciona otro espacio.`
+              : `El espacio ${formatDisplayTitle(formData.espacio)} ya está ocupado el ${formatDateDDMMYYYY(candidateConflictDates[0] || formData.fecha || '')} entre ${formData.horaInicio} y ${formData.horaFin}. Cambia el horario o selecciona otro espacio.`}
           </p>
 
           {/* Detalle de reservas existentes con botón de mover inmediatamente después */}
@@ -144,15 +148,21 @@ export const ReservationConflictBanner: React.FC<ReservationConflictBannerProps>
           <span>Sugerir próximo horario libre</span>
         </button>
 
-        <label className="flex items-center space-x-2 text-rose-800 font-semibold cursor-pointer text-[11px]">
-          <input
-            type="checkbox"
-            checked={allowConflictOverride}
-            onChange={(e) => setAllowConflictOverride(e.target.checked)}
-            className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
-          />
-          <span>Permitir guardar a pesar del conflicto de horario</span>
-        </label>
+        {canOverrideConflicts ? (
+          <label className="flex items-center space-x-2 text-rose-800 font-semibold cursor-pointer text-[11px]">
+            <input
+              type="checkbox"
+              checked={allowConflictOverride}
+              onChange={(e) => setAllowConflictOverride(e.target.checked)}
+              className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
+            />
+            <span>Permitir guardar a pesar del conflicto de horario</span>
+          </label>
+        ) : (
+          <p className="text-[11px] font-medium text-rose-900">
+            Cambia el horario o elige otra sala libre para poder continuar.
+          </p>
+        )}
       </div>
     </div>
   );

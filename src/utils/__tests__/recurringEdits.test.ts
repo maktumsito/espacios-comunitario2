@@ -28,3 +28,11 @@ it('corrects a past occurrence individually without shifting a schedule before m
   const early={...base,id:'early',fecha:'2026-10-20',horaInicio:'00:30',horaFin:'01:30'};
   expect(()=>buildReservationMoveBatch(base,{...base,horaInicio:'09:00',horaFin:'10:00'},'future',[base,early],'2026-10-06')).toThrow(/fuera del día/);
 });
+
+it('distinguishes series (all pending from today) from future (from sourceDate onward) and single', async () => {
+  const { getSeriesEditStartDate } = await import('../recurringEdits');
+  expect(getSeriesEditStartDate('single', '2026-10-15', '2026-10-06')).toBe('2026-10-15');
+  expect(getSeriesEditStartDate('future', '2026-10-15', '2026-10-06')).toBe('2026-10-15');
+  expect(getSeriesEditStartDate('future', '2026-10-01', '2026-10-06')).toBe('2026-10-06');
+  expect(getSeriesEditStartDate('series', '2026-10-15', '2026-10-06')).toBe('2026-10-06');
+});

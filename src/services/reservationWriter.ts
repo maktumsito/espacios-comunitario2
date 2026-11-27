@@ -60,6 +60,7 @@ export interface WriteOptions {
   operationId?: string;
   deletedIds?: string[];
   allowConflictOverride?: boolean;
+  allowBirthdayLimitOverride?: boolean;
   onProgress?: (result: WriteResult) => void;
   auditRestore?: AuditRestoreContext;
   serverHooks?: {
@@ -492,6 +493,7 @@ export async function writeReservations(
       deletedIds,
       confirmedIds: [],
       allowConflictOverride: !!options.allowConflictOverride,
+      allowBirthdayLimitOverride: !!options.allowBirthdayLimitOverride,
       intent: options.intent,
       requireAtomic: options.requireAtomic,
       expectedVersions: options.expectedVersions,
@@ -512,6 +514,7 @@ export async function writeReservations(
             expectedVersions: original.expectedVersions,
             intent: original.intent,
             allowConflictOverride: original.allowConflictOverride,
+            allowBirthdayLimitOverride: original.allowBirthdayLimitOverride,
             requireAtomic: original.requireAtomic,
             restoreLogId: original.auditRestore?.logId,
             distributionDate: original.distributionDate,
@@ -577,6 +580,7 @@ export async function writeReservations(
     deletedIds: tracked?.deletedIds || deletedIds,
     confirmedIds: tracked?.confirmedIds || [],
     allowConflictOverride: Boolean(options.allowConflictOverride),
+    allowBirthdayLimitOverride: Boolean(options.allowBirthdayLimitOverride),
     intent: options.intent,
     ...(options.requireAtomic ? { requireAtomic: true } : {}),
     ...(options.expectedVersions

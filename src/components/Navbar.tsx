@@ -38,7 +38,7 @@ interface NavbarProps {
   onToggleSidebar?: () => void;
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
-  onNewReservation: () => void;
+  onNewReservation?: () => void;
   onOpenQuickRequest?: () => void;
   onOpenImportExport: () => void;
   onOpenPrintModal?: () => void;
@@ -601,24 +601,26 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                 <KeyRound className="h-5 w-5" />
               </button>
             )}
-            <button
-              id="btn-new-reservation"
-              type="button"
-              onClick={onNewReservation}
-              onMouseEnter={onPrefetchNewReservation}
-              onFocus={onPrefetchNewReservation}
-              className="ml-2 hidden min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800 lg:inline-flex"
-            >
-              <Plus className="h-4 w-4" />
-              Nueva reserva
-            </button>
+            {onNewReservation && (
+              <button
+                id="btn-new-reservation"
+                type="button"
+                onClick={onNewReservation}
+                onMouseEnter={onPrefetchNewReservation}
+                onFocus={onPrefetchNewReservation}
+                className="ml-2 hidden min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800 lg:inline-flex"
+              >
+                <Plus className="h-4 w-4" />
+                Nueva reserva
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       <nav
         aria-label="Navegación móvil"
-        className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 gap-1 border-t border-slate-200 bg-white/95 backdrop-blur-md px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(15,23,42,0.06)] lg:hidden"
+        className={`no-print fixed inset-x-0 bottom-0 z-40 grid ${onNewReservation ? 'grid-cols-4' : 'grid-cols-3'} gap-1 border-t border-slate-200 bg-white/95 backdrop-blur-md px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(15,23,42,0.06)] lg:hidden`}
       >
         <button
           id="nav-mobile-tab-mobile"
@@ -640,15 +642,17 @@ const NavbarComponent: React.FC<NavbarProps> = ({
           <Building2 className="h-5 w-5" />
           Espacios
         </button>
-        <button
-          id="btn-mobile-new-reservation"
-          type="button"
-          onClick={onNewReservation}
-          className="flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-blue-700 text-[11px] font-bold text-white shadow-xs active:scale-[0.98] transition"
-        >
-          <Plus className="h-5 w-5" />
-          Reservar
-        </button>
+        {onNewReservation && (
+          <button
+            id="btn-mobile-new-reservation"
+            type="button"
+            onClick={onNewReservation}
+            className="flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl bg-blue-700 text-[11px] font-bold text-white shadow-xs active:scale-[0.98] transition"
+          >
+            <Plus className="h-5 w-5" />
+            Reservar
+          </button>
+        )}
         <button
           id="btn-mobile-more-tools"
           type="button"

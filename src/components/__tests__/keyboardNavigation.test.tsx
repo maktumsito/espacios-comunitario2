@@ -26,7 +26,8 @@ describe('search keyboard regressions', () => {
     act(()=>booking.dispatchEvent(keyboard));
     expect(keyboard.defaultPrevented).toBe(false);expect(navigate).not.toHaveBeenCalled();
     fireEvent.click(booking);expect(select).toHaveBeenCalledTimes(1);
-    const day=booking.closest('[role="button"]')!;
+    const dayCell=booking.closest('[data-calendar-date]')!;
+    const day=dayCell.querySelector('[data-calendar-day-button]')!;
     fireEvent.keyDown(day,{key:'Enter'});expect(navigate).toHaveBeenCalledTimes(1);
   });
   it('focuses the input, cycles Tab and Shift+Tab, then restores focus after closing', () => {

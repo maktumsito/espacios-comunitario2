@@ -40,6 +40,8 @@ interface ReservationModalFooterProps {
   conflicts: Reservation[];
   candidateConflictDates: readonly string[] | string[];
   allowConflictOverride: boolean;
+  hasBirthdayLimitBlock?: boolean;
+  requiresExtendedAuth?: boolean;
   isSubmitting: boolean;
   timeValidation: { isValid: boolean };
   enableSingleSecondSpace: boolean;
@@ -82,6 +84,8 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
   conflicts,
   candidateConflictDates,
   allowConflictOverride,
+  hasBirthdayLimitBlock = false,
+  requiresExtendedAuth = false,
   isSubmitting,
   timeValidation,
   enableSingleSecondSpace,
@@ -104,6 +108,10 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
     : wizardStep === 2 && (!isStep2Completed || !timeValidation.isValid)
     ? (!timeValidation.isValid
       ? 'La hora de término debe ser posterior a la hora de inicio.'
+      : hasBirthdayLimitBlock
+      ? 'Hay fechas que superan el máximo de 2 cumpleaños por día.'
+      : requiresExtendedAuth
+      ? 'Este horario requiere autorización de horario extendido para continuar.'
       : conflicts.length > 0 || candidateConflictDates.length > 0
       ? 'Revisa los conflictos de horario antes de continuar.'
       : 'Revisa el espacio, las fechas y los avisos de este paso para continuar.')
@@ -287,6 +295,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
               id="btn-submit-reservation"
               key="submit-reservation"
               type="submit"
+              aria-busy={isSubmitting}
               aria-label={draftMode ? 'Aplicar cambios a la importación' : 'Confirmar y guardar reserva de espacio'}
               disabled={isFormSubmitDisabled || (isEditingExisting && !canModifyReservation)}
               className={`min-h-11 min-w-0 flex-1 px-4 py-2.5 rounded-lg text-white text-sm font-semibold transition-colors sm:flex-none ${
@@ -302,7 +311,7 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
               {isSubmitting ? (
                 <span className="flex items-center justify-center space-x-1.5">
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Guardando...</span>
+                  <span>Guardando reserva...</span>
                 </span>
               ) : isEditingExisting && !canModifyReservation
                 ? 'Solo administradores o coordinadores pueden editar'
@@ -333,14 +342,14 @@ export const ReservationModalFooter: React.FC<ReservationModalFooterProps> = Rea
                 : bookingMode === 'specific' && generateFullSeries
                 ? (specificDates.length === 0
                     ? 'Sin fechas seleccionadas (0)'
-                    : `Guardar Reserva (${enableSingleSecondSpace ? specificDates.length * 2 : specificDates.length} Reservas en Serie)`)
+                    : `Guardar serie (${enableSingleSecondSpace ? specificDates.length * 2 : specificDates.length} reservas)`)
                 : bookingMode === 'pattern' && generateFullSeries
                 ? (generatedDates.length === 0
                     ? 'Sin sesiones válidas (0)'
-                    : `Guardar Serie (${enableSingleSecondSpace ? generatedDates.length * 2 : generatedDates.length} ${enableSingleSecondSpace ? 'Reservas: 2 Espacios/Día' : generatedDates.length === 1 ? 'Sesión' : 'Sesiones'})`)
+                    : `Guardar serie (${enableSingleSecondSpace ? generatedDates.length * 2 : generatedDates.length} reservas)`)
                 : enableSingleSecondSpace
-                ? 'Crear Reserva (2 Espacios)'
-                : 'Crear Reserva'}
+                ? 'Guardar reserva (2 espacios)'
+                : 'Guardar reserva'}
             </button>
           )}
         </div>

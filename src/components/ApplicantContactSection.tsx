@@ -100,7 +100,9 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
         {/* RUT */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label htmlFor="input-reserva-rut" className="font-semibold text-slate-700">R.U.T. Solicitante</label>
+            <label htmlFor="input-reserva-rut" className="font-semibold text-slate-700">
+              R.U.T. Solicitante <span className="text-xs font-normal text-slate-500">(opcional)</span>
+            </label>
             {formData.rut && rutValidation.isValid && (
               <span className="text-[10px] text-emerald-600 font-bold flex items-center space-x-0.5">
                 <CheckCircle2 className="w-3 h-3" />
@@ -113,6 +115,8 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
             type="text"
             placeholder="Ej: 12.345.678-9"
             value={formData.rut || ''}
+            aria-invalid={Boolean(formData.rut && !rutValidation.isValid)}
+            aria-describedby={formData.rut && !rutValidation.isValid ? 'rut-error' : undefined}
             onChange={(e) => {
               const val = e.target.value;
               const formatted = formatRut(val);
@@ -125,7 +129,7 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
             }`}
           />
           {formData.rut && !rutValidation.isValid && (
-            <p className="text-[11px] text-rose-600 font-semibold flex items-center space-x-1 mt-0.5">
+            <p id="rut-error" aria-live="polite" className="text-[11px] text-rose-600 font-semibold flex items-center space-x-1 mt-0.5">
               <AlertTriangle className="w-3 h-3 shrink-0" />
               <span>{rutValidation.error}</span>
             </p>
@@ -142,7 +146,7 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
           <div className="flex items-center justify-between">
             <label htmlFor="input-reserva-telefono" className="font-semibold text-slate-700 flex items-center space-x-1.5">
               <Phone className="w-3.5 h-3.5 text-blue-500" />
-              <span>Teléfono</span>
+              <span>Teléfono <span className="text-xs font-normal text-slate-500">(opcional)</span></span>
             </label>
             {formData.telefonoContacto && phoneValidation.isValid && (
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md flex items-center space-x-1">
@@ -156,6 +160,8 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
             type="tel"
             placeholder="+56 9 1234 5678"
             value={formData.telefonoContacto || ''}
+            aria-invalid={Boolean(formData.telefonoContacto && !phoneValidation.isValid)}
+            aria-describedby={formData.telefonoContacto && !phoneValidation.isValid ? 'phone-error' : undefined}
             onChange={(e) => setFormData({ ...formData, telefonoContacto: e.target.value })}
             className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 shadow-xs ${
               formData.telefonoContacto && !phoneValidation.isValid
@@ -164,7 +170,7 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
             }`}
           />
           {formData.telefonoContacto && !phoneValidation.isValid && (
-            <p className="text-[11px] text-rose-600 font-semibold flex items-center space-x-1 mt-0.5">
+            <p id="phone-error" aria-live="polite" className="text-[11px] text-rose-600 font-semibold flex items-center space-x-1 mt-0.5">
               <AlertTriangle className="w-3 h-3 shrink-0" />
               <span>{phoneValidation.error}</span>
             </p>
@@ -176,7 +182,7 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
           <div className="flex items-center justify-between">
             <label htmlFor="input-reserva-email" className="font-semibold text-slate-700 flex items-center space-x-1.5">
               <Mail className="w-3.5 h-3.5 text-blue-500" />
-              <span>Correo Electrónico</span>
+              <span>Correo Electrónico <span className="text-xs font-normal text-slate-500">(opcional)</span></span>
             </label>
             {formData.emailContacto && emailValidation.isValid && (
               <span className="text-[10px] text-emerald-600 font-bold flex items-center space-x-0.5">
@@ -190,6 +196,8 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
             type="email"
             placeholder="vecino@correo.cl"
             value={formData.emailContacto || ''}
+            aria-invalid={Boolean(formData.emailContacto && !emailValidation.isValid)}
+            aria-describedby={formData.emailContacto && !emailValidation.isValid ? 'email-error' : undefined}
             onChange={(e) => setFormData({ ...formData, emailContacto: e.target.value })}
             className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 shadow-xs ${
               formData.emailContacto && !emailValidation.isValid
@@ -198,7 +206,7 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
             }`}
           />
           {formData.emailContacto && !emailValidation.isValid && (
-            <p className="text-[11px] text-rose-600 font-semibold flex items-center space-x-1 mt-0.5">
+            <p id="email-error" aria-live="polite" className="text-[11px] text-rose-600 font-semibold flex items-center space-x-1 mt-0.5">
               <AlertTriangle className="w-3 h-3 shrink-0" />
               <span>{emailValidation.error}</span>
             </p>
@@ -210,7 +218,7 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
         <div className="space-y-1.5">
           <label htmlFor="input-reserva-domicilio" className="font-semibold text-slate-700 flex items-center space-x-1.5">
             <Home className="w-3.5 h-3.5 text-blue-500" />
-            <span>Domicilio / Dirección</span>
+            <span>Domicilio / Dirección <span className="text-xs font-normal text-slate-500">(opcional)</span></span>
           </label>
           <input
             id="input-reserva-domicilio"
@@ -278,135 +286,6 @@ export const ApplicantContactSection: React.FC<ApplicantContactSectionProps> = (
       )}
 
       </section>
-
-      {/* Carta de Compromiso: Activación con 1 Clic para actividades que no son cumpleaños ni préstamos */}
-      {!isCommitmentLetterEligible(formData.tipoActividad, formData.tipoPrestamo) && (
-        <div className="space-y-2 pt-1">
-          <div
-            id="card-toggle-carta-compromiso"
-            onClick={() => {
-              const nextVal = !formData.requiereCartaCompromiso;
-              setFormData((prev) => ({
-                ...prev,
-                requiereCartaCompromiso: nextVal
-              }));
-              if (nextVal) {
-                setDescargarCartaAlCrear(true);
-              }
-            }}
-            className={`p-3.5 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between gap-3 ${
-              formData.requiereCartaCompromiso
-                ? 'bg-amber-500/10 border-amber-400 ring-2 ring-amber-300/60 shadow-xs'
-                : 'bg-white hover:bg-amber-50/40 border-slate-200 hover:border-amber-300 shadow-2xs'
-            }`}
-          >
-            <div className="flex items-center space-x-3">
-              <input
-                id="toggle-activar-carta-compromiso"
-                type="checkbox"
-                checked={Boolean(formData.requiereCartaCompromiso)}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setFormData((prev) => ({
-                    ...prev,
-                    requiereCartaCompromiso: checked
-                  }));
-                  if (checked) {
-                    setDescargarCartaAlCrear(true);
-                  }
-                }}
-                className="w-5 h-5 rounded-md border-amber-400 text-amber-600 focus:ring-amber-500 cursor-pointer"
-              />
-              <label htmlFor="toggle-activar-carta-compromiso" className="cursor-pointer space-y-0.5 select-none">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-black text-slate-900 flex items-center space-x-1.5">
-                    <FileSignature className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Activar Carta de Compromiso para esta actividad</span>
-                  </span>
-                  <span className="text-[9px] font-extrabold uppercase bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded-md">
-                    1 Clic
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  {formData.requiereCartaCompromiso
-                    ? `Carta de compromiso activada para ${formatDisplayTitle(formData.tipoActividad || 'esta actividad')}. Se habilitan opciones de descarga y previsualización.`
-                    : `Esta actividad (${formatDisplayTitle(formData.tipoActividad || 'general')}) no la requiere por defecto. Haz clic para activarla.`}
-                </p>
-              </label>
-            </div>
-
-            <button
-              type="button"
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shrink-0 cursor-pointer ${
-                formData.requiereCartaCompromiso
-                  ? 'bg-amber-400 text-amber-950 hover:bg-amber-300 shadow-2xs font-black'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              <span>{formData.requiereCartaCompromiso ? '✓ Activada' : '+ Activar con 1 Clic'}</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Ticket: Descarga Automática de Carta de Compromiso & Gestión (Activa para Préstamos/Cumpleaños o activada con 1 Clic) */}
-      {(isCommitmentLetterEligible(formData.tipoActividad, formData.tipoPrestamo) || formData.requiereCartaCompromiso) && (
-        <div className="space-y-3 pt-1">
-          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-300 flex items-start justify-between gap-3">
-            <div className="flex items-start space-x-3">
-              <input
-                id="ticket-descargar-carta-auto"
-                type="checkbox"
-                checked={descargarCartaAlCrear}
-                onChange={(e) => setDescargarCartaAlCrear(e.target.checked)}
-                className="w-5 h-5 mt-0.5 rounded-md border-amber-400 text-amber-600 focus:ring-amber-500 cursor-pointer"
-              />
-              <label htmlFor="ticket-descargar-carta-auto" className="cursor-pointer space-y-0.5 select-none">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-black text-amber-950">
-                    Descargar automáticamente Carta de Compromiso oficial al guardar
-                  </span>
-                  <span className="text-[9px] font-extrabold uppercase bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded-md">
-                    Ticket
-                  </span>
-                </div>
-                <p className="text-[11px] text-amber-900/80">
-                  Al confirmar la reserva, se descargará de inmediato el archivo PDF prellenado con los antecedentes y reglamento para que el solicitante lo firme.
-                </p>
-              </label>
-            </div>
-
-            <button
-              id="btn-ver-carta-previa-modal"
-              type="button"
-              onClick={() => setShowCommitmentLetterModal(true)}
-              className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-amber-950 font-black rounded-xl text-xs transition shadow-2xs flex items-center space-x-1.5 shrink-0 cursor-pointer"
-              title="Ver borrador de carta oficial"
-            >
-              <FileSignature className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Previsualizar</span>
-            </button>
-          </div>
-
-          {editingReservation && effectiveFormDataForLetter && (
-            <CommitmentLetterCard
-              reservation={{
-                ...effectiveFormDataForLetter,
-                id: editingReservation.id,
-                cartaCompromisoAdjunta: formData.cartaCompromisoAdjunta
-              }}
-              allReservations={allReservations as Reservation[]}
-              seriesScheduleItems={effectiveSeriesSlotsForLetter}
-              onUpdateAttachment={(attachment: CommitmentLetterAttachment | null) => {
-                setFormData((prev) => ({
-                  ...prev,
-                  cartaCompromisoAdjunta: attachment || undefined
-                }));
-              }}
-            />
-          )}
-        </div>
-      )}
 
       {/* Antecedente de Calificaciones Previas */}
       {responsibleHistoryAlert.hasHistory && (

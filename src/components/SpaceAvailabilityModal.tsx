@@ -101,7 +101,7 @@ export function SpaceAvailabilityModal({ initialDate, onClose, onReserve }: Spac
         <button type="button" disabled={!validRange || loading}
           onClick={() => { setResult(null); setRequest({ ...range }); }}
           className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50">
-          <RefreshCw aria-hidden="true" className="h-4 w-4" /> Consultar
+          <RefreshCw aria-hidden="true" className="h-4 w-4" /> Consultar disponibilidad
         </button>
         <button type="button" disabled={!result || !('days' in result)} onClick={() => window.print()}
           className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50">

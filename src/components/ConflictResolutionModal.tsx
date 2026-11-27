@@ -62,6 +62,7 @@ interface ConflictResolutionModalProps {
   onUpdateDateSchedules: (updater: (prev: Record<string, CustomScheduleSlot>) => Record<string, CustomScheduleSlot>) => void;
   onConvertToSpecificDates: (dates: string[], schedules: Record<string, CustomScheduleSlot>) => void;
   onSetAllowConflictOverride: (allow: boolean) => void;
+  canOverrideConflicts?: boolean;
 }
 
 export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = ({
@@ -93,6 +94,7 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
   onUpdateDateSchedules,
   onConvertToSpecificDates,
   onSetAllowConflictOverride,
+  canOverrideConflicts = true,
 }) => {
   // Local state for individually permitted items
   const [individuallyPermittedKeys, setIndividuallyPermittedKeys] = useState<Set<string>>(new Set());
@@ -914,6 +916,31 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
             </div>
           </div>
 
+          {/* Affected slots summary (dates, spaces, times) & user options */}
+          {conflictingSessions.length > 0 && (
+            <div className="p-4 bg-white rounded-2xl border border-rose-200 shadow-2xs space-y-2 text-xs">
+              <div className="font-bold text-rose-950">
+                Detalle de fechas, espacios y horarios afectados ({conflictingSessions.length} bloques en {conflictingDates.length} {conflictingDates.length === 1 ? 'fecha' : 'fechas'}):
+              </div>
+              <ul className="max-h-32 overflow-y-auto space-y-1 text-[11px] text-slate-700 list-disc pl-4">
+                {conflictingSessions.slice(0, 8).map((session) => (
+                  <li key={`summary-${session.id}`}>
+                    <strong>{formatDateDDMMYYYY(session.date)}</strong> · {session.espacio} ({session.horaInicio}–{session.horaFin})
+                    {session.conflicts[0] ? ` — coincide con "${session.conflicts[0].descripcion || session.conflicts[0].tipoActividad}"` : ''}
+                  </li>
+                ))}
+                {conflictingSessions.length > 8 && (
+                  <li className="list-none font-semibold text-rose-700">
+                    … y {conflictingSessions.length - 8} bloque(s) más listados abajo.
+                  </li>
+                )}
+              </ul>
+              <p className="text-[11px] text-slate-600 pt-1">
+                Opciones disponibles: auto-ajustar a otro horario/sala disponible, mover el horario de la serie{bookingMode !== 'single' ? ', omitir las fechas en conflicto' : ''}, o ajustar cada fecha abajo antes de guardar. No se guardará nada parcialmente sin resolverlo.
+              </p>
+            </div>
+          )}
+
           {/* ==================================================== */}
           {/* SECTION 1: CORRECCIÓN MASIVA                        */}
           {/* ==================================================== */}
@@ -1039,7 +1066,8 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
                 </div>
               </div>
 
-              {/* Option D: Allow all conflicts */}
+              {/* Option D: Allow all conflicts (only Coordinators / Admins) */}
+              {canOverrideConflicts && (
               <button
                 type="button"
                 id="btn-conflict-bulk-allow"
@@ -1067,6 +1095,7 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
                   </div>
                 </div>
               </button>
+              )}
             </div>
           </div>
 
@@ -1266,7 +1295,8 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
                                   </div>
                                 </div>
 
-                                {/* Allow this day specifically */}
+                                {/* Allow this day specifically (only Coordinators / Admins) */}
+                                {canOverrideConflicts && (
                                 <label className="flex items-center space-x-1.5 text-slate-700 font-semibold cursor-pointer text-[11px]">
                                   <input
                                     type="checkbox"
@@ -1276,6 +1306,7 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
                                   />
                                   <span>Permitir en este día</span>
                                 </label>
+                                )}
                               </div>
                             </div>
                           );

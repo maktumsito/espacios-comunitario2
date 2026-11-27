@@ -13,7 +13,7 @@ import {
   Info
 } from 'lucide-react';
 import { Reservation, UpdateScope } from '../types';
-import { formatDateDDMMYYYY } from '../utils/dateUtils';
+import { formatDateDDMMYYYY, getChileLocalDateString } from '../utils/dateUtils';
 
 interface RecurringSeriesScopeSelectorProps {
   editingReservation: Reservation;
@@ -65,9 +65,9 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
         </div>
       </div>
 
-      {/* 5-Scope Buttons Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1">
-        {/* 1. Solo esta reserva */}
+      {/* 3 Primary Scopes */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+        {/* 1. Solo esta fecha */}
         <button
           type="button"
           id="btn-scope-single"
@@ -81,16 +81,16 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
           <div className="flex items-center justify-between w-full mb-1">
             <span className="text-xs font-bold flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5" />
-              Solo esta reserva
+              Solo esta fecha
             </span>
             {updateScope === 'single' && <Check className="w-3.5 h-3.5 text-emerald-300" />}
           </div>
           <span className={`text-[11px] leading-tight ${updateScope === 'single' ? 'text-indigo-100' : 'text-indigo-700'}`}>
-            Modifica solo el {formatDateDDMMYYYY(editingReservation.fecha)}
+            Modifica únicamente el {formatDateDDMMYYYY(editingReservation.fecha)}
           </span>
         </button>
 
-        {/* 2. Esta y las siguientes */}
+        {/* 2. Esta fecha y las siguientes */}
         <button
           type="button"
           id="btn-scope-future"
@@ -104,12 +104,17 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
           <div className="flex items-center justify-between w-full mb-1">
             <span className="text-xs font-bold flex items-center gap-1.5">
               <ArrowRightCircle className="w-3.5 h-3.5" />
-              Esta y las siguientes
+              Esta fecha y las siguientes
             </span>
             {updateScope === 'future' && <Check className="w-3.5 h-3.5 text-emerald-300" />}
           </div>
           <span className={`text-[11px] leading-tight ${updateScope === 'future' ? 'text-indigo-100' : 'text-indigo-700'}`}>
-            Desde {formatDateDDMMYYYY(editingReservation.fecha)} ({seriesReservations.filter((r) => r.fecha >= editingReservation.fecha).length} reservas)
+            {(() => {
+              const todayStr = getChileLocalDateString();
+              const refDate = editingReservation.fecha > todayStr ? editingReservation.fecha : todayStr;
+              const futureCount = seriesReservations.filter((r) => r.fecha >= refDate).length;
+              return `Desde el ${formatDateDDMMYYYY(refDate)} en adelante (${futureCount} ${futureCount === 1 ? 'reserva' : 'reservas'})`;
+            })()}
           </span>
         </button>
 
@@ -127,70 +132,81 @@ export const RecurringSeriesScopeSelector: React.FC<RecurringSeriesScopeSelector
           <div className="flex items-center justify-between w-full mb-1">
             <span className="text-xs font-bold flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5" />
-              Serie desde esta fecha
+              Toda la serie
             </span>
             {updateScope === 'series' && <Check className="w-3.5 h-3.5 text-emerald-300" />}
           </div>
           <span className={`text-[11px] leading-tight ${updateScope === 'series' ? 'text-indigo-100' : 'text-indigo-700'}`}>
-            Las {seriesCount} reservas desde la fecha seleccionada
-          </span>
-        </button>
-
-        {/* 4. Rango de fechas */}
-        <button
-          type="button"
-          id="btn-scope-dateRange"
-          onClick={() => {
-            setUpdateScope('dateRange');
-            if (!rangeStartDate) setRangeStartDate(editingReservation.fecha);
-            if (!rangeEndDate) setRangeEndDate(seriesReservations[seriesReservations.length - 1]?.fecha || editingReservation.fecha);
-          }}
-          className={`flex flex-col items-start p-3 rounded-xl text-left transition cursor-pointer border ${
-            updateScope === 'dateRange'
-              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-              : 'bg-white text-indigo-950 border-indigo-200 hover:bg-indigo-100/60'
-          }`}
-        >
-          <div className="flex items-center justify-between w-full mb-1">
-            <span className="text-xs font-bold flex items-center gap-1.5">
-              <CalendarRange className="w-3.5 h-3.5" />
-              Rango de fechas
-            </span>
-            {updateScope === 'dateRange' && <Check className="w-3.5 h-3.5 text-emerald-300" />}
-          </div>
-          <span className={`text-[11px] leading-tight ${updateScope === 'dateRange' ? 'text-indigo-100' : 'text-indigo-700'}`}>
-            Definir intervalo desde / hasta
-          </span>
-        </button>
-
-        {/* 5. Fechas seleccionadas */}
-        <button
-          type="button"
-          id="btn-scope-selected"
-          onClick={() => {
-            setUpdateScope('selected');
-            if (selectedOccurrenceIds.size === 0) {
-              setSelectedOccurrenceIds(new Set([editingReservation.id]));
-            }
-          }}
-          className={`flex flex-col items-start p-3 rounded-xl text-left transition cursor-pointer border ${
-            updateScope === 'selected'
-              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-              : 'bg-white text-indigo-950 border-indigo-200 hover:bg-indigo-100/60'
-          }`}
-        >
-          <div className="flex items-center justify-between w-full mb-1">
-            <span className="text-xs font-bold flex items-center gap-1.5">
-              <ListFilter className="w-3.5 h-3.5" />
-              Fechas seleccionadas
-            </span>
-            {updateScope === 'selected' && <Check className="w-3.5 h-3.5 text-emerald-300" />}
-          </div>
-          <span className={`text-[11px] leading-tight ${updateScope === 'selected' ? 'text-indigo-100' : 'text-indigo-700'}`}>
-            {selectedOccurrenceIds.size} de {seriesCount} marcadas
+            Todas las reservas pendientes ({seriesCount}). Las fechas pasadas no cambian.
           </span>
         </button>
       </div>
+
+      {/* Advanced Scopes */}
+      <details
+        open={updateScope === 'dateRange' || updateScope === 'selected' || undefined}
+        className="rounded-xl border border-indigo-200/80 bg-white/70 p-2.5"
+      >
+        <summary className="cursor-pointer select-none text-xs font-bold text-indigo-900">
+          Opciones avanzadas de selección (rango o fechas puntuales)
+        </summary>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2.5">
+          {/* 4. Rango de fechas */}
+          <button
+            type="button"
+            id="btn-scope-dateRange"
+            onClick={() => {
+              setUpdateScope('dateRange');
+              if (!rangeStartDate) setRangeStartDate(editingReservation.fecha);
+              if (!rangeEndDate) setRangeEndDate(seriesReservations[seriesReservations.length - 1]?.fecha || editingReservation.fecha);
+            }}
+            className={`flex flex-col items-start p-3 rounded-xl text-left transition cursor-pointer border ${
+              updateScope === 'dateRange'
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                : 'bg-white text-indigo-950 border-indigo-200 hover:bg-indigo-100/60'
+            }`}
+          >
+            <div className="flex items-center justify-between w-full mb-1">
+              <span className="text-xs font-bold flex items-center gap-1.5">
+                <CalendarRange className="w-3.5 h-3.5" />
+                Rango de fechas
+              </span>
+              {updateScope === 'dateRange' && <Check className="w-3.5 h-3.5 text-emerald-300" />}
+            </div>
+            <span className={`text-[11px] leading-tight ${updateScope === 'dateRange' ? 'text-indigo-100' : 'text-indigo-700'}`}>
+              Definir intervalo desde / hasta
+            </span>
+          </button>
+
+          {/* 5. Fechas seleccionadas */}
+          <button
+            type="button"
+            id="btn-scope-selected"
+            onClick={() => {
+              setUpdateScope('selected');
+              if (selectedOccurrenceIds.size === 0) {
+                setSelectedOccurrenceIds(new Set([editingReservation.id]));
+              }
+            }}
+            className={`flex flex-col items-start p-3 rounded-xl text-left transition cursor-pointer border ${
+              updateScope === 'selected'
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                : 'bg-white text-indigo-950 border-indigo-200 hover:bg-indigo-100/60'
+            }`}
+          >
+            <div className="flex items-center justify-between w-full mb-1">
+              <span className="text-xs font-bold flex items-center gap-1.5">
+                <ListFilter className="w-3.5 h-3.5" />
+                Fechas seleccionadas
+              </span>
+              {updateScope === 'selected' && <Check className="w-3.5 h-3.5 text-emerald-300" />}
+            </div>
+            <span className={`text-[11px] leading-tight ${updateScope === 'selected' ? 'text-indigo-100' : 'text-indigo-700'}`}>
+              {selectedOccurrenceIds.size} de {seriesCount} marcadas
+            </span>
+          </button>
+        </div>
+      </details>
 
       {/* Sub-panel: Date Range Configuration */}
       {updateScope === 'dateRange' && (
