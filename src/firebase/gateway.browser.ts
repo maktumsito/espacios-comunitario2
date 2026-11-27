@@ -213,6 +213,10 @@ function makeRef(firestore: any, path: string, kind: 'document' | 'query', const
     path,
     id,
     type: kind === 'document' ? 'document' : 'collection',
+    get parent() {
+      const parentPath = path.split('/').slice(0, -1).join('/');
+      return parentPath ? makeRef(firestore, parentPath, kind === 'document' ? 'query' : 'document') : null;
+    },
     __desc: { path, kind, ...(kind === 'query' ? { constraints } : {}) } as DataReference,
   };
 }

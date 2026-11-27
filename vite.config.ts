@@ -1,15 +1,35 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, type Plugin} from 'vite';
+
+// Resolve by the importing file as well as the specifier: sharedSnapshot and
+// authClient import their siblings as './gateway' and './config'. All browser
+// consumers must receive the same HTTP adapter and database descriptor.
+function browserFirebaseModules(): Plugin {
+  const directory = path.resolve(__dirname, 'src/firebase');
+  return {
+    name: 'browser-firebase-modules',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (!importer || !source.startsWith('.')) return null;
+      const resolved = path.resolve(path.dirname(importer.split('?')[0]), source);
+      for (const name of ['gateway', 'config']) {
+        const target = path.join(directory, name);
+        if (resolved === target || resolved === `${target}.ts`) {
+          return path.join(directory, `${name}.browser.ts`);
+        }
+      }
+      return null;
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [browserFirebaseModules(), react(), tailwindcss()],
     resolve: {
       alias: [
-        { find: /^(\.\.?\/)+firebase\/gateway$/, replacement: path.resolve(__dirname, 'src/firebase/gateway.browser.ts') },
-        { find: /^(\.\.?\/)+firebase\/config$/, replacement: path.resolve(__dirname, 'src/firebase/config.browser.ts') },
         { find: '@', replacement: path.resolve(__dirname, '.') },
       ],
     },
