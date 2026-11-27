@@ -80,10 +80,16 @@ export function sharedOnSnapshot(ref: Reference, next: (snapshot: any) => void, 
     disposed = true;
     current.subscribers.delete(subscriber);
     if (!current.subscribers.size) {
-      current.timer = setTimeout(() => {
+      if (current.failure) {
+        clearTimeout(current.timer);
         current.unsubscribe();
         entries.delete(current);
-      }, 1000);
+      } else {
+        current.timer = setTimeout(() => {
+          current.unsubscribe();
+          entries.delete(current);
+        }, 1000);
+      }
     }
   };
 }

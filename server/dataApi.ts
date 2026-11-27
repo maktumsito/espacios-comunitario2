@@ -323,6 +323,7 @@ export function registerDataApi(
 ) {
   registerInventoryApi(app, db, sessions);
   const VIEW_IDLE_TTL_MS = 300000;
+  const VIEW_READY_TIMEOUT_MS = 15000;
   const views = new Map<
     string,
     {
@@ -331,13 +332,18 @@ export function registerDataApi(
       lastUse: number;
       stop: () => void;
       ready: Promise<void>;
+      failReady?: (error: any) => void;
     }
   >();
+  const disposeView = (key: string, view: { stop: () => void; failReady?: (error: any) => void }, reason?: any) => {
+    views.delete(key);
+    try { view.stop(); } catch {}
+    if (reason) view.failReady?.(reason);
+  };
   const expireViews = setInterval(() => {
     for (const [key, view] of views)
       if (Date.now() - view.lastUse > VIEW_IDLE_TTL_MS) {
-        view.stop();
-        views.delete(key);
+        disposeView(key, view, new ApiFailure(503, "La vista expiró antes de recibir datos."));
       }
   }, 60000);
   expireViews.unref();
@@ -367,8 +373,7 @@ export function registerDataApi(
         });
       for (const [id, v] of views)
         if (Date.now() - v.lastUse > VIEW_IDLE_TTL_MS) {
-          v.stop();
-          views.delete(id);
+          disposeView(id, v, new ApiFailure(503, "La vista expiró antes de recibir datos."));
         }
       let view = views.get(key);
       if (!view) {
@@ -378,6 +383,7 @@ export function registerDataApi(
             "Hay demasiadas consultas activas. Cierra vistas y vuelve a intentar.",
           );
         let ready!: () => void, fail!: (error: any) => void;
+        let settled = false;
         const epoch = randomUUID();
         let sequence = 0;
         view = {
@@ -386,21 +392,43 @@ export function registerDataApi(
           lastUse: Date.now(),
           stop: () => {},
           ready: new Promise<void>((r, j) => {
-            ready = r;
-            fail = j;
+            ready = () => {
+              if (settled) return;
+              settled = true;
+              r();
+            };
+            fail = (err: any) => {
+              if (settled) return;
+              settled = true;
+              j(err);
+            };
           }),
+          failReady: (err: any) => fail(err),
         };
         const current = view;
+        const readyTimer = setTimeout(() => {
+          if (!settled) {
+            disposeView(
+              key,
+              current,
+              new ApiFailure(
+                503,
+                "El servidor de base de datos no respondió a tiempo. Intenta nuevamente en unos segundos.",
+              ),
+            );
+          }
+        }, VIEW_READY_TIMEOUT_MS);
+        readyTimer.unref?.();
         current.stop = ref.onSnapshot(
           (snapshot: any) => {
+            clearTimeout(readyTimer);
             current.docs = records(snapshot, body.path);
             current.version = `${epoch}:${++sequence}`;
             ready();
           },
           (error: any) => {
-            views.delete(key);
-            current.stop();
-            fail(error);
+            clearTimeout(readyTimer);
+            disposeView(key, current, error);
           },
         );
         views.set(key, current);
@@ -436,9 +464,21 @@ export function registerDataApi(
     }
     const results = await Promise.all(queries.map(async query => {
       try { return await readView(query, (req as any).user); }
-      catch (error) {
-        return { error: error instanceof ApiFailure ? error.message : 'No se pudo sincronizar esta vista. Conserva tus datos y vuelve a intentar.',
-          status: error instanceof ApiFailure ? error.status : 503, retryAfterMs: 60_000 };
+      catch (error: any) {
+        const rawMsg = String(error?.message || '');
+        const isCredError = /Could not load the default credentials|ENOTFOUND|Unable to detect a Project Id|credential/i.test(rawMsg);
+        return {
+          error: error instanceof ApiFailure
+            ? error.message
+            : isCredError
+              ? 'No se pudo conectar con Firestore desde el servidor (credenciales o red no disponibles).'
+              : 'No se pudo sincronizar esta vista. Conserva tus datos y vuelve a intentar.',
+          status: error instanceof ApiFailure ? error.status : 503,
+          code: error instanceof ApiFailure
+            ? (error.status === 429 ? 'resource-exhausted' : 'unavailable')
+            : (isCredError ? 'credentials-missing' : 'backend-unavailable'),
+          retryAfterMs: error instanceof ApiFailure && error.status === 429 ? 60_000 : 15_000,
+        };
       }
     }));
     const content = Buffer.from(JSON.stringify({ success: true, results }));

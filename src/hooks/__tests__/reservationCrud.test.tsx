@@ -59,7 +59,7 @@ it('merges four reservations in one atomic write and audits every original', asy
   expect(merged).toMatchObject({ id: target.id, horaInicio: '09:00', horaFin: '12:00', espacio: 'SALA 2 / SALA 3', cantidadParticipantes: 30, importante: 'Sí', requiereCartaCompromiso: true, equipamientoSolicitado: [expect.objectContaining({ quantity: 12 })] });
   expect(merged.descripcion).toContain('Preparación'); expect(merged.descripcion).toContain('Cierre');
   expect(merged.comentarios).toBe('Base | Montaje');
-  expect(mocks.save.mock.calls[0][1]).toEqual({ deletedIds: ['early', 'late', 'other-space'], requireAtomic: true, expectedVersions: { early: 3, late: 4, 'other-space': 5 } });
+  expect(mocks.save.mock.calls[0][1]).toEqual({ deletedIds: ['early', 'late', 'other-space'], requireAtomic: true, expectedVersions: { form: 2, early: 3, late: 4, 'other-space': 5 } });
   expect((p.setReservations as any).mock.calls[0][0](p.reservations)).toEqual([merged, unrelated]);
   expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ previousState: [target, early, late, otherSpace], newStateIsConfirmed: true }));
 });
@@ -424,4 +424,43 @@ it('rejects a scoped request by clearing only its owning reservation', async () 
   await act(async () => result.current.handleRejectDeleteRequest(requested));
   expect(mocks.series).not.toHaveBeenCalled();
   expect(mocks.save.mock.calls[0][0]).not.toHaveProperty('solicitudEliminacion');
+});
+
+it('fetches remote siblings when deleting a multi-space/series reservation and cleans up local drafts', async () => {
+  const spaceA = { ...row, id: 'dbl-a', serieRecurrente: 'DBL_123', version: 2 };
+  const spaceB = { ...row, id: 'dbl-b', espacio: 'SALA 3', serieRecurrente: 'DBL_123', version: 4 };
+  localStorage.setItem('ccd_reservation_draft_edit_dbl-a', JSON.stringify({ savedAt: Date.now() }));
+  localStorage.setItem('ccd_reservation_draft_edit_dbl-b', JSON.stringify({ savedAt: Date.now() }));
+  const p = props(); p.reservations = [spaceA];
+  mocks.series.mockResolvedValue([spaceA, spaceB]);
+  mocks.save.mockResolvedValue({ reservations: [], deletedIds: ['dbl-a', 'dbl-b'], confirmedIds: [], pendingIds: [] });
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => result.current.handleDelete('', true, 'DBL_123'));
+  expect(mocks.series).toHaveBeenCalledWith('DBL_123');
+  expect(mocks.save).toHaveBeenCalledWith([], expect.objectContaining({
+    deletedIds: ['dbl-a', 'dbl-b'],
+    expectedVersions: { 'dbl-a': 2, 'dbl-b': 4 },
+  }));
+  expect(localStorage.getItem('ccd_reservation_draft_edit_dbl-a')).toBeNull();
+  expect(localStorage.getItem('ccd_reservation_draft_edit_dbl-b')).toBeNull();
+});
+
+it('stores a single anchor delete request with scoped selection for series requests instead of duplicating across every document', async () => {
+  const a = { ...row, id: 'ser-1', serieRecurrente: 'SER_9', version: 1 };
+  const b = { ...row, id: 'ser-2', fecha: '2026-10-13', serieRecurrente: 'SER_9', version: 2 };
+  const p = props();
+  p.currentUser = { ...p.currentUser!, role: 'Personal', canDeleteReservations: false };
+  p.reservations = [a, b];
+  mocks.series.mockResolvedValue([a, b]);
+  mocks.save.mockImplementation(async (val: Reservation) => ({ reservations: [{ ...val, version: 2 }], deletedIds: [], confirmedIds: [val.id], pendingIds: [] }));
+  const { result } = renderHook(() => useReservationCrud(p));
+  await act(async () => result.current.handleSubmitDeleteRequest(a, 'Cambio de agenda', true, 'SER_9'));
+  expect(mocks.save).toHaveBeenCalledTimes(1);
+  const saved = mocks.save.mock.calls[0][0] as Reservation;
+  expect(saved.id).toBe('ser-1');
+  expect(saved.solicitudEliminacion).toMatchObject({
+    alcance: 'series',
+    serieId: 'SER_9',
+    seleccion: [{ id: 'ser-1', version: 2 }, { id: 'ser-2', version: 2 }],
+  });
 });

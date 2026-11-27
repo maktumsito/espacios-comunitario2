@@ -19,7 +19,9 @@ const baseSpace: SpaceInfo = {
   category: 'Salas',
   capacity: 25,
   color: '#2563eb',
-  enabled: true,
+  iconName: 'Building2',
+  description: 'Sala multiuso',
+  activo: true,
 };
 
 const sampleReservation: Reservation = {
@@ -34,6 +36,7 @@ const sampleReservation: Reservation = {
   rut: '12.345.678-9',
   domicilio: 'Av. Apoquindo 1234',
   tipoActividad: 'TALLER MUNICIPAL',
+  actividadRecurrente: 'No',
   unidadMunicipal: 'Dirección de Deportes',
   descripcion: 'Taller de Yoga Vecinal',
   estado: 'activa',
@@ -43,7 +46,7 @@ describe('UX, privacy, and role improvements', () => {
   it('shows optional municipal unit field with example for TALLER MUNICIPAL', () => {
     const setFormData = vi.fn();
     render(
-      <ReservationVisualsProvider>
+      <ReservationVisualsProvider activityTypes={[]} reservations={[sampleReservation]}>
         <ReservationStep1Activity
           isWizardMode
           formData={{ tipoActividad: 'TALLER MUNICIPAL', descripcion: 'Taller Municipal de Teatro' }}
@@ -86,10 +89,12 @@ describe('UX, privacy, and role improvements', () => {
       username: 'auxiliar1',
       name: 'Carlos Auxiliar',
       role: 'Auxiliar',
+      initials: 'CA',
+      avatarColor: '#2563eb',
     };
 
     render(
-      <ReservationVisualsProvider>
+      <ReservationVisualsProvider activityTypes={[]} reservations={[sampleReservation]}>
         <ReservationDetailModal
           reservation={sampleReservation}
           isOpen
@@ -121,7 +126,7 @@ describe('UX, privacy, and role improvements', () => {
     expect(container.querySelector('#btn-mobile-new-reservation')).toBeNull();
 
     render(
-      <ReservationVisualsProvider>
+      <ReservationVisualsProvider activityTypes={[]} reservations={[sampleReservation]}>
         <CalendarView
           reservations={[sampleReservation]}
           spaces={[baseSpace]}

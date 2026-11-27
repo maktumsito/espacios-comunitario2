@@ -16,6 +16,7 @@ function makeReservation(overrides: Partial<Reservation> = {}): Reservation {
     espacio: overrides.espacio || 'SALA 3',
     responsable: overrides.responsable || 'Vecino Ejemplo',
     tipoActividad: overrides.tipoActividad || 'CUMPLEAÑOS',
+    actividadRecurrente: overrides.actividadRecurrente || 'No',
     descripcion: overrides.descripcion || 'Cumpleaños Infantil',
     estado: overrides.estado || 'activa',
     ...overrides,

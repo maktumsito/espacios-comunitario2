@@ -129,3 +129,18 @@ it('reconciles cached reservation views in place when reservation write progress
   expect(request).toHaveBeenCalledTimes(1);
   stop();
 });
+
+it('immediately bypasses backoff cooldown when forceRetry is triggered by the user', async () => {
+  const p = setup();
+  p.request.mockRejectedValueOnce(Object.assign(new Error('Servicio no disponible'), { status: 503, retryAfterMs: 120_000 }));
+  await vi.advanceTimersByTimeAsync(25);
+  expect(p.error).toHaveBeenCalledTimes(7);
+  expect(p.request).toHaveBeenCalledTimes(1);
+
+  // Regular refresh still respects cooldown, but explicit forceRetry polls right away
+  p.poller.forceRetry();
+  await vi.advanceTimersByTimeAsync(10);
+  expect(p.request).toHaveBeenCalledTimes(2);
+  expect(p.next).toHaveBeenCalledTimes(7);
+  p.stop();
+});

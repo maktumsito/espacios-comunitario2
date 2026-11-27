@@ -9,12 +9,16 @@ import {
   loadHistoricalReservationsRange,
   compareReservationsByDate
 } from '../services/reservationService';
+import { retryDataViews } from '../firebase/gateway';
 import { triggerSonnerToast } from '../services/toastNotificationService';
 import type { ReservationDateRange } from '../utils/reservationReadScope';
 
 export interface UseReservationsStateReturn {
   isReadScopeReady: boolean;
   readError: boolean;
+  readErrorMessage: string | null;
+  readErrorCode: string | null;
+  isRetryingRead: boolean;
   retryRead: () => void;
   reservations: Reservation[];
   setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
@@ -45,8 +49,16 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
   const scopeKey = `${enabled}:${startDate ?? 'active'}:${endDate ?? ''}`;
   const [confirmedScope, setConfirmedScope] = useState<string | null>(null);
   const [readError, setReadError] = useState(false);
+  const [readErrorMessage, setReadErrorMessage] = useState<string | null>(null);
+  const [readErrorCode, setReadErrorCode] = useState<string | null>(null);
+  const [isRetryingRead, setIsRetryingRead] = useState(false);
   const [readAttempt, setReadAttempt] = useState(0);
-  const retryRead = useCallback(() => setReadAttempt(attempt => attempt + 1), []);
+  const retryRead = useCallback(() => {
+    setIsRetryingRead(true);
+    setReadError(false);
+    retryDataViews();
+    setReadAttempt(attempt => attempt + 1);
+  }, []);
   const [reservations, setReservations] = useState<Reservation[]>(() => getLocalCache());
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
   const [isFirebaseSyncing, setIsFirebaseSyncing] = useState(false);
@@ -106,6 +118,8 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
     }
     let isMounted = true;
     setReadError(false);
+    setReadErrorMessage(null);
+    setReadErrorCode(null);
     setConfirmedScope(null);
     const inRange = (r: Reservation) => !startDate || !endDate || (r.fecha >= startDate && r.fecha <= endDate);
 
@@ -136,7 +150,13 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
         setReservations(data);
         setIsInitialLoading(false);
         setIsFirebaseConnected(isLiveFromFirestore);
-        if (isLiveFromFirestore) { setConfirmedScope(scopeKey); setReadError(false); }
+        if (isLiveFromFirestore) {
+          setConfirmedScope(scopeKey);
+          setReadError(false);
+          setReadErrorMessage(null);
+          setReadErrorCode(null);
+          setIsRetryingRead(false);
+        }
         setIsFirebaseSyncing(!!isRevalidating);
         if (syncTime) {
           setLastSyncTime(syncTime);
@@ -150,10 +170,14 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
     const onError = (error: unknown) => {
         if (!isMounted) return;
         console.warn('Firebase sync notice:', error);
+        const errObj = error as { message?: string; code?: string; status?: number } | null;
         setIsInitialLoading(false);
         setIsFirebaseConnected(false);
         setIsFirebaseSyncing(false);
+        setIsRetryingRead(false);
         setReadError(true);
+        setReadErrorCode(typeof errObj?.code === 'string' ? errObj.code : null);
+        setReadErrorMessage(typeof errObj?.message === 'string' && errObj.message.trim() ? errObj.message.trim() : null);
       };
     const unsubscribe = startDate && endDate
       ? subscribeToReservationsByDateRange(startDate, endDate, onData, onError)
@@ -172,6 +196,9 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
   return {
     isReadScopeReady: enabled && confirmedScope === scopeKey,
     readError,
+    readErrorMessage,
+    readErrorCode,
+    isRetryingRead,
     retryRead,
     reservations,
     setReservations,

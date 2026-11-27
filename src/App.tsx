@@ -14,7 +14,7 @@ import { fetchReservationById } from './services/reservationService';
 import { queryReservationsBySeries } from './services/reservationService';
 import { getChileLocalDateString, parseDateToNoon } from './utils/dateUtils';
 import { computeRoomDayFreeSlots, filterEnabledSpaceReservations, getEnabledSpaces, hasEnabledSpace } from './utils/spaceAvailability';
-import { checkSingleConflict } from './utils/conflictDetector';
+import { checkSingleConflict, findMaintenanceBlockConflicts, formatBlockConflictMessage } from './utils/conflictDetector';
 import { canReplaceOccurrence, setReplacementActive } from './utils/reservationReplacement';
 import { useReplacementReminders } from './hooks/useReplacementReminders';
 import { getDueReplacementReminders } from './utils/replacementReminders';
@@ -277,10 +277,14 @@ export default function App() {
     isFirebaseSyncing, setIsFirebaseSyncing, lastSyncTime, setLastSyncTime,
     isInitialLoading, isHistoricalLoading,
     triggerSyncToast, loadHistoricalMonth,
-    isReadScopeReady, readError, retryRead,
+    isReadScopeReady, readError, readErrorMessage, readErrorCode, isRetryingRead, retryRead,
   } = useReservationsState({
     enabled: Boolean(currentUser), dateRange: reservationReadScope, allowMaintenance: canWrite,
   });
+  const [isReadErrorDismissed, setIsReadErrorDismissed] = useState(false);
+  useEffect(() => {
+    if (readError) setIsReadErrorDismissed(false);
+  }, [readError]);
   const generalDataPending = !canWrite && !reservationReadScope && !isReadScopeReady;
 
   // 4. Admin Configuration Hook
@@ -1169,15 +1173,72 @@ export default function App() {
 
       {/* Revalidation Banner for cloud synchronization feedback */}
       <RevalidationBanner isRevalidating={isFirebaseSyncing} />
-      {(generalDataPending || readError) && (
-        <div role="status" className="p-4 text-center text-slate-600">
-          {readError ? 'No se pudieron cargar las reservas. Comprueba tu conexión.' : 'Cargando reservas para esta vista...'}
-          {readError && <button type="button" onClick={retryRead} className="ml-3 text-blue-600 underline">Reintentar</button>}
-          {(isImportExportModalOpen || isGlobalPrintModalOpen || isGmailDispatchModalOpen) && (
-            <button type="button" className="ml-3 text-blue-600 underline" onClick={() => {
-              setIsImportExportModalOpen(false); setIsGlobalPrintModalOpen(false); setIsGmailDispatchModalOpen(false);
-            }}>Cancelar</button>
-          )}
+      {(generalDataPending || (readError && !isReadErrorDismissed)) && (
+        <div
+          role={readError ? 'alert' : 'status'}
+          className={`mx-auto w-full max-w-[1680px] px-3 sm:px-6 pt-2`}
+        >
+          <div
+            className={`flex flex-wrap items-center justify-between gap-2.5 rounded-xl border px-3.5 py-2.5 text-xs sm:text-sm shadow-sm ${
+              readError
+                ? 'bg-amber-50/95 border-amber-200/90 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800/70 dark:text-amber-200'
+                : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800/70 dark:border-slate-700 dark:text-slate-300'
+            }`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-medium leading-snug">
+                {readError
+                  ? !isOnline
+                    ? 'Sin conexión a Internet. Comprueba tu red para actualizar las reservas.'
+                    : readErrorCode === 'credentials-missing' || readErrorCode === 'backend-unavailable'
+                      ? (readErrorMessage || 'No se pudo conectar con el servidor de reservas en este momento.')
+                      : 'No se pudieron actualizar las reservas desde el servidor. Comprueba tu conexión.'
+                  : 'Cargando reservas para esta vista...'}
+              </span>
+              {readError && reservations.length > 0 && (
+                <span className="hidden md:inline-flex items-center rounded-full bg-amber-100/90 dark:bg-amber-900/60 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-200 shrink-0">
+                  Mostrando caché local ({reservations.length})
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {readError && (
+                <button
+                  type="button"
+                  disabled={isRetryingRead}
+                  onClick={() => {
+                    setIsReadErrorDismissed(false);
+                    retryRead();
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-60 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+                >
+                  {isRetryingRead ? 'Reintentando...' : 'Reintentar'}
+                </button>
+              )}
+              {readError && reservations.length > 0 && !generalDataPending && (
+                <button
+                  type="button"
+                  onClick={() => setIsReadErrorDismissed(true)}
+                  className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/50 transition-colors"
+                >
+                  Ocultar
+                </button>
+              )}
+              {(isImportExportModalOpen || isGlobalPrintModalOpen || isGmailDispatchModalOpen) && (
+                <button
+                  type="button"
+                  className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-900/40 underline transition-colors"
+                  onClick={() => {
+                    setIsImportExportModalOpen(false);
+                    setIsGlobalPrintModalOpen(false);
+                    setIsGmailDispatchModalOpen(false);
+                  }}
+                >
+                  Cancelar
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1336,19 +1397,28 @@ export default function App() {
               <button
                 type="button"
                 id="btn-app-resume-draft"
-                onClick={() => {
+                onClick={async () => {
                   if (activeDraft.isEditing && activeDraft.targetId) {
                     if (!userCanEditReservations(currentUser)) {
                       triggerSyncToast('Permiso denegado: No tienes autorización para editar reservas (gestión controlada por Cristian Shute).', 'error');
                       return;
                     }
-                    const target = reservations.find((r) => r.id === activeDraft.targetId);
+                    let target: Reservation | null = reservations.find((r) => r.id === activeDraft.targetId) || null;
+                    if (!target) {
+                      try {
+                        target = await fetchReservationById(activeDraft.targetId);
+                      } catch {
+                        target = null;
+                      }
+                    }
                     if (target) {
-                      setEditingReservation(target);
-                      setIsDuplicating(false);
-                      setIsReservationModalOpen(true);
+                      void prepareReservationEditor(target);
                       return;
                     }
+                    removeStoredDraft(activeDraft.key);
+                    setActiveDraft(null);
+                    triggerSyncToast('La reserva asociada a este borrador ya fue eliminada.', 'info');
+                    return;
                   }
                   if (!userCanCreateReservations(currentUser)) {
                     triggerSyncToast('Permiso denegado: No tienes autorización para registrar nuevas reservas (gestión controlada por Cristian Shute).', 'error');
@@ -2082,17 +2152,44 @@ export default function App() {
             onUpdateReservation={async (updated) => {
               if (!userCanEditReservations(currentUser)) {
                 triggerSyncToast('Permiso denegado: No tienes autorización para modificar reservas (gestión controlada por Cristian Shute).', 'error');
-                return;
+                return false;
               }
               try {
+                const previous = reservations.find((r) => r.id === updated.id) || selectedReservation;
+                const isReactivating = previous?.estado === 'cancelada' && (updated.estado || 'activa') === 'activa';
+                if (isReactivating) {
+                  const slotConflicts = checkSingleConflict(updated, reservations, [updated.id]);
+                  if (slotConflicts.length > 0) {
+                    triggerSyncToast(
+                      `No se puede reactivar: horario ocupado por "${slotConflicts[0].tipoActividad}" (${slotConflicts[0].horaInicio}–${slotConflicts[0].horaFin}).`,
+                      'error',
+                    );
+                    return false;
+                  }
+                  const blockConflicts = findMaintenanceBlockConflicts([updated], spaceBlocks);
+                  if (blockConflicts.length > 0) {
+                    triggerSyncToast(formatBlockConflictMessage(blockConflicts[0]), 'error');
+                    return false;
+                  }
+                }
                 const result = await saveReservation(updated);
                 const confirmed = result.reservations[0];
                 setReservations((prev) =>
                   prev.map((r) => (r.id === confirmed.id ? confirmed : r)).sort(compareReservationsByDate)
                 );
                 setSelectedReservation(confirmed);
+                if (previous?.estado !== confirmed.estado) {
+                  triggerSyncToast(
+                    confirmed.estado === 'cancelada'
+                      ? 'Reserva cancelada y horario liberado.'
+                      : 'Reserva reactivada correctamente.',
+                    'success',
+                  );
+                }
+                return true;
               } catch (error: any) {
                 triggerSyncToast(error.message || 'No se pudo actualizar la reserva.', 'error');
+                return false;
               }
             }}
             onEdit={(r) => { requireAuth(() => void prepareReservationEditor(r), 'editar esta reserva'); }}
@@ -2117,13 +2214,10 @@ export default function App() {
                 triggerSyncToast('Permiso denegado: No tienes autorización para modificar reservas (gestión controlada por Cristian Shute).', 'error');
                 return;
               }
-              requireAuth(() => {
-                handleQuickToggleRealizada(reserva);
-                if (selectedReservation && selectedReservation.id === reserva.id) {
-                  setSelectedReservation({
-                    ...selectedReservation,
-                    realizada: selectedReservation.realizada === 'Sí' ? 'No' : 'Sí'
-                  });
+              requireAuth(async () => {
+                const confirmed = await handleQuickToggleRealizada(reserva);
+                if (confirmed && selectedReservation && selectedReservation.id === confirmed.id) {
+                  setSelectedReservation(confirmed);
                 }
               }, 'actualizar asistencia de reserva');
             }}

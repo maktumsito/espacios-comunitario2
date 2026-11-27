@@ -71,7 +71,7 @@ interface ReservationDetailModalProps {
   onRequestDelete?: (reserva: Reservation) => void;
   onToggleRealizada?: (reserva: Reservation) => void;
   onOpenCheckIn?: (reserva: Reservation) => void;
-  onUpdateReservation?: (updated: Reservation) => void;
+  onUpdateReservation?: (updated: Reservation) => void | boolean | Promise<void | boolean>;
   onMergeReservations?: (targetReservationId: string, sourceReservationIds: string[]) => Promise<boolean | void> | boolean | void;
   existingRating?: SpaceRating | null;
   onOpenRatingModal?: (reserva: Reservation, rating?: SpaceRating) => void;
@@ -197,13 +197,13 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         message: `La actividad ${scheduleSummary} volverá a figurar como confirmada y ocupará su horario en la agenda.`,
         confirmLabel: 'Reactivar reserva',
         variant: 'primary',
-        onConfirm: () => {
-          onUpdateReservation?.({
+        onConfirm: async () => {
+          const result = await onUpdateReservation?.({
             ...reservation,
             estado: 'activa'
           });
           closeConfirm();
-          onClose();
+          if (result !== false) onClose();
         }
       });
     } else {
@@ -212,13 +212,13 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         message: `La actividad ${scheduleSummary} se marcará como cancelada en el historial y su horario quedará liberado de inmediato para nuevas reservas.`,
         confirmLabel: 'Cancelar esta reserva',
         variant: 'warning',
-        onConfirm: () => {
-          onUpdateReservation?.({
+        onConfirm: async () => {
+          const result = await onUpdateReservation?.({
             ...reservation,
             estado: 'cancelada'
           });
           closeConfirm();
-          onClose();
+          if (result !== false) onClose();
         }
       });
     }

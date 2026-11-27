@@ -1,4 +1,5 @@
 import { selectReservationsToDelete } from '../utils/reservationDeletion';
+import { getDraftStorageKey, removeStoredDraft } from './useReservationAutosave';
 import type { DeleteScope } from '../types';
 import { useCallback, useRef } from 'react';
 import { addWeeks, format, parseISO } from 'date-fns';
@@ -103,7 +104,7 @@ export interface UseReservationCrudReturn {
   handleAuthorizeDelete: (reservation: Reservation) => Promise<void>;
   handleRejectDeleteRequest: (reservation: Reservation) => Promise<void>;
   handleClearParticipants: (reserva: Reservation) => Promise<void>;
-  handleQuickToggleRealizada: (reserva: Reservation) => Promise<void>;
+  handleQuickToggleRealizada: (reserva: Reservation) => Promise<Reservation | null>;
   handleSyncAllToFirebase: () => Promise<any>;
   handleImportReservations: (importedList: Reservation[]) => Promise<void>;
   handleDeleteAllHolidays: () => Promise<{ deletedCount: number }>;
@@ -183,9 +184,13 @@ export function useReservationCrud({
     }
 
     const selected=selection||reservations.map(r=>selectedReservation?.id===r.id?selectedReservation:r);
-    const mergedPool = selection || [...new Map([...getLocalCache(), ...selected].map(r => [r.id, r])).values()];
+    let remoteSeriesRows: Reservation[] = [];
+    if (isSeries && seriesId) {
+      remoteSeriesRows = (await queryReservationsBySeries(seriesId).catch(() => [])) || [];
+    }
+    const mergedPool = [...new Map([...getLocalCache(), ...selected, ...remoteSeriesRows].map(r => [r.id, r])).values()];
     const targets = isSeries && seriesId
-      ? mergedPool.filter(r=>r.serieRecurrente===seriesId || r.recurrenteId===seriesId)
+      ? mergedPool.filter(r=>(r.serieRecurrente===seriesId || r.recurrenteId===seriesId) && r.estado !== 'eliminada')
       : mergedPool.filter(r=>r.id===id);
     const deleteIds = targets.length ? targets.map(r=>r.id) : [id];
     const expectedVersions = targets.length
@@ -193,11 +198,14 @@ export function useReservationCrud({
       : { [id]: mergedPool.find(r=>r.id===id)?.version || 0 };
     try {
       applyConfirmed(await commitReservationChanges([], { deletedIds: deleteIds, expectedVersions }));
+      deleteIds.forEach(delId => removeStoredDraft(getDraftStorageKey({ id: delId } as Reservation, false)));
+      setIsReservationModalOpen(false);
+      setEditingReservation(null);
       if (selectedReservation && deleteIds.includes(selectedReservation.id)) { setIsDetailModalOpen(false); setSelectedReservation(null); }
       triggerSyncToast('Eliminación confirmada.', 'success');
       void safeAudit({ action: isSeries ? 'DELETE_SERIES' : 'DELETE', description: `Eliminadas ${deleteIds.length} reservas`, reservaId: seriesId || id, user: currentUser, previousState: isSeries ? targets : targets[0] });
     } catch (err: any) { triggerSyncToast(err?.message || 'No se pudo eliminar.', 'error'); throw err; }
-  }, [currentUser, reservations, selectedReservation, setReservations, setIsDetailModalOpen, setSelectedReservation, triggerSyncToast, handleRequestDelete]);
+  }, [currentUser, reservations, selectedReservation, setReservations, setIsDetailModalOpen, setSelectedReservation, setIsReservationModalOpen, setEditingReservation, triggerSyncToast, handleRequestDelete]);
 
   const handleDeleteDay = useCallback(async (fecha: string, selection: readonly Reservation[]) => {
     if (!userCanDeleteReservations(currentUser)) {
@@ -242,6 +250,7 @@ export function useReservationCrud({
         : message);
     } finally {
       if (confirmedIds.length) {
+        confirmedIds.forEach(delId => removeStoredDraft(getDraftStorageKey({ id: delId } as Reservation, false)));
         void safeAudit({ action: 'DELETE', description: `Eliminación masiva del día ${fecha}: ${confirmedIds.length} reservas`,
           reservaId: `DAY_${fecha}`, reservaFecha: fecha, user: currentUser, previousState: targets.filter(row => confirmedIds.includes(row.id)) });
       }
@@ -291,22 +300,30 @@ export function useReservationCrud({
       }
 
       if (isSeries && seriesId) {
-        const remoteSeries = await queryReservationsBySeries(seriesId);
+        const remoteSeries = (await queryReservationsBySeries(seriesId).catch(() => [])) || [];
         const toUpdate = [...new Map([...getLocalCache(), ...reservations, ...remoteSeries].map(r => [r.id, r])).values()].filter(
           (r) => (r.serieRecurrente === seriesId || r.recurrenteId === seriesId) && r.estado !== 'eliminada'
         );
-        const requestedRows = reviewedSelection || toUpdate;
-        const updatedList = requestedRows.map((r) => ({
-          ...r,
-          solicitudEliminacion: solicitudInfo
-        }));
-
-        const confirmedWrite = await saveReservationsBatch(updatedList);
+        const requestedRows = reviewedSelection || (toUpdate.length ? toUpdate : [reservation]);
+        const anchorRow = requestedRows.find(r => r.id === reservation.id) || reservation;
+        const scopedRequest = {
+          ...solicitudInfo,
+          alcance: 'series' as const,
+          serieId: seriesId,
+          seleccion: requestedRows.map(row => ({
+            id: row.id,
+            version: (row.version || 0) + (row.id === anchorRow.id ? 1 : 0)
+          }))
+        };
+        const confirmedWrite = await saveReservation({
+          ...anchorRow,
+          solicitudEliminacion: scopedRequest
+        });
         applyConfirmed(confirmedWrite);
 
         void safeAudit({
           action: 'REQUEST_DELETE',
-          description: `Solicitud de eliminación de serie enviada por ${currentUser?.name || currentUser?.username} (${toUpdate.length} reservas) - En espera de autorización. Motivo: ${motivo || 'No especificado'}`,
+          description: `Solicitud de eliminación de serie enviada por ${currentUser?.name || currentUser?.username} (${requestedRows.length} reservas) - En espera de autorización. Motivo: ${motivo || 'No especificado'}`,
           reservaId: seriesId,
           user: currentUser,
           reservaTitle: reservation.tipoActividad,
@@ -314,7 +331,7 @@ export function useReservationCrud({
           reservaEspacio: reservation.espacio,
           reservaHorario: `${reservation.horaInicio} - ${reservation.horaFin}`,
           reservaResponsable: reservation.responsable,
-          previousState: toUpdate,
+          previousState: anchorRow,
           newState: confirmedWrite.reservations,
           newStateIsConfirmed: true
         });
@@ -386,6 +403,9 @@ export function useReservationCrud({
         if (err instanceof ReservationWriteError) applyDeletion(err.result);
         throw err;
       }
+      selection.forEach(row => removeStoredDraft(getDraftStorageKey({ id: row.id } as Reservation, false)));
+      setIsReservationModalOpen(false);
+      setEditingReservation(null);
       if (selectedReservation && selection.some(row => row.id === selectedReservation.id)) {
         setIsDetailModalOpen(false);
         setSelectedReservation(null);
@@ -427,6 +447,7 @@ export function useReservationCrud({
         if (err instanceof ReservationWriteError) applyConfirmed(err.result);
         throw err;
       }
+      targets.forEach(row => removeStoredDraft(getDraftStorageKey({ id: row.id } as Reservation, false)));
       void safeAudit({ action: 'AUTHORIZE_DELETE', description: `Autorizada eliminación ${request.alcance}: ${targets.length} reservas`,
         reservaId: reservation.id, user: currentUser, previousState: targets });
       if (selectedReservation && targets.some(row => row.id === selectedReservation.id)) {
@@ -448,6 +469,7 @@ export function useReservationCrud({
         );
 
         await deleteSeriesByRecurrenteId(seriesId,toDelete.map(r=>r.id),Object.fromEntries(toDelete.map(r=>[r.id,r.id===reservation.id?reservation.version||0:r.version||0])));
+        toDelete.forEach(row => removeStoredDraft(getDraftStorageKey({ id: row.id } as Reservation, false)));
         void safeAudit({
           action: 'AUTHORIZE_DELETE',
           description: `Autorizada eliminación de serie recurrente (${toDelete.length} reservas) solicitada por ${reservation.solicitudEliminacion?.solicitadoPorNombre || 'Personal'}`,
@@ -464,9 +486,11 @@ export function useReservationCrud({
         setReservations((prev) =>
           prev.filter((r) => r.serieRecurrente !== seriesId && r.recurrenteId !== seriesId)
         );
+        triggerSyncToast(`Eliminadas ${toDelete.length} reservas autorizadas.`, 'success');
 
       } else {
         await deleteReservationById(reservation.id,reservation.version||0);
+        removeStoredDraft(getDraftStorageKey({ id: reservation.id } as Reservation, false));
         void safeAudit({
           action: 'AUTHORIZE_DELETE',
           description: `Autorizada y confirmada eliminación definitiva de reserva '${reservation.tipoActividad}' (${reservation.fecha}, ${reservation.espacio}) solicitada por ${reservation.solicitudEliminacion?.solicitadoPorNombre || 'Personal'}`,
@@ -481,6 +505,7 @@ export function useReservationCrud({
         });
 
         setReservations((prev) => prev.filter((r) => r.id !== reservation.id));
+        triggerSyncToast('Eliminación autorizada y confirmada.', 'success');
       }
 
       if (selectedReservation?.id === reservation.id) {
@@ -490,6 +515,7 @@ export function useReservationCrud({
     } catch (err) {
       console.error('Error authorizing delete:', err);
       triggerSyncToast('Ocurrió un error al autorizar la eliminación.', 'error');
+      throw err;
     }
   }, [currentUser, reservations, selectedReservation, setReservations, setIsDetailModalOpen, setSelectedReservation, triggerSyncToast]);
 
@@ -560,9 +586,11 @@ export function useReservationCrud({
         delete copy.solicitudEliminacion;
         setSelectedReservation(copy);
       }
+      triggerSyncToast('Solicitud de eliminación rechazada. La reserva permanece activa.', 'info');
     } catch (err) {
       console.error('Error rejecting delete request:', err);
       triggerSyncToast('Ocurrió un error al procesar la solicitud.', 'error');
+      throw err;
     }
   }, [currentUser, reservations, selectedReservation, setReservations, setSelectedReservation, triggerSyncToast]);
 
@@ -597,10 +625,10 @@ export function useReservationCrud({
     } catch (err: any) { triggerSyncToast(err?.message || 'No se pudo guardar el cambio.', 'error'); }
   }, [currentUser, setReservations, triggerSyncToast]);
 
-  const handleQuickToggleRealizada = useCallback(async (reserva: Reservation) => {
+  const handleQuickToggleRealizada = useCallback(async (reserva: Reservation): Promise<Reservation | null> => {
     if (!userCanEditReservations(currentUser)) {
       triggerSyncToast('Permiso denegado: No tienes autorización para modificar reservas (gestión controlada por Cristian Shute).', 'error');
-      return;
+      return null;
     }
     const nextVal = reserva.realizada === 'Sí' ? 'No' : 'Sí';
     const updated: Reservation = {
@@ -626,7 +654,11 @@ export function useReservationCrud({
           newState: confirmedWrite.reservations,
           newStateIsConfirmed: true
         });
-    } catch (err: any) { triggerSyncToast(err?.message || 'No se pudo guardar el cambio.', 'error'); }
+      return confirmedWrite.reservations[0] || null;
+    } catch (err: any) {
+      triggerSyncToast(err?.message || 'No se pudo guardar el cambio.', 'error');
+      return null;
+    }
   }, [currentUser, setReservations, triggerSyncToast]);
 
   const handleSyncAllToFirebase = useCallback(async () => {
@@ -1575,7 +1607,7 @@ export function useReservationCrud({
       const confirmedWrite = await commitReservationChanges([mergedReserva], {
         deletedIds: sourceIds,
         requireAtomic: true,
-        expectedVersions: Object.fromEntries(selectedSources.map(r => [r.id, r.version || 0]))
+        expectedVersions: Object.fromEntries([target, ...selectedSources].map(r => [r.id, r.version || 0]))
       });
       applyConfirmed(confirmedWrite);
       triggerSyncToast(`${selectedSources.length + 1} reservas unificadas y confirmadas.`, 'success');

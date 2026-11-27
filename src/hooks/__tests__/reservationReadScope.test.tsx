@@ -4,8 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useReservationsState } from '../useReservationsState';
 import type { Reservation } from '../../types';
 
-const mock = vi.hoisted(() => ({ full: vi.fn(), range: vi.fn(), stops: [] as ReturnType<typeof vi.fn>[],
+const mock = vi.hoisted(() => ({ full: vi.fn(), range: vi.fn(), retryDataViews: vi.fn(), stops: [] as ReturnType<typeof vi.fn>[],
   listeners: [] as { next: (...args: any[]) => void; error: (error: unknown) => void }[], migration: vi.fn() }));
+vi.mock('../../firebase/gateway', () => ({ retryDataViews: mock.retryDataViews }));
 vi.mock('../../services/reservationService', () => ({
   subscribeToReservations: mock.full, subscribeToReservationsByDateRange: mock.range,
   getLocalCache: () => [], getLastSyncTime: () => null,
@@ -60,9 +61,12 @@ it('waits for confirmation after expanding to the editor/general subscription an
   act(() => mock.listeners[1].error(new Error('offline')));
   expect(result.current.readError).toBe(true);
   act(() => result.current.retryRead());
+  expect(mock.retryDataViews).toHaveBeenCalledOnce();
+  expect(result.current.isRetryingRead).toBe(true);
   expect(mock.full).toHaveBeenCalledTimes(2); expect(result.current.readError).toBe(false);
   act(() => mock.listeners[2].next([], true, false));
   expect(result.current.isReadScopeReady).toBe(true);
+  expect(result.current.isRetryingRead).toBe(false);
 });
 
 it('keeps local write events inside the reader scope and removes reservations moved out of it', () => {

@@ -34,6 +34,8 @@ import { Reservation, SpaceInfo, ActivityTypeItem } from '../types';
 import { getEnabledSpaces } from '../utils/spaceAvailability';
 import { formatDateDDMMYYYY } from '../utils/dateUtils';
 import { detectBatchConflicts } from '../utils/conflictDetector';
+import { filterOutChileanHolidays } from '../utils/holidayUtils';
+import { queryReservationsBySeries } from '../services/reservationService';
 import { usePagination } from '../hooks/usePagination';
 import { PaginationControls } from './common/PaginationControls';
 import { ConfirmationModal } from './common/ConfirmationModal';
@@ -447,8 +449,8 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
     }
 
     if (newEndDate > curEnd) {
-      // Extending: generate candidate dates between curEnd and newEndDate
-      const newDates: string[] = [];
+      // Extending: generate candidate dates between curEnd and newEndDate (excluding Chilean holidays)
+      const rawNewDates: string[] = [];
       const curDateSet = new Set(curList.map((r) => r.fecha));
 
       try {
@@ -460,7 +462,7 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
           if (diasSemana.includes(dayNum)) {
             const dateStr = format(runner, 'yyyy-MM-dd');
             if (!curDateSet.has(dateStr)) {
-              newDates.push(dateStr);
+              rawNewDates.push(dateStr);
             }
           }
           runner = addDays(runner, 1);
@@ -468,6 +470,8 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
       } catch (err) {
         console.error('Error generating preview extension:', err);
       }
+
+      const { validDates: newDates } = filterOutChileanHolidays(rawNewDates);
 
       // Check conflicts for new candidate dates
       const candidateSlots = newDates.map((d) => ({
@@ -529,8 +533,24 @@ export const AdminRecurringView: React.FC<AdminRecurringViewProps> = ({
     setModifySuccess(null);
 
     try {
-      const { reservations: curList, horaInicio, horaFin, espacio } = modifyingSeries;
-      const firstRes = curList[0];
+      const { reservations: localList, horaInicio, horaFin, espacio, seriesId } = modifyingSeries;
+      let curList = localList;
+      try {
+        const remoteSeries = await queryReservationsBySeries(seriesId);
+        if (remoteSeries.length > 0) {
+          const mergedById = new Map<string, Reservation>();
+          localList.forEach(r => mergedById.set(r.id, r));
+          remoteSeries.forEach(r => {
+            if (!['cancelada', 'eliminada', 'rechazada'].includes(r.estado || '')) {
+              mergedById.set(r.id, r);
+            }
+          });
+          curList = [...mergedById.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
+        }
+      } catch {
+        // Fallback to local list if offline
+      }
+      const firstRes = curList[0] || localList[0];
 
       // Build explicit slots list from fechaInicio to newEndDate
       const allSlots: Array<{ fecha: string; horaInicio: string; horaFin: string; espacio: string }> = [];

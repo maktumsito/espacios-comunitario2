@@ -21,8 +21,8 @@ interface DeleteConfirmationModalProps {
   isOpen: boolean;
   reservation: Reservation | null;
   onClose: () => void;
-  onConfirmDeleteSingle: (id: string) => void;
-  onConfirmDeleteSeries: (seriesId: string) => void;
+  onConfirmDeleteSingle: (id: string) => void | Promise<void>;
+  onConfirmDeleteSeries: (seriesId: string) => void | Promise<void>;
   onConfirmDeleteScope?: ScopedDeleteProps['onConfirm'];
   onClearParticipants?: (reservation: Reservation) => void;
   currentUser?: AuthUser | null;
@@ -31,7 +31,7 @@ interface DeleteConfirmationModalProps {
     motivo?: string,
     isSeries?: boolean,
     seriesId?: string
-  ) => void;
+  ) => void | Promise<void>;
   onAuthorizeDelete?: (reservation: Reservation) => void | Promise<void>;
   onRejectDeleteRequest?: (reservation: Reservation) => void | Promise<void>;
 }
@@ -95,8 +95,9 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
   // Handle Non-Admin Submission
   const handleSendRequest = (isSeries: boolean) => {
     if (onSubmitDeleteRequest) {
-      onSubmitDeleteRequest(reservation, motivo, isSeries, isSeries ? seriesId : undefined);
-      onClose();
+      void runPendingAction(() =>
+        onSubmitDeleteRequest(reservation, motivo, isSeries, isSeries ? seriesId : undefined),
+      );
     }
   };
 
@@ -124,8 +125,9 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
     <button
       id="btn-confirm-delete-cancel"
       type="button"
+      disabled={actionBusy}
       onClick={onClose}
-      className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
+      className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-50 border border-slate-200 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
     >
       Cancelar
     </button>
@@ -235,12 +237,16 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
               />
             </div>
 
+            {actionError && <p role="alert" className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{actionError}</p>}
+            {actionBusy && <p role="status" className="text-xs font-medium text-slate-600">Enviando solicitud…</p>}
+
             {hasMultipleSlots ? (
               <div className="space-y-2.5">
                 <button
                   type="button"
+                  disabled={actionBusy}
                   onClick={() => handleSendRequest(false)}
-                  className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-amber-50/70 border border-amber-300 hover:border-amber-400 transition shadow-2xs group flex items-start space-x-3 cursor-pointer"
+                  className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-amber-50/70 disabled:opacity-50 border border-amber-300 hover:border-amber-400 transition shadow-2xs group flex items-start space-x-3 cursor-pointer"
                 >
                   <div className="p-2 rounded-xl bg-amber-100 text-amber-800 group-hover:bg-amber-600 group-hover:text-white transition shrink-0 mt-0.5">
                     <Send className="w-4 h-4" />
@@ -259,8 +265,9 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
 
                 <button
                   type="button"
+                  disabled={actionBusy}
                   onClick={() => handleSendRequest(true)}
-                  className="w-full text-left p-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white transition shadow-sm group flex items-start space-x-3 cursor-pointer"
+                  className="w-full text-left p-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white transition shadow-sm group flex items-start space-x-3 cursor-pointer"
                 >
                   <div className="p-2 rounded-xl bg-white/20 text-white shrink-0 mt-0.5">
                     <Repeat className="w-4 h-4" />
@@ -280,11 +287,12 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
             ) : (
               <button
                 type="button"
+                disabled={actionBusy}
                 onClick={() => handleSendRequest(false)}
-                className="w-full p-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition flex items-center justify-center space-x-2 cursor-pointer"
+                className="w-full p-3 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-xs shadow-xs transition flex items-center justify-center space-x-2 cursor-pointer"
               >
                 <Send className="w-4 h-4" />
-                <span>Enviar Solicitud de Eliminación (Quedará en Espera)</span>
+                <span>{actionBusy ? 'Enviando solicitud…' : 'Enviar Solicitud de Eliminación (Quedará en Espera)'}</span>
               </button>
             )}
           </div>
@@ -341,6 +349,8 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
               </div>
             ) : hasMultipleSlots ? (
               <div className="space-y-3">
+                {actionError && <p role="alert" className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{actionError}</p>}
+                {actionBusy && <p role="status" className="text-xs font-medium text-slate-600">Eliminando…</p>}
                 <p className="text-xs text-slate-700 font-medium leading-relaxed">
                   {isMultiSpace ? (
                     <>¿Deseas eliminar <strong>únicamente este espacio ({formatDisplayTitle(reservation.espacio)})</strong> o <strong>ambos espacios reservados</strong> para esta fecha?</>
@@ -353,11 +363,9 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
                   <button
                     id="btn-confirm-delete-single"
                     type="button"
-                    onClick={() => {
-                      onConfirmDeleteSingle(reservation.id);
-                      onClose();
-                    }}
-                    className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-rose-50/60 border border-rose-200 hover:border-rose-300 transition shadow-2xs group flex items-start space-x-3 cursor-pointer"
+                    disabled={actionBusy}
+                    onClick={() => void runPendingAction(() => onConfirmDeleteSingle(reservation.id))}
+                    className="w-full text-left p-3.5 rounded-2xl bg-white hover:bg-rose-50/60 disabled:opacity-50 border border-rose-200 hover:border-rose-300 transition shadow-2xs group flex items-start space-x-3 cursor-pointer"
                   >
                     <div className="p-2 rounded-xl bg-rose-100 text-rose-700 group-hover:bg-rose-600 group-hover:text-white transition shrink-0 mt-0.5">
                       <Trash2 className="w-4 h-4" />
@@ -379,11 +387,9 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
                   <button
                     id="btn-confirm-delete-series"
                     type="button"
-                    onClick={() => {
-                      onConfirmDeleteSeries(seriesId);
-                      onClose();
-                    }}
-                    className="w-full text-left p-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white transition shadow-sm group flex items-start space-x-3 cursor-pointer"
+                    disabled={actionBusy}
+                    onClick={() => void runPendingAction(() => onConfirmDeleteSeries(seriesId))}
+                    className="w-full text-left p-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white transition shadow-sm group flex items-start space-x-3 cursor-pointer"
                   >
                     <div className="p-2 rounded-xl bg-white/20 text-white shrink-0 mt-0.5">
                       <Repeat className="w-4 h-4" />
@@ -403,6 +409,8 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
               </div>
             ) : (
               <div className="space-y-3">
+                {actionError && <p role="alert" className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{actionError}</p>}
+                {actionBusy && <p role="status" className="text-xs font-medium text-slate-600">Eliminando…</p>}
                 <p className="text-xs text-slate-700 font-medium leading-relaxed">
                   ¿Estás seguro de que deseas eliminar permanentemente esta reserva del calendario?
                 </p>
@@ -411,14 +419,12 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
                   <button
                     id="btn-confirm-delete-single-direct"
                     type="button"
-                    onClick={() => {
-                      onConfirmDeleteSingle(reservation.id);
-                      onClose();
-                    }}
-                    className="w-full p-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition flex items-center justify-center space-x-2 cursor-pointer"
+                    disabled={actionBusy}
+                    onClick={() => void runPendingAction(() => onConfirmDeleteSingle(reservation.id))}
+                    className="w-full p-3 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs shadow-xs transition flex items-center justify-center space-x-2 cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
-                    <span>Eliminar Reserva</span>
+                    <span>{actionBusy ? 'Eliminando…' : 'Eliminar Reserva'}</span>
                   </button>
                 </div>
               </div>

@@ -168,6 +168,24 @@ export class DataViewPoller {
     this.schedule(50);
   }
 
+  /** Resets backoff cooldowns and triggers an immediate poll (e.g. user clicked "Reintentar" or browser came back online). */
+  forceRetry() {
+    clearTimeout(this.timer);
+    if (this.controller) {
+      this.generation++;
+      this.controller.abort();
+      this.controller = undefined;
+    }
+    this.retryAt = 0;
+    this.failures = 0;
+    for (const entry of this.entries.values()) {
+      entry.blocked = false;
+      entry.retryAt = 0;
+    }
+    this.dirty = true;
+    this.schedule(0);
+  }
+
   private schedule(delay: number) {
     clearTimeout(this.timer);
     if (!this.entries.size || !this.token() || !this.visible() || this.controller || this.retryAt === Infinity) return;

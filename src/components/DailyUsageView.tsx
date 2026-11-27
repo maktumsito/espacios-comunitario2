@@ -1916,12 +1916,10 @@ const DailyUsageViewComponent: React.FC<DailyUsageViewProps> = ({
                                     <button
                                       type="button"
                                       aria-label="Eliminar reserva"
-                                      title={res.actividadRecurrente === 'Sí' || res.recurrenteId || res.serieRecurrente ? "Eliminar reserva (abrir opciones de serie)" : "Eliminar reserva"}
+                                      title={res.actividadRecurrente === 'Sí' || res.recurrenteId || res.serieRecurrente ? "Eliminar reserva (opciones de serie)" : "Eliminar reserva"}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (res.actividadRecurrente === 'Sí' || res.recurrenteId || res.serieRecurrente) {
-                                          onSelectReservation(res);
-                                        } else if (onRequestDelete) {
+                                        if (onRequestDelete) {
                                           onRequestDelete(res);
                                         } else if (onDeleteReservation) {
                                           onDeleteReservation(res.id, false);

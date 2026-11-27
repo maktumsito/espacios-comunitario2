@@ -656,7 +656,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
         indiceEnSerie: isCopy ? undefined : editingReservation.indiceEnSerie,
         totalEnSerie: isCopy ? undefined : editingReservation.totalEnSerie,
         terminaDiaSiguiente: initialMidnight,
-        horarioExtendidoAutorizado: false,
+        horarioExtendidoAutorizado: isCopy ? false : Boolean(editingReservation.horarioExtendidoAutorizado),
         claveAutorizacion: '',
         autorizadoPor: editingReservation.autorizadoPor || '',
         equipamientoSolicitado: clonedEquip
@@ -839,6 +839,64 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
       setDaySchedules(Object.fromEntries([1, 2, 3, 4, 5, 6, 0].map(d => [d, { ...defaultDaySlot }])));
     }
   }, [editingReservation, isDuplicating, initialDate, initialSpace, initialStartTime, initialEndTime, isOpen, availableSpaces, availableLoanTypes, availableActivityTypes]);
+
+  // Re-hydrate series dates/schedules if prepareReservationEditor asynchronously fetched remote series rows
+  const hydratedSeriesCountRef = useRef<number>(0);
+  useEffect(() => {
+    if (!isOpen || !editingReservation || isDuplicating || isSingleDayMultiSpaceReservation(editingReservation)) {
+      hydratedSeriesCountRef.current = 0;
+      return;
+    }
+    const sId = editingReservation.serieRecurrente || editingReservation.recurrenteId;
+    if (!sId || !allReservations) return;
+    const matches = allReservations.filter(
+      (r) =>
+        (r.serieRecurrente === sId || r.recurrenteId === sId) &&
+        r.fecha >= getSeriesEditStartDate('series', editingReservation.fecha) &&
+        !r.reemplazadaPorReservaId &&
+        !['cancelada', 'eliminada', 'rechazada'].includes(r.estado || ''),
+    );
+    if (matches.length <= hydratedSeriesCountRef.current) {
+      if (hydratedSeriesCountRef.current === 0) hydratedSeriesCountRef.current = matches.length;
+      return;
+    }
+    const prevCount = hydratedSeriesCountRef.current;
+    hydratedSeriesCountRef.current = matches.length;
+    if (prevCount === 0) return;
+
+    const sortedMatches = [...matches].sort((a, b) =>
+      a.fecha !== b.fecha ? a.fecha.localeCompare(b.fecha) : a.horaInicio.localeCompare(b.horaInicio),
+    );
+    const dates = [...new Set(sortedMatches.map((r) => r.fecha))];
+    setSpecificDates(dates);
+    setRecurrenceStartDate(dates[0]);
+    const lastMatchedDate = dates[dates.length - 1];
+    const nextEndDate =
+      editingReservation.fechaFinRecurrencia && editingReservation.fechaFinRecurrencia > lastMatchedDate
+        ? editingReservation.fechaFinRecurrencia
+        : lastMatchedDate;
+    setRecurrenceEndDate(nextEndDate);
+
+    const schedules = schedulesFromReservations(sortedMatches);
+    const foundDays = new Set(sortedMatches.map((m) => getDayOfWeekFromDateString(m.fecha)));
+    const hasDifferentSchedules = Object.values(schedules.dates).some(
+      (slot) =>
+        slot.hasSecondSlot ||
+        slot.horaInicio !== editingReservation.horaInicio ||
+        slot.horaFin !== editingReservation.horaFin ||
+        slot.espacio !== editingReservation.espacio,
+    );
+    setDaySchedules(schedules.days);
+    setDateSchedules(schedules.dates);
+    setUseCustomSchedulesPerDay(hasDifferentSchedules);
+    setUseCustomSchedulesPerDate(hasDifferentSchedules);
+    if (schedules.variableDates) setBookingMode('specific');
+    if (foundDays.size > 0) {
+      setSelectedDays(Array.from(foundDays).sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b)));
+    }
+    setInitialFormBaseline(null);
+    setInitializationRevision((rev) => rev + 1);
+  }, [isOpen, editingReservation, isDuplicating, allReservations]);
 
   // Synchronize start date if primary date changes
   const handlePrimaryDateChange = (newDate: string) => {
@@ -1073,7 +1131,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     allowConflictOverride,
     singleDateHolidayInfo,
     isHolidayAuthorized: isHolidayAuthorized || Boolean(editingReservation && !isDuplicating && bookingMode === 'single' &&
-      formData.fecha === editingReservation.fecha && verifyHolidayOverrideKey(editingReservation.claveAutorizacionFeriado || '')),
+      formData.fecha === editingReservation.fecha && isReservationActiveForAvailability(editingReservation)),
     specificHolidayAnalysis,
     includeHolidaysInSeries,
     patternHolidayAnalysis,
@@ -1379,7 +1437,6 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
     if (!editingReservation) return;
 
     if (onRequestDelete) {
-      onClose();
       onRequestDelete(editingReservation);
       return;
     }

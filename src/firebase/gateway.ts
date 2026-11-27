@@ -445,6 +445,9 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
 }) as typeof sdk.onSnapshot;
 
 let dataViewPoller: DataViewPoller | undefined;
+export function retryDataViews() {
+  dataViewPoller?.forceRetry();
+}
 function getDataViewPoller() {
   if (dataViewPoller) return dataViewPoller;
   const poller = new DataViewPoller((queries, signal) => dataRequest('/api/data/listen-batch', { queries }, signal),
@@ -462,6 +465,9 @@ function getDataViewPoller() {
   const focus = () => {
     if (document.visibilityState === "visible") poller.refresh();
   };
+  const online = () => {
+    if (document.visibilityState === "visible") poller.forceRetry();
+  };
   const reservationProgress = (e: Event) => {
     const detail = (e as CustomEvent)?.detail;
     if (detail) poller.applyReservationProgress(detail);
@@ -472,6 +478,7 @@ function getDataViewPoller() {
   window.addEventListener("data-changed", focus);
   window.addEventListener("reservation-write-progress", reservationProgress);
   window.addEventListener("focus", focus);
+  window.addEventListener("online", online);
   document.addEventListener("visibilitychange", focus);
   return poller;
 }

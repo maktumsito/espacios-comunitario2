@@ -466,9 +466,10 @@ export function useReservationSaveHandler({
         return;
       }
 
-      // Check single date holiday
+      // Check single date holiday: if editing an already-active reservation on the same holiday date,
+      // its holiday authorization was already verified when created (keys are stripped before persisting).
       const existingHolidayAuthorization = !isDuplicating && editingReservation?.fecha === targetSingleDate &&
-        verifyHolidayOverrideKey(editingReservation.claveAutorizacionFeriado || '');
+        (verifyHolidayOverrideKey(editingReservation.claveAutorizacionFeriado || '') || isReservationActiveForAvailability(editingReservation));
       if (singleDateHolidayInfo && !isHolidayAuthorized && !existingHolidayAuthorization) {
         abortWithFeedback(
           `🚫 FECHA EN DÍA FERIADO NACIONAL: El día ${formatDateDDMMYYYY(targetSingleDate)} es feriado (${singleDateHolidayInfo.name}). Para autorizarla debes ingresar la clave CCD.`
@@ -504,7 +505,11 @@ export function useReservationSaveHandler({
       const timing = validateTimeRange(slot.horaInicio,slot.horaFin,Boolean(slot.terminaDiaSiguiente));
       if (!timing.isValid) { abortWithFeedback(`Horario inválido el ${formatDateDDMMYYYY(slot.fecha)}: ${timing.error}`); return; }
       const original = allReservations.find(r=>r.id===slot.sourceId);
-      const alreadyAuthorized = original && sameScheduleSlot(original,slot) && original.horarioExtendidoAutorizado;
+      const sameAuthorizedHours = original &&
+        original.horaInicio === slot.horaInicio &&
+        original.horaFin === slot.horaFin &&
+        Boolean(original.terminaDiaSiguiente) === Boolean(slot.terminaDiaSiguiente);
+      const alreadyAuthorized = original && (sameScheduleSlot(original,slot) || sameAuthorizedHours) && original.horarioExtendidoAutorizado;
       if (checkLoanScheduleLimit(slot.horaInicio,slot.horaFin,Boolean(slot.terminaDiaSiguiente)).requiresAuthorization && !isExtensionAuthorized && !alreadyAuthorized) {
         abortWithFeedback(`El horario del ${formatDateDDMMYYYY(slot.fecha)} requiere autorización de horario extendido.`); return;
       }
@@ -974,7 +979,7 @@ export function useReservationSaveHandler({
                 diasSemana: diasSemanaStr,
                 fechaInicioRecurrencia: isConvertingToSeries ? finalDates[0] : recurrenceStartDate || finalDates[0] || slot.fecha,
                 fechaFinRecurrencia: isConvertingToSeries ? finalDates[finalDates.length - 1] : recurrenceEndDate || finalDates[finalDates.length - 1] || slot.fecha,
-                estado: 'confirmada',
+                estado: 'activa',
                 version: 0,
                 editadoPor: currentUser?.name || currentUser?.username || 'Usuario',
                 fechaEdicion: format(new Date(), 'dd/MM/yyyy HH:mm:ss'),

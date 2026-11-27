@@ -39,6 +39,8 @@ function responseFailure(response: Response, result: any) {
   );
 }
 
+const DATA_REQUEST_TIMEOUT_MS = 20_000;
+
 export async function dataRequest(
   path: string,
   body: unknown,
@@ -48,24 +50,65 @@ export async function dataRequest(
   if (!sentToken) {
     throw new DataApiError('Inicia sesión para acceder a los datos.', 401, 'unauthenticated');
   }
-  const response = await fetch(path, {
-    method: 'POST',
-    signal,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${sentToken}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const timeoutController = new AbortController();
+  let timedOut = false;
+  const onExternalAbort = () => timeoutController.abort();
+  if (signal) {
+    if (signal.aborted) timeoutController.abort();
+    else signal.addEventListener('abort', onExternalAbort, { once: true });
+  }
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    timeoutController.abort();
+  }, DATA_REQUEST_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: 'POST',
+      signal: timeoutController.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sentToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err: any) {
+    if (timedOut) {
+      throw new DataApiError(
+        'El servidor tardó demasiado en responder. Verifica tu conexión y reintenta.',
+        504,
+        'deadline-exceeded',
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+    signal?.removeEventListener('abort', onExternalAbort);
+  }
+
   if (
     response.status === 401 &&
-    path === '/api/data/listen-batch' &&
     sentToken === sessionToken() &&
     typeof window !== 'undefined'
   ) {
     window.dispatchEvent(new Event(SESSION_REJECTED_EVENT));
   }
-  const result = await response.json();
+  const rawText = await response.text();
+  let result: any = {};
+  if (rawText) {
+    try {
+      result = JSON.parse(rawText);
+    } catch {
+      throw new DataApiError(
+        response.status >= 500
+          ? 'El servidor está temporalmente no disponible. Intenta nuevamente en unos segundos.'
+          : 'Respuesta inesperada del servidor.',
+        response.status || 502,
+        'invalid-response',
+      );
+    }
+  }
   if (!response.ok || result.success === false) {
     throw responseFailure(response, result);
   }
@@ -372,6 +415,9 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
 }) as any;
 
 let dataViewPoller: DataViewPoller | undefined;
+export function retryDataViews() {
+  dataViewPoller?.forceRetry();
+}
 function getDataViewPoller() {
   if (dataViewPoller) return dataViewPoller;
   const poller = new DataViewPoller(
@@ -390,6 +436,9 @@ function getDataViewPoller() {
   const focus = () => {
     if (document.visibilityState === 'visible') poller.refresh();
   };
+  const online = () => {
+    if (document.visibilityState === 'visible') poller.forceRetry();
+  };
   const reservationProgress = (e: Event) => {
     const detail = (e as CustomEvent)?.detail;
     if (detail) poller.applyReservationProgress(detail);
@@ -400,6 +449,7 @@ function getDataViewPoller() {
   window.addEventListener('data-changed', focus);
   window.addEventListener('reservation-write-progress', reservationProgress);
   window.addEventListener('focus', focus);
+  window.addEventListener('online', online);
   document.addEventListener('visibilitychange', focus);
   return poller;
 }

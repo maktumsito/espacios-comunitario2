@@ -353,7 +353,7 @@ const CalendarDayCell = memo<CalendarDayCellProps>(({
             data-calendar-day-button={dateStr}
             onClick={(e) => {
               e.stopPropagation();
-              handleCellClick(e as unknown as React.MouseEvent<HTMLDivElement>);
+              handleCellClick();
             }}
             onDoubleClick={(e) => {
               e.stopPropagation();
