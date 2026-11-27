@@ -186,3 +186,13 @@ it('issues Google sessions only for verified identities with the registered exac
     expect(confirmed.token).toContain('.');
   }, verify);
 });
+
+it('identifies missing server credentials during login without exposing internal error details', async () => {
+  await withSession(async (base, read) => {
+    read.mockRejectedValue(new Error('Could not load the default credentials. Internal path /private/key.json'));
+    const result = await login(base);
+    expect(result.status).toBe(503);
+    expect(result.code).toBe('credentials-missing');
+    expect(JSON.stringify(result)).not.toContain('/private/key.json');
+  });
+});

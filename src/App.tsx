@@ -43,6 +43,17 @@ import { useSpaceBlocks } from './hooks/useSpaceBlocks';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // Code-split agenda views so only the active view is downloaded on initial load
+const RESERVATION_READ_MESSAGES: Record<string, string> = {
+  'view-warming': 'Actualizando reservas. El servidor está preparando los datos.',
+  'credentials-missing': 'El servidor necesita credenciales de acceso a la base de datos.',
+  'deadline-exceeded': 'El servidor tardó demasiado en responder. Volveremos a intentar.',
+  'resource-exhausted': 'El servicio alcanzó su límite de uso. Volveremos a intentar.',
+  'auth-backend-quota-exceeded': 'La base de datos alcanzó su cuota de uso. Vuelve a intentar más tarde.',
+  'unauthenticated': 'Inicia sesión nuevamente para actualizar las reservas.',
+  'permission-denied': 'Tu cuenta no tiene permiso para consultar estas reservas.',
+  'auth-backend-permission-denied': 'El servidor necesita permisos de acceso a la base de datos.',
+};
+
 const CalendarView = lazyWithRetry(
   () => import('./components/CalendarView').then((m) => ({ default: m.CalendarView })),
   'CalendarView'
@@ -652,7 +663,7 @@ export default function App() {
     let isMounted = true;
 
     const executeScheduledBackupCheck = async () => {
-      if (!isCoordinatorOrAdmin(currentUser)) return;
+      if (!isCoordinatorOrAdmin(currentUser) || !isFirebaseConnected || !isReadScopeReady) return;
       try {
         const currentResList = reservationsRef.current;
         if (!currentResList || currentResList.length === 0) return;
@@ -671,9 +682,8 @@ export default function App() {
       }
     };
 
-    if (isCoordinatorOrAdmin(currentUser) && reservations.length > 0) {
-      executeScheduledBackupCheck();
-    }
+    const backupTimer = isCoordinatorOrAdmin(currentUser) && isFirebaseConnected && isReadScopeReady
+      ? setTimeout(() => void executeScheduledBackupCheck(), 15_000) : undefined;
 
     // Check periodically every 4 hours while the app is active
     const intervalId = setInterval(() => {
@@ -683,8 +693,9 @@ export default function App() {
     return () => {
       isMounted = false;
       clearInterval(intervalId);
+      clearTimeout(backupTimer);
     };
-  }, [reservations.length > 0, canWrite]);
+  }, [isFirebaseConnected, isReadScopeReady, currentUser, canWrite]);
 
   const handleOpenRatingModal = (reservation: Reservation, rating?: SpaceRating) => {
     if (!rating) {
@@ -1190,8 +1201,8 @@ export default function App() {
                 {readError
                   ? !isOnline
                     ? 'Sin conexión a Internet. Comprueba tu red para actualizar las reservas.'
-                    : readErrorCode === 'credentials-missing' || readErrorCode === 'backend-unavailable'
-                      ? (readErrorMessage || 'No se pudo conectar con el servidor de reservas en este momento.')
+                    : !!readErrorCode
+                      ? (RESERVATION_READ_MESSAGES[readErrorCode] || 'No se pudo conectar con el servidor de reservas. Volveremos a intentar.')
                       : 'No se pudieron actualizar las reservas desde el servidor. Comprueba tu conexión.'
                   : 'Cargando reservas para esta vista...'}
               </span>

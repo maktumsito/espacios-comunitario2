@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   FileSignature,
   FileText,
@@ -17,6 +17,7 @@ import {
 import { Reservation, CommitmentLetterAttachment } from '../types';
 import { downloadCommitmentLetterPdf, CommitmentScheduleSlot } from '../utils/commitmentLetterPdf';
 import { compressImageToDataUrl, readFileToDataUrl, formatBytes } from '../utils/fileUtils';
+import { fetchReservationById } from '../services/reservationService';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { CommitmentLetterModal } from './CommitmentLetterModal';
 import { ConfirmationModal } from './common/ConfirmationModal';
@@ -47,6 +48,43 @@ export const CommitmentLetterCard: React.FC<CommitmentLetterCardProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const attachment = reservation.cartaCompromisoAdjunta || null;
+  const [loadedAttachment, setLoadedAttachment] = useState<CommitmentLetterAttachment | null>(null);
+  const [isLoadingAttachment, setIsLoadingAttachment] = useState(false);
+  const attachmentRequest = useRef(0);
+  useEffect(() => {
+    attachmentRequest.current++;
+    setLoadedAttachment(null);
+    setShowDocViewer(false);
+    setIsLoadingAttachment(false);
+    return () => { attachmentRequest.current++; };
+  }, [reservation.id, attachment?.name, attachment?.uploadedAt, attachment?.dataUrl]);
+  const openAttachment = async (download = false) => {
+    if (!attachment || isLoadingAttachment) return;
+    const request = ++attachmentRequest.current;
+    setIsLoadingAttachment(true);
+    setUploadError(null);
+    try {
+      const full = attachment.dataUrl ? attachment : loadedAttachment ||
+        (reservation.id ? (await fetchReservationById(reservation.id))?.cartaCompromisoAdjunta : null);
+      if (request !== attachmentRequest.current) return;
+      if (!full?.dataUrl || full.name !== attachment.name || full.uploadedAt !== attachment.uploadedAt)
+        throw new Error('La carta cambió o no está disponible. Actualiza la reserva y vuelve a intentar.');
+      setLoadedAttachment(full);
+      if (download) {
+        const link = document.createElement('a');
+        link.href = full.dataUrl;
+        link.download = full.name || 'Carta_Compromiso_Firmada.pdf';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } else setShowDocViewer(true);
+    } catch (error) {
+      if (request === attachmentRequest.current)
+        setUploadError(error instanceof Error ? error.message : 'No se pudo cargar la carta. Vuelve a intentar.');
+    } finally {
+      if (request === attachmentRequest.current) setIsLoadingAttachment(false);
+    }
+  };
   const isPdf = attachment?.type?.includes('pdf') || attachment?.name?.toLowerCase().endsWith('.pdf');
 
   // Handle instant download of official blank/prefilled PDF
@@ -238,7 +276,8 @@ export const CommitmentLetterCard: React.FC<CommitmentLetterCardProps> = ({
                 <button
                   id="btn-consultar-carta-adjunta"
                   type="button"
-                  onClick={() => setShowDocViewer(true)}
+                  disabled={isLoadingAttachment}
+                  onClick={() => void openAttachment()}
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center space-x-1.5 shrink-0 cursor-pointer"
                 >
                   <Eye className="w-3.5 h-3.5" />
@@ -251,14 +290,8 @@ export const CommitmentLetterCard: React.FC<CommitmentLetterCardProps> = ({
                 <div className="flex items-center space-x-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      const link = document.createElement('a');
-                      link.href = attachment.dataUrl;
-                      link.download = attachment.name || 'Carta_Compromiso_Firmada.pdf';
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    }}
+                    disabled={isLoadingAttachment}
+                    onClick={() => void openAttachment(true)}
                     className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition flex items-center space-x-1 cursor-pointer"
                     title="Descargar copia del archivo escaneado"
                   >
@@ -384,7 +417,7 @@ export const CommitmentLetterCard: React.FC<CommitmentLetterCardProps> = ({
         <DocumentViewerModal
           isOpen={showDocViewer}
           onClose={() => setShowDocViewer(false)}
-          attachment={attachment}
+          attachment={loadedAttachment || attachment}
           title={`Carta de Compromiso — ${(reservation.espacio || 'Espacio').toUpperCase()}`}
         />
       )}

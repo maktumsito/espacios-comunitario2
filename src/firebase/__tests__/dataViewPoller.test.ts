@@ -162,3 +162,62 @@ it('re-emits the last snapshot to clear error state when recovery returns unchan
   expect(p.next).toHaveBeenCalledTimes(14);
   p.stop();
 });
+
+it('retries only the warming view after four seconds and retains conditional versions on manual retry', async () => {
+  const p = setup();
+  p.request.mockResolvedValueOnce({ results: queries.map((q, i) => i === 0
+    ? { error: 'Preparando', code: 'view-warming', status: 503, retryAfterMs: 4000 }
+    : { docs: [], version: `v-${q.path}` }) } as any);
+  await vi.advanceTimersByTimeAsync(25);
+  expect(p.next).toHaveBeenCalledTimes(6);
+  await vi.advanceTimersByTimeAsync(3999);
+  expect(p.request).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(p.request).toHaveBeenCalledTimes(2);
+  expect(p.error).toHaveBeenCalledOnce();
+  p.poller.forceRetry(); p.poller.forceRetry();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(p.request).toHaveBeenCalledTimes(3);
+  expect(p.request.mock.calls[2][0].every(q => q.version)).toBe(true);
+  p.stop();
+});
+
+it('applies ordered deltas, preserves unchanged references and requests a full snapshot after an invalid base', async () => {
+  const docs = [{ id: 'a', data: { fecha: '2026-11-01' } }, { id: 'b', data: { fecha: '2026-11-02' } }];
+  const request = vi.fn().mockResolvedValueOnce({ results: [{ docs, version: 'epoch:1' }] })
+    .mockResolvedValueOnce({ results: [{ version: 'epoch:2', delta: { baseVersion: 'epoch:1', upserts: [{ id: 'c', data: {} }], removedIds: ['b'], orderedIds: ['c', 'a'] } }] })
+    .mockResolvedValueOnce({ results: [{ version: 'epoch:3', delta: { baseVersion: 'other:1', upserts: [], removedIds: [], orderedIds: [] } }] })
+    .mockResolvedValue({ results: [{ docs, version: 'epoch:4' }] });
+  const poller = new DataViewPoller(request, () => 'session', () => true);
+  const next = vi.fn();
+  const stop = poller.subscribe({ path: 'reservas', kind: 'query', light: true, delta: true }, next, vi.fn());
+  await vi.advanceTimersByTimeAsync(25);
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(next.mock.calls[1][0].docs.map((doc: any) => doc.id)).toEqual(['c', 'a']);
+  expect(next.mock.calls[1][0].docs[1]).toBe(docs[0]);
+  await vi.advanceTimersByTimeAsync(60_050);
+  expect(request.mock.calls[3][0][0].version).toBeUndefined();
+  expect(next.mock.lastCall![0].docs).toEqual(docs);
+  stop();
+});
+it('throttles passive focus notifications and allows mutation refresh immediately', async () => {
+  const p = setup();
+  await vi.advanceTimersByTimeAsync(25);
+  p.poller.refresh(); p.poller.refresh();
+  await vi.advanceTimersByTimeAsync(50);
+  expect(p.request).toHaveBeenCalledOnce();
+  p.poller.refresh(false, true);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(p.request).toHaveBeenCalledTimes(2);
+  p.stop();
+});
+
+it('acknowledges an explicit retry even when the confirmed data is unchanged', async () => {
+  const p = setup();
+  await vi.advanceTimersByTimeAsync(25);
+  expect(p.next).toHaveBeenCalledTimes(7);
+  p.poller.forceRetry();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(p.next).toHaveBeenCalledTimes(14);
+  p.stop();
+});

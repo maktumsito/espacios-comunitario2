@@ -3,11 +3,14 @@ export interface DataViewQuery {
   kind: 'document' | 'query';
   constraints?: unknown[];
   version?: string;
+  light?: boolean;
+  delta?: boolean;
 }
 export interface DataViewMessage {
   version?: string;
   unchanged?: boolean;
   docs?: any[];
+  delta?: { baseVersion: string; upserts: any[]; removedIds: string[]; orderedIds: string[] };
   error?: string;
   status?: number;
   code?: string;
@@ -68,6 +71,7 @@ export class DataViewPoller {
   private failures = 0;
   private retryAt = 0;
   private dirty = false;
+  private lastSuccessAt = -Infinity;
 
   constructor(
     private request: (queries: DataViewQuery[], signal: AbortSignal) => Promise<{ results: DataViewMessage[] }>,
@@ -151,7 +155,8 @@ export class DataViewPoller {
     };
   }
 
-  refresh(resetSession = false) {
+  refresh(resetSession = false, immediate = false) {
+    if (!resetSession && !immediate && Date.now() - this.lastSuccessAt < 10_000) return;
     if (resetSession) {
       this.generation++;
       this.controller?.abort();
@@ -171,7 +176,8 @@ export class DataViewPoller {
   }
 
   /** Resets backoff cooldowns and triggers an immediate poll (e.g. user clicked "Reintentar" or browser came back online). */
-  forceRetry() {
+  forceRetry(path?: string) {
+    if (!this.entries.size || (path && ![...this.entries.values()].some(entry => entry.query.path === path))) return false;
     clearTimeout(this.timer);
     if (this.controller) {
       this.generation++;
@@ -181,11 +187,13 @@ export class DataViewPoller {
     this.retryAt = 0;
     this.failures = 0;
     for (const entry of this.entries.values()) {
+      entry.failed = true;
       entry.blocked = false;
       entry.retryAt = 0;
     }
     this.dirty = true;
     this.schedule(0);
+    return true;
   }
 
   private schedule(delay: number) {
@@ -221,9 +229,28 @@ export class DataViewPoller {
           if (message.error) {
             entry.failed = true;
             entry.blocked = message.status === 401 || message.status === 403;
-            entry.retryAt = Date.now() + Math.max(60_000, message.retryAfterMs || 0);
+            entry.retryAt = Date.now() + (message.code === 'view-warming' ? Math.max(1000, message.retryAfterMs || 4000) : Math.max(60_000, message.retryAfterMs || 0));
             for (const listener of entry.listeners) listener.error(Object.assign(new Error(message.error), message));
             return;
+          }
+          if (message.delta) {
+            const delta = message.delta;
+            const byId = new Map<string, any>(entry.last?.docs?.map(doc => [doc.id, doc]));
+            if (!Array.isArray(delta.upserts) || !Array.isArray(delta.removedIds) || !Array.isArray(delta.orderedIds)
+                || delta.upserts.some(doc => !doc || typeof doc.id !== 'string')
+                || delta.baseVersion !== entry.query.version || !entry.last?.docs) {
+              entry.query.version = undefined;
+              this.dirty = true;
+              return;
+            }
+            delta.removedIds.forEach(id => byId.delete(id));
+            delta.upserts.forEach(doc => byId.set(doc.id, doc));
+            if (delta.orderedIds.length !== byId.size || new Set(delta.orderedIds).size !== byId.size || delta.orderedIds.some(id => !byId.has(id))) {
+              entry.query.version = undefined;
+              this.dirty = true;
+              return;
+            }
+            message = { version: message.version, docs: delta.orderedIds.map(id => byId.get(id)) };
           }
           const recovered = entry.failed;
           entry.failed = false;
@@ -238,6 +265,7 @@ export class DataViewPoller {
           for (const listener of entry.listeners) listener.next(message);
         });
       }
+      this.lastSuccessAt = Date.now();
       this.failures = 0;
       this.retryAt = 0;
     } catch (error: any) {
@@ -251,7 +279,10 @@ export class DataViewPoller {
     } finally {
       if (generation === this.generation) {
         this.controller = undefined;
-        if (this.retryAt !== Infinity) this.schedule(this.dirty ? 50 : 60_000);
+        if (this.retryAt !== Infinity) {
+          const nextRetry = Math.min(...[...this.entries.values()].filter(entry => !entry.blocked && entry.retryAt > Date.now()).map(entry => entry.retryAt));
+          this.schedule(this.dirty ? 50 : Math.min(60_000, nextRetry - Date.now()));
+        }
       }
     }
   }

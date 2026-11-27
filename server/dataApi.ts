@@ -32,6 +32,8 @@ export class ApiFailure extends Error {
   constructor(
     public status: number,
     message: string,
+    public code?: string,
+    public retryAfterMs?: number,
   ) {
     super(message);
   }
@@ -164,9 +166,20 @@ function reference(db: Firestore, body: any, user: any): any {
   }
   return query;
 }
-function records(snapshot: any, path: string) {
-  const sanitize = (data: any) =>
-    path.startsWith("usuarios_sistema") ? publicProfile(data) : data;
+/** Signed letters are stored as base64; list views only need their metadata. */
+const LIGHT_ATTACHMENT_LIMIT = 512;
+export function lightReservationData(data: any) {
+  const attachment = data?.cartaCompromisoAdjunta;
+  if (attachment && typeof attachment.dataUrl === "string" && attachment.dataUrl.length > LIGHT_ATTACHMENT_LIMIT)
+    return { ...data, cartaCompromisoAdjunta: { ...attachment, dataUrl: "" } };
+  return data;
+}
+function sanitizeData(path: string, data: any, light = false) {
+  if (path.startsWith("usuarios_sistema")) return publicProfile(data);
+  return light ? lightReservationData(data) : data;
+}
+function records(snapshot: any, path: string, light = false) {
+  const sanitize = (data: any) => sanitizeData(path, data, light);
   return typeof snapshot.exists === "boolean"
     ? [
         {
@@ -180,6 +193,7 @@ export function apiError(res: Response, error: any) {
   if (res.headersSent) return res.end();
   res.status(error instanceof ApiFailure ? error.status : 503).json({
     success: false,
+    ...(error instanceof ApiFailure ? { code: error.code, retryAfterMs: error.retryAfterMs } : {}),
     error:
       error instanceof ApiFailure
         ? error.message
@@ -323,12 +337,14 @@ export function registerDataApi(
 ) {
   registerInventoryApi(app, db, sessions);
   const VIEW_IDLE_TTL_MS = 300000;
-  const VIEW_READY_TIMEOUT_MS = 15000;
+  const HTTP_VIEW_WAIT_MS = 22_000;
+  const VIEW_INIT_TIMEOUT_MS = 60_000;
   const views = new Map<
     string,
     {
       docs: any[];
       version: string;
+      history: { baseVersion: string; version: string; upserts: any[]; removedIds: string[] }[];
       lastUse: number;
       stop: () => void;
       ready: Promise<void>;
@@ -336,6 +352,7 @@ export function registerDataApi(
     }
   >();
   const disposeView = (key: string, view: { stop: () => void; failReady?: (error: any) => void }, reason?: any) => {
+    if (views.get(key) !== view) return;
     views.delete(key);
     try { view.stop(); } catch {}
     if (reason) view.failReady?.(reason);
@@ -370,6 +387,7 @@ export function registerDataApi(
           path: body.path,
           kind: body.kind,
           constraints: body.constraints || [],
+          light: body.light === true && body.path === "reservas" && body.kind === "query",
         });
       for (const [id, v] of views)
         if (Date.now() - v.lastUse > VIEW_IDLE_TTL_MS) {
@@ -388,6 +406,7 @@ export function registerDataApi(
         let sequence = 0;
         view = {
           docs: [],
+          history: [],
           version: "",
           lastUse: Date.now(),
           stop: () => {},
@@ -405,6 +424,8 @@ export function registerDataApi(
           }),
           failReady: (err: any) => fail(err),
         };
+        // A warming view may outlive its HTTP waiter. Handle later rejection.
+        void view.ready.catch(() => {});
         const current = view;
         const readyTimer = setTimeout(() => {
           if (!settled) {
@@ -417,13 +438,33 @@ export function registerDataApi(
               ),
             );
           }
-        }, VIEW_READY_TIMEOUT_MS);
+        }, VIEW_INIT_TIMEOUT_MS);
         readyTimer.unref?.();
-        current.stop = ref.onSnapshot(
+        views.set(key, current);
+        const unsubscribe = ref.onSnapshot(
           (snapshot: any) => {
             clearTimeout(readyTimer);
-            current.docs = records(snapshot, body.path);
+            const nextDocs = records(snapshot, body.path, body.light === true && body.path === "reservas" && body.kind === "query");
+            const previous = new Map(current.docs.map(doc => [doc.id, doc]));
+            const changes = typeof snapshot.docChanges === 'function' ? snapshot.docChanges() : null;
+            const changedIds = changes ? new Set(changes.map((change: any) => change.doc.id)) : null;
+            const upserts: any[] = [];
+            current.docs = nextDocs.map((doc: any) => {
+              const old = previous.get(doc.id);
+              if (old && (changedIds ? !changedIds.has(doc.id) : isDeepStrictEqual(old.data, doc.data))) return old;
+              upserts.push(doc);
+              return doc;
+            });
+            const ids = new Set(current.docs.map(doc => doc.id));
+            const baseVersion = current.version;
             current.version = `${epoch}:${++sequence}`;
+            if (baseVersion && body.light === true) {
+              current.history.push({ baseVersion, version: current.version, upserts,
+                removedIds: [...previous.keys()].filter(id => !ids.has(id)) });
+              // Bound history by both revisions and bytes for busy or large views.
+              while (current.history.length > 32 || Buffer.byteLength(JSON.stringify(current.history)) > 4_000_000)
+                current.history.shift();
+            }
             ready();
           },
           (error: any) => {
@@ -431,10 +472,31 @@ export function registerDataApi(
             disposeView(key, current, error);
           },
         );
-        views.set(key, current);
+        current.stop = () => { clearTimeout(readyTimer); unsubscribe(); };
       }
       view.lastUse = Date.now();
-      await view.ready;
+      let waitTimer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([view.ready, new Promise<never>((_, reject) => {
+          waitTimer = setTimeout(() => reject(new ApiFailure(503,
+            "Actualizando reservas. El servidor está preparando los datos.", "view-warming", 4000)), HTTP_VIEW_WAIT_MS);
+        })]);
+      } finally { clearTimeout(waitTimer); }
+      if (body.delta === true && body.light === true && body.version !== view.version) {
+        const index = view.history.findIndex(change => change.baseVersion === body.version);
+        if (index >= 0) {
+          const upserts = new Map<string, any>();
+          const removed = new Set<string>();
+          for (const change of view.history.slice(index)) {
+            for (const id of change.removedIds) { upserts.delete(id); removed.add(id); }
+            for (const doc of change.upserts) { removed.delete(doc.id); upserts.set(doc.id, doc); }
+          }
+          const delta = { baseVersion: body.version, upserts: [...upserts.values()], removedIds: [...removed],
+            orderedIds: view.docs.map(doc => doc.id) };
+          if (Buffer.byteLength(JSON.stringify(delta)) < Buffer.byteLength(JSON.stringify(view.docs)))
+            return { version: view.version, delta };
+        }
+      }
       const message =
         body.version === view.version
           ? { version: view.version, unchanged: true }
@@ -466,7 +528,11 @@ export function registerDataApi(
       try { return await readView(query, (req as any).user); }
       catch (error: any) {
         const rawMsg = String(error?.message || '');
-        const isCredError = /Could not load the default credentials|ENOTFOUND|Unable to detect a Project Id|credential/i.test(rawMsg);
+        const nativeCode = String(error?.code || '').toLowerCase().replace(/_/g, '-');
+        const nativeCodes: Record<string, string> = { '8': 'resource-exhausted', 'resource-exhausted': 'resource-exhausted',
+          '4': 'deadline-exceeded', 'deadline-exceeded': 'deadline-exceeded', '7': 'auth-backend-permission-denied',
+          'permission-denied': 'auth-backend-permission-denied' };
+        const isCredError = /Could not load the default credentials|Unable to detect a Project Id|credential/i.test(rawMsg);
         return {
           error: error instanceof ApiFailure
             ? error.message
@@ -475,9 +541,9 @@ export function registerDataApi(
               : 'No se pudo sincronizar esta vista. Conserva tus datos y vuelve a intentar.',
           status: error instanceof ApiFailure ? error.status : 503,
           code: error instanceof ApiFailure
-            ? (error.status === 429 ? 'resource-exhausted' : 'unavailable')
-            : (isCredError ? 'credentials-missing' : 'backend-unavailable'),
-          retryAfterMs: error instanceof ApiFailure && error.status === 429 ? 60_000 : 15_000,
+            ? (error.code || ({ 401: 'unauthenticated', 403: 'permission-denied', 429: 'resource-exhausted' } as Record<number, string>)[error.status] || 'unavailable')
+            : (isCredError ? 'credentials-missing' : nativeCodes[nativeCode] || 'backend-unavailable'),
+          retryAfterMs: error instanceof ApiFailure ? (error.retryAfterMs ?? (error.status === 429 ? 60_000 : 15_000)) : 15_000,
         };
       }
     }));

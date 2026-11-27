@@ -234,6 +234,18 @@ export function reservationContent(
   return JSON.stringify(canonicalizeForComparison(filtered));
 }
 
+/** Resolve lightweight attachment metadata against the transaction's current row. */
+export function resolveReservationAttachment(next: Reservation, existing?: Reservation) {
+  const attachment = next.cartaCompromisoAdjunta;
+  if (!attachment || attachment.dataUrl) return attachment;
+  const stored = existing?.cartaCompromisoAdjunta;
+  if (!stored?.dataUrl || stored.name !== attachment.name || stored.uploadedAt !== attachment.uploadedAt
+      || (existing?.version || 0) !== (next.version || 0)) {
+    throw new ReservationInputError('La carta adjunta cambió o no está disponible. Consulta la reserva y vuelve a adjuntar el archivo.');
+  }
+  return { ...attachment, dataUrl: stored.dataUrl };
+}
+
 export function hasReservationMaterialChange(
   existing: Reservation | undefined,
   next: Reservation,
@@ -566,7 +578,9 @@ export async function writeReservations(
   }
   let chunks: string[][];
   try {
-    chunks = planWriteChunks(items, previous, deletedIds, options.serverHooks ? 32 : options.auditRestore ? 2 : 0);
+    const sizedItems = items.map(row => previous.has(row.id)
+      ? { ...row, cartaCompromisoAdjunta: resolveReservationAttachment(row, previous.get(row.id)) } : row);
+    chunks = planWriteChunks(sizedItems, previous, deletedIds, options.serverHooks ? 32 : options.auditRestore ? 2 : 0);
   } catch (error) { throw new ReservationInputError((error as Error).message); }
   if (options.requireAtomic && chunks.length > 1)
     throw new ReservationInputError(
@@ -905,12 +919,14 @@ export async function writeReservations(
             );
           if ((existing?.version || 0) !== (next.version || 0))
             throw new ReservationVersionError(existing!);
+          const attachment = resolveReservationAttachment(next, existing);
           const unchanged = isUnchangedExisting(id);
           if (unchanged) unchangedIds.add(id);
           const confirmed = unchanged
             ? { ...existing! }
             : {
                 ...next,
+                cartaCompromisoAdjunta: attachment,
                 version: (existing?.version || 0) + 1,
                 restoredStateVersion: options.auditRestore
                   ? next.restoredStateVersion

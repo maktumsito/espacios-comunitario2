@@ -140,6 +140,39 @@ describe.skipIf(!enabled)(
       await db.terminate();
       await deleteApp(app);
     });
+    it('preserves a signed letter from lightweight cache through trusted commits and full backup reads', async () => {
+      const letter = { name: 'carta.pdf', type: 'application/pdf', size: 600, uploadedAt: '2026-11-01', dataUrl: 'data:application/pdf;base64,' + 'a'.repeat(800) };
+      const seed = await post('/api/reservations/commit', { reservations: [{ ...row('letter', '2099-10-13'), cartaCompromisoAdjunta: letter }], options: { operationId: 'letter-seed' } });
+      expect(seed.status).toBe(200);
+      const query = { path: 'reservas', kind: 'query', light: true };
+      const listed = await post('/api/data/listen-batch', { queries: [query] });
+      const cached = { id: 'letter', ...listed.results[0].docs[0].data };
+      expect(cached.cartaCompromisoAdjunta.dataUrl).toBe('');
+      const edited = await post('/api/reservations/commit', { reservations: [{ ...cached, descripcion: 'Editada desde caché' }], options: { operationId: 'letter-edit' } });
+      expect(edited.status).toBe(200);
+      expect((await db.doc('reservas/letter').get()).data()!.cartaCompromisoAdjunta).toEqual(letter);
+      const backupRead = await post('/api/data/read', { path: 'reservas', kind: 'query' });
+      expect(backupRead.docs[0].data.cartaCompromisoAdjunta).toEqual(letter);
+      const missingFile = await post('/api/reservations/commit', { reservations: [{ ...cached, id: 'new-letter', version: 0 }], options: { operationId: 'letter-invalid' } });
+      expect(missingFile.error).toMatch(/carta/i);
+      expect(missingFile.discardPending).toBe(true);
+      expect((await db.doc('reservas/new-letter').get()).exists).toBe(false);
+      const replacement = { ...letter, uploadedAt: '2026-11-02', dataUrl: 'data:application/pdf;base64,bmV3' };
+      const replaced = await post('/api/reservations/commit', { reservations: [{ ...edited.result.reservations[0], cartaCompromisoAdjunta: replacement }], options: { operationId: 'letter-replace' } });
+      expect(replaced.error).toBeUndefined();
+      const staleLetter = await post('/api/reservations/commit', { reservations: [{ ...cached, version: replaced.result.reservations[0].version }], options: { operationId: 'letter-stale' } });
+      expect(staleLetter.error).toMatch(/carta/i);
+      expect((await db.doc('reservas/letter').get()).data()!.cartaCompromisoAdjunta).toEqual(replacement);
+      const removed = { ...replaced.result.reservations[0] };
+      delete removed.cartaCompromisoAdjunta;
+      const removal = await post('/api/reservations/commit', { reservations: [removed], options: { operationId: 'letter-remove' } });
+      expect(removal.status).toBe(200);
+      expect((await db.doc('reservas/letter').get()).data()!.cartaCompromisoAdjunta).toBeUndefined();
+      const serializedBackup = JSON.stringify(backupRead.docs[0].data);
+      const restored = await post('/api/reservations/commit', { reservations: [{ ...JSON.parse(serializedBackup), id: 'letter', version: removal.result.reservations[0].version }], options: { operationId: 'letter-restore' } });
+      expect(restored.error).toBeUndefined();
+      expect((await db.doc('reservas/letter').get()).data()!.cartaCompromisoAdjunta).toEqual(letter);
+    });
     const cake = (id: string, date: string, cantidadTortas: number) => ({
       ...row(id, date), tipoActividad: 'ACTIVIDAD MUNICIPAL', descripcion: 'Celebración municipal', cantidadTortas,
     });

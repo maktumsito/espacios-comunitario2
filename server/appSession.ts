@@ -9,6 +9,10 @@ const MAX_SESSION_MS = 7 * 24 * 60 * 60_000;
 const DIRECTORY_CACHE_MS = 15_000;
 
 function accountReadFailure(error: unknown) {
+  if (/Could not load the default credentials|Unable to detect a Project Id/i.test(String((error as any)?.message || ''))) return {
+    code: 'credentials-missing', retryAfter: 60,
+    message: 'El servidor necesita credenciales de acceso a Firestore. Revisa la configuración del servidor.',
+  };
   const code = String((error as any)?.code ?? '').toLowerCase().replace(/_/g, '-');
   if (['8', 'resource-exhausted', '429'].includes(code)) return {
     code: 'auth-backend-quota-exceeded', retryAfter: 60,

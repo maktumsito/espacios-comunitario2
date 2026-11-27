@@ -21,7 +21,8 @@ export class DataApiError extends Error {
   }
 }
 function responseFailure(response: Response, result: any) {
-  const seconds = Number(response.headers.get('Retry-After'));
+  const retryHeader = response.headers.get('Retry-After');
+  const seconds = retryHeader === null ? Number(result.retryAfterMs) / 1000 : Number(retryHeader);
   return new DataApiError(result.error || 'No se pudo completar la operación.', response.status,
     result.code, Number.isFinite(seconds) ? Math.min(3_600_000, Math.max(0, seconds * 1000)) : 0);
 }
@@ -406,7 +407,7 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
       ? ref.onSnapshot((s: any) => next(wrap(s)), error)
       : (sdk.onSnapshot as any)(ref, ...args);
   let records: any[] = [];
-  return getDataViewPoller().subscribe(describe(ref), message => {
+  return getDataViewPoller().subscribe({ ...describe(ref), light: ref.type !== "document" && describe(ref).path === "reservas", delta: true }, message => {
           if (message.docs) {
             const previous = records;
             records = message.docs;
@@ -428,7 +429,7 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
               if (
                 !old ||
                 old.index !== i ||
-                JSON.stringify(old.data) !== JSON.stringify(r.data)
+                (old.data !== r.data && JSON.stringify(old.data) !== JSON.stringify(r.data))
               )
                 changes.push({
                   type: old ? "modified" : "added",
@@ -446,7 +447,7 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
 
 let dataViewPoller: DataViewPoller | undefined;
 export function retryDataViews() {
-  dataViewPoller?.forceRetry();
+  return dataViewPoller?.forceRetry('reservas') ?? false;
 }
 function getDataViewPoller() {
   if (dataViewPoller) return dataViewPoller;
@@ -472,10 +473,11 @@ function getDataViewPoller() {
     const detail = (e as CustomEvent)?.detail;
     if (detail) poller.applyReservationProgress(detail);
   };
-  channel?.addEventListener("message", focus);
+  const mutation = () => poller.refresh(false, true);
+  channel?.addEventListener("message", mutation);
   window.addEventListener("auth-session-changed", changed);
   window.addEventListener("storage", changed);
-  window.addEventListener("data-changed", focus);
+  window.addEventListener("data-changed", mutation);
   window.addEventListener("reservation-write-progress", reservationProgress);
   window.addEventListener("focus", focus);
   window.addEventListener("online", online);

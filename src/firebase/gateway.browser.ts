@@ -30,7 +30,8 @@ export class DataApiError extends Error {
 }
 
 function responseFailure(response: Response, result: any) {
-  const seconds = Number(response.headers.get('Retry-After'));
+  const retryHeader = response.headers.get('Retry-After');
+  const seconds = retryHeader === null ? Number(result.retryAfterMs) / 1000 : Number(retryHeader);
   return new DataApiError(
     result.error || 'No se pudo completar la operación.',
     response.status,
@@ -39,7 +40,7 @@ function responseFailure(response: Response, result: any) {
   );
 }
 
-const DATA_REQUEST_TIMEOUT_MS = 20_000;
+const DATA_REQUEST_TIMEOUT_MS = 30_000;
 
 export async function dataRequest(
   path: string,
@@ -63,6 +64,7 @@ export async function dataRequest(
   }, DATA_REQUEST_TIMEOUT_MS);
 
   let response: Response;
+  let rawText: string;
   try {
     response = await fetch(path, {
       method: 'POST',
@@ -73,10 +75,11 @@ export async function dataRequest(
       },
       body: JSON.stringify(body),
     });
+    rawText = await response.text();
   } catch (err: any) {
     if (timedOut) {
       throw new DataApiError(
-        'El servidor tardó demasiado en responder. Verifica tu conexión y reintenta.',
+        'El servidor tardó demasiado en responder. Vuelve a intentar en unos segundos.',
         504,
         'deadline-exceeded',
       );
@@ -94,7 +97,7 @@ export async function dataRequest(
   ) {
     window.dispatchEvent(new Event(SESSION_REJECTED_EVENT));
   }
-  const rawText = await response.text();
+
   let result: any = {};
   if (rawText) {
     try {
@@ -378,7 +381,7 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
   const error = typeof args[0] === 'function' ? args[1] : args[2];
   let records: any[] = [];
   return getDataViewPoller().subscribe(
-    describe(ref),
+    { ...describe(ref), light: ref.type !== "document" && describe(ref).path === "reservas", delta: true },
     (message) => {
       if (message.docs) {
         const previous = records;
@@ -396,7 +399,7 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
           }));
         records.forEach((r, i) => {
           const old = previousById.get(r.id);
-          if (!old || JSON.stringify(old.data) !== JSON.stringify(r.data)) {
+          if (!old || (old.data !== r.data && JSON.stringify(old.data) !== JSON.stringify(r.data))) {
             changes.push({
               type: old ? 'modified' : 'added',
               id: r.id,
@@ -416,7 +419,7 @@ export const onSnapshot = ((ref: any, ...args: any[]) => {
 
 let dataViewPoller: DataViewPoller | undefined;
 export function retryDataViews() {
-  dataViewPoller?.forceRetry();
+  return dataViewPoller?.forceRetry('reservas') ?? false;
 }
 function getDataViewPoller() {
   if (dataViewPoller) return dataViewPoller;
@@ -443,10 +446,11 @@ function getDataViewPoller() {
     const detail = (e as CustomEvent)?.detail;
     if (detail) poller.applyReservationProgress(detail);
   };
-  channel?.addEventListener('message', focus);
+  const mutation = () => poller.refresh(false, true);
+  channel?.addEventListener('message', mutation);
   window.addEventListener('auth-session-changed', changed);
   window.addEventListener('storage', changed);
-  window.addEventListener('data-changed', focus);
+  window.addEventListener('data-changed', mutation);
   window.addEventListener('reservation-write-progress', reservationProgress);
   window.addEventListener('focus', focus);
   window.addEventListener('online', online);

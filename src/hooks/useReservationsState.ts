@@ -56,8 +56,7 @@ export function useReservationsState({ enabled = true, dateRange, allowMaintenan
   const retryRead = useCallback(() => {
     setIsRetryingRead(true);
     setReadError(false);
-    retryDataViews();
-    setReadAttempt(attempt => attempt + 1);
+    if (!retryDataViews()) setReadAttempt(attempt => attempt + 1);
   }, []);
   const [reservations, setReservations] = useState<Reservation[]>(() => getLocalCache());
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
